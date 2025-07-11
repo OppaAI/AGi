@@ -1,2 +1,2 @@
 # AGi
-Amazing GRACe interface
+Amazing GRACE Infrastructure
