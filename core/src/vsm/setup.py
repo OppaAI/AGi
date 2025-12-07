@@ -1,10 +1,10 @@
 from setuptools import find_packages, setup
 
-package_name = 'vsc'
+package_name = 'vsm'
 
 setup(
     name=package_name,
-    version='0.0.1',
+    version='0.1.1225',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='Vitality System Core for AGi',
+    description='Vitality System Module for AGi',
     license='GPLv3',
     extras_require={
         'test': [
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'heartbeat = vsc.heartbeat:main',
+            'core_heartbeat = vsm.core_heartbeat:main',
         ],
     },
 )

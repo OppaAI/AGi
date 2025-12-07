@@ -7,10 +7,10 @@ import sys
 RED = "\033[91m"
 RESET = "\033[0m"
 
-class Heartbeat(Node):
+class CoreHeartbeat(Node):
     def __init__(self):
-        super().__init__('heartbeat')
-        self.publisher_ = self.create_publisher(String, 'heartbeat', 10)
+        super().__init__('core_heartbeat')
+        self.publisher_ = self.create_publisher(String, 'core_heartbeat', 10)
         self.show_heart = True
         self.interval = 0.8  # seconds per beat
         self.bpm = 60 / self.interval  # calculate beats per minute
@@ -28,14 +28,14 @@ class Heartbeat(Node):
 
         self.show_heart = not self.show_heart  # toggle for next beat
 
-        # Publish heartbeat message
+        # Publish coreheartbeat message
         msg = String()
-        msg.data = "heartbeat"
+        msg.data = "core_heartbeat"
         self.publisher_.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Heartbeat()
+    node = CoreHeartbeat()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
