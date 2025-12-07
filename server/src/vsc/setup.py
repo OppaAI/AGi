@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'heartbeat_node = vsc.heartbeat_node:main',
+            'heartbeat = vsc.heartbeat:main',
         ],
     },
 )
