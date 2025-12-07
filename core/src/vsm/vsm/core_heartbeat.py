@@ -39,7 +39,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nHeartbeat stopped.")
+        print("\nCore Heartbeat stopped.")
     node.destroy_node()
     rclpy.shutdown()
 

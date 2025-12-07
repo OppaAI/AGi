@@ -18,13 +18,11 @@ setup(
     description='Vitality System Module for AGi',
     license='GPLv3',
     extras_require={
-        'test': [
-            'pytest',
-        ],
+        'test': ['pytest'],
     },
     entry_points={
         'console_scripts': [
-            'core_heartbeat = vsm.core_heartbeat:main',
+            'heartbeat = vsm.heartbeat:main',
         ],
     },
 )

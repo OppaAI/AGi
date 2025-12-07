@@ -2,10 +2,15 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vsm</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="oppa.ai.org@gmail.com">oppa-ai</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.1.1225</version>
+  <description>Vitality System Module for AGi</description>
+
+  <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
+  <license>GPLv3</license>
+
+  <url type="website">https://github.com/OppaAI/AGi-ROS</url>
+  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/robot/src/vsm</url>
+  <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

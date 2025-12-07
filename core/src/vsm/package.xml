@@ -9,7 +9,7 @@
   <license>GPLv3</license>
 
   <url type="website">https://github.com/OppaAI/AGi-ROS</url>
-  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/src/vsm</url>
+  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/core/src/vsm</url>
   <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
 
   <test_depend>ament_copyright</test_depend>
