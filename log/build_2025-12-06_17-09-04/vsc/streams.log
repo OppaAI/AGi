@@ -1,0 +1,24 @@
+[0.495s] Invoking command in '/home/oppa-ai/AGi-ROS/src/vsc': PYTHONPATH=/home/oppa-ai/AGi-ROS/build/vsc/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/vsc build --build-base /home/oppa-ai/AGi-ROS/build/vsc/build install --record /home/oppa-ai/AGi-ROS/build/vsc/install.log --single-version-externally-managed install_data
+[0.650s] running egg_info
+[0.650s] writing ../../build/vsc/vsc.egg-info/PKG-INFO
+[0.651s] writing dependency_links to ../../build/vsc/vsc.egg-info/dependency_links.txt
+[0.651s] writing entry points to ../../build/vsc/vsc.egg-info/entry_points.txt
+[0.651s] writing requirements to ../../build/vsc/vsc.egg-info/requires.txt
+[0.651s] writing top-level names to ../../build/vsc/vsc.egg-info/top_level.txt
+[0.652s] reading manifest file '../../build/vsc/vsc.egg-info/SOURCES.txt'
+[0.652s] writing manifest file '../../build/vsc/vsc.egg-info/SOURCES.txt'
+[0.652s] running build
+[0.652s] running build_py
+[0.652s] copying vsc/heartbeat_node.py -> /home/oppa-ai/AGi-ROS/build/vsc/build/lib/vsc
+[0.653s] running install
+[0.653s] running install_lib
+[0.653s] copying /home/oppa-ai/AGi-ROS/build/vsc/build/lib/vsc/heartbeat_node.py -> /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc
+[0.653s] byte-compiling /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc/heartbeat_node.py to heartbeat_node.cpython-310.pyc
+[0.654s] running install_data
+[0.654s] running install_egg_info
+[0.655s] removing '/home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc-0.0.1-py3.10.egg-info' (and everything under it)
+[0.655s] Copying ../../build/vsc/vsc.egg-info to /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc-0.0.1-py3.10.egg-info
+[0.655s] running install_scripts
+[0.665s] Installing heartbeat_node script to /home/oppa-ai/AGi-ROS/install/vsc/lib/vsc
+[0.666s] writing list of installed files to '/home/oppa-ai/AGi-ROS/build/vsc/install.log'
+[0.677s] Invoked command in '/home/oppa-ai/AGi-ROS/src/vsc' returned '0': PYTHONPATH=/home/oppa-ai/AGi-ROS/build/vsc/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/vsc build --build-base /home/oppa-ai/AGi-ROS/build/vsc/build install --record /home/oppa-ai/AGi-ROS/build/vsc/install.log --single-version-externally-managed install_data

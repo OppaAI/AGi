@@ -1,0 +1,22 @@
+running egg_info
+writing ../../build/vsc/vsc.egg-info/PKG-INFO
+writing dependency_links to ../../build/vsc/vsc.egg-info/dependency_links.txt
+writing entry points to ../../build/vsc/vsc.egg-info/entry_points.txt
+writing requirements to ../../build/vsc/vsc.egg-info/requires.txt
+writing top-level names to ../../build/vsc/vsc.egg-info/top_level.txt
+reading manifest file '../../build/vsc/vsc.egg-info/SOURCES.txt'
+writing manifest file '../../build/vsc/vsc.egg-info/SOURCES.txt'
+running build
+running build_py
+copying vsc/heartbeat_node.py -> /home/oppa-ai/AGi-ROS/build/vsc/build/lib/vsc
+running install
+running install_lib
+copying /home/oppa-ai/AGi-ROS/build/vsc/build/lib/vsc/heartbeat_node.py -> /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc
+byte-compiling /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc/heartbeat_node.py to heartbeat_node.cpython-310.pyc
+running install_data
+running install_egg_info
+removing '/home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc-0.0.1-py3.10.egg-info' (and everything under it)
+Copying ../../build/vsc/vsc.egg-info to /home/oppa-ai/AGi-ROS/install/vsc/lib/python3.10/site-packages/vsc-0.0.1-py3.10.egg-info
+running install_scripts
+Installing heartbeat_node script to /home/oppa-ai/AGi-ROS/install/vsc/lib/vsc
+writing list of installed files to '/home/oppa-ai/AGi-ROS/build/vsc/install.log'

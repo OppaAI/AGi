@@ -1,0 +1,3 @@
+[console_scripts]
+heartbeat_node = vsc.heartbeat_node:main
+
