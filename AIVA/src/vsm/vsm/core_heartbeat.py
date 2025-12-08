@@ -11,9 +11,14 @@ class CoreHeartbeat(Node):
     def __init__(self):
         super().__init__('core_heartbeat')
         self.publisher_ = self.create_publisher(String, 'core_heartbeat', 10)
+        
         self.show_heart = True
-        self.interval = 0.8  # seconds per beat
+        self.interval = 0.8  # seconds per beat (initial)
         self.bpm = 60 / self.interval
+
+        # last time receiving robot feedback
+        self.last_feedback_time = None
+
         self.timer = self.create_timer(self.interval, self.timer_callback)
 
         # Subscribe to feedback from robots
@@ -25,11 +30,12 @@ class CoreHeartbeat(Node):
         )
 
     def timer_callback(self):
+        # Show heartbeat animation with updated bpm
         if self.show_heart:
-            print(f"\r{'❤️':<3} {RED}Heartbeat at Rate: {self.bpm:.0f} BPM{RESET}", end="", flush=True)
-            print("\a", end="", flush=True)  # ASCII bell
+            print(f"\r{'❤️':<3} {RED}Heartbeat Rate: {self.bpm:.1f} BPM{RESET}", end="", flush=True)
         else:
-            print(f"\r{'':<2} {RED}Heartbeat at Rate: {self.bpm:.0f} BPM{RESET}", end="", flush=True)
+            print(f"\r{'':<2} {RED}Heartbeat Rate: {self.bpm:.1f} BPM{RESET}", end="", flush=True)
+
         self.show_heart = not self.show_heart
 
         # Publish core heartbeat
@@ -38,8 +44,16 @@ class CoreHeartbeat(Node):
         self.publisher_.publish(msg)
 
     def feedback_callback(self, msg):
-        now = time.strftime("%H:%M:%S", time.localtime())
-        print(f"\n{RED}Feedback received at {now}: {msg.data}{RESET}")
+        now = time.time()
+
+        if self.last_feedback_time is not None:
+            interval = now - self.last_feedback_time
+
+            if interval > 0:
+                hz = 1.0 / interval
+                self.bpm = hz * 60
+
+        self.last_feedback_time = now
 
 def main(args=None):
     rclpy.init(args=args)

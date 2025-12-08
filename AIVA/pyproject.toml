@@ -3,5 +3,5 @@ name = "AGI-ROS"
 version = "0.1.1225"
 description = "AGi-ROS2"
 readme = "README.md"
-requires-python == "3.10.12"
+requires-python = "3.10.12"
 dependencies = []

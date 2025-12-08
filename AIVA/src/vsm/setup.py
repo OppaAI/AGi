@@ -22,7 +22,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'heartbeat = vsm.heartbeat:main',
+            'core_heartbeat = vsm.core_heartbeat:main',
         ],
     },
 )
