@@ -3,5 +3,9 @@ name = "AGI-ROS"
 version = "0.1.1225"
 description = "AGi-ROS2"
 readme = "README.md"
+<<<<<<< HEAD
 requires-python = "3.10.12"
+=======
+requires-python == "3.10.12"
+>>>>>>> c429c75 (Change names of the directories)
 dependencies = []
