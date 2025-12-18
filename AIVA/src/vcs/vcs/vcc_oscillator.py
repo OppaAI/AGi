@@ -7,7 +7,7 @@ import time
 RED = "\033[91m"
 RESET = "\033[0m"
 
-class CoreHeartbeat(Node):
+class VCCOscillator(Node):
     def __init__(self):
         super().__init__('vcc_oscillator')
         self.publisher_ = self.create_publisher(String, 'vcc_oscillator', 10)
@@ -16,7 +16,7 @@ class CoreHeartbeat(Node):
         self.interval = 0.8  # seconds per beat (initial)
         self.bpm = 60 / self.interval
 
-        # last time receiving robot feedback
+        # last time receiving robots vcc feedback
         self.last_feedback_time = None
 
         self.timer = self.create_timer(self.interval, self.timer_callback)
@@ -24,13 +24,13 @@ class CoreHeartbeat(Node):
         # Subscribe to feedback from robots
         self.feedback_sub = self.create_subscription(
             String,
-            'heartbeat_feedback',
+            'vcc_feedback',
             self.feedback_callback,
             10
         )
 
     def timer_callback(self):
-        # Show heartbeat animation with updated bpm
+        # Show vcc vital pulse animation with updated bpm
         if self.show_heart:
             print(f"\r{'❤️':<3} {RED}VCC Pulse Rate: {self.bpm:.1f} BPM{RESET}", end="", flush=True)
         else:
@@ -38,7 +38,7 @@ class CoreHeartbeat(Node):
 
         self.show_heart = not self.show_heart
 
-        # Publish core heartbeat
+        # Publish vcc vital pulse
         msg = String()
         msg.data = "vcc_oscillator"
         self.publisher_.publish(msg)
@@ -57,7 +57,7 @@ class CoreHeartbeat(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = CoreHeartbeat()
+    node = VCCOscillator()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
