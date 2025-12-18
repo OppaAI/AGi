@@ -1,10 +1,10 @@
 from setuptools import find_packages, setup
 
-package_name = 'vsm'
+package_name = 'vcs'
 
 setup(
     name=package_name,
-    version='0.1.1225',
+    version='0.1.0.2512',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,14 +15,16 @@ setup(
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='Vitality System Module for AGi',
-    license='GPLv3',
+    description='Vital Circulatory System for AGi',
+    license='GPL-3.0-only',
     extras_require={
-        'test': ['pytest'],
+        'test': [
+            'pytest',
+        ],
     },
     entry_points={
         'console_scripts': [
-            'core_heartbeat = vsm.core_heartbeat:main',
+            'vcc_oscillator = vcs.vcc_oscillator:main'
         ],
     },
 )

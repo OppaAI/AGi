@@ -1,15 +1,14 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>vsm</name>
+  <name>vcs</name>
   <version>0.1.1225</version>
-  <description>Vitality System Module for AGi</description>
-
+  <description>Vital Circulatory System for AGi</description>
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
-  <license>GPLv3</license>
+  <license>GPL-3.0-only</license>
 
   <url type="website">https://github.com/OppaAI/AGi-ROS</url>
-  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/core/src/vsm</url>
+  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/core/src/vcs</url>
   <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
 
   <test_depend>ament_copyright</test_depend>
