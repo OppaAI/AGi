@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vcs</name>
-  <version>0.1.1225</version>
+  <version>0.1.0</version>
   <description>Vital Circulatory System for AGi</description>
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
   <license>GPL-3.0-only</license>
