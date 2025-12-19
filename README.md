@@ -2,7 +2,7 @@
 
 [![Repository](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 [![Build Status](https://img.shields.io/badge/build-pending-lightgrey)]()
-[![License: GPL v3](https://img.shields.io/github/license/<user>/<repo>)]()
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)]()
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
 
