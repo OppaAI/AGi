@@ -24,13 +24,36 @@ This repo consists of 2 separate directories:
 The AGi-ROS is only at a very early development stage;
 it is still a very simple infrastructure with the following system:
 
-### Vital Circulatory System (VCS) - Bio-Inspired Heartbeat Monitoring
-**Vital Pulse System** for robust mutual awareness between robot and server:
-- **Vital Pulse Generator** (on AuRoRA/robot side): Periodically publishes pulses with simple telemetry data.
-  [`AIVA/src/vcs/vcs/vp_analyzer.py`](https://github.com/OppaAI/AGi-ROS/tree/main/AIVA/src/vcs/vcs)
-- **Vital Pulse Analyzer** (on AIVA/server side): Monitors incoming pulses and displays robot/user IDs for fleet tracking.
-  [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/tree/main/AuRoRA/src/vcs/vcs) 
-This ensures agents only act when connected, detects disconnections quickly, and provides identity context for multi-robot scenarios. Inspired by biological circulatory systems — the "blood" that keeps the AGI robot alive and aware.
+### 🫀 Vital Circulatory System (VCS) – Bio-Inspired Heartbeat Monitoring
+
+The **Vital Pulse System** provides robust, mutual awareness between robot and server, ensuring reliable operation in distributed AGI robot setups.
+
+Inspired by biological circulatory systems, VCS acts as the "blood flow" that keeps the entire system alive and self-aware.
+
+#### Key Components
+
+- **Vital Pulse Generator** (AuRoRA / robot side)  
+  Periodically publishes lightweight pulses containing:
+  - Robot ID
+  - User ID
+  - Status changes
+  - Human-like BPM with beating heart indicators (❤️)  
+  - Color-coded console feedback (bright orange when connected)  
+
+  → Code: [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AuRoRA/src/vcs/vcs/vp_generator.py)
+
+- **Vital Pulse Analyzer** (AIVA / server side)  
+  Monitors incoming pulses, tracks connected robots/users, and detects timeouts/disconnections in real time.  
+
+  → Code: [`AIVA/src/vcs/vcs/vp_analyzer.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AIVA/src/vcs/vcs/vp_analyzer.py)
+
+#### Benefits
+- Agents only execute tasks when a valid connection is confirmed
+- Fast detection of network issues or node failures
+- Identity context for multi-robot/multi-user scenarios
+- Low overhead — designed to be lightweight and always-on
+
+This foundational module enables higher-level autonomic behaviors in future roadmap phases (self-regulation, predictive healing).
 
 Table of Contents
 - [Why AGi-ROS?](#why-agi-ros)
