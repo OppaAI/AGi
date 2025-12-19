@@ -6,7 +6,7 @@
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
 
-> NOTE: This README contains starter configurations and examples. Please adapt the config files, launch names, and dependency versions to match your repository layout and supported ROS distributions.
+> WARNING: This README is only a raw blanket file with starter configurations, preliminary outlines, examples and roadmaps. May contain inaccurate and misleading information. Will update shortly to reflect my current progress...
 
 Table of Contents
 - [Why AGi-ROS?](#why-agi-ros)
@@ -231,8 +231,7 @@ Planned items:
 - First stable release with ROS 2 Humble support
 - Additional LLM adapters for on-prem LLMs (Llama, Mistral)
 - Prebuilt Docker images and CI artifacts
-- ROS 1 bridge flows and migration guides
-
+  
 License
 -------
 This repository does not include a LICENSE file by default in this README. If you'd like to use a permissive license, consider MIT:
