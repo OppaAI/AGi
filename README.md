@@ -5,8 +5,14 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)]()
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
+I am only a one man team with limited programming capability since the era of QBASIC, and superficial knowledge of ML/DL/Agentic/Robotics.
+This project may last for decades, but I just want to see how far I could go.
 
 > WARNING: This README is only a raw blanket file with starter configurations, preliminary outlines, examples and roadmaps. May contain inaccurate and misleading information. Will update shortly to reflect my current progress...
+
+This repo consists of 2 separate directories:
+- AIVA - AI Virtual Assistant (Server for containing LLM and various models)
+- AuRoRA - Autonomous Rover Robot Assistant (Robot unit with autonomous navigation and thinking/reasoning and simplified Agentic framework)
 
 Table of Contents
 - [Why AGi-ROS?](#why-agi-ros)
