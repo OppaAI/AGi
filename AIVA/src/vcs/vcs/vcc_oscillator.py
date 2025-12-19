@@ -61,7 +61,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nVCC Pulse stopped.")
+        print("\nVCC Vital Pulse stopped.")
     node.destroy_node()
     rclpy.shutdown()
 

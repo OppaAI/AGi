@@ -4,7 +4,7 @@ package_name = 'vcs'
 
 setup(
     name=package_name,
-    version='0.1.1225',
+    version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='Vitality Circulatory System for AGi',
-    license='GPLv3',
+    description='Vital Circulatory System for AGi',
+    license='GPL-3.0-only',
     extras_require={
         'test': [
             'pytest',
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vital_pulse = vcs.vital_core:main'
+            'vtc_oscillator = vcs.vtc_oscillator:main'
         ],
     },
 )

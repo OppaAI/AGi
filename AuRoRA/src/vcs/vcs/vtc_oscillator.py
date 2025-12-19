@@ -5,14 +5,14 @@ from std_msgs.msg import String
 import time
 import json
 
-class RobotVitalPulse(Node):
+class VTCOscillator(Node):
     def __init__(self):
-        super().__init__('robot_vital_pulse')
+        super().__init__('vtc_oscillator')
 
-        self.publisher_ = self.create_publisher(String, 'vital_pulse', 10)
+        self.publisher_ = self.create_publisher(String, 'vtc_oscillator', 10)
         self.feedback_sub = self.create_subscription(
             String,
-            'vital_feedback',
+            'vcc_feedback',
             self.feedback_callback,
             10
         )
@@ -47,11 +47,11 @@ class RobotVitalPulse(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = RobotVitalPulse()
+    node = VTCOscillator()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nRobot Vital Pulse stopped.")
+        print("\nVTC Vital Pulse stopped.")
     node.destroy_node()
     rclpy.shutdown()
 
