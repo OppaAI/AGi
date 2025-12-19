@@ -26,6 +26,8 @@ it is still a very simple infrastructure with the following system:
 
 ### 🫀 Vital Circulatory System (VCS) – Bio-Inspired Heartbeat Monitoring
 
+Version 0.1.0
+
 The **Vital Pulse System** provides robust, mutual awareness between robot and server, ensuring reliable operation in distributed AGI robot setups.
 
 Inspired by biological circulatory systems, VCS acts as the "blood flow" that keeps the entire system alive and self-aware.
@@ -33,12 +35,7 @@ Inspired by biological circulatory systems, VCS acts as the "blood flow" that ke
 #### Key Components
 
 - **Vital Pulse Generator** (AuRoRA / robot side)  
-  Periodically publishes lightweight pulses containing:
-  - Robot ID
-  - User ID
-  - Status changes
-  - Human-like BPM with beating heart indicators (❤️)  
-  - Color-coded console feedback (bright orange when connected)  
+  Periodically publishes lightweight pulses containing telemetry data and timestamp:
 
   → Code: [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AuRoRA/src/vcs/vcs/vp_generator.py)
 
@@ -47,13 +44,6 @@ Inspired by biological circulatory systems, VCS acts as the "blood flow" that ke
 
   → Code: [`AIVA/src/vcs/vcs/vp_analyzer.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AIVA/src/vcs/vcs/vp_analyzer.py)
 
-#### Benefits
-- Agents only execute tasks when a valid connection is confirmed
-- Fast detection of network issues or node failures
-- Identity context for multi-robot/multi-user scenarios
-- Low overhead — designed to be lightweight and always-on
-
-This foundational module enables higher-level autonomic behaviors in future roadmap phases (self-regulation, predictive healing).
 
 Table of Contents
 - [Why AGi-ROS?](#why-agi-ros)
