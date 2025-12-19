@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vtc_vp_generator = vcs.vtc_vp_generator:main'
+            'vital_pulse_generator = vcs.vital_pulse_generator:main'
         ],
     },
 )

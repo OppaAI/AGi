@@ -10,7 +10,7 @@ ROBOT_ID = "AuRoRA_Zero_Prototype"  # used as namespace
 USER_ID = "OppaAI"
 PUBLISHER_TOPIC = "vital_pulse"     # topic inside namespace
 FEEDBACK_TOPIC = "vital_feedback"   # topic inside namespace
-NODE_NAME = "vtc_vp_generator"      # node name only, no slashes
+NODE_NAME = "vital_pulse_generator"      # node name only, no slashes
 
 INTERVAL = 1.0  # seconds per pulse (~60 BPM resting heart rate)
 ASCII_HEART = "❤"  # heart symbol
