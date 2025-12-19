@@ -1,11 +1,14 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
-[![repo](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
-![status](https://img.shields.io/badge/build-pending-lightgrey)
-[![license: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
+![Build](https://img.shields.io/badge/build-pending-lightgrey)
+![Status Active](https://img.shields.io/badge/status-active-success.svg)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
-![Python 3.10](https://img.shields.io/badge/python-3.10-cyan.svg)
-![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-cyan.svg)
+![Platform Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
+![Ubuntu](https://img.shields.io/badge/ubuntu-22.04-E95420.svg)
+![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)
+![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-blue.svg)
 
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
