@@ -1,9 +1,10 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
 [![repo](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
-[![status](https://img.shields.io/badge/build-pending-lightgrey)]()
+![status](https://img.shields.io/badge/build-pending-lightgrey)
 [![license: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
-[![Python 3.10](img.shields.io)]()
+
+![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
 I am only a one man team with limited programming capability since the era of QBASIC, and superficial knowledge of ML/DL/Agentic/Robotics.
