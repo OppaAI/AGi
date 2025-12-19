@@ -8,7 +8,7 @@ AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents
 I am only a one man team with limited programming capability since the era of QBASIC, and superficial knowledge of ML/DL/Agentic/Robotics.
 This project may last for decades, but I just want to see how far I could go.
 
-> WARNING: This README is only a raw blanket file with starter configurations, preliminary outlines, examples and roadmaps. May contain inaccurate and misleading information. Will update shortly to reflect my current progress...
+> WARNING: This README is only a raw blanket file with starter configurations, preliminary outlines, examples and roadmaps. May contain inaccurate and misleading information. Will update shortly to reflect my current progress... Throughout the time I will go through my notes to write a comphrensive guidance document...
 
 This repo consists of 2 separate directories:
 - AIVA - AI Virtual Assistant (Server for containing LLM and various models)
