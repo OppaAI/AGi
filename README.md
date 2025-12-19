@@ -5,7 +5,7 @@
 [![license: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 ![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)
-![ROS 2](https://img.shields.io/badge/ROS-2%20Humble-blue.svg)
+![ROS2](https://img.shields.io/badge/ROS-2%20Humble-blue.svg)
 
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
