@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vtc_oscillator = vcs.vtc_oscillator:main'
+            'vtc_vp_generator = vcs.vtc_vp_generator:main'
         ],
     },
 )
