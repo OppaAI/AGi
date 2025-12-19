@@ -1,10 +1,10 @@
-# AGi-ROS (ROS2 Humble Project with LLM to achieve AGI)
+# AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
-[![Repository](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-blue)](https://github.com/OppaAI/AGi-ROS)
+[![Repository](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 [![Build Status](https://img.shields.io/badge/build-pending-lightgrey)]()
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)]()
+[![License: GPL v3](https://img.shields.io/github/license/<user>/<repo>)]()
 
-AGi-ROS (Artificial General Intelligence for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
+AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
 
 > NOTE: This README contains starter configurations and examples. Please adapt the config files, launch names, and dependency versions to match your repository layout and supported ROS distributions.
 
@@ -53,10 +53,9 @@ Features
 
 Supported Platforms
 -------------------
-- Primary target: ROS 2 (Humble / Iron / Rolling — check branch-specific docs)
-- ROS 1 support planned / reachable via ros1_bridge (custom setup required)
-- Ubuntu 20.04 / 22.04 (match ROS distro)
-- Python 3.8+
+- Primary target: ROS 2 (Humble — check branch-specific docs)
+- Ubuntu 22.04 (match ROS distro)
+- Python 3.10
 
 Quickstart
 ----------
@@ -64,7 +63,7 @@ Quickstart
 Prerequisites
 - Git
 - A supported ROS installation (ROS 2 recommended)
-- Python 3.8+ and pip
+- Python 3.10 and pip
 - colcon (for ROS 2 builds)
 - LLM API credentials (if using cloud LLMs)
 
