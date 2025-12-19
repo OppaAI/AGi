@@ -21,6 +21,15 @@ This repo consists of 2 separate directories:
 - AIVA - AI Virtual Assistant (Server for containing LLM and various models)
 - AuRoRA - Autonomous Rover Robot Assistant (Robot unit with autonomous navigation and thinking/reasoning and simplified Agentic framework)
 
+The AGi-ROS is only at a very early development stage;
+it is still a very simple infrastructure with the following system:
+
+### Vital Circulatory System (VCS) - Bio-Inspired Heartbeat Monitoring
+**Vital Pulse System** for robust mutual awareness between robot and server:
+- **Vital Pulse Generator** (on AuRoRA/robot side): Periodically publishes pulses with simple telemetry data. [`AIVA/src/vcs/vcs/vp_analyzer.py`](https://github.com/OppaAI/AGi-ROS/tree/main/AIVA/src/vcs/vcs)
+- **Vital Pulse Analyzer** (on AIVA/server side): Monitors incoming pulses and displays robot/user IDs for fleet tracking. [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/tree/main/AuRoRA/src/vcs/vcs)
+This ensures agents only act when connected, detects disconnections quickly, and provides identity context for multi-robot scenarios. Inspired by biological circulatory systems — the "blood" that keeps the AGI robot alive and aware.
+
 Table of Contents
 - [Why AGi-ROS?](#why-agi-ros)
 - [Features](#features)
