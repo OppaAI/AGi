@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+import json
+import time
+from rclpy.qos import QoSProfile
+
+# ANSI color codes
+DARK_ORANGE = "\033[38;5;166m"
+BRIGHT_ORANGE = "\033[38;5;214m"
+
+# Constants
+ROBOT_NAMESPACE = "AuRoRA_Zero_Prototype"
+NODE_NAME = "vital_pulse_analyzer"
+SUBSCRIBE_TOPIC = "vital_pulse"
+FEEDBACK_TOPIC = "vital_feedback"
+BRIGHT_DURATION = 5.0
+
+class VitalPulseAnalyzer(Node):
+    def __init__(self):
+        super().__init__(NODE_NAME, namespace=ROBOT_NAMESPACE)
+
+        qos_profile = QoSProfile(depth=10)
+
+        # Subscriber for robot vital pulse
+        self.subscriber_ = self.create_subscription(
+            String,
+            SUBSCRIBE_TOPIC,
+            self.pulse_callback,
+            qos_profile
+        )
+
+        # Publisher to send feedback
+        self.publisher_ = self.create_publisher(String, FEEDBACK_TOPIC, qos_profile)
+
+        self.last_pulse_time = None
+
+    def pulse_callback(self, msg):
+        now = time.time()
+        try:
+            data = json.loads(msg.data)
+            robot_id = data.get("robot_id", "Unknown")
+            user_id = data.get("user_id", "Unknown")
+            pulse = data.get("vital_pulse_opm", 0.0)
+        except json.JSONDecodeError:
+            self.get_logger().error("Failed to decode JSON from robot pulse message")
+            return
+
+        self.last_pulse_time = now
+
+        # Send feedback to robot
+        feedback_msg = String()
+        feedback_msg.data = json.dumps({"opm": pulse})
+        self.publisher_.publish(feedback_msg)
+
+        # Determine color based on recent pulse
+        if self.last_pulse_time and (now - self.last_pulse_time) <= BRIGHT_DURATION:
+            color = BRIGHT_ORANGE
+        else:
+            color = DARK_ORANGE
+
+        # Print terminal display
+        print(f"\r{color}Robot ID: [{robot_id}] | User: {user_id} | Vital Pulse: {pulse:.1f} OPM", flush=True)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = VitalPulseAnalyzer()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        print("\nVital Pulse Analyzer stopped.")
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == "__main__":
+    main()

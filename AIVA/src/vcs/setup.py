@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vcc_oscillator = vcs.vcc_oscillator:main'
+            'vital_pulse_analyzer = vcs.vp_analyzer:main'
         ],
     },
 )
