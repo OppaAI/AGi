@@ -6,19 +6,24 @@ import time
 import json
 
 # ---------------- CONSTANTS ----------------
-ROBOT_ID = "AuRoRA_Zero_Prototype"  # safe for ROS
-PUBLISHER_TOPIC = "vtc_vp_generator"
-FEEDBACK_TOPIC = "vcc_vital_feedback"
-NODE_NAME = "vtc_vp_generator_node"
-INTERVAL = 0.8  # seconds per pulse (~75 BPM resting heart rate)
+ROBOT_ID = "AuRoRA_Zero_Prototype"  # used as namespace
+USER_ID = "OppaAI"
+PUBLISHER_TOPIC = "vital_pulse"     # topic inside namespace
+FEEDBACK_TOPIC = "vital_feedback"   # topic inside namespace
+NODE_NAME = "vtc_vp_generator"      # node name only, no slashes
 
+INTERVAL = 1.0  # seconds per pulse (~60 BPM resting heart rate)
 ASCII_HEART = "❤"  # heart symbol
 
 # -------------------------------------------
+# Add color codes
+DARK_ORANGE = "\033[38;5;166m"
+BRIGHT_ORANGE = "\033[38;5;214m"
+RESET = "\033[0m"
 
-class VTCPulseGenerator(Node):
+class VitalPulseGenerator(Node):
     def __init__(self):
-        super().__init__(NODE_NAME)
+        super().__init__(NODE_NAME, namespace=ROBOT_ID)
 
         self.publisher_ = self.create_publisher(String, PUBLISHER_TOPIC, 10)
         self.feedback_sub = self.create_subscription(
@@ -30,15 +35,14 @@ class VTCPulseGenerator(Node):
 
         self.timer = self.create_timer(INTERVAL, self.send_pulse)
         self.show_heart = True
-        self.bpm = 0.0  # calculated from interval
-        self.step = 0   # for simple "pulse" animation
+        self.bpm = 0.0
+        self.step = 0
+        self.server_online = False  # Track server feedback
 
     def send_pulse(self):
         now = time.time()
-        # Calculate pulses per minute from interval
-        self.bpm = (1 / INTERVAL) * 60  # oscillations per minute (opm)
+        self.bpm = (1 / INTERVAL) * 60
 
-        # Publish JSON message with robot time and pulse rate
         msg = String()
         msg.data = json.dumps({
             "robot_id": ROBOT_ID,
@@ -47,22 +51,26 @@ class VTCPulseGenerator(Node):
         })
         self.publisher_.publish(msg)
 
-        # Simple pulse effect: alternate showing heart bigger/smaller
-        heart_display = ASCII_HEART * (1 + self.step % 2)
+        # Blink heart effect
+        heart_display = ASCII_HEART if self.step % 2 == 0 else " "
 
-        # Print pulse in terminal
-        print(f"\r{heart_display} Vital Pulse oscillation rate: {self.bpm:.1f} opm", end="", flush=True)
+        # Choose color based on server status
+        color = BRIGHT_ORANGE if self.server_online else DARK_ORANGE
+
+        # Print pulse in terminal with color
+        print(f"\r{color}{heart_display} Vital Pulse oscillation rate: {self.bpm:.1f} opm{RESET}", end="", flush=True)
 
         self.step += 1
 
     def feedback_callback(self, msg):
         data = json.loads(msg.data)
         bpm = data.get('bpm', 0)
-        print(f"  | Server BPM: {bpm:.1f}", flush=True)
+        self.server_online = True  # Server is online if feedback received
+        print(f"\n  | Server BPM: {bpm:.1f}", flush=True)
 
 def main(args=None):
     rclpy.init(args=args)
-    node = VTCPulseGenerator()
+    node = VitalPulseGenerator()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
