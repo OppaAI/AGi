@@ -2,7 +2,7 @@
 
 [![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
-![Status Active](https://img.shields.io/badge/status-active-success.svg)
+![Status Experimental](https://img.shields.io/badge/status-experimental-orange.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 ![Platform Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
