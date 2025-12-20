@@ -4,6 +4,7 @@ from rclpy.node import Node
 from std_msgs.msg import String
 import time
 import json
+from rclpy.qos import QoSProfile
 
 # ---------------- CONSTANTS ----------------
 ROBOT_ID = "AuRoRA_Zero_Prototype"
@@ -12,15 +13,13 @@ PUBLISHER_TOPIC = "vital_pulse"
 FEEDBACK_TOPIC = "vital_feedback"
 NODE_NAME = "vital_pulse_generator"
 
-INTERVAL = 1.0  # seconds per pulse (~60 BPM resting heart rate)
+INTERVAL = 1.0  # seconds per pulse (~60 opm resting heart rate)
 ASCII_HEART = "❤"
 
-# Color codes
-DARK_ORANGE = "\033[38;5;166m"
-BRIGHT_ORANGE = "\033[38;5;214m"
+# Cyan color codes
+DARK_CYAN = "\033[38;5;30m"
+BRIGHT_CYAN = "\033[38;5;51m"
 BRIGHT_DURATION = 1.0  # seconds after feedback to stay bright
-
-from rclpy.qos import QoSProfile
 
 class VitalPulseGenerator(Node):
     def __init__(self):
@@ -46,7 +45,7 @@ class VitalPulseGenerator(Node):
 
     def send_pulse(self):
         now = time.time()
-        bpm = (1 / INTERVAL) * 60
+        opm = (1 / INTERVAL) * 60
 
         # Publish message
         msg = String()
@@ -54,7 +53,7 @@ class VitalPulseGenerator(Node):
             "robot_id": ROBOT_ID,
             "user_id": USER_ID,
             "robot_time": now,
-            "vital_pulse_opm": bpm
+            "vital_pulse_opm": opm
         })
         self.publisher_.publish(msg)
 
@@ -62,13 +61,10 @@ class VitalPulseGenerator(Node):
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
 
         # Determine color based on last feedback
-        if self.last_feedback_time and (now - self.last_feedback_time) <= BRIGHT_DURATION:
-            color = BRIGHT_ORANGE
-        else:
-            color = DARK_ORANGE
+        color = BRIGHT_CYAN if self.last_feedback_time and (now - self.last_feedback_time) <= BRIGHT_DURATION else DARK_CYAN
 
         # Print on the same line (overwrite)
-        print(f"\r{color}{heart_display} Vital Pulse: {bpm:.1f} opm", end="", flush=True)
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM", end="", flush=True)
 
         self.step += 1
 
@@ -76,15 +72,15 @@ class VitalPulseGenerator(Node):
         self.last_feedback_time = time.time()
         try:
             data = json.loads(msg.data)
-            bpm = data.get('bpm', 0)
+            opm = data.get('opm', 0)
         except:
-            bpm = 0
+            opm = 0
 
         # Overwrite the same line instead of printing new line
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
-        color = BRIGHT_ORANGE
+        color = BRIGHT_CYAN
 
-        print(f"\r{color}{heart_display} Vital Pulse: {bpm:.1f} opm", end="", flush=True)
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM", end="", flush=True)
 
 
 def main(args=None):
@@ -96,6 +92,7 @@ def main(args=None):
         print("\nVital Pulse Generator stopped.")
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
