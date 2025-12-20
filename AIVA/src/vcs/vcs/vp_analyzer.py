@@ -7,15 +7,15 @@ import time
 from rclpy.qos import QoSProfile
 
 # ANSI color codes
-DARK_ORANGE = "\033[38;5;166m"
-BRIGHT_ORANGE = "\033[38;5;214m"
+DARK_CYAN = "\033[38;5;30m"    # darker cyan
+BRIGHT_CYAN = "\033[38;5;51m"  # bright cyan
 
 # Constants
 ROBOT_NAMESPACE = "AuRoRA_Zero_Prototype"
 NODE_NAME = "vital_pulse_analyzer"
 SUBSCRIBE_TOPIC = "vital_pulse"
 FEEDBACK_TOPIC = "vital_feedback"
-BRIGHT_DURATION = 5.0
+BLINK_DURATION = 1.0
 
 class VitalPulseAnalyzer(Node):
     def __init__(self):
@@ -55,10 +55,10 @@ class VitalPulseAnalyzer(Node):
         self.publisher_.publish(feedback_msg)
 
         # Determine color based on recent pulse
-        if self.last_pulse_time and (now - self.last_pulse_time) <= BRIGHT_DURATION:
-            color = BRIGHT_ORANGE
+        if self.last_pulse_time and (now - self.last_pulse_time) <= BLINK_DURATION:
+            color = BRIGHT_CYAN
         else:
-            color = DARK_ORANGE
+            color = DARK_CYAN
 
         # Print terminal display
         print(f"\r{color}Robot ID: [{robot_id}] | User: {user_id} | Vital Pulse: {pulse:.1f} OPM", flush=True)
