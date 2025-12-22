@@ -127,9 +127,12 @@ ros2 topic list
 ## Code 
 
 ### vp_generator.py (Robot VTC)
+  → [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AuRoRA/src/vcs/vcs/vp_generator.py)
 
 
 ### vp_analyzer.py (Server VCC)
+Monitors incoming pulses, tracks connected robots/users, and detects timeouts/disconnections in real time.  
+→ [`AIVA/src/vcs/vcs/vp_analyzer.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AIVA/src/vcs/vcs/vp_analyzer.py)
 
 
 ---
