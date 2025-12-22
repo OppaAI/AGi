@@ -87,13 +87,10 @@ flowchart TD
 
 ---
 
-## Installation
+## Build ROS2 Worksapce
+Go to the directory of the repo (eg. ~/AGi_ROS)
 
 ```bash
-# Clone repository
-git clone https://github.com/<username>/vcs.git
-cd vcs
-
 # Build ROS2 workspace
 colcon build
 source install/setup.bash
