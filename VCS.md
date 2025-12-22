@@ -17,8 +17,8 @@ The system is divided into:
 
 | Type    | Name             | Module | Node / Executable        |
 |--------|-----------------|--------|-------------------------|
-| Robot  | Jon              | VTC    | vp_generator            |
-| Server | Grace_Home       | VCC    | vp_analyzer             |
+| Robot  | AuRoRA              | VTC    | vp_generator            |
+| Server | AIVA       | VCC    | vp_analyzer             |
 
 - **VTC (Vital Terminal Core)** – Robot module for sending vital data.  
 - **VCC (Vital Central Core)** – Server module for receiving and analyzing robot vital data.  
