@@ -4,10 +4,10 @@
 
 The **Vital Circulatory System (VCS)** is a conceptual framework for managing the "heartbeat" and vital signals of robots (VTC) and servers (VCC) in a distributed ROS2 architecture. It mimics human physiology at a simplified level to organize systems, modules, and nodes for robotics operations.  
 
-VCS is designed to:  
-- Ensure continuous monitoring of robot health via **heartbeat signals**.  
-- Allow servers to process and respond to robot vital data.  
-- Provide a clear naming convention for nodes, packages, and topics to map the system intuitively.
+The Vital Circulatory System (VCS) is designed to:  
+- Continuously monitor the health of robots through **heartbeat signals**.  
+- Enable the server to process and respond to robot vital data in real-time.  
+- Verify and maintain a reliable connection between robots and the server.
 
 ---
 
