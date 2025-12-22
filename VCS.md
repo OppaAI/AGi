@@ -55,18 +55,19 @@ flowchart TD
     Robot[AuRoRA (Robot VTC)]
     Server[AIVA (Server VCC)]
 
-    Robot -->|vital_pulse| Server
-    Server -->|vital_feedback| Robot
-
-    subgraph Robot Module
+    subgraph RobotModule ["Robot Module"]
         vp_generator["vp_generator (Node/Executable)"]
     end
-    Robot --> vp_generator
 
-    subgraph Server Module
+    subgraph ServerModule ["Server Module"]
         vp_analyzer["vp_analyzer (Node/Executable)"]
     end
+
+    Robot --> vp_generator
     Server --> vp_analyzer
+
+    vp_generator -->|vital_pulse| vp_analyzer
+    vp_analyzer -->|vital_feedback| vp_generator
 ````
 
 ---
