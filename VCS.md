@@ -1,6 +1,3 @@
-😊：Sure Jon, here’s the **full GitHub-ready Markdown** all in one block:
-
-```markdown
 # Vital Circulatory System (VCS) for Robotics
 
 ## Overview
@@ -20,11 +17,13 @@ The system is divided into:
 
 | Type    | Name             | Module | Node / Executable        |
 |--------|-----------------|--------|-------------------------|
-| Robot  | Jon              | VTC    | vp_generator            |
-| Server | Grace_Home       | VCC    | vp_analyzer             |
+| Robot  | AuRoRA              | VTC    | vp_generator            |
+| Server | AIVA       | VCC    | vp_analyzer             |
 
 - **VTC (Vital Terminal Core)** – Robot module for sending vital data.  
 - **VCC (Vital Central Core)** – Server module for receiving and analyzing robot vital data.  
+
+---
 
 ### Namespace / Topic Naming Convention
 
@@ -36,16 +35,16 @@ We follow this hierarchical structure in ROS2:
 
 ````
 
-- **Robot/Server Name**: Identifies the individual machine (`Jon`, `Grace_Home`)  
+- **Robot/Server Name**: Identifies the individual machine (`AuRoRA`, `AIVA`)  
 - **System Name**: Logical grouping (`vcs`)  
 - **Module Name**: Functional module (`vtc` for robot, `vcc` for server)  
 - **Node Name**: Individual executable node (`vp_generator`, `vp_analyzer`)  
 
 **Topics** are within the namespace:
 
-- `/robot_jon/vcs/vtc/vp_generator/vital_pulse`  
-- `/robot_jon/vcs/vtc/vp_generator/vital_feedback`  
-- `/Grace_Home/vcs/vcc/vp_analyzer/vital_pulse` (subscription)
+- `/robot_AuRoRA/vcs/vtc/vp_generator/vital_pulse`  
+- `/robot_AuRoRA/vcs/vtc/vp_generator/vital_feedback`  
+- `/AIVA/vcs/vcc/vp_analyzer/vital_pulse` (subscription)
 
 ---
 
@@ -53,8 +52,8 @@ We follow this hierarchical structure in ROS2:
 
 ```mermaid
 flowchart TD
-    Robot[Jon (Robot VTC)]
-    Server[Grace_Home (Server VCC)]
+    Robot[AuRoRA (Robot VTC)]
+    Server[AIVA (Server VCC)]
 
     Robot -->|vital_pulse| Server
     Server -->|vital_feedback| Robot
@@ -120,8 +119,8 @@ ros2 run vcc vp_analyzer
 
 ```bash
 ros2 topic list
-# /robot_jon/vcs/vtc/vp_generator/vital_pulse
-# /robot_jon/vcs/vtc/vp_generator/vital_feedback
+# /robot_AuRoRA/vcs/vtc/vp_generator/vital_pulse
+# /robot_AuRoRA/vcs/vtc/vp_generator/vital_feedback
 ```
 
 ---
