@@ -163,9 +163,3 @@ OppaAI
 
 ```
 
----
-
-😊：This is a clean, ready-to-push **full README** for your VCS system.  
-
-If you like, I can **also add a second Mermaid diagram showing multiple robots and multiple modules communicating with the server**, to make it visually obvious how VCS scales. Do you want me to do that?
-```
