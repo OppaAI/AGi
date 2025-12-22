@@ -59,9 +59,12 @@ flowchart TD
     subgraph Server Module
         vp_analyzer["vp_analyzer (Node/Executable)"]
     end
-    Server --> vp_analyzer```
+    Server --> vp_analyzer
+```
 
-###Naming Conventions
+
+
+## Naming Conventions
 Concept	ROS2 Equivalent	Example
 System	Namespace (optional)	vcs
 Module	Sub-namespace / Package	vtc (robot), vcc (server)
@@ -72,7 +75,8 @@ Node names are nouns (objects).
 
 Function names / executables are verbs (actions).
 
-###Usage Examples
+
+## Usage Examples
 Robot (VTC)
 # Run vital pulse generator
 ros2 run vtc vp_generator
