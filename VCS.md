@@ -128,6 +128,7 @@ ros2 topic list
 
 ### vp_generator.py (Robot VTC)
 Periodically publishes lightweight pulses containing telemetry data and timestamp:
+
 → [`AuRoRA/src/vcs/vcs/vp_generator.py`](https://github.com/OppaAI/AGi-ROS/blob/main/AuRoRA/src/vcs/vcs/vp_generator.py)
 
 
