@@ -45,8 +45,8 @@ We follow this hierarchical structure in ROS2:
 
 ```mermaid
 flowchart TD
-    Robot[Jon (Robot VTC)]
-    Server[Grace_Home (Server VCC)]
+    Robot[AuRoRA (Robot VTC)]
+    Server[AIVA (Server VCC)]
 
     Robot -->|vital_pulse| Server
     Server -->|vital_feedback| Robot
