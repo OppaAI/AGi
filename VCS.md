@@ -118,27 +118,19 @@ ros2 run vcc vp_analyzer
 
 ```bash
 ros2 topic list
-# /robot_AuRoRA/vcs/vtc/vp_generator/vital_pulse
-# /robot_AuRoRA/vcs/vtc/vp_generator/vital_feedback
+# /<robotID>/vcs/vtc/vp_generator/vital_pulse
+# /<robotID>/vcs/vtc/vp_generator/vital_feedback
 ```
 
 ---
 
-## Code Examples
+## Code 
 
 ### vp_generator.py (Robot VTC)
 
-```python
-#!/usr/bin/env python3
-# [Robot node code snippet here]
-```
 
 ### vp_analyzer.py (Server VCC)
 
-```python
-#!/usr/bin/env python3
-# [Server node code snippet here]
-```
 
 ---
 
