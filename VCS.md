@@ -52,14 +52,14 @@ We follow this hierarchical structure in ROS2:
 
 ```mermaid
 flowchart TD
-    Robot["AuRoRA (Robot VTC)"]
-    Server["AIVA (Server VCC)"]
+    Robot["AuRoRA (Robot VCS)"]
+    Server["AIVA (Server VCS)"]
 
-    subgraph RobotModule ["Robot Module"]
+    subgraph RobotModule ["Robot VTC Module"]
         vp_generator["vp_generator (Node/Executable)"]
     end
 
-    subgraph ServerModule ["Server Module"]
+    subgraph ServerModule ["Server VCC Module"]
         vp_analyzer["vp_analyzer (Node/Executable)"]
     end
 
