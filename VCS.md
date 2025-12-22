@@ -59,7 +59,7 @@ flowchart TD
     subgraph Server Module
         vp_analyzer["vp_analyzer (Node/Executable)"]
     end
-    Server --> vp_analyzer
+    Server --> vp_analyzer```
 
 ###Naming Conventions
 Concept	ROS2 Equivalent	Example
