@@ -10,7 +10,7 @@
 ![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)
 ![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-blue.svg)
 
-![Maintainer](https://img.shields.io/badge/maintainer-OppaAI-darkpink)
+![Maintainer](https://img.shields.io/badge/maintainer-OppaAI-%23FFB7C5)
 ![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
 ![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan)
 ![CS Credentials](https://img.shields.io/badge/CS-None-lightgrey)
