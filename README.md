@@ -31,7 +31,7 @@ it is still a very simple infrastructure with the following system:
 
 ### 🫀 Vital Circulatory System (VCS) – Bio-Inspired Heartbeat Monitoring
 Version 0.1.0
-  → Document:[`VCS.md`](https://github.com/OppaAI/AGi-ROS/edit/main/VCS.md)
+  → Document:[`VCS.md`](docs/vcs.md)
 
 
 #### Key Components
