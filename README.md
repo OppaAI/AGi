@@ -30,12 +30,8 @@ The AGi-ROS is only at a very early development stage;
 it is still a very simple infrastructure with the following system:
 
 ### 🫀 Vital Circulatory System (VCS) – Bio-Inspired Heartbeat Monitoring
-
 Version 0.1.0
 
-The **Vital Pulse System** provides robust, mutual awareness between robot and server, ensuring reliable operation in distributed AGI robot setups.
-
-Inspired by biological circulatory systems, VCS acts as the "blood flow" that keeps the entire system alive and self-aware.
 
 #### Key Components
 
