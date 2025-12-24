@@ -157,5 +157,46 @@ GPL-3.0-only
 
 OppaAI
 
-```
 
+
+```mermaid
+
+graph TB
+    subgraph Robot
+        R1[VTC - Vital Pulse Generator 0.1.0]
+        R2[Robot ID : SAID TBD]
+        R3[Ner-ID]
+        R4[Health Data]
+        R5[Open GPU]
+        R6[Vital Pulse Threat]
+        R7[Vital Pulse Poke]
+        R8[Vital Feedback]
+    end
+
+    subgraph Servers
+        S1[VCC - Vital Pulse Receptor 0.1.0]
+        S2[Robot ID : SAID TBD]
+        S3[Ner-ID]
+        S4[Health Data]
+        S5[Open GPU]
+        S6[Vital Pulse Threat]
+        S7[Vital Pulse Poke]
+        S8[Vital Feedback]
+    end
+
+    R1 -->|Vital Pulse Threat| S1
+    R2 -->|Vital Pulse Threat| S1
+    R6 -->|Vital Pulse Poke| S7
+    R7 -->|Vital Feedback| R8
+    R8 -->|Vital Feedback| S8
+    S1 -->|Vital Feedback| R8
+    S6 -->|Vital Feedback| R7
+    S7 -->|Vital Feedback| R6
+    R4 -->|Health Data| S4
+    S5 -->|Health Data| R5
+    R3 -->|Robot ID| S2
+    S3 -->|Robot ID| R2
+    R5 -->|Open GPU| S5
+    S5 -->|Open GPU| R5
+
+````
