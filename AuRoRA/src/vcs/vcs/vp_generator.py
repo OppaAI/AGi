@@ -2,7 +2,6 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
-import time
 import json
 from rclpy.qos import QoSProfile
 
@@ -16,44 +15,26 @@ NODE_NAME = "vital_pulse_generator"
 INTERVAL = 1.0  # seconds per pulse (~60 opm resting heart rate)
 ASCII_HEART = "❤"
 
-# Cyan color codes
+# ANSI color codes
 DARK_CYAN = "\033[38;5;30m"
 BRIGHT_CYAN = "\033[38;5;51m"
 RESET_COLOR = "\033[0m"
 BRIGHT_DURATION = 1.0  # seconds after feedback to stay bright
 
 class VitalPulseGenerator(Node):
-    """
-    Vital Pulse Generator Node.
-    """
-
-    fire_timestamp = 0.0
-    
     def __init__(self):
         super().__init__(NODE_NAME, namespace=ROBOT_ID)
 
         qos_profile = QoSProfile(depth=10)
-
-        # Publisher and subscriber
         self.publisher_ = self.create_publisher(String, PUBLISHER_TOPIC, qos_profile)
-        self.feedback_sub = self.create_subscription(
-            String,
-            FEEDBACK_TOPIC,
-            self.feedback_callback,
-            qos_profile
-        )
+        self.feedback_sub = self.create_subscription(String, FEEDBACK_TOPIC, self.feedback_callback, qos_profile)
 
-        # Timer for heartbeat
         self.timer = self.create_timer(INTERVAL, self.send_pulse)
-
-        self.show_heart = True
         self.step = 0
-        self.last_feedback_time = None  # for bright color after feedback
-    
+        self.last_feedback_time = None
+        self.fire_timestamp = None
+
     def get_now_sec(self):
-        """
-        Return current ROS time in seconds as float.
-        """
         now = self.get_clock().now()
         return now.seconds_nanoseconds()[0] + now.seconds_nanoseconds()[1] / 1e9
 
@@ -62,7 +43,7 @@ class VitalPulseGenerator(Node):
         self.fire_timestamp = now
         opm = (1 / INTERVAL) * 60
 
-        # Publish message
+        # Publish pulse message
         msg = String()
         msg.data = json.dumps({
             "robot_id": ROBOT_ID,
@@ -72,19 +53,15 @@ class VitalPulseGenerator(Node):
         })
         self.publisher_.publish(msg)
 
-        # Blink heart
+        # Blink heart logic
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
-
-        # Determine color based on last feedback
-        if self.last_feedback_time is None:
-            color = DARK_CYAN  # 初次沒有 feedback 就暗色
-        else:
+        color = DARK_CYAN
+        if self.last_feedback_time:
             elapsed = now - self.last_feedback_time
-            color = BRIGHT_CYAN if 0 <= elapsed <= BRIGHT_DURATION else DARK_CYAN
+            if 0 <= elapsed <= BRIGHT_DURATION:
+                color = BRIGHT_CYAN
 
-        # Print on the same line (overwrite)
-        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM, Sent at: {now:.2f}s {RESET_COLOR}", end="", flush=True)
-
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM | Sent at: {now:.2f}s {RESET_COLOR}", end="", flush=True)
         self.step += 1
 
     def feedback_callback(self, msg):
@@ -92,17 +69,14 @@ class VitalPulseGenerator(Node):
         try:
             data = json.loads(msg.data)
             opm = data.get('opm', 0)
-            rtt = (self.last_feedback_time - self.fire_timestamp) * 1000  # convert to milliseconds
+            rtt = (self.last_feedback_time - self.fire_timestamp) * 1000 if self.fire_timestamp else 0
         except:
             opm = 0
             rtt = 0
 
-        # Overwrite the same line instead of printing new line
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
         color = BRIGHT_CYAN
-
-        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM | RTT: {rtt:.0f}ms {RESET_COLOR}".ljust(100), end="", flush=True)  # overwrite the same line
-
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM | RTT: {rtt:.0f}ms {RESET_COLOR}".ljust(100), end="", flush=True)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -113,7 +87,6 @@ def main(args=None):
         print("\nVital Pulse Generator stopped.")
     node.destroy_node()
     rclpy.shutdown()
-
 
 if __name__ == "__main__":
     main()
