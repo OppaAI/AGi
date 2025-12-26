@@ -36,8 +36,15 @@ class VitalPulseAnalyzer(Node):
 
         self.last_pulse_time = None
 
+    def get_now_sec(self):
+        """
+        Return current ROS time in seconds as float.
+        """
+        now = self.get_clock().now()
+        return now.seconds_nanoseconds()[0] + now.seconds_nanoseconds()[1] / 1e9
+
     def pulse_callback(self, msg):
-        now = time.time()
+        now = self.get_now_sec()
         try:
             data = json.loads(msg.data)
             robot_id = data.get("robot_id", "Unknown")
@@ -51,7 +58,7 @@ class VitalPulseAnalyzer(Node):
 
         # Send feedback to robot
         feedback_msg = String()
-        feedback_msg.data = json.dumps({"opm": pulse})
+        feedback_msg.data = json.dumps({"opm": pulse, "timestamp": now})
         self.publisher_.publish(feedback_msg)
 
         # Determine color based on recent pulse
@@ -61,7 +68,7 @@ class VitalPulseAnalyzer(Node):
             color = DARK_CYAN
 
         # Print terminal display
-        print(f"\r{color}Robot ID: [{robot_id}] | User: {user_id} | Vital Pulse: {pulse:.1f} OPM", flush=True)
+        print(f"\r{color}Robot ID: [{robot_id}] | User: {user_id} | Vital Pulse: {pulse:.1f} OPM | Received at: {now:.2f}s", flush=True)
 
 def main(args=None):
     rclpy.init(args=args)
