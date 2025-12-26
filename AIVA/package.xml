@@ -1,8 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>vcs</name>
-  <version>0.1.0</version>
+  <name>vcs</name> <version>0.1.0</version>
   <description>Vital Circulatory System for AGi</description>
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
   <license>GPL-3.0-only</license>
@@ -11,6 +10,11 @@
   <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/core/src/vcs</url>
   <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
 
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend> 
+
+  <exec_depend>AGi_core</exec_depend> 
+  
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
