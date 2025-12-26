@@ -1,11 +1,11 @@
-# Vital Core (VC)
+# Vital Central Core (VCC)
 # - Broadcast vital pulse to ROS network to ping the server
 # - Sends vital data and timestamp to the server for analysis
 # - Receives feedback from the server to verify connection
 # - Detects timeouts and disconnections
 # - Displays vital signs in the terminal
 
-class VitalCore:
+class VitalCentralCore:
     def __init__(self, interval=1.0, blink_duration=1.0):
         self.interval = interval
         self.blink_duration = blink_duration

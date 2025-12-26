@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import json
-from vital_core import VitalCore
+from vcb import VitalCentralCore
 
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
@@ -14,7 +14,7 @@ NODE_NAME = "vital_pulse_analyzer"
 class VitalPulseAnalyzer(Node):
     def __init__(self):
         super().__init__(NODE_NAME)
-        self.vc = VitalCore(blink_duration=1.0)
+        self.vc = VitalCentralCore(blink_duration=1.0)
         qos_profile = 10
 
         self.subscriber_ = self.create_subscription(String, SUBSCRIBE_TOPIC, self.pulse_callback, qos_profile)

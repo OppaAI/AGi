@@ -5,7 +5,7 @@ from std_msgs.msg import String
 import json
 import threading
 import time
-from vcs.vital_core import VitalCore
+from vtc import VitalTerminalCore
 
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
@@ -18,7 +18,7 @@ FEEDBACK_TOPIC = "vital_feedback"
 class VitalPulseGenerator(Node):
     def __init__(self):
         super().__init__("vital_pulse_generator", namespace=ROBOT_ID)
-        self.vc = VitalCore(interval=1.0, blink_duration=1.0)
+        self.vc = VitalTerminalCore(interval=1.0, blink_duration=1.0)
 
         qos_profile = 10
         self.publisher_ = self.create_publisher(String, PUBLISHER_TOPIC, qos_profile)
