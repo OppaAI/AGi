@@ -12,8 +12,8 @@ Description: This system monitors and manages the vital signs of AGi robots, inc
 * vital_pulse_collector (AuRoRA/VCS): Collects vital pulses from robot and sends to server
 * vital_pulse_analyzer (AIVA/VCS): Receives vital pulses from robots, tracks connected robots/users, and detects timeouts/disconnections
 
-Forthcoming
------------
+0.1.1 (2025-12-26)
+------------------
 * Fixed Time Logic issue by using ROS time instead of system clock (#3)
 * Fixed print Bottleneck issue by using separate thread for terminal display (#2)
 * Separated vital core (vcc and vtc) functions into its own package:

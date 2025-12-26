@@ -4,7 +4,7 @@
 <package format="3">
   <!-- Basic package information -->
   <name>vcs</name>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <description>Vital Circulatory System for AGi</description>
   
   <!-- Maintainer and author information -->
