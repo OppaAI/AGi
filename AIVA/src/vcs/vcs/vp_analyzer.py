@@ -3,7 +3,12 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import json
+<<<<<<< HEAD
 from vcs.vital_core import VitalCore
+=======
+import time
+from vital_core import VitalCore
+>>>>>>> parent of 335c90b (Separate the vital_core into shared directory AGi_core)
 
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
