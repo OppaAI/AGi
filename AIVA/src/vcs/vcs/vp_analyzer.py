@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import json
-from AGi_core.src.AGi_core.vital_core import VitalCore
+from vcs.vital_core import VitalCore
 
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
