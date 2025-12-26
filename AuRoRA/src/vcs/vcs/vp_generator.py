@@ -19,9 +19,16 @@ ASCII_HEART = "❤"
 # Cyan color codes
 DARK_CYAN = "\033[38;5;30m"
 BRIGHT_CYAN = "\033[38;5;51m"
+RESET_COLOR = "\033[0m"
 BRIGHT_DURATION = 1.0  # seconds after feedback to stay bright
 
 class VitalPulseGenerator(Node):
+    """
+    Vital Pulse Generator Node.
+    """
+
+    fire_timestamp = 0.0
+    
     def __init__(self):
         super().__init__(NODE_NAME, namespace=ROBOT_ID)
 
@@ -52,6 +59,7 @@ class VitalPulseGenerator(Node):
 
     def send_pulse(self):
         now = self.get_now_sec()
+        self.fire_timestamp = now
         opm = (1 / INTERVAL) * 60
 
         # Publish message
@@ -59,7 +67,7 @@ class VitalPulseGenerator(Node):
         msg.data = json.dumps({
             "robot_id": ROBOT_ID,
             "user_id": USER_ID,
-            "robot_time": now,
+            "timestamp": now,
             "vital_pulse_opm": opm
         })
         self.publisher_.publish(msg)
@@ -68,10 +76,14 @@ class VitalPulseGenerator(Node):
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
 
         # Determine color based on last feedback
-        color = BRIGHT_CYAN if self.last_feedback_time and (now - self.last_feedback_time) <= BRIGHT_DURATION else DARK_CYAN
+        if self.last_feedback_time is None:
+            color = DARK_CYAN  # 初次沒有 feedback 就暗色
+        else:
+            elapsed = now - self.last_feedback_time
+            color = BRIGHT_CYAN if 0 <= elapsed <= BRIGHT_DURATION else DARK_CYAN
 
         # Print on the same line (overwrite)
-        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM", end="", flush=True)
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM, Sent at: {now:.2f}s {RESET_COLOR}", end="", flush=True)
 
         self.step += 1
 
@@ -80,14 +92,16 @@ class VitalPulseGenerator(Node):
         try:
             data = json.loads(msg.data)
             opm = data.get('opm', 0)
+            rtt = (self.last_feedback_time - self.fire_timestamp) * 1000  # convert to milliseconds
         except:
             opm = 0
+            rtt = 0
 
         # Overwrite the same line instead of printing new line
         heart_display = ASCII_HEART if self.step % 2 == 0 else " "
         color = BRIGHT_CYAN
 
-        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM", end="", flush=True)
+        print(f"\r{color}{heart_display} Vital Pulse: {opm:.1f} OPM | RTT: {rtt:.0f}ms {RESET_COLOR}".ljust(100), end="", flush=True)  # overwrite the same line
 
 
 def main(args=None):
