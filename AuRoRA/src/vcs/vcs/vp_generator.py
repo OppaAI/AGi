@@ -42,9 +42,16 @@ class VitalPulseGenerator(Node):
         self.show_heart = True
         self.step = 0
         self.last_feedback_time = None  # for bright color after feedback
+    
+    def get_now_sec(self):
+        """
+        Return current ROS time in seconds as float.
+        """
+        now = self.get_clock().now()
+        return now.seconds_nanoseconds()[0] + now.seconds_nanoseconds()[1] / 1e9
 
     def send_pulse(self):
-        now = time.time()
+        now = self.get_now_sec()
         opm = (1 / INTERVAL) * 60
 
         # Publish message
@@ -69,7 +76,7 @@ class VitalPulseGenerator(Node):
         self.step += 1
 
     def feedback_callback(self, msg):
-        self.last_feedback_time = time.time()
+        self.last_feedback_time = self.get_now_sec()
         try:
             data = json.loads(msg.data)
             opm = data.get('opm', 0)
