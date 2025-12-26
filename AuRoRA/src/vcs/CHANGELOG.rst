@@ -2,7 +2,7 @@
 Changelog for package vcs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-System Name: Vital Circulatory System (VCS)  [Space][Space]
+System Name: Vital Circulatory System (VCS)   
 Description: This system monitors and manages the vital signs of AGi robots, including their operational status, user interactions, and network connectivity. It provides real-time feedback and alerts for critical conditions, ensuring the smooth operation of the AGi ecosystem.
 
 Forthcoming
