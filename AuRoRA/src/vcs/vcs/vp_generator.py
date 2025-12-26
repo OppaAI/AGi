@@ -5,7 +5,7 @@ from std_msgs.msg import String
 import json
 import threading
 import time
-from vital_core import VitalCore
+from vcs.vital_core import VitalCore
 
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
