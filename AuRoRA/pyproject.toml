@@ -1,7 +1,7 @@
 [project]
-name = "AGI-ROS"
+name = "AuRoRA"
 version = "0.1.0"
-description = "AGi-ROS2"
+description = "Autonomous Rover Robotic Assistant"
 readme = "README.md"
-requires-python = "3.10.12"
+requires-python = "==3.10.12"
 dependencies = []
