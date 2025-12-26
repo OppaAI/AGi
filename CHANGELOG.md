@@ -17,7 +17,6 @@ This repository contains multiple ROS packages. For granular technical details, 
 ## 0.1.0 - 2025-12-19
 [VCS] _Initial non-production release for testing._
 
-## Vital Circulatory System (VCS)
 ### Added
 - [VCS] 2 nodes: vital_pulse_analyzer and vital_pulse_collector
 - [VCS] vital_pulse_collector (AuRoRA/VCS): Collects vital pulses from robot and sends to server
