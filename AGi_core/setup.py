@@ -8,7 +8,6 @@ setup(
     packages=['vcs'],
     install_requires=['setuptools'],
     zip_safe=True,
-    zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
     description='Vital Circulatory System modules for AGi',
