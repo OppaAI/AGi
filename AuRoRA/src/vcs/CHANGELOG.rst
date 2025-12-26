@@ -1,9 +1,16 @@
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package vcs
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 System Name: Vital Circulatory System (VCS)
 Description: This system monitors and manages the vital signs of AGi robots, including their operational status, user interactions, and network connectivity. It provides real-time feedback and alerts for critical conditions, ensuring the smooth operation of the AGi ecosystem.
+
+Forthcoming
+-----------
+* Fix JSON Fragility issue by changing to Protobuf (#5)
+* Fix Logic Conflict of vital_pulse and vital_feedback by utilizing centralized output (#6)
+* Optimize the codes in the nodes and packages for better performance and readability
+* Add dynamic version update into packages and setup.py from package.xml
 
 0.1.1 (2025-12-26)
 ------------------
