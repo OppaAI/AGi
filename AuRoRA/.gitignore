@@ -22,8 +22,4 @@ Thumbs.db
 *.egg
 
 # ROS 2 Catkin build system
-<<<<<<< HEAD
 CATKIN_IGNORE
-=======
-CATKIN_IGNORE
->>>>>>> a9416dc (Finalize the initial release of v.0.1.0)
