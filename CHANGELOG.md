@@ -2,7 +2,7 @@
 
 This repository contains multiple ROS packages. For granular technical details, see the package-specific logs:
 - [VCS Changelog (Server)](./AIVA/src/vcs/CHANGELOG.rst)
-- [VCS Changelog (Robot))](./AuRoRA/src/vcs/CHANGELOG.rst)
+- [VCS Changelog (Robot)](./AuRoRA/src/vcs/CHANGELOG.rst)
 
 ## 0.1.1 - 2025-12-26
 ### Changed
