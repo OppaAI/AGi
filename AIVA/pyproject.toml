@@ -1,6 +1,6 @@
 [project]
 name = "AIVA"
-version = "0.1.0"
+version = "0.1.1"
 description = "Artificial Intelligence Virtual Assistant"
 readme = "README.md"
 requires-python = "==3.10.12"

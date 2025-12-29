@@ -2,7 +2,7 @@
 
 """
 Vital Pulse Analyzer:
-- Receives vital pulses from robots
+- Receives VitalPulse msgs from robots
 - Tracks connected robots/users
 - Detects timeouts/disconnections
 - Displays vital signs in the terminal
@@ -10,17 +10,15 @@ Vital Pulse Analyzer:
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from rclpy.duration import Duration
-from std_msgs.msg import String
-import json
 import threading
 import time
 
+from vp.msg import VitalPulse  # <-- 使用自訂訊息
 from vcs.vcc import VitalCentralCore
 
 RESET_COLOR = "\033[0m"
 
+ROBOT_ID = "AuRoRA_Zero_Prototype"
 SERVER_ID = "AIVA"
 SYSTEM_NAME = "VCS"
 NODE_NAME = "vital_pulse_analyzer"
@@ -31,58 +29,51 @@ BASELINE_OPM = 60.0
 
 class VitalPulseAnalyzer(Node):
     def __init__(self):
-        super().__init__(NODE_NAME, namespace=SERVER_ID + "/" + SYSTEM_NAME)
-
+        super().__init__(NODE_NAME, namespace=ROBOT_ID + "/" + SYSTEM_NAME)
         self.vc = VitalCentralCore(blink_duration=60/BASELINE_OPM)
 
-        qos = QoSProfile(
-            depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            durability=DurabilityPolicy.VOLATILE,
-            liveliness_lease_duration=Duration(seconds=TIMEOUT_SEC)
+        qos_profile = 5
+        self.subscriber_ = self.create_subscription(
+            VitalPulse,
+            SUBSCRIBE_TOPIC,
+            self.pulse_callback,
+            qos_profile
         )
-        self.subscriber_ = self.create_subscription(String, SUBSCRIBE_TOPIC, self.pulse_callback, qos)
-        self.publisher_ = self.create_publisher(String, FEEDBACK_TOPIC, qos)
+        self.publisher_ = self.create_publisher(VitalPulse, FEEDBACK_TOPIC, qos_profile)
 
-        # ⭐ start display thread
+        # 顯示 thread
         self.display_thread = threading.Thread(target=self.display_loop, daemon=True)
         self.display_thread.start()
 
-    def pulse_callback(self, msg):
-        try:
-            data = json.loads(msg.data)
-            robot_id = data.get("robot_id", "Unknown")
-            user_id = data.get("user_id", "Unknown")
-            pulse = float(data.get("vital_pulse_opm", 0.0))
-            timestamp = data.get("timestamp", None)
-        except Exception:
-            return
+    def pulse_callback(self, msg: VitalPulse):
+        robot_id = msg.robot_id
+        user_id = msg.user_id
+        pulse = float(msg.vital_pulse_opm)
+        timestamp = msg.timestamp
 
         # ⭐ store identity + pulse
         self.vc.record_identity(robot_id, user_id)
         self.vc.record_remote_pulse(pulse, timestamp)
 
-        # send feedback (keep original JSON)
-        feedback = String()
-        feedback.data = json.dumps({
-            "opm": pulse,
-            "timestamp": self.get_clock().now().nanoseconds / 1e9
-        })
+        # ⭐ 發 feedback
+        feedback = VitalPulse()
+        feedback.robot_id = ROBOT_ID
+        feedback.user_id = robot_id
+        feedback.timestamp = self.get_clock().now().nanoseconds / 1e9
+        feedback.vital_pulse_opm = pulse
         self.publisher_.publish(feedback)
 
     def display_loop(self):
         while rclpy.ok():
             now = self.vc.get_now_sec()
 
-            # ⭐ timeout check: if last pulse too old, clear info
+            # ⭐ timeout check
             if self.vc.last_pulse_time is None or (now - self.vc.last_pulse_time) > TIMEOUT_SEC:
                 self.vc.clear_identity_and_pulse()
 
             status = self.vc.get_status()
             pulse = status["opm"]
             color = status["color"]
-
             robot_id = self.vc.robot_id
             user_id = self.vc.user_id
 
