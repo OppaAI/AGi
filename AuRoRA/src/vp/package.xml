@@ -3,9 +3,9 @@
 
 <package format="3">
   <!-- Basic package information -->
-  <name>vcs</name>
+  <name>vp</name>
   <version>0.1.1</version>
-  <description>Vital Circulatory System for AGi</description>
+  <description>Vital Pulse for AGi</description>
   
   <!-- Maintainer and author information -->
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
@@ -18,22 +18,17 @@
   <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
 
   <!-- Build tool dependencies -->
-  <buildtool_depend>ament_python</buildtool_depend>
-  
-  <!-- Runtime dependencies -->
-  <depend>rclpy</depend>
-  <depend>std_msgs</depend>
-  <exec_depend>vp</exec_depend>
-  
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
   <!-- Test Dependencies -->
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <!-- Export tags -->
   <export>
-    <build_type>ament_python</build_type>
+    <build_type>ament_cmake</build_type>
   </export>
-
 </package>

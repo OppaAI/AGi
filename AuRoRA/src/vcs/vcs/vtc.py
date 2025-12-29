@@ -6,6 +6,7 @@
 # - Displays vital signs in the terminal
 
 class VitalTerminalCore:
+    
     def __init__(self, interval=1.0, blink_duration=1.0):
         self.interval = interval
         self.blink_duration = blink_duration
