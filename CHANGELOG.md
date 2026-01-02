@@ -4,6 +4,15 @@ This repository contains multiple ROS packages. For granular technical details, 
 - [VCS Changelog (Server)](./AIVA/src/vcs/CHANGELOG.rst)
 - [VCS Changelog (Robot)](./AuRoRA/src/vcs/CHANGELOG.rst)
 
+## 0.1.2 - 2026-01-01
+### Changed
+- [VCS] Optimized the codes in the nodes and packages for better performance and readability
+- [VCS] Combined back the vital core (vcc and vtc) functions into its own package, to be prepared for modularization
+
+### Fixed
+- [VCS] Fixed JSON Fragility issue by changing to ROS msg ([#5](https://github.com/OppaAI/AGi-ROS/pull/5)) (@OppaAI)
+- [VCS] Fixed Logic Conflict of vital_pulse and vital_feedback by utilizing centralized output ([#6](https://github.com/OppaAI/AGi-ROS/pull/6)) (@OppaAI)
+
 ## 0.1.1 - 2025-12-26
 ### Changed
 - [VCS] Separated vital core (vcc and vtc) functions into its own package:
