@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vital_pulse_analyzer = vcs.vp_analyzer:main'
+            'vital_central_core = vcs.vcc:main'
         ],
     },
 )
