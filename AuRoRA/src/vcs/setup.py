@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'vital_pulse_regulator = vcs.vp_regulator:main'
+            'vital_terminal_core = vcs.vtc:main'
         ],
     },
 )
