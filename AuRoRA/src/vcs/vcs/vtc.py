@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 # Vital Terminal Core (VTC)
-# - Oscillator: Encodes vital data into vital pulse signal (send_pulse)
-# - Regulator: Handles feedback and updates RTT (feedback_callback)
-# - Pacemaker: Calculates pulse rhythm (compute_opm)
-# - Monitor: Handles display and timeout logic (display_tick, display_loop)
+# - Pump: Collects raw vital data and packs into Protobuf
+# - Pacemaker: Calculates pulse rhythm according to network RTT
+# - Oscillator: Encodes packed vital data into vital pulse signal at the OPM rhythm
+# - Regulator: Handles outgoing and incoming vital pulses and updates RTT
 
 # System modules
-import threading
 import time
+from jtop import jtop
 
 # ROS 2 modules
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 from rclpy.duration import Duration
-from builtin_interfaces.msg import Time # Required for accurate timestamps
 
 # AGi Vital Pulse definition
 from vp.msg import VitalPulse
@@ -35,6 +34,86 @@ BASELINE_OPM = 60.0
 DISPLAY_INTERVAL = 0.5
 BLINK_DURATION = 0.3
 
+class Pump:
+    """Collects raw system metrics for a Jetson robot using a persistent jtop instance."""
+    
+    def __init__(self):
+        # 1. Initialize jtop monitoring (Start once)
+        self.jetson = None
+        if jtop:
+            try:
+                self.jetson = jtop()
+                self.jetson.start()
+                print("Pump: jtop monitoring started successfully.")
+                
+                # ⭐ CRITICAL FIX: Add a short delay to allow jtop to collect initial data
+                # Without this, the first call to .cpu often returns empty or None data.
+                time.sleep(0.5) 
+                
+            except Exception as e:
+                print(f"Pump Initialization Error: Could not start jtop. Error: {e}")
+                self.jetson = None
+        
+        self.data = {}        # stores raw metrics
+        self.timestamp = 0    # nanoseconds of collection
+
+    def __del__(self):
+        """Ensure jtop is gracefully stopped when the object is deleted/cleaned up."""
+        if self.jetson and self.jetson.ok():
+            self.jetson.close()
+            print("Pump: jtop monitoring stopped.")
+
+    def gather_metrics(self):
+        """Collect only CPU temperatures from the live jtop stream."""
+        
+        # 1. Record the timestamp BEFORE collecting the data
+        now_ns = time.time_ns()
+        metrics = {}
+        
+        if not self.jetson or not self.jetson.ok():
+            # Fallback when jtop is not running
+            metrics = {
+                "cpu_temp_per_core": None,
+                "cpu_temp_max": None
+            }
+        else:
+            try:
+                # 2. Access the currently running data stream (FAST READ)
+                cpu_data = self.jetson.cpu 
+                
+                metrics["cpu_temp_per_core"] = {
+                    core: info.get('temp', None)
+                    for core, info in cpu_data.items()
+                    if isinstance(info, dict)
+                }
+                
+                # Compute max only from valid temps
+                valid_temps = [t for t in metrics["cpu_temp_per_core"].values() if t is not None]
+                metrics["cpu_temp_max"] = max(valid_temps) if valid_temps else None
+
+            except Exception as e:
+                print("Jetson stats data collection error:", e)
+                metrics = {
+                    "cpu_temp_per_core": None,
+                    "cpu_temp_max": None
+                }
+
+        self.timestamp = now_ns
+        self.data = metrics 
+        return metrics
+
+class PaceMaker():
+    def __init__(self):
+        pass
+
+class Oscillator():
+    def __init__(self):
+        pass
+
+class Regulator():
+    def __init__(self):
+        pass
+
 class VitalTerminalCore(Node):
     def __init__(self):
         super().__init__("vital_terminal_core", namespace=ROBOT_ID + "/" + SYSTEM_ID)
@@ -52,7 +131,10 @@ class VitalTerminalCore(Node):
 
         # Thread-safe snapshot for display
         self.display_snapshot = {}
-        self.snapshot_lock = threading.Lock()
+
+        pump = Pump()
+        data = pump.gather_metrics()
+        print(f"[{pump.timestamp}] Pump collected:", data)
 
         # 2. QoS Profile Definition (Based on our discussion)
         qos_profile = QoSProfile(
@@ -74,10 +156,6 @@ class VitalTerminalCore(Node):
         # 4. Timer Setup
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
-
-        # 5. Start Display Thread
-        self.display_thread = threading.Thread(target=self.display_loop, daemon=True)
-        self.display_thread.start()
 
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
@@ -138,40 +216,27 @@ class VitalTerminalCore(Node):
         self.heart_step += 1
 
         # Thread-safe snapshot update
-        with self.snapshot_lock:
-            self.display_snapshot = {
-                "time": now,
-                "heart_step": self.heart_step,
-                "opm": self.current_opm,
-                "rtt": self.current_rtt,
-                "linked": self.vc_linked
-            }
+        self.display_snapshot = {
+            "time": now,
+            "heart_step": self.heart_step,
+            "opm": self.current_opm,
+            "rtt": self.current_rtt,
+            "linked": self.vc_linked
+        }
 
-    def display_loop(self):
-        """Monitor Thread: continuously print snapshot"""
-        while rclpy.ok():
-            with self.snapshot_lock:
-                snap = self.display_snapshot.copy() if self.display_snapshot else None
+        snap = self.display_snapshot.copy() if self.display_snapshot else None
 
-            if snap is None:
-                time.sleep(0.1)
-                continue
+        heart = ASCII_HEART if snap["heart_step"] % 2 == 0 else " "
+        color = self.blink_color(snap["time"])
+        status = "ONLINE" if snap["linked"] else "OFFLINE"
 
-            heart = ASCII_HEART if snap["heart_step"] % 2 == 0 else " "
-            color = self.blink_color(snap["time"])
-            status = "ONLINE" if snap["linked"] else "OFFLINE"
-
-            print(
-                f"\r{color}{heart} VTC Monitor: "
-                f"{snap['opm']:.2f} OPM | "
-                f"RTT: {snap['rtt']:.2f}ms | "
-                f"Server Status: {status} "
-                f"{RESET_COLOR}".ljust(100),
-                end="",
-                flush=True
-            )
-
-            time.sleep(DISPLAY_INTERVAL)
+        self.get_logger().info(
+            f"{color}{heart} VTC Monitor: "
+            f"{snap['opm']:.2f} OPM | "
+            f"RTT: {snap['rtt']:.2f}ms | "
+            f"Server Status: {status} "
+            f"{RESET_COLOR}".ljust(100)
+        )
 
     def get_now_sec(self):
         """Helper to get current time as float seconds"""
@@ -193,7 +258,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nVital Terminal Core stopped.")
+        node.get_logger().info("\nVital Terminal Core stopped.")
 
     node.destroy_node()
     rclpy.shutdown()
