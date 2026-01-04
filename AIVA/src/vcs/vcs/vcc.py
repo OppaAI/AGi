@@ -13,7 +13,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 from rclpy.duration import Duration
 import time
-import threading
 
 from vp.msg import VitalPulse
 
@@ -118,10 +117,7 @@ class VitalPulseAnalyzer(Node):
             qos_profile
         )
         self.publisher_ = self.create_publisher(VitalPulse, VITAL_PULSE_RESPONSE, qos_profile)
-
-        # Display thread
-        self.display_thread = threading.Thread(target=self.display_loop, daemon=True)
-        self.display_thread.start()
+        self.display_timer = self.create_timer(1.0, self.display_loop)
 
     def pulse_callback(self, msg: VitalPulse):
         robot_id = msg.robot_id
@@ -143,26 +139,24 @@ class VitalPulseAnalyzer(Node):
 
     def display_loop(self):
         """Continuously print pulse & connection status"""
-        while rclpy.ok():
-            now = self.vc.get_now_sec()
+        now = self.vc.get_now_sec()
 
-            # Timeout / disconnection
-            if self.vc.last_pulse_time is None or (now - self.vc.last_pulse_time) > VITAL_PULSE_TIMEOUT:
-                self.vc.clear_identity_and_pulse()
+        # Timeout / disconnection
+        if self.vc.last_pulse_time is None or (now - self.vc.last_pulse_time) > VITAL_PULSE_TIMEOUT:
+            self.vc.clear_identity_and_pulse()
 
-            status = self.vc.get_status()
-            pulse = status["opm"]
-            color = status["color"]
-            robot_id = self.vc.robot_id
-            user_id = self.vc.user_id
+        status = self.vc.get_status()
+        pulse = status["opm"]
+        color = status["color"]
+        robot_id = self.vc.robot_id
+        user_id = self.vc.user_id
 
-            if robot_id == "Unknown":
-                line = f"\r{color}Waiting for vital pulse...{RESET_COLOR}".ljust(100)
-            else:
-                line = f"\r{color}Robot [{robot_id}] | User [{user_id}] | Vital Pulse: {pulse:.1f} OPM{RESET_COLOR}".ljust(100)
+        if robot_id == "Unknown":
+            line = f"{color}Waiting for vital pulse...{RESET_COLOR}".ljust(100)
+        else:
+            line = f"{color}Robot [{robot_id}] | User [{user_id}] | Vital Pulse: {pulse:.1f} OPM{RESET_COLOR}".ljust(100)
 
-            print(line, end="", flush=True)
-            time.sleep(0.05)  # 20Hz refresh
+        self.get_logger().info(line)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -170,7 +164,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\nVital Pulse Analyzer stopped.")
+        node.get_logger().info("Vital Pulse Analyzer stopped.")
     node.destroy_node()
     rclpy.shutdown()
 
