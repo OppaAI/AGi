@@ -82,14 +82,13 @@ class Pump():
     def get_freq(cls, level: POLL_LEVEL) -> int:
         return cls.POLL_FREQ[level]
     
-    def collect_vitals(self, step: int) -> dict[str, str | None]:
+    def collect_vitals(self, step: int, sensor_data: dict[str, str | None]) -> dict[str, str | None]:
         """
         Collect vital data based on polling level:
             - High level: CPU and GPU temperatures.
         """
         # 1. Poll vitals
-        now_ns = time.time_ns()
-        vitals: dict[str, str | None] = self.vitals.copy()
+        
 
         # 2. Collect vitals
         for vid, key in self.JETSON_STATS_KEYS.items():
@@ -197,7 +196,7 @@ class VitalTerminalCore(Node):
             snapshot["iteration"] = 0
         else:
             snapshot["iteration"] += 1
-            
+
         self.get_logger().info(f"[Pump] Collected: {snapshot['sensor_data']}")
         
     def oscillate_vital_pulse(self):
