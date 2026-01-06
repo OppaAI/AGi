@@ -7,6 +7,7 @@
 
 # System modules
 import time
+from typing import Literal
 from jtop import jtop
 
 # ROS 2 modules
@@ -34,73 +35,90 @@ BASELINE_OPM = 60.0
 DISPLAY_INTERVAL = 0.5
 BLINK_DURATION = 0.3
 
-class Pump:
-    """Collects raw system metrics for a Jetson robot using a persistent jtop instance."""
+class Pump():
+    POLL_LEVEL = Literal["LO", "MED", "HI"]
+    #TODO: to be moved to config file for settings
+    POLL_FREQ : dict[POLL_LEVEL, int] = { # Polling Frequency
+        "LO": 1,    # 1Hz (60 ppm)
+        "MED": 5,   # 5Hz (300 ppm)
+        "HI": 10    # 10Hz (600 ppm)
+    }
+
+    VITAL_ID_KEYS: dict[POLL_LEVEL, dict[str, str]] = { # Vital ID Keys
+        "HI": {
+            "cpu_temp": "Temp cpu",
+            "gpu_temp": "Temp gpu",
+        },
+        "MED": {},
+        "LO": {}
+    }
+    """
+    Collects vital data from a Jetson robot using a persistent jtop instance.
+        - get_freq: Returns polling frequency for a given level
+        - collect_vitals: Collects vitals based on polling level
+        - poll_vital: Polls a vital metric from jtop stats
+    """
     
     def __init__(self):
-        # 1. Initialize jtop monitoring (Start once)
         self.jetson = None
         if jtop:
             try:
                 self.jetson = jtop()
                 self.jetson.start()
-                print("Pump: jtop monitoring started successfully.")
-                
-                # ⭐ CRITICAL FIX: Add a short delay to allow jtop to collect initial data
-                # Without this, the first call to .cpu often returns empty or None data.
-                time.sleep(0.5) 
-                
+                time.sleep(0.5)  # allow initial stats collection
             except Exception as e:
+                #TODO: to implement logging in the future
                 print(f"Pump Initialization Error: Could not start jtop. Error: {e}")
                 self.jetson = None
-        
-        self.data = {}        # stores raw metrics
+
+        self.vitals = {}      # stores raw vital data
         self.timestamp = 0    # nanoseconds of collection
 
-    def __del__(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         """Ensure jtop is gracefully stopped when the object is deleted/cleaned up."""
         if self.jetson and self.jetson.ok():
             self.jetson.close()
-            print("Pump: jtop monitoring stopped.")
 
-    def gather_metrics(self):
-        """Collect only CPU temperatures from the live jtop stream."""
-        
-        # 1. Record the timestamp BEFORE collecting the data
+    @classmethod
+    def get_freq(cls, level: POLL_LEVEL) -> int:
+        return cls.POLL_FREQ[level]
+    
+    def collect_vitals(self, level: POLL_LEVEL = "HI") -> dict[str, str | None]:
+        """
+        Collect vital data based on polling level:
+            - High level: CPU and GPU temperatures.
+        """
+        # 1. Poll vitals
         now_ns = time.time_ns()
-        metrics = {}
-        
-        if not self.jetson or not self.jetson.ok():
-            # Fallback when jtop is not running
-            metrics = {
-                "cpu_temp_per_core": None,
-                "cpu_temp_max": None
-            }
-        else:
-            try:
-                # 2. Access the currently running data stream (FAST READ)
-                cpu_data = self.jetson.cpu 
-                
-                metrics["cpu_temp_per_core"] = {
-                    core: info.get('temp', None)
-                    for core, info in cpu_data.items()
-                    if isinstance(info, dict)
-                }
-                
-                # Compute max only from valid temps
-                valid_temps = [t for t in metrics["cpu_temp_per_core"].values() if t is not None]
-                metrics["cpu_temp_max"] = max(valid_temps) if valid_temps else None
+        vitals: dict[str, str | None] = self.vitals.copy()
 
-            except Exception as e:
-                print("Jetson stats data collection error:", e)
-                metrics = {
-                    "cpu_temp_per_core": None,
-                    "cpu_temp_max": None
-                }
+        # 2. Collect vitals
+        for vid, key in self.VITAL_ID_KEYS[level].items():
+            vitals[vid] = self.poll_vital(key)
 
         self.timestamp = now_ns
-        self.data = metrics 
-        return metrics
+        self.vitals = vitals
+        return vitals
+            
+    def poll_vital(self, key: str)-> str | None:
+        """
+        Poll a vital metric from jtop stats
+        Args:
+            key (str): jetson stats key
+        Returns:
+            str | None: vital data value or None if error
+        """
+
+        if not self.jetson or not self.jetson.ok():
+            return None
+        else:
+            try:
+                stats: dict = self.jetson.stats
+                return stats.get(key)
+            except Exception as e:
+                #TODO: to implement logging in the future
+                print("Jetson stats data collection error:", e)
+                return None
 
 class PaceMaker():
     def __init__(self):
@@ -124,6 +142,9 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
+
+        # Initiate the 4 modules
+        self.pump = Pump()  # Pump: Collects raw vital data and packs into Protobuf
         
         # Tracking variables for RTT and Timeout (FIX)
         self.fire_timestamp = None
@@ -133,7 +154,7 @@ class VitalTerminalCore(Node):
         self.display_snapshot = {}
 
         pump = Pump()
-        data = pump.gather_metrics()
+        data = pump.collect_vitals()
         print(f"[{pump.timestamp}] Pump collected:", data)
 
         # 2. QoS Profile Definition (Based on our discussion)
@@ -154,9 +175,18 @@ class VitalTerminalCore(Node):
         self.vp_response_receptor = self.create_subscription(VitalPulse, VITAL_PULSE_RESPONSE, self.feedback_callback, qos_profile)
 
         # 4. Timer Setup
+        # create timers for each level
+        self.timers = {
+            level: self.create_timer(1.0 / Pump.POLL_FREQ[level], lambda l=level: self.timer_callback(l))
+            for level in Pump.POLL_FREQ
+        }
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
+    def timer_callback(self, level: str):
+        vitals = self.pump.collect_vitals(level)
+        self.get_logger().info(f"[{level}] Vitals: {vitals}")
+        
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
         current_rclpy_time = self.get_clock().now()

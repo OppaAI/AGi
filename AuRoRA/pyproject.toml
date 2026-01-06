@@ -4,4 +4,6 @@ version = "0.1.1"
 description = "Autonomous Rover Robotic Assistant"
 readme = "README.md"
 requires-python = "==3.10.12"
-dependencies = []
+dependencies = [
+    "jetson-stats>=4.3.2",
+]
