@@ -1,3 +1,4 @@
+```mermaid
 flowchart LR
     %% External Inputs
     OS[(Jetson OS &<br/>Sensors)] --> P
