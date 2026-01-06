@@ -5,13 +5,13 @@ flowchart LR
 
     subgraph PROC_SYSTEM [PROC System Architecture]
         direction TB
-        P[<b>P</b>ump<br/><i>Data Ingress</i>] --> R
+        P[<b>P</b>ump<br/><i>Data Ingress</i><br/>Polling: HI/MED/LO] --> R
         
-        R[<b>R</b>egulator<br/><i>Slew-Rate Governor</i>] --> O
+        R[<b>R</b>egulator<br/><i>Slew-Rate Governor</i><br/>Heartbeat Rhythm: 60-200 OPM] --> O
         
-        O[<b>O</b>scillator<br/><i>Reference Clock</i>] --> C
+        O[<b>O</b>scillator<br/><i>Reference Clock</i><br/>Encodes & Publishes] --> C
         
-        C[<b>C</b>oordinator<br/><i>Safety Interlock</i>] -- "Health Report<br/>(RTT/Error Rate)" --> R
+        C[<b>C</b>oordinator<br/><i>Safety Interlock</i><br/>Monitors RTT/Error Rate] -- "Health Report<br/>(RTT/Error Rate)" --> R
         
         C -- "Circuit Breaker<br/>(is_connected)" --> R
     end
@@ -25,3 +25,4 @@ flowchart LR
     style O fill:#f0fff4,stroke:#2ecc71,stroke-width:2px
     style C fill:#fff0f0,stroke:#e74c3c,stroke-width:4px
     style S fill:#eee,stroke:#333
+
