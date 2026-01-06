@@ -1,27 +1,26 @@
-flowchart TD
-    %% Define nodes with boxes
-    subgraph PumpNode["Pump"]
+flowchart LR
+    %% External Inputs
+    OS[(Jetson OS &<br/>Sensors)] --> P
+
+    subgraph PROC_SYSTEM [PROC System Architecture]
         direction TB
-        PumpText["Collect raw sensor data (CPU/GPU/etc)\nResponsibilities:\n- 3-level polling (HI/MED/LO)\n- Provide latest snapshot\n- No filtering or regulation"]
+        P[<b>P</b>ump<br/><i>Data Ingress</i>] --> R
+        
+        R[<b>R</b>egulator<br/><i>Slew-Rate Governor</i>] --> O
+        
+        O[<b>O</b>scillator<br/><i>Reference Clock</i>] --> C
+        
+        C[<b>C</b>oordinator<br/><i>Safety Interlock</i>] -- "Health Report<br/>(RTT/Error Rate)" --> R
+        
+        C -- "Circuit Breaker<br/>(is_connected)" --> R
     end
 
-    subgraph RegNode["Regulator"]
-        direction TB
-        RegText["Filter & Normalize, Control Heartbeat\nResponsibilities:\n- Clean & normalize data\n- Control snapshot rate (1-3Hz)\n- Ensure stable downstream data"]
-    end
+    %% External Output
+    C <==>|UDP/ROS2 Binary| S((Server / Vital<br/>Pulse Analyzer))
 
-    subgraph OscNode["Oscillator"]
-        direction TB
-        OscText["Encode & Pack into protobuf\nResponsibilities:\n- Pack snapshot into protobuf\n- Publish data to server\n- Ensure format correctness"]
-    end
-
-    subgraph CoordNode["Coordinator"]
-        direction TB
-        CoordText["Manage traffic & monitor system health\nResponsibilities:\n- Control incoming/outgoing flow\n- Check RTT & error rate\n- Fail-safe: cut linkage if error\n- Ensure system reliability"]
-    end
-
-    %% Draw arrows
-    PumpNode --> RegNode
-    RegNode --> OscNode
-    OscNode --> CoordNode
-    CoordNode -- Feedback --> OscNode
+    %% Styling
+    style P fill:#f4f7fc,stroke:#4a90e2,stroke-width:2px
+    style R fill:#fff9f0,stroke:#f5a623,stroke-width:2px
+    style O fill:#f0fff4,stroke:#2ecc71,stroke-width:2px
+    style C fill:#fff0f0,stroke:#e74c3c,stroke-width:4px
+    style S fill:#eee,stroke:#333
