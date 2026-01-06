@@ -3,7 +3,7 @@ flowchart LR
     %% External Inputs
     OS[(Jetson OS &<br/>Sensors)] --> P
 
-    subgraph PROC_SYSTEM [PROC System Architecture]
+    subgraph PROC_SYSTEM [Vital Terminal Core (VTC) PROC System Architecture]
         direction TB
         P[<b>P</b>ump<br/><i>Data Ingress</i><br/>Polling: HI/MED/LO] --> R
         
@@ -25,4 +25,5 @@ flowchart LR
     style O fill:#f0fff4,stroke:#2ecc71,stroke-width:2px
     style C fill:#fff0f0,stroke:#e74c3c,stroke-width:4px
     style S fill:#eee,stroke:#333
+
 
