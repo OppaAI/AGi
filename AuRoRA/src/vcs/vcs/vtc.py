@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # Vital Terminal Core (VTC)
-# - Pump: Collects raw vital data and packs into Protobuf
-# - Pacemaker: Calculates pulse rhythm according to network RTT
-# - Oscillator: Encodes packed vital data into vital pulse signal at the OPM rhythm
-# - Regulator: Handles outgoing and incoming vital pulses and updates RTT
+# - Pump: Collects raw sensor data for different sensors using Tripe-Level Polling (TLP) technique
+# - Regulator: Normalizes raw sensor data into proper format and regulates the oscillation rhythm according to RTT
+# - Oscillator: Packs and encodes sensor data into vital pulse signal and publishes at oscillation rhythm
+# - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 # System modules
 import time
@@ -38,20 +38,19 @@ BLINK_DURATION = 0.3
 class Pump():
     POLL_LEVEL = Literal["LO", "MED", "HI"]
     #TODO: to be moved to config file for settings
-    POLL_FREQ : dict[POLL_LEVEL, int] = { # Polling Frequency
+    # Polling Frequency
+    POLL_FREQ : dict[POLL_LEVEL, int] = {
         "LO": 1,    # 1Hz (60 ppm)
         "MED": 5,   # 5Hz (300 ppm)
         "HI": 10    # 10Hz (600 ppm)
     }
 
-    VITAL_ID_KEYS: dict[POLL_LEVEL, dict[str, str]] = { # Vital ID Keys
-        "HI": {
+    # Keys for polling Jetson Stats
+    JETSON_STATS_KEYS: dict[str, str] = {
             "cpu_temp": "Temp cpu",
             "gpu_temp": "Temp gpu",
-        },
-        "MED": {},
-        "LO": {}
     }
+
     """
     Collects vital data from a Jetson robot using a persistent jtop instance.
         - get_freq: Returns polling frequency for a given level
@@ -74,7 +73,7 @@ class Pump():
         self.vitals = {}      # stores raw vital data
         self.timestamp = 0    # nanoseconds of collection
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def close(self):
         """Ensure jtop is gracefully stopped when the object is deleted/cleaned up."""
         if self.jetson and self.jetson.ok():
             self.jetson.close()
@@ -83,7 +82,7 @@ class Pump():
     def get_freq(cls, level: POLL_LEVEL) -> int:
         return cls.POLL_FREQ[level]
     
-    def collect_vitals(self, level: POLL_LEVEL = "HI") -> dict[str, str | None]:
+    def collect_vitals(self, step: int) -> dict[str, str | None]:
         """
         Collect vital data based on polling level:
             - High level: CPU and GPU temperatures.
@@ -93,14 +92,14 @@ class Pump():
         vitals: dict[str, str | None] = self.vitals.copy()
 
         # 2. Collect vitals
-        for vid, key in self.VITAL_ID_KEYS[level].items():
-            vitals[vid] = self.poll_vital(key)
+        for vid, key in self.JETSON_STATS_KEYS.items():
+            vitals[vid] = self.poll_sensor_data(key)
 
         self.timestamp = now_ns
         self.vitals = vitals
         return vitals
             
-    def poll_vital(self, key: str)-> str | None:
+    def poll_sensor_data(self, key: str)-> str | None:
         """
         Poll a vital metric from jtop stats
         Args:
@@ -142,6 +141,21 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
+        self.vtc_snapshot = {
+            "pump":
+                "timestamp": 0,
+                "iteration": 0,
+                "sensor_data": {}
+            "regulator":
+                "timestamp": 0,
+                "vital_data": {}
+            "oscillator":
+                "timestamp": 0,
+                "vital_pulse": {}
+            "orchestrator":
+                "timestamp": 0,
+                "vital_response": {}
+        }
 
         # Initiate the 4 modules
         self.pump = Pump()  # Pump: Collects raw vital data and packs into Protobuf
@@ -152,10 +166,6 @@ class VitalTerminalCore(Node):
 
         # Thread-safe snapshot for display
         self.display_snapshot = {}
-
-        pump = Pump()
-        data = pump.collect_vitals()
-        print(f"[{pump.timestamp}] Pump collected:", data)
 
         # 2. QoS Profile Definition (Based on our discussion)
         qos_profile = QoSProfile(
@@ -176,16 +186,19 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.timers = {
-            level: self.create_timer(1.0 / Pump.POLL_FREQ[level], lambda l=level: self.timer_callback(l))
-            for level in Pump.POLL_FREQ
-        }
+        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), self.pump_cycle(self.vtc_snapshot["pump"]))
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
-    def timer_callback(self, level: str):
-        vitals = self.pump.collect_vitals(level)
-        self.get_logger().info(f"[{level}] Vitals: {vitals}")
+    def pump_cycle(self, snapshot):
+        snapshot["timestamp"] = self.get_now_sec()
+        snapshot["sensor_data"] = self.pump.collect_vitals(snapshot["iteration"])
+        if snapshot["iteration"] == self.pump.get_freq("HI"):
+            snapshot["iteration"] = 0
+        else:
+            snapshot["iteration"] += 1
+            
+        self.get_logger().info(f"[Pump] Collected: {snapshot['sensor_data']}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
@@ -290,6 +303,8 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("\nVital Terminal Core stopped.")
 
+    # Clean up
+    node.pump.close()
     node.destroy_node()
     rclpy.shutdown()
 
