@@ -8,7 +8,7 @@ flowchart LR
         R["<b>R</b>egulator<i>Slew-Rate Governor</i> Heartbeat Rhythm: 60-200 OPM"] --> O
         O["<b>O</b>scillator<i>Reference Clock</i> Encodes & Publishes"] --> C
         C["<b>C</b>oordinator<i>Safety Interlock</i> Monitors RTT/Error Rate"] -- "Health Report (RTT/Error Rate)" --> R
-        C -- "Circuit Breaker\n(is_connected)" --> R
+        C -- "Circuit Breaker (is_connected)" --> R
     end
 
     C <==>|UDP/ROS2 Binary| S((Server / Vital Pulse Analyzer))
@@ -18,6 +18,7 @@ flowchart LR
     style O fill:#f0fff4,stroke:#2ecc71,stroke-width:2px
     style C fill:#fff0f0,stroke:#e74c3c,stroke-width:4px
     style S fill:#eee,stroke:#333
+
 
 
 
