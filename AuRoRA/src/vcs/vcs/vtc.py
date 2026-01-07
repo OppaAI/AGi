@@ -201,19 +201,23 @@ class VitalTerminalCore(Node):
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
     def pump_cycle(self):
-        # Get initial time before pumping happens
-        start_timestamp = self.get_now_sec()
+        # Get initial time and blob before pumping happens
+        self.vital_manifest["pump"]["timestamp"] = self.get_now_sec()
+        vital_blob = self.vital_blob["pump"]
                 
-        # Determine the poll level (HI, MID, LO) from the iteration
-        snapshot["sensor_data"] = self.pump.collect_vitals(snapshot["iteration"])
-        if snapshot["iteration"] == self.pump.get_freq("HI"):
-            snapshot["iteration"] = 0
+        # Increment the step until 10 iterations, then reset
+        vital_blob["payload"] = self.pump.collect_vitals(snapshot["iteration"])
+        if vital_blob["iteration"] == self.pump.get_freq("HI"):
+            vital_blob["iteration"] = 0
         else:
-            snapshot["iteration"] += 1
-        
+            vital_blob["iteration"] += 1
+
+        # Update payload into vital manifest
+        self.vital_manifest["pump"]["payload"] = vital_blob["payload"]
+        self.vital_manifest["elasped"] = self.get_now_sec() - self.vital_manifest["timestamp"]
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
-        self.get_logger().info(f"[Pump] Collected: {self.vital_manifest['pump']['payload']}")
+        self.get_logger().info(f"[Pump] Collected: {self.vital_manifest["pump"]["payload"]}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
