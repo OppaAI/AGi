@@ -140,17 +140,6 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
-        self.vital_blob = {
-            "pump":
-                "iteration: 0,
-                "payload": {}
-            "regulator":
-                "payload": {}
-            "oscillator":
-                "payload": {}
-            "orchestrator":
-                "payload": {}
-        }
         self.vital_manifest = {
             "pump":
                 "timestamp": 0.0,
@@ -196,28 +185,30 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), self.pump_cycle)
+        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), lamba := self.pump_cycle(self.vital_manifest["pump"]))
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
-    def pump_cycle(self):
-        # Get initial time and blob before pumping happens
-        self.vital_manifest["pump"]["timestamp"] = self.get_now_sec()
-        vital_blob = self.vital_blob["pump"]
-                
+    def pump_cycle(self, manifest):
+        # Get initial time before pumping happens
+        manifest["timestamp"] = self.get_now_sec()
+        
+        # Duplicate a snapshot of the last good manifest
+        vital_clone = manifest["payload"].copy()
+        manifest["payload"] = self.pump.collect_vitals(vital_clone)
+        
+        # iteration needs to move to collect_vitals
         # Increment the step until 10 iterations, then reset
-        vital_blob["payload"] = self.pump.collect_vitals(snapshot["iteration"])
-        if vital_blob["iteration"] == self.pump.get_freq("HI"):
-            vital_blob["iteration"] = 0
-        else:
-            vital_blob["iteration"] += 1
+        #if vital_blob["iteration"] == self.pump.get_freq("HI"):
+        #    vital_blob["iteration"] = 0
+        #else:
+        #    vital_blob["iteration"] += 1
 
-        # Update payload into vital manifest
-        self.vital_manifest["pump"]["payload"] = vital_blob["payload"]
-        self.vital_manifest["elasped"] = self.get_now_sec() - self.vital_manifest["timestamp"]
+        # Update elapsed time into  manifest
+        manifest["elasped"] = self.get_now_sec() - manifest["timestamp"]
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
-        self.get_logger().info(f"[Pump] Collected: {self.vital_manifest["pump"]["payload"]}")
+        self.get_logger().info(f"[Pump] Collected: {self.manifest["payload"]}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
