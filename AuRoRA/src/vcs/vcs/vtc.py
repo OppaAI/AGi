@@ -140,20 +140,31 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
-        self.vtc_snapshot = {
+        self.vital_blob = {
             "pump":
-                "timestamp": 0,
-                "iteration": 0,
-                "sensor_data": {}
+                "iteration: 0,
+                "payload": {}
             "regulator":
-                "timestamp": 0,
-                "vital_data": {}
+                "payload": {}
             "oscillator":
-                "timestamp": 0,
-                "vital_pulse": {}
+                "payload": {}
             "orchestrator":
-                "timestamp": 0,
-                "vital_response": {}
+                "payload": {}
+        }
+        self.vital_manifest = {
+            "pump":
+                "timestamp": 0.0,
+                "elapsed": 0.0,
+                "payload": {}
+            "regulator":
+                "timestamp": 0.0,
+                "payload": {}
+            "oscillator":
+                "timestamp": 0.0,
+                "payload": {}
+            "orchestrator":
+                "timestamp": 0.0,
+                "payload": {}
         }
 
         # Initiate the 4 modules
@@ -185,19 +196,24 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), self.pump_cycle(self.vtc_snapshot["pump"]))
+        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), self.pump_cycle)
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
-    def pump_cycle(self, snapshot):
-        snapshot["timestamp"] = self.get_now_sec()
+    def pump_cycle(self):
+        # Get initial time before pumping happens
+        start_timestamp = self.get_now_sec()
+                
+        # Determine the poll level (HI, MID, LO) from the iteration
         snapshot["sensor_data"] = self.pump.collect_vitals(snapshot["iteration"])
         if snapshot["iteration"] == self.pump.get_freq("HI"):
             snapshot["iteration"] = 0
         else:
             snapshot["iteration"] += 1
+        
 
-        self.get_logger().info(f"[Pump] Collected: {snapshot['sensor_data']}")
+        # for DEBUG: Print out the payload to see if collected data is correct, will DEL
+        self.get_logger().info(f"[Pump] Collected: {self.vital_manifest['pump']['payload']}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
