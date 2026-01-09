@@ -6,9 +6,10 @@
 # - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 # System modules
+import copy
 import time
-from typing import Literal
 from jtop import jtop
+from typing import Tuple, Literal
 
 # ROS 2 modules
 import rclpy
@@ -18,6 +19,9 @@ from rclpy.duration import Duration
 
 # AGi Vital Pulse definition
 from vp.msg import VitalPulse
+
+# Polling Level
+POLL_LEVEL = Literal["LO", "MED", "HI"]
 
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
@@ -36,7 +40,6 @@ DISPLAY_INTERVAL = 0.5
 BLINK_DURATION = 0.3
 
 class Pump():
-    POLL_LEVEL = Literal["LO", "MED", "HI"]
     #TODO: to be moved to config file for settings
     # Polling Frequency
     POLL_FREQ : dict[POLL_LEVEL, int] = {
@@ -82,23 +85,19 @@ class Pump():
     def get_freq(cls, level: POLL_LEVEL) -> int:
         return cls.POLL_FREQ[level]
     
-    def collect_vitals(self, step: int, sensor_data: dict[str, str | None]) -> dict[str, str | None]:
+    def poll_vital_data(self, vital_blob: dict[str, any]) -> dict[str, any | None]:
         """
-        Collect vital data based on polling level:
+        Collect vital data based on polling level, and update worst case values:
             - High level: CPU and GPU temperatures.
         """
-        # 1. Poll vitals
-        
-
-        # 2. Collect vitals
-        for vid, key in self.JETSON_STATS_KEYS.items():
-            vitals[vid] = self.poll_sensor_data(key)
-
-        self.timestamp = now_ns
-        self.vitals = vitals
-        return vitals
+        # Implement Triple-level polling (TLP) of polling vitals data
+        vital_blob["payload"].update(self.get_jetson_stats(vital_blob["payload"]))
+        if vital_blob["iteration"] % 2 == 0: pass # vital_blob["payload"].update(self.get_sensor_stats(vital_blob["payload"]))
+        if vital_blob["iteration"] == 0: pass # vital_blob["payload"].update(self.get_io_stats(vital_blob["payload"]))
+        vital_blob["payload"] = self.get_jetson_stats(vital_blob["payload"])
+        return vital_blob
             
-    def poll_sensor_data(self, key: str)-> str | None:
+    def get_jetson_stats(self, key: str)-> str | None:
         """
         Poll a vital metric from jtop stats
         Args:
@@ -140,20 +139,25 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
-        self.vital_manifest = {
-            "pump":
+        self.vital_dump = {
+            "pump": {
                 "timestamp": 0.0,
-                "elapsed": 0.0,
-                "payload": {}
-            "regulator":
+                "duration": 0.0,
+                "iteration": 0,
+                "payload": {}  # raw sensor data
+            },
+            "regulator": {
                 "timestamp": 0.0,
-                "payload": {}
-            "oscillator":
+                "payload": {}  # normalized/filtered data
+            },
+            "oscillator": {
                 "timestamp": 0.0,
-                "payload": {}
-            "orchestrator":
+                "payload": {}  # final encoded message before publish
+            },
+            "orchestrator": {
                 "timestamp": 0.0,
-                "payload": {}
+                "payload": {}  # decisions, alerts, safety state
+            }
         }
 
         # Initiate the 4 modules
@@ -185,30 +189,44 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), lamba := self.pump_cycle(self.vital_manifest["pump"]))
+        self.timers = self.create_timer(1.0 / self.pump.get_freq("HI"), self.run_pump_cycle)
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
-    def pump_cycle(self, manifest):
-        # Get initial time before pumping happens
-        manifest["timestamp"] = self.get_now_sec()
-        
-        # Duplicate a snapshot of the last good manifest
-        vital_clone = manifest["payload"].copy()
-        manifest["payload"] = self.pump.collect_vitals(vital_clone)
-        
-        # iteration needs to move to collect_vitals
-        # Increment the step until 10 iterations, then reset
-        #if vital_blob["iteration"] == self.pump.get_freq("HI"):
-        #    vital_blob["iteration"] = 0
-        #else:
-        #    vital_blob["iteration"] += 1
+    def run_pump_cycle(self):
+        """
+        Collects vitals based on the configured polling level and updates the vital_dump.
 
-        # Update elapsed time into  manifest
-        manifest["elasped"] = self.get_now_sec() - manifest["timestamp"]
+        It performs a single pump cycle, gathering data from all streams
+        (Hi, Med, Lo) according to the current tier and mode settings. It updates 
+        the internal `vital_dump` manifest using the "update if worse/null/error" logic, 
+        ensuring the worst-case scenario is always preserved until the next enrichment tick.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Clone a blob of the vital dump and fill it with snapshot data
+        vital_blob : dict[str, any] = copy.deepcopy(self.vital_dump["pump"])
+
+        # Get initial time before pumping happens
+        vital_blob["timestamp"] = self.get_clock().now()
+        
+        # Pass vital_blob to pump to implement Triple-level polling (TLP)
+        vital_blob["payload"] = self.pump.poll_vital_data(vital_blob)
+
+        # Increment the step until 10 iterations, then reset
+        vital_blob["iteration"] = (vital_blob["iteration"] + 1) % self.pump.get_freq("HI")
+
+        # Atomically commit the vital dump snapshot
+        self.commit_vital_dump(vital_blob)
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
-        self.get_logger().info(f"[Pump] Collected: {self.manifest["payload"]}")
+        # TODO: to be removed in the future
+        self.get_logger().info(f"[Pump] Collected: {self.vital_dump['pump']['payload']}")
+        self.get_logger().info(f"[Pump] Duration: {self.vital_dump['pump']['duration']} s")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
@@ -290,6 +308,15 @@ class VitalTerminalCore(Node):
             f"Server Status: {status} "
             f"{RESET_COLOR}".ljust(100)
         )
+
+    def commit_vital_dump(self, vital_blob: dict[str, any]):
+        """Commit vital dump with latest data"""
+        # Calculate duration time of pump cycle
+        vital_blob["duration"] = (self.get_clock().now() - vital_blob["timestamp"]).nanoseconds * 1e-9
+
+        # Atomically commit the vital dump snapshot
+        self.vital_dump["pump"] = vital_blob
+
 
     def get_now_sec(self):
         """Helper to get current time as float seconds"""
