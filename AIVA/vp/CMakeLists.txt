@@ -9,10 +9,12 @@ endif()
 # Find Dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 
 # Generate Interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VitalPulse.msg"
+  DEPENDENCIES builtin_interfaces
 )
 
 # Testing (Optional)

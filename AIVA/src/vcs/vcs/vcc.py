@@ -12,7 +12,6 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 from rclpy.duration import Duration
-import time
 
 from vp.msg import VitalPulse
 
@@ -51,14 +50,14 @@ class VitalCentralCore:
             from rclpy.clock import Clock
             return Clock().now().nanoseconds / 1e9
         except Exception:
-            return time.time()
+            return None
 
     def record_identity(self, robot_id, user_id):
         self.robot_id = robot_id
         self.user_id = user_id
 
     def record_remote_pulse(self, opm, remote_ts):
-        now = time.time()
+        now = self.get_now_sec()
         self.last_pulse_time = now
         self.current_opm = float(opm)
 
@@ -81,7 +80,7 @@ class VitalCentralCore:
             "opm": self.current_opm,
             "rtt": self.current_rtt,
             "blink": self._blink_step % 2,
-            "color": self.blink_color(time.time())
+            "color": self.blink_color(self.get_now_sec())
         }
 
     def clear_identity_and_pulse(self):
@@ -123,7 +122,7 @@ class VitalPulseAnalyzer(Node):
         robot_id = msg.robot_id
         user_id = msg.user_id
         pulse = float(msg.vital_pulse_opm)
-        timestamp = msg.timestamp
+        timestamp = rclpy.time.Time.from_msg(msg.timestamp).nanoseconds / 1e9
 
         # Record identity + pulse
         self.vc.record_identity(robot_id, user_id)
@@ -133,7 +132,7 @@ class VitalPulseAnalyzer(Node):
         feedback = VitalPulse()
         feedback.robot_id = ROBOT_ID
         feedback.user_id = robot_id
-        feedback.timestamp = self.get_clock().now().nanoseconds / 1e9
+        feedback.timestamp = self.get_clock().now()
         feedback.vital_pulse_opm = pulse
         self.publisher_.publish(feedback)
 
