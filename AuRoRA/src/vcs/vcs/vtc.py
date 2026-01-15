@@ -293,7 +293,7 @@ class VitalTerminalCore(Node):
             # Use VITAL_PULSE_TIMEOUT (1.0s) as the base for timing policies
             liveliness_lease_duration=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.5),
             lifespan=Duration(seconds=VITAL_PULSE_TIMEOUT),
-            deadline=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.1)
+            deadline=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.3)
         )
 
         # 3. Communication Setup
