@@ -8,6 +8,7 @@
 # System modules
 import copy
 import time
+from collections import deque
 from builtin_interfaces.msg import Time
 from jtop import jtop
 from typing import Any, Literal
@@ -49,24 +50,26 @@ class Pump():
         "HI": 10    # 10Hz (600 ppm)
     }
 
+    MAX_POLL_HISTORY = 10
+
     # Keys for polling Jetson Stats
-    JETSON_STATS_KEYS: dict[str, tuple[str, ...]] = {
+    VITAL_MANIFEST: dict[str, tuple[str, tuple[str, ...]]] = {
         # CPU stats (The "Brain" load)
-        "cpu_user": ("cpu", "total", "user"),
-        "cpu_system": ("cpu", "total", "system"),
+        "cpu_user": ("cpu", ("total", "user")),
+        "cpu_system": ("cpu", ("total", "system")),
 
         # GPU stats (The "Vision/AI" load)
-        "gpu_load": ("gpu", "gpu", "status", "load"),
+        "gpu_load": ("gpu", ("gpu", "status", "load")),
 
         # Temperature stats (The "Thermals")
-        "cpu_temp": ("temperature", "cpu", "temp"),
-        "gpu_temp": ("temperature", "gpu", "temp"),
-        "soc0_temp": ("temperature", "soc0", "temp"),
-        "soc1_temp": ("temperature", "soc1", "temp"),
-        "soc2_temp": ("temperature", "soc2", "temp"),
-        "tj_temp": ("temperature", "tj", "temp"),
-        "cv0_temp": ("temperature", "cv0", "temp"),
-        "cv1_temp": ("temperature", "cv1", "temp"),
+        "cpu_temp": ("temperature", ("cpu", "temp")),
+        "gpu_temp": ("temperature", ("gpu", "temp")),
+        "soc0_temp": ("temperature", ("soc0", "temp")),
+        "soc1_temp": ("temperature", ("soc1", "temp")),
+        "soc2_temp": ("temperature", ("soc2", "temp")),
+        "tj_temp": ("temperature", ("tj", "temp")),
+        "cv0_temp": ("temperature", ("cv0", "temp")),
+        "cv1_temp": ("temperature", ("cv1", "temp")),
         
         # CPU stats (The "Brain" load)
         #"cpu1_load%": "CPU1",
@@ -148,9 +151,42 @@ class Pump():
         max_step = round(self.get_poll_freq("HI") / self.get_poll_freq("LO"))
         mid_factor = round(self.get_poll_freq("HI") / self.get_poll_freq("MID"))
 
+        # Realize the proxies into standard dictionaries
+        # Using dict() on these objects is the "Secret Handshake" for jtop 4.x
+        source_map = {
+            "cpu": dict(self.jetson.cpu),
+            "gpu": dict(self.jetson.gpu),
+            "temperature": dict(self.jetson.temperature)
+        }
+
         # Implement Triple-Level Polling (TLP) of polling vitals data
         # High Level: Poll all Jetson stats
-        vital_glob = self.get_jetson_stats(vital_glob)
+        # Use Recursive Path Traversal to get the stats
+        for key, (source_name, path) in self.VITAL_MANIFEST.items():
+            try:
+                # Grab the realized dictionary
+                source_data = source_map.get(source_name)
+                
+                if source_data is not None:
+                    # Sift through the dictionary using your path tuple
+                    value = self.get_recursive(source_data, path)
+                else:
+                    value = float('nan')
+
+                # Initialize the deque if not exist
+                if key not in vital_glob["payload"]:
+                        vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
+
+                # Append the new value to the deque
+                vital_glob["payload"][key].append(value)
+                        
+            except Exception:
+                # Initialize the deque if not exist
+                if key not in vital_glob["payload"]:
+                    vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
+
+                # Append the nan value to the deque
+                vital_glob["payload"][key].append(float('nan'))
 
         # Mid Level: Poll all sensor stats
         if vital_glob["iteration"] % mid_factor == 0:
@@ -161,6 +197,8 @@ class Pump():
         if vital_glob["iteration"] % max_step == 0:
             # vital_glob["payload"].update(self.get_io_stats(vital_glob["payload"]))
             pass
+
+        print(f"[Pump] glob: {vital_glob}")
 
         return vital_glob
             
@@ -189,9 +227,17 @@ class Pump():
         
         vital_glob["payload"].append(current_stats)
         vital_glob["jetson_duration"] = time.perf_counter() - t0
-        print(f"[Pump] glob: {vital_glob}")
         return vital_glob
 
+    def get_recursive(self, data: Any, path: tuple[str, ...]) -> Any:
+        """Helper to navigate nested dictionaries safely."""
+        for key in path:
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            else:
+                return float('nan')
+        return data
+    
 class PaceMaker():
     def __init__(self):
         pass
