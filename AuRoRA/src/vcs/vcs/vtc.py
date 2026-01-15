@@ -285,8 +285,8 @@ class VitalTerminalCore(Node):
 
         # 2. QoS Profile Definition (Based on our discussion)
         qos_profile = QoSProfile(
-            depth=5,
-            reliability=ReliabilityPolicy.RELIABLE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
             liveliness=LivelinessPolicy.AUTOMATIC,
