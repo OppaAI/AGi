@@ -153,8 +153,9 @@ class VitalTerminalCore(Node):
         # Thread-safe snapshot for display
         self.display_snapshot = {}
 
-        data = self.pump.collect_vitals()
-        print(f"[{self.pump.timestamp}] Pump collected:", data)
+        pump = Pump()
+        data = pump.collect_vitals()
+        print(f"[{pump.timestamp}] Pump collected:", data)
 
         # 2. QoS Profile Definition (Based on our discussion)
         qos_profile = QoSProfile(
@@ -176,8 +177,8 @@ class VitalTerminalCore(Node):
         # 4. Timer Setup
         # create timers for each level
         self.timers = {
-            level: self.create_timer(1.0 / self.pump.POLL_FREQ[level], lambda l=level: self.timer_callback(l))
-            for level in self.pump.POLL_FREQ
+            level: self.create_timer(1.0 / Pump.POLL_FREQ[level], lambda l=level: self.timer_callback(l))
+            for level in Pump.POLL_FREQ
         }
         self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
