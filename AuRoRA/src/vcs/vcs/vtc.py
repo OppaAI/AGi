@@ -53,7 +53,7 @@ class Pump():
     MAX_POLL_HISTORY = 10
 
     # Keys for polling Jetson Stats
-    VITAL_MANIFEST: dict[str, tuple[str, tuple[str, ...]]] = {
+    JETSON_STATS_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
         # CPU stats (The "Brain" load)
         "cpu_user": ("cpu", ("total", "user")),
         "cpu_system": ("cpu", ("total", "system")),
@@ -117,8 +117,10 @@ class Pump():
         self.jetson = None
         if jtop:
             try:
-                self.jetson = jtop(interval=self.get_poll_rhythm("HI"))    # 10Hz polling at every 0.1s
+                # Start jtop with high frequency polling at 10Hz (0.1s)
+                self.jetson = jtop(interval=self.get_poll_rhythm("HI"))
                 self.jetson.start()
+
             except Exception as e:
                 #TODO: to implement logging in the future
                 print(f"Pump Initialization Error: Could not start jtop. Error: {e}")
@@ -146,47 +148,26 @@ class Pump():
             - Mid level: Poll all sensor stats
             - Low level: Poll all I/O stats
         """
+        # Update jetson stats
+        if self.jetson and self.jetson.ok():
+
+            # Then update realized dicts
+            self.jetson_source = {
+                "cpu": dict(self.jetson.cpu),
+                "fan": dict(self.jetson.fan),
+                "gpu": dict(self.jetson.gpu),
+                "memory": dict(self.jetson.memory),
+                "power": dict(self.jetson.power),
+                "temperature": dict(self.jetson.temperature)
+            }
 
         # Calculate iteration step and mid-point factor
         max_step = round(self.get_poll_freq("HI") / self.get_poll_freq("LO"))
         mid_factor = round(self.get_poll_freq("HI") / self.get_poll_freq("MID"))
 
-        # Realize the proxies into standard dictionaries
-        # Using dict() on these objects is the "Secret Handshake" for jtop 4.x
-        source_map = {
-            "cpu": dict(self.jetson.cpu),
-            "gpu": dict(self.jetson.gpu),
-            "temperature": dict(self.jetson.temperature)
-        }
-
         # Implement Triple-Level Polling (TLP) of polling vitals data
         # High Level: Poll all Jetson stats
-        # Use Recursive Path Traversal to get the stats
-        for key, (source_name, path) in self.VITAL_MANIFEST.items():
-            try:
-                # Grab the realized dictionary
-                source_data = source_map.get(source_name)
-                
-                if source_data is not None:
-                    # Sift through the dictionary using your path tuple
-                    value = self.get_recursive(source_data, path)
-                else:
-                    value = float('nan')
-
-                # Initialize the deque if not exist
-                if key not in vital_glob["payload"]:
-                        vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
-
-                # Append the new value to the deque
-                vital_glob["payload"][key].append(value)
-                        
-            except Exception:
-                # Initialize the deque if not exist
-                if key not in vital_glob["payload"]:
-                    vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
-
-                # Append the nan value to the deque
-                vital_glob["payload"][key].append(float('nan'))
+        vital_glob.update(self.get_jetson_stats(vital_glob))
 
         # Mid Level: Poll all sensor stats
         if vital_glob["iteration"] % mid_factor == 0:
@@ -210,23 +191,34 @@ class Pump():
         Returns:
             dict[str, any]: updated vital blob
         """
-        t0 = time.perf_counter()
-        if not self.jetson or not self.jetson.ok():
-            return vital_glob
+        # Use Recursive Path Traversal to get the stats
+        for key, (source_name, path) in self.JETSON_STATS_MAP.items():
+            try:
+                # Grab the realized dictionary
+                vital_data = self.jetson_source.get(source_name)
+                
+                # Sanitize the data by removing "Hardware Off" noise
+                if vital_data == -256 or vital_data is None:
+                    vital_data = float("nan")
+                else:
+                    # Sift through the dictionary using your path tuple
+                    vital_data = self.get_recursive(vital_data, path)
 
-        # Use the specific properties which return the dicts you just dumped
-        # This matches the structure of your printout exactly
-        current_stats = {
-            "cpu": self.jetson.cpu,
-            "gpu": self.jetson.gpu,
-            "temperature": self.jetson.temperature
-        }
+                # Initialize the deque if not exist
+                if key not in vital_glob["payload"]:
+                        vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
 
-        if not isinstance(vital_glob["payload"], list):
-            vital_glob["payload"] = []
-        
-        vital_glob["payload"].append(current_stats)
-        vital_glob["jetson_duration"] = time.perf_counter() - t0
+                # Append the new value to the deque
+                vital_glob["payload"][key].append(vital_data)
+                        
+            except Exception:
+                # Initialize the deque if not exist
+                if key not in vital_glob["payload"]:
+                    vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
+
+                # Append the nan value to the deque
+                vital_glob["payload"][key].append(float('nan'))
+                
         return vital_glob
 
     def get_recursive(self, data: Any, path: tuple[str, ...]) -> Any:
@@ -264,7 +256,6 @@ class VitalTerminalCore(Node):
             "pump": {
                 "timestamp": Time(),
                 "duration": 0.0,
-                "jetson_duration": 0.0,
                 "iteration": 0,
                 "payload": {}  # raw sensor data
             },
@@ -346,7 +337,7 @@ class VitalTerminalCore(Node):
         self.commit_vital_dump(vital_glob)
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
-        # TODO: to be removed in the future, and to remove Jetson duration
+        # TODO: to be removed in the future
         self.get_logger().info(f"[Pump] Collected: {self.vital_dump}")
         
     def oscillate_vital_pulse(self):
