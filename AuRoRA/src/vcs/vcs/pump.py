@@ -128,8 +128,8 @@ class Pump():
             }
 
         # Calculate iteration step and mid-point factor
-        max_step = round(self.get_poll_freq("HI") / self.get_poll_freq("LO"))
-        mid_factor = round(self.get_poll_freq("HI") / self.get_poll_freq("MID"))
+        max_step = round(self.get_poll_freq("HI") // self.get_poll_freq("LO"))
+        mid_factor = round(self.get_poll_freq("HI") // self.get_poll_freq("MID"))
 
         # Implement Triple-Level Polling (TLP) of polling vitals data
         # High Level: Poll all Jetson stats
@@ -142,9 +142,6 @@ class Pump():
         # Low Level: Poll all I/O stats
         if vital_glob["iteration"] % max_step == 0:
             vital_glob.update(self.get_jetson_stats(vital_glob, "LO"))
-       
-        # Increment the step until 10 iterations, then reset
-        vital_glob["iteration"] = (vital_glob["iteration"] + 1) % self.get_poll_freq("HI")
 
         return vital_glob
             
