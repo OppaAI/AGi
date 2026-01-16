@@ -18,8 +18,19 @@ class Pump():
 
     MAX_POLL_HISTORY = 10
 
+    # Source to poll Jetson Stats
+    JETSON_STATS_SOURCES: dict[str, POLL_LEVEL] = {
+        "cpu": "HI",
+        "gpu": "HI",
+        "temperature": "HI",
+        "fan": "MID",
+        "memory": "MID",
+        "power": "MID",
+        "disk": "LO"
+    }    
+
     # Keys for polling Jetson Stats
-    JETSON_STATS_MAP: dict[str, tuple[str, tuple[str, ...]]] = {
+    JETSON_STATS_MAP: dict[str, tuple[str, tuple[Any, ...], ...]] = {
         # CPU stats (The "Brain" load)
         "cpu_user": ("cpu", ("total", "user")),
         "cpu_system": ("cpu", ("total", "system")),
@@ -36,39 +47,27 @@ class Pump():
         "tj_temp": ("temperature", ("tj", "temp")),
         "cv0_temp": ("temperature", ("cv0", "temp")),
         "cv1_temp": ("temperature", ("cv1", "temp")),
-        
-        # CPU stats (The "Brain" load)
-        #"cpu1_load%": "CPU1",
-        #"cpu2_load%": "CPU2",
-        #"cpu3_load%": "CPU3",
-        #"cpu4_load%": "CPU4",
-        #"cpu5_load%": "CPU5",
-        #"cpu6_load%": "CPU6",
-        #"cpu_temp": "Temp cpu",
-        #"tj_temp": "Temp tj",     # Critical: The thermal junction max temp
 
-        # GPU stats (The "Vision/AI" load)
-        #"gpu_load%": "GPU",
-        #"gpu_temp": "Temp gpu",
+        # Fan stats (The "Cooling")
+        "fan_speed": ("fan", ("pwmfan", "speed", 0)),
 
-        # SoC & Memory stats (The "Data Bus" health)
-        #"soc0_temp": "Temp soc0",
-        #"soc1_temp": "Temp soc1",
-        #"soc2_temp": "Temp soc2",
-        #"ram_used%": "RAM",
-        #"swap_used%": "SWAP",
-        #"emc_load%": "EMC",       # Memory controller bandwidth utilization
+        # Memory stats (The "RAM/Storage")
+        "ram_total": ("memory", ("RAM", "tot")),
+        "ram_used": ("memory", ("RAM", "used")),
+        "swap_total": ("memory", ("SWAP", "tot")),
+        "swap_used": ("memory", ("SWAP", "used")),
+        "emc_load": ("memory", ("EMC", "cur")),
 
-        # Power & Mechanical (The "Metabolism")
-        #"nvp_model": "nvp model", 
-        #"fan_pwm%": "Fan pwmfan0", # If fan is 100% and temp is high, it's a danger sign
-        #"power_total": "Power TOT",
-        #"power_cpu_gpu": "Power VDD_CPU_GPU_CV",
-        #"power_soc": "Power VDD_SOC",
-        
-        # Temporal Reference
-        #"jetson_time": "time",
-        #"uptime": "uptime"
+        # Power stats (The "Energy")
+        "vdd_cpu_gpu_cv": ("power", ("rail", "VDD_CPU_GPU_CV", "power")),
+        "vdd_soc": ("power", ("rail", "VDD_SOC", "power")),
+        "voltage_soc": ("power", ("tot", "volt")),
+        "current_soc": ("power", ("tot", "curr")),
+        "power_soc": ("power", ("tot", "power")),
+
+        # Disk stats (The "Storage")
+        "disk_used": ("disk", ("used",)),
+
     }
 
     """
@@ -124,7 +123,8 @@ class Pump():
                 "gpu": dict(self.jetson.gpu),
                 "memory": dict(self.jetson.memory),
                 "power": dict(self.jetson.power),
-                "temperature": dict(self.jetson.temperature)
+                "temperature": dict(self.jetson.temperature),
+                "disk": dict(self.jetson.disk)
             }
 
         # Calculate iteration step and mid-point factor
@@ -133,23 +133,21 @@ class Pump():
 
         # Implement Triple-Level Polling (TLP) of polling vitals data
         # High Level: Poll all Jetson stats
-        vital_glob.update(self.get_jetson_stats(vital_glob))
+        vital_glob.update(self.get_jetson_stats(vital_glob, "HI"))
 
         # Mid Level: Poll all sensor stats
         if vital_glob["iteration"] % mid_factor == 0:
-            # vital_glob["payload"].update(self.get_sensor_stats(vital_glob["payload"]))
-            pass
+            vital_glob.update(self.get_jetson_stats(vital_glob, "MID"))
 
         # Low Level: Poll all I/O stats
         if vital_glob["iteration"] % max_step == 0:
-            # vital_glob["payload"].update(self.get_io_stats(vital_glob["payload"]))
-            pass
+            vital_glob.update(self.get_jetson_stats(vital_glob, "LO"))
 
         print(f"[Pump] glob: {vital_glob}")
 
         return vital_glob
             
-    def get_jetson_stats(self, vital_glob: dict[str, Any]) -> dict[str, Any]:
+    def get_jetson_stats(self, vital_glob: dict[str, Any], level: POLL_LEVEL) -> dict[str, Any]:
         """
         Poll all Jetson stats and update vital blob payload
         Args:
@@ -163,40 +161,48 @@ class Pump():
             self.jetson_source = {}
 
         # Use Recursive Path Traversal to get the stats
-        for key, (source_name, path) in self.JETSON_STATS_MAP.items():
-            try:
-                # Grab the realized dictionary
-                vital_data = self.jetson_source.get(source_name)
-                
-                # Sanitize the data by removing "Hardware Off" noise
-                if vital_data == -256 or vital_data is None:
-                    vital_data = None
-                else:
-                    # Sift through the dictionary using your path tuple
-                    vital_data = self.get_recursive(vital_data, path)
+        for key, (source_name, path) in self.JETSON_STATS_MAP.items():            
+            if self.JETSON_STATS_SOURCES[source_name] == level:
+                try:
+                    # Grab the realized dictionary
+                    vital_data = self.jetson_source.get(source_name)
+                    
+                    # Sanitize the data by removing "Hardware Off" noise
+                    if vital_data == -256 or vital_data is None:
+                        vital_data = None
+                    else:
+                        # Sift through the dictionary using your path tuple
+                        vital_data = self.get_recursive(vital_data, path)
 
-                # Initialize the deque if not exist
-                if key not in vital_glob["payload"]:
+                    # Initialize the deque if not exist
+                    if key not in vital_glob["payload"]:
+                            vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
+
+                    # Append the new value to the deque
+                    vital_glob["payload"][key].append(vital_data)
+                            
+                except Exception:
+                    # Initialize the deque if not exist
+                    if key not in vital_glob["payload"]:
                         vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
 
-                # Append the new value to the deque
-                vital_glob["payload"][key].append(vital_data)
-                        
-            except Exception:
-                # Initialize the deque if not exist
-                if key not in vital_glob["payload"]:
-                    vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
-
-                # Append the None value to the deque
-                vital_glob["payload"][key].append(None)
-                
+                    # Append the None value to the deque
+                    vital_glob["payload"][key].append(None)
+                    
         return vital_glob
 
-    def get_recursive(self, data: Any, path: tuple[str, ...]) -> Any:
-        """Helper to navigate nested dictionaries safely."""
+    def get_recursive(self, data: Any, path: tuple[Any, ...]) -> Any:
+        """Helper to navigate nested dictionaries and lists safely."""
         for key in path:
+            # Handle Dictionary access
             if isinstance(data, dict) and key in data:
                 data = data[key]
+            # Handle List access (if key is an integer)
+            elif isinstance(data, list) and isinstance(key, int):
+                try:
+                    data = data[key]
+                except IndexError:
+                    return None
             else:
                 return None
         return data

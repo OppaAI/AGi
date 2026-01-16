@@ -266,8 +266,8 @@ power.tot.name
 +-------------------+-------------------------+-----------+----------------------------------------+
 | Category          | Metric                  | Poll Level| Notes                                  |
 +-------------------+-------------------------+-----------+----------------------------------------+
-| CPU (MID)         | cpu.total.user          | MID       | User load can spike occasionally       |
-|                   | cpu.total.system        | MID       | System load changes slowly             |
+| CPU (HI)          | cpu.total.user          | HI        | User load can spike occasionally       |
+|                   | cpu.total.system        | HI        | System load changes slowly             |
 +-------------------+-------------------------+-----------+----------------------------------------+
 | Memory (MID)      | memory.RAM.tot          | LO        | Static value                           |
 |                   | memory.RAM.used         | MID       | Memory usage changes slowly            |
