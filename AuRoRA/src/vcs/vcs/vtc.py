@@ -133,8 +133,11 @@ class VitalTerminalCore(Node):
         # Pass the glob to pump to implement Triple-Level Polling (TLP)
         vital_glob = self.pump.poll_vital_data(vital_glob)
 
+        # Increment the step until 10 iterations, then reset
+        vital_glob["iteration"] = (vital_glob["iteration"] + 1) % self.get_poll_freq("HI")
+
         # Atomically commit the vital dump snapshot
-        self.commit_vital_dump(vital_glob)
+        self.commit_vital_dump("pump", vital_glob)
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
         # TODO: to be removed in the future
@@ -238,15 +241,15 @@ class VitalTerminalCore(Node):
             f"{RESET_COLOR}".ljust(100)
         )
 
-    def commit_vital_dump(self, vital_glob: dict[str, any]):
+    def commit_vital_dump(self, module: str, vital_dump: dict[str, any]):
         """Commit vital dump with latest data"""
         # Calculate duration time of pump cycle
         current_time = self.get_clock().now()
-        start_time = rclpy.time.Time.from_msg(vital_glob["timestamp"])
-        vital_glob["duration"] = (current_time - start_time).nanoseconds * 1e-9
+        start_time = rclpy.time.Time.from_msg(vital_dump["timestamp"])
+        vital_dump["duration"] = (current_time - start_time).nanoseconds * 1e-9
 
         # Atomically commit the vital dump snapshot
-        self.vital_dump["pump"] = copy.deepcopy(vital_glob)
+        self.vital_dump[module] = copy.deepcopy(vital_dump)
 
     def current_rclpy_time_sec(self) -> int:
         """Helper to get current time in seconds"""
