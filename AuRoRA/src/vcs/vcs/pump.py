@@ -3,19 +3,18 @@ from collections import deque
 from jtop import jtop
 from typing import Any, Literal
 
-
-# Polling Level
-POLL_LEVEL = Literal["LO", "MID", "HI"]
-
-#TODO: to be moved to config file for settings
-# Polling Frequency (Hz)
-POLL_FREQ : dict[POLL_LEVEL, int] = {
-    "LO": 1,    # 1Hz (60 ppm)
-    "MID": 5,   # 5Hz (300 ppm)
-    "HI": 10    # 10Hz (600 ppm)
-    }
-
 class Pump():
+
+    # Polling Level
+    POLL_LEVEL = Literal["LO", "MID", "HI"]
+
+    #TODO: to be moved to config file for settings, or to a robot spec YAML file
+    # Polling Frequency (Hz)
+    POLL_FREQ : dict[POLL_LEVEL, int] = {
+        "LO": 1,    # 1Hz (60 ppm)
+        "MID": 5,   # 5Hz (300 ppm)
+        "HI": 10    # 10Hz (600 ppm)
+        }
 
     MAX_POLL_HISTORY = 10
 
@@ -76,7 +75,7 @@ class Pump():
     Collects vital data from a Jetson robot using a persistent jtop instance.
         - get_poll_freq: Returns polling frequency for a given level
         - get_poll_rhythm: Returns polling rhythm (sec) for a given level
-        - collect_vitals: Collects vitals based on polling level
+        - poll_vital_data: Collects vitals based on polling level
         - poll_vital: Polls a vital metric from jtop stats
     """
     
@@ -108,9 +107,9 @@ class Pump():
         """Return polling rhythm (sec) for a given level"""
         return 1.0 / cls.get_poll_freq(level)
     
-    def poll_vital_data(self, vital_glob: dict[str, any]) -> dict[str, any]:
+    def poll_vital_data(self, vital_glob: dict[str, Any]) -> dict[str, Any]:
         """
-        Collect vital data based on polling level, and update worst case values:
+        Poll vital data based on the configured polling level and update worst case values:
             - High level: Poll all Jetson stats
             - Mid level: Poll all sensor stats
             - Low level: Poll all I/O stats
@@ -150,14 +149,19 @@ class Pump():
 
         return vital_glob
             
-    def get_jetson_stats(self, vital_glob: dict[str, any]) -> dict[str, any]:
+    def get_jetson_stats(self, vital_glob: dict[str, Any]) -> dict[str, Any]:
         """
         Poll all Jetson stats and update vital blob payload
         Args:
-            vital_glob (dict[str, any]): vital blob containing payload
+            vital_glob (dict[str, Any]): vital blob containing payload
         Returns:
-            dict[str, any]: updated vital blob
+            dict[str, Any]: updated vital blob
         """
+
+        # Ensure jetson_source exists, even if jtop is not available
+        if not hasattr(self, "jetson_source") or self.jetson_source is None:
+            self.jetson_source = {}
+
         # Use Recursive Path Traversal to get the stats
         for key, (source_name, path) in self.JETSON_STATS_MAP.items():
             try:
@@ -166,7 +170,7 @@ class Pump():
                 
                 # Sanitize the data by removing "Hardware Off" noise
                 if vital_data == -256 or vital_data is None:
-                    vital_data = float("nan")
+                    vital_data = None
                 else:
                     # Sift through the dictionary using your path tuple
                     vital_data = self.get_recursive(vital_data, path)
@@ -183,8 +187,8 @@ class Pump():
                 if key not in vital_glob["payload"]:
                     vital_glob["payload"][key] = deque(maxlen=self.MAX_POLL_HISTORY)
 
-                # Append the nan value to the deque
-                vital_glob["payload"][key].append(float('nan'))
+                # Append the None value to the deque
+                vital_glob["payload"][key].append(None)
                 
         return vital_glob
 
@@ -194,28 +198,32 @@ class Pump():
             if isinstance(data, dict) and key in data:
                 data = data[key]
             else:
-                return float('nan')
+                return None
         return data
     
 if __name__ == "__main__":
+    import time
+
     # Create the instance
-    p = Pump()
+    pump = Pump()
     
     print("--- VTC PUMP DIAGNOSTIC START ---")
+    vital_glob = {"timestamp": 0, "duration": 0.0, "iteration": 0, "payload": {}}
+
     try:
-        # Run a 5-second test loop
         for i in range(5):
-            # Test the 'HI' polling level (the most critical one)
-            vitals = p.collect_vitals(level="HI")
+            vital_glob["iteration"] = i
+            vital_glob["timestamp"] = time.time()
+            vitals = pump.poll_vital_data(vital_glob)
             
-            # Print a clean snapshot
-            print(f"[{p.timestamp}] CPU: {vitals['cpu_temp']}°C | GPU: {vitals['gpu_temp']}°C")
+            cpu_temp = vitals["payload"]["cpu_temp"][-1]
+            gpu_temp = vitals["payload"]["gpu_temp"][-1]
+            print(f"[{vital_glob['timestamp']}] CPU: {cpu_temp}°C | GPU: {gpu_temp}°C")
             
             time.sleep(1)
             
     except KeyboardInterrupt:
         print("\nDiagnostic stopped by user.")
     finally:
-        # This ensures jtop.close() is called even if the test fails
-        del p 
+        pump.close()
         print("--- VTC PUMP DIAGNOSTIC END ---")
