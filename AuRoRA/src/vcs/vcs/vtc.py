@@ -28,7 +28,7 @@ SYSTEM_ID = "VCS"
 USER_ID = "OppaAI"
 VITAL_PULSE_SIGNAL = "vital_pulse_signal"
 VITAL_PULSE_RESPONSE = "vital_pulse_response"
-VITAL_PULSE_TIMEOUT = 1.5  # Timeout in seconds (Base Interval)
+VITAL_PULSE_TIMEOUT = 2.0  # Timeout in seconds (Base Interval)
 VITAL_PULSE_NETWORK_TIMEOUT = 500  # High latency threshold (ms)
 BASELINE_OPM = 60.0
 
@@ -57,12 +57,6 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
-        self.vital_glob = {
-            "timestamp": Time(),
-            "duration": 0.0,
-            "iteration": 0,
-            "payload": {}  # raw sensor data
-        }
         self.vital_dump = {
             "pump": {
                 "timestamp": Time(),
@@ -132,17 +126,15 @@ class VitalTerminalCore(Node):
         Returns:
             None
         """
-        # Get initial time before pumping happens
-        self.vital_glob["timestamp"] = self.get_clock().now().to_msg()
+        # Initialize the glob and get the initial time before pumping happens
+        vital_glob = {}
+        vital_glob["timestamp"] = self.get_clock().now().to_msg()
         
-        # Pass vital_glob to pump to implement Triple-Level Polling (TLP)
-        self.vital_glob = self.pump.poll_vital_data(self.vital_glob)
-
-        # Increment the step until 10 iterations, then reset
-        self.vital_glob["iteration"] = (self.vital_glob["iteration"] + 1) % self.pump.get_poll_freq("HI")
+        # Pass the glob to pump to implement Triple-Level Polling (TLP)
+        vital_glob = self.pump.poll_vital_data(vital_glob)
 
         # Atomically commit the vital dump snapshot
-        self.commit_vital_dump(self.vital_glob)
+        self.commit_vital_dump(vital_glob)
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
         # TODO: to be removed in the future
@@ -251,10 +243,10 @@ class VitalTerminalCore(Node):
         # Calculate duration time of pump cycle
         current_time = self.get_clock().now()
         start_time = rclpy.time.Time.from_msg(vital_glob["timestamp"])
-        self.vital_glob["duration"] = (current_time - start_time).nanoseconds * 1e-9
+        vital_glob["duration"] = (current_time - start_time).nanoseconds * 1e-9
 
         # Atomically commit the vital dump snapshot
-        self.vital_dump["pump"] = copy.deepcopy(self.vital_glob)
+        self.vital_dump["pump"] = copy.deepcopy(vital_glob)
 
     def current_rclpy_time_sec(self) -> int:
         """Helper to get current time in seconds"""
