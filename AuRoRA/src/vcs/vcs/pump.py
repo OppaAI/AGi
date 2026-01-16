@@ -142,8 +142,9 @@ class Pump():
         # Low Level: Poll all I/O stats
         if vital_glob["iteration"] % max_step == 0:
             vital_glob.update(self.get_jetson_stats(vital_glob, "LO"))
-
-        print(f"[Pump] glob: {vital_glob}")
+       
+        # Increment the step until 10 iterations, then reset
+        vital_glob["iteration"] = (vital_glob["iteration"] + 1) % self.get_poll_freq("HI")
 
         return vital_glob
             
@@ -208,6 +209,8 @@ class Pump():
         return data
     
 if __name__ == "__main__":
+
+    # Pump diagnostic test
     import time
 
     # Create the instance
