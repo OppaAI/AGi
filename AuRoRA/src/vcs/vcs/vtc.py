@@ -133,12 +133,12 @@ class VitalTerminalCore(Node):
         
         # Pass the glob to pump to implement Triple-Level Polling (TLP)
         vital_glob = self.pump.poll_vital_data(vital_glob)
-
-        # Increment the step until 10 iterations, then reset
-        vital_glob["iteration"] = (vital_glob["iteration"] + 1) % self.pump.get_poll_freq("HI")
       
         # Atomically commit the vital dump snapshot
         self.commit_vital_dump("pump", vital_glob)
+
+        # Increment the step until 10 iterations, then reset to zero; step is for determining TLP frequency
+        self.vital_dump["pump"]["iteration"] = (vital_glob["iteration"] + 1) % self.pump.get_poll_freq("HI")
 
         # for DEBUG: Print out the payload to see if collected data is correct, will DEL
         # TODO: to be removed in the future
