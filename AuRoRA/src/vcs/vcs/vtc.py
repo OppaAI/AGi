@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # Vital Terminal Core (VTC)
-# - Pump: Collects raw vital data and packs into Protobuf
-# - Pacemaker: Calculates pulse rhythm according to network RTT
-# - Oscillator: Encodes packed vital data into vital pulse signal at the OPM rhythm
-# - Regulator: Handles outgoing and incoming vital pulses and updates RTT
+# - Pump: Collects useful glob from the lifestream using Triple Action Pump (TAP) technique
+# - Regulator: Normalizes raw sensor data into proper format and regulates the oscillation rhythm according to RTT
+# - Oscillator: Packs and encodes sensor data into vital pulse signal and publishes at oscillation rhythm
+# - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 # System modules
-import time
-from typing import Literal
-from jtop import jtop
+import copy
+from builtin_interfaces.msg import Time
 
 # ROS 2 modules
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
-from rclpy.duration import Duration
 
-# AGi Vital Pulse definition
-from vp.msg import VitalPulse
+# AGi VCS modules
+from vp.msg import VitalPulse   # Vital Pulse message definition
+from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
 
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
@@ -28,98 +28,13 @@ SYSTEM_ID = "VCS"
 USER_ID = "OppaAI"
 VITAL_PULSE_SIGNAL = "vital_pulse_signal"
 VITAL_PULSE_RESPONSE = "vital_pulse_response"
-VITAL_PULSE_TIMEOUT = 1.0  # Timeout in seconds (Base Interval)
+VITAL_PULSE_TIMEOUT = 2.0  # Timeout in seconds (Base Interval)
 VITAL_PULSE_NETWORK_TIMEOUT = 500  # High latency threshold (ms)
 BASELINE_OPM = 60.0
 
 DISPLAY_INTERVAL = 0.5
 BLINK_DURATION = 0.3
-
-class Pump():
-    POLL_LEVEL = Literal["LO", "MED", "HI"]
-    #TODO: to be moved to config file for settings
-    POLL_FREQ : dict[POLL_LEVEL, int] = { # Polling Frequency
-        "LO": 1,    # 1Hz (60 ppm)
-        "MED": 5,   # 5Hz (300 ppm)
-        "HI": 10    # 10Hz (600 ppm)
-    }
-
-    VITAL_ID_KEYS: dict[POLL_LEVEL, dict[str, str]] = { # Vital ID Keys
-        "HI": {
-            "cpu_temp": "Temp cpu",
-            "gpu_temp": "Temp gpu",
-        },
-        "MED": {},
-        "LO": {}
-    }
-    """
-    Collects vital data from a Jetson robot using a persistent jtop instance.
-        - get_freq: Returns polling frequency for a given level
-        - collect_vitals: Collects vitals based on polling level
-        - poll_vital: Polls a vital metric from jtop stats
-    """
-    
-    def __init__(self):
-        self.jetson = None
-        if jtop:
-            try:
-                self.jetson = jtop()
-                self.jetson.start()
-                time.sleep(0.5)  # allow initial stats collection
-            except Exception as e:
-                #TODO: to implement logging in the future
-                print(f"Pump Initialization Error: Could not start jtop. Error: {e}")
-                self.jetson = None
-
-        self.vitals = {}      # stores raw vital data
-        self.timestamp = 0    # nanoseconds of collection
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Ensure jtop is gracefully stopped when the object is deleted/cleaned up."""
-        if self.jetson and self.jetson.ok():
-            self.jetson.close()
-
-    @classmethod
-    def get_freq(cls, level: POLL_LEVEL) -> int:
-        return cls.POLL_FREQ[level]
-    
-    def collect_vitals(self, level: POLL_LEVEL = "HI") -> dict[str, str | None]:
-        """
-        Collect vital data based on polling level:
-            - High level: CPU and GPU temperatures.
-        """
-        # 1. Poll vitals
-        now_ns = time.time_ns()
-        vitals: dict[str, str | None] = self.vitals.copy()
-
-        # 2. Collect vitals
-        for vid, key in self.VITAL_ID_KEYS[level].items():
-            vitals[vid] = self.poll_vital(key)
-
-        self.timestamp = now_ns
-        self.vitals = vitals
-        return vitals
-            
-    def poll_vital(self, key: str)-> str | None:
-        """
-        Poll a vital metric from jtop stats
-        Args:
-            key (str): jetson stats key
-        Returns:
-            str | None: vital data value or None if error
-        """
-
-        if not self.jetson or not self.jetson.ok():
-            return None
-        else:
-            try:
-                stats: dict = self.jetson.stats
-                return stats.get(key)
-            except Exception as e:
-                #TODO: to implement logging in the future
-                print("Jetson stats data collection error:", e)
-                return None
-
+  
 class PaceMaker():
     def __init__(self):
         pass
@@ -142,9 +57,29 @@ class VitalTerminalCore(Node):
         self.current_rtt = 0.0
         self.heartbeat_interval = 60.0 / BASELINE_OPM # 1.0 second
         self.vc_linked = False
+        self.vital_dump = {
+            "pump": {
+                "timestamp": Time(),
+                "duration": 0.0,
+                "run": 0,
+                "glob": {}  # useful glob from the lifestream
+            },
+            "regulator": {
+                "timestamp": Time(),
+                "payload": {}  # normalized/filtered data
+            },
+            "oscillator": {
+                "timestamp": Time(),
+                "payload": {}  # final encoded message before publish
+            },
+            "orchestrator": {
+                "timestamp": Time(),
+                "payload": {}  # decisions, alerts, safety state
+            }
+        }
 
         # Initiate the 4 modules
-        self.pump = Pump()  # Pump: Collects raw vital data and packs into Protobuf
+        self.pump = Pump()  # Pump: Collects useful glob from the lifestream
         
         # Tracking variables for RTT and Timeout (FIX)
         self.fire_timestamp = None
@@ -153,21 +88,17 @@ class VitalTerminalCore(Node):
         # Thread-safe snapshot for display
         self.display_snapshot = {}
 
-        pump = Pump()
-        data = pump.collect_vitals()
-        print(f"[{pump.timestamp}] Pump collected:", data)
-
         # 2. QoS Profile Definition (Based on our discussion)
         qos_profile = QoSProfile(
-            depth=5,
-            reliability=ReliabilityPolicy.RELIABLE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
             liveliness=LivelinessPolicy.AUTOMATIC,
             # Use VITAL_PULSE_TIMEOUT (1.0s) as the base for timing policies
             liveliness_lease_duration=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.5),
             lifespan=Duration(seconds=VITAL_PULSE_TIMEOUT),
-            deadline=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.1)
+            deadline=Duration(seconds=VITAL_PULSE_TIMEOUT * 1.3)
         )
 
         # 3. Communication Setup
@@ -176,32 +107,58 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.timers = {
-            level: self.create_timer(1.0 / Pump.POLL_FREQ[level], lambda l=level: self.timer_callback(l))
-            for level in Pump.POLL_FREQ
-        }
-        self.timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
+        self.pump_timer = self.create_timer(1.0 / self.pump.which_flow_rate_for_this_channel("HI"), self.run_pump_cycle)
+        self.oscillation_timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
-    def timer_callback(self, level: str):
-        vitals = self.pump.collect_vitals(level)
-        self.get_logger().info(f"[{level}] Vitals: {vitals}")
+    def run_pump_cycle(self):
+        """
+        Collects glob from the lifestream based on the configured polling level and updates the vital_dump.
+
+        It performs a single pump cycle, gathering data from all flow channels
+        (HI, MID, LO) according to the current tier and mode settings. It updates 
+        the internal `vital_dump` manifest using the "update if worse/null/error" logic, 
+        ensuring the worst-case scenario is always preserved until the next enrichment tick.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        # Initialize the bin and get the initial time before pumping happens
+        bin = self.vital_dump["pump"]
+        bin["timestamp"] = self.get_clock().now().to_msg()
+        
+        # Pass the bin to pump to engage Triple Action Pump (TAP) to harvest glob from the lifestream
+        bin = self.pump.engage_tap_to_harvest_glob(bin)
+      
+        # Atomically commit the vital dump snapshot
+        self.commit_vital_dump("pump", bin)
+
+        # Increment the step until max runs, then reset to zero; step is for determining TAP frequency
+        self.vital_dump["pump"]["run"] = (bin["run"] + 1) % self.pump.which_flow_rate_for_this_channel("HI")
+
+        # for DEBUG: Print out the bin to see if collected data is correct, will be DEL
+        # TODO: to be removed in the future
+        self.get_logger().info(f"[Pump] Bin: {bin}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
-        current_rclpy_time = self.get_clock().now()
-        now_sec_float = current_rclpy_time.nanoseconds * 1e-9
-        
-        self.fire_timestamp = now_sec_float
+        self.fire_timestamp = self.current_rclpy_time_sec()
         self.current_opm = self.compute_opm()
 
         msg = VitalPulse()
         msg.robot_id = ROBOT_ID
         msg.user_id = USER_ID
-        
+        cpu_temp_deque = self.vital_dump["pump"]["glob"].get("cpu_temp", [])
+        gpu_temp_deque = self.vital_dump["pump"]["glob"].get("gpu_temp", [])
+        msg.cpu_temp = max((v for v in cpu_temp_deque if v is not None), default=0.0)
+        msg.gpu_temp = max((v for v in gpu_temp_deque if v is not None), default=0.0)
+       
         # ⭐ FIX: Assign structured time message
         # Assuming VitalPulse.timestamp is of type builtin_interfaces/msg/Time
-        msg.timestamp = now_sec_float
+        msg.timestamp = self.get_clock().now().to_msg()
         
         msg.vital_pulse_opm = self.current_opm
 
@@ -212,7 +169,7 @@ class VitalTerminalCore(Node):
         if msg.robot_id != ROBOT_ID:
             return
 
-        now_sec_float = self.get_clock().now().nanoseconds * 1e-9
+        now_sec_float = self.current_rclpy_time_sec()
         
         # ⭐ FIX: Record successful feedback time
         self.last_feedback_time = now_sec_float 
@@ -225,7 +182,7 @@ class VitalTerminalCore(Node):
 
     def display_tick(self):
         """Monitor: Update snapshot for display thread, handling timeout (FIX)"""
-        now = self.get_now_sec()
+        now = self.current_rclpy_time_sec()
 
         # ⭐ FIX: Explicit Timeout Check (If last feedback is too old, we are offline)
         is_timeout = (
@@ -244,6 +201,7 @@ class VitalTerminalCore(Node):
              self.vc_linked = True # Still technically linked
         
         self.heart_step += 1
+        vital_manifest = copy.deepcopy(self.vital_dump["pump"]["glob"])
 
         # Thread-safe snapshot update
         self.display_snapshot = {
@@ -251,6 +209,23 @@ class VitalTerminalCore(Node):
             "heart_step": self.heart_step,
             "opm": self.current_opm,
             "rtt": self.current_rtt,
+            "system_cpu_load%": max(vital_manifest["cpu_system"]),
+            "user_cpu_load%": max(vital_manifest["cpu_user"]),
+            "cpu_temp": max(vital_manifest["cpu_temp"]),
+            "gpu_load%": max(vital_manifest["gpu_load"]),
+            "gpu_temp": max(vital_manifest["gpu_temp"]),
+            "tj_temp": max(vital_manifest["tj_temp"]),
+            "fan_speed": max(vital_manifest["fan_speed"]),
+            "ram_used%": max(vital_manifest["ram_used"]),
+            "swap_used%": max(vital_manifest["swap_used"]),
+            "emc_load%": max(vital_manifest["emc_load"]),
+            "vdd_cpu_gpu_cv": max(vital_manifest["vdd_cpu_gpu_cv"]),
+            "vdd_soc": max(vital_manifest["vdd_soc"]),
+            "voltage_soc": max(vital_manifest["voltage_soc"]),
+            "current_soc": max(vital_manifest["current_soc"]),
+            "power_soc": max(vital_manifest["power_soc"]),
+            "disk_used%": max(vital_manifest["disk_used"]),
+            
             "linked": self.vc_linked
         }
 
@@ -268,8 +243,18 @@ class VitalTerminalCore(Node):
             f"{RESET_COLOR}".ljust(100)
         )
 
-    def get_now_sec(self):
-        """Helper to get current time as float seconds"""
+    def commit_vital_dump(self, module: str, vital_dump: dict[str, any]):
+        """Commit vital dump with latest data"""
+        # Calculate duration time of pump cycle
+        current_time = self.get_clock().now()
+        start_time = rclpy.time.Time.from_msg(vital_dump["timestamp"])
+        vital_dump["duration"] = (current_time - start_time).nanoseconds * 1e-9
+
+        # Atomically commit the vital dump snapshot
+        self.vital_dump[module] = copy.deepcopy(vital_dump)
+
+    def current_rclpy_time_sec(self) -> float:
+        """Helper to get current time in seconds"""
         return self.get_clock().now().nanoseconds * 1e-9
 
     def compute_opm(self):
@@ -285,11 +270,17 @@ def main(args=None):
     rclpy.init(args=args)
     node = VitalTerminalCore()
 
+    # Use MultiThreadedExecutor instead of rclpy.spin(node)
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(node)
+    
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         node.get_logger().info("\nVital Terminal Core stopped.")
 
+    # Clean up
+    node.pump.close_valve()
     node.destroy_node()
     rclpy.shutdown()
 

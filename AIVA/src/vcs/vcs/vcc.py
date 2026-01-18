@@ -12,7 +12,6 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 from rclpy.duration import Duration
-import time
 
 from vp.msg import VitalPulse
 
@@ -27,7 +26,7 @@ SYSTEM_NAME = "VCS"
 NODE_NAME = "vital_pulse_analyzer"
 VITAL_PULSE_SIGNAL = "vital_pulse_signal"
 VITAL_PULSE_RESPONSE = "vital_pulse_response"
-VITAL_PULSE_TIMEOUT = 1.0  # Timeout in seconds
+VITAL_PULSE_TIMEOUT = 1.5  # Timeout in seconds
 BASELINE_OPM = 60.0
 
 # ------------------ Vital Central Core ------------------
@@ -42,6 +41,8 @@ class VitalCentralCore:
         # Identity
         self.robot_id = "Unknown"
         self.user_id = "Unknown"
+        self.cpu_temp = 0.0
+        self.gpu_temp = 0.0
 
         self._blink_step = 0
 
@@ -51,6 +52,7 @@ class VitalCentralCore:
             from rclpy.clock import Clock
             return Clock().now().nanoseconds / 1e9
         except Exception:
+            import time
             return time.time()
 
     def record_identity(self, robot_id, user_id):
@@ -58,7 +60,7 @@ class VitalCentralCore:
         self.user_id = user_id
 
     def record_remote_pulse(self, opm, remote_ts):
-        now = time.time()
+        now = self.get_now_sec()
         self.last_pulse_time = now
         self.current_opm = float(opm)
 
@@ -81,7 +83,7 @@ class VitalCentralCore:
             "opm": self.current_opm,
             "rtt": self.current_rtt,
             "blink": self._blink_step % 2,
-            "color": self.blink_color(time.time())
+            "color": self.blink_color(self.get_now_sec())
         }
 
     def clear_identity_and_pulse(self):
@@ -90,6 +92,8 @@ class VitalCentralCore:
         self.current_opm = 0.0
         self.current_rtt = 0.0
         self.last_pulse_time = None
+        self.cpu_temp = 0.0  # Reset on disconnect
+        self.gpu_temp = 0.0
 
 # ------------------ Vital Pulse Analyzer ------------------
 class VitalPulseAnalyzer(Node):
@@ -99,8 +103,8 @@ class VitalPulseAnalyzer(Node):
 
         # QoS profile
         qos_profile = QoSProfile(
-            depth=5,
-            reliability=ReliabilityPolicy.RELIABLE,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             durability=DurabilityPolicy.VOLATILE,
             liveliness=LivelinessPolicy.AUTOMATIC,
@@ -122,8 +126,10 @@ class VitalPulseAnalyzer(Node):
     def pulse_callback(self, msg: VitalPulse):
         robot_id = msg.robot_id
         user_id = msg.user_id
+        self.vc.cpu_temp = msg.cpu_temp
+        self.vc.gpu_temp = msg.gpu_temp
         pulse = float(msg.vital_pulse_opm)
-        timestamp = msg.timestamp
+        timestamp = rclpy.time.Time.from_msg(msg.timestamp).nanoseconds / 1e9
 
         # Record identity + pulse
         self.vc.record_identity(robot_id, user_id)
@@ -133,7 +139,7 @@ class VitalPulseAnalyzer(Node):
         feedback = VitalPulse()
         feedback.robot_id = ROBOT_ID
         feedback.user_id = robot_id
-        feedback.timestamp = self.get_clock().now().nanoseconds / 1e9
+        feedback.timestamp = self.get_clock().now().to_msg()
         feedback.vital_pulse_opm = pulse
         self.publisher_.publish(feedback)
 
@@ -150,11 +156,13 @@ class VitalPulseAnalyzer(Node):
         color = status["color"]
         robot_id = self.vc.robot_id
         user_id = self.vc.user_id
+        cpu_temp = self.vc.cpu_temp
+        gpu_temp = self.vc.gpu_temp
 
         if robot_id == "Unknown":
             line = f"{color}Waiting for vital pulse...{RESET_COLOR}".ljust(100)
         else:
-            line = f"{color}Robot [{robot_id}] | User [{user_id}] | Vital Pulse: {pulse:.1f} OPM{RESET_COLOR}".ljust(100)
+            line = f"{color}Robot [{robot_id}] | User [{user_id}] | CPU Temp: {cpu_temp:.1f}°C | GPU Temp: {gpu_temp:.1f}°C | Vital Pulse: {pulse:.1f} OPM{RESET_COLOR}".ljust(100)
 
         self.get_logger().info(line)
 

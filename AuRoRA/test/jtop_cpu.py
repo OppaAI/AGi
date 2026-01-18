@@ -9,7 +9,10 @@ def explore_jetson_keys():
 
         # 1. Print top-level keys
         top_keys = list(jetson.stats.keys())
+        board = getattr(jetson, 'board', {}) or {}
+        board_keys = list(board.keys())
         print("Top-level keys:", top_keys)
+        print("Board keys:", board_keys)
 
         # 2. For each key, print nested keys if it's a dict
         for key in top_keys:

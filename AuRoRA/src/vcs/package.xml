@@ -23,7 +23,8 @@
   <!-- Runtime dependencies -->
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
-  <exec_depend>vp</exec_depend>
+  <depend>builtin_interfaces</depend>
+  <depend>vp</depend>
   
   <!-- Test Dependencies -->
   <test_depend>ament_copyright</test_depend>
