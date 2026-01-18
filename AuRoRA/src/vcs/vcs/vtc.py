@@ -130,13 +130,13 @@ class VitalTerminalCore(Node):
         bin = self.vital_dump["pump"]
         bin["timestamp"] = self.get_clock().now().to_msg()
         
-        # Pass the bin to pump to implement Triple Action Pump (TAP) technique
-        bin = self.pump.collect_lifestream_into_bin(bin)
+        # Pass the bin to pump to engage Triple Action Pump (TAP) to harvest glob from the lifestream
+        bin = self.pump.engage_tap_to_harvest_glob(bin)
       
         # Atomically commit the vital dump snapshot
         self.commit_vital_dump("pump", bin)
 
-        # Increment the step until 10 runs, then reset to zero; step is for determining TAP frequency
+        # Increment the step until max runs, then reset to zero; step is for determining TAP frequency
         self.vital_dump["pump"]["run"] = (bin["run"] + 1) % self.pump.which_flow_rate_for_this_channel("HI")
 
         # for DEBUG: Print out the bin to see if collected data is correct, will be DEL
