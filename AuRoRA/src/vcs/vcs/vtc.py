@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Vital Terminal Core (VTC)
-# - Pump: Collects raw sensor data for different sensors using Triple-Level Polling (TLP) technique
+# - Pump: Collects useful glob from the lifestream using Triple Action Pump (TAP) technique
 # - Regulator: Normalizes raw sensor data into proper format and regulates the oscillation rhythm according to RTT
 # - Oscillator: Packs and encodes sensor data into vital pulse signal and publishes at oscillation rhythm
 # - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
@@ -17,7 +17,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 
 # AGi VCS modules
 from vp.msg import VitalPulse   # Vital Pulse message definition
-from vcs.pump import Pump   # Pump: Collects raw vital data from robot sensors
+from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
 
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
@@ -61,8 +61,8 @@ class VitalTerminalCore(Node):
             "pump": {
                 "timestamp": Time(),
                 "duration": 0.0,
-                "iteration": 0,
-                "payload": {}  # raw sensor data
+                "run": 0,
+                "glob": {}  # useful glob from the lifestream
             },
             "regulator": {
                 "timestamp": Time(),
@@ -79,7 +79,7 @@ class VitalTerminalCore(Node):
         }
 
         # Initiate the 4 modules
-        self.pump = Pump()  # Pump: Collects raw vital data and packs into Protobuf
+        self.pump = Pump()  # Pump: Collects useful glob from the lifestream
         
         # Tracking variables for RTT and Timeout (FIX)
         self.fire_timestamp = None
@@ -107,15 +107,15 @@ class VitalTerminalCore(Node):
 
         # 4. Timer Setup
         # create timers for each level
-        self.pump_timer = self.create_timer(1.0 / self.pump.get_poll_freq("HI"), self.run_pump_cycle)
+        self.pump_timer = self.create_timer(1.0 / self.pump.which_flow_rate_for_this_channel("HI"), self.run_pump_cycle)
         self.oscillation_timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
 
     def run_pump_cycle(self):
         """
-        Collects vitals based on the configured polling level and updates the vital_dump.
+        Collects glob from the lifestream based on the configured polling level and updates the vital_dump.
 
-        It performs a single pump cycle, gathering data from all streams
+        It performs a single pump cycle, gathering data from all flow channels
         (HI, MID, LO) according to the current tier and mode settings. It updates 
         the internal `vital_dump` manifest using the "update if worse/null/error" logic, 
         ensuring the worst-case scenario is always preserved until the next enrichment tick.
@@ -126,23 +126,22 @@ class VitalTerminalCore(Node):
         Returns:
             None
         """
-        # Initialize the glob and get the initial time before pumping happens
-        vital_glob = {}
-        vital_glob["iteration"] = self.vital_dump["pump"]["iteration"]
-        vital_glob["timestamp"] = self.get_clock().now().to_msg()
+        # Initialize the bin and get the initial time before pumping happens
+        bin = self.vital_dump["pump"]
+        bin["timestamp"] = self.get_clock().now().to_msg()
         
-        # Pass the glob to pump to implement Triple-Level Polling (TLP)
-        vital_glob = self.pump.poll_vital_data(vital_glob)
+        # Pass the bin to pump to implement Triple Action Pump (TAP) technique
+        bin = self.pump.collect_lifestream_into_bin(bin)
       
         # Atomically commit the vital dump snapshot
-        self.commit_vital_dump("pump", vital_glob)
+        self.commit_vital_dump("pump", bin)
 
-        # Increment the step until 10 iterations, then reset to zero; step is for determining TLP frequency
-        self.vital_dump["pump"]["iteration"] = (vital_glob["iteration"] + 1) % self.pump.get_poll_freq("HI")
+        # Increment the step until 10 runs, then reset to zero; step is for determining TAP frequency
+        self.vital_dump["pump"]["run"] = (bin["run"] + 1) % self.pump.which_flow_rate_for_this_channel("HI")
 
-        # for DEBUG: Print out the payload to see if collected data is correct, will DEL
+        # for DEBUG: Print out the bin to see if collected data is correct, will be DEL
         # TODO: to be removed in the future
-        self.get_logger().info(f"[Pump] Collected: {self.vital_dump}")
+        self.get_logger().info(f"[Pump] Bin: {bin}")
         
     def oscillate_vital_pulse(self):
         """Oscillator: publish vital pulse signal"""
@@ -152,8 +151,8 @@ class VitalTerminalCore(Node):
         msg = VitalPulse()
         msg.robot_id = ROBOT_ID
         msg.user_id = USER_ID
-        msg.cpu_temp = max(self.vital_dump["pump"]["payload"]["cpu_temp"])
-        msg.gpu_temp = max(self.vital_dump["pump"]["payload"]["gpu_temp"])
+        msg.cpu_temp = max(self.vital_dump["pump"]["glob"]["cpu_temp"])
+        msg.gpu_temp = max(self.vital_dump["pump"]["glob"]["gpu_temp"])
         
         # ⭐ FIX: Assign structured time message
         # Assuming VitalPulse.timestamp is of type builtin_interfaces/msg/Time
@@ -200,7 +199,7 @@ class VitalTerminalCore(Node):
              self.vc_linked = True # Still technically linked
         
         self.heart_step += 1
-        vital_manifest = copy.deepcopy(self.vital_dump["pump"]["payload"])
+        vital_manifest = copy.deepcopy(self.vital_dump["pump"]["glob"])
 
         # Thread-safe snapshot update
         self.display_snapshot = {
