@@ -52,7 +52,8 @@ class VitalCentralCore:
             from rclpy.clock import Clock
             return Clock().now().nanoseconds / 1e9
         except Exception:
-            return None
+            import time
+            return time.time()
 
     def record_identity(self, robot_id, user_id):
         self.robot_id = robot_id
