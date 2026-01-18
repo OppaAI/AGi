@@ -25,7 +25,7 @@ Forthcoming
 * Optimized lifestream collection using Triple Action Pump (TAP) technique to prioritize crucial glob while conserving memory footprints
 * Implemented impurity detection and removal to ensure clean glob is harvested
 * Transitioned the naming schema to a "Biological Hardware" schema with more evocative and memorable terminologies
-* Added a standalone validation block in the pump moudle for real-time verification of its integrity
+* Added a standalone validation block in the pump module for real-time verification of its integrity
 
 
 0.1.2 (2026-01-01)

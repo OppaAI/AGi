@@ -1,7 +1,10 @@
 # System modules
 from collections import deque
 from jtop import jtop
-from typing import Any, Literal
+from typing import Any, cast, Literal
+    
+# Define the flow channel type of the lifestream
+FlowChannel = Literal["LO", "MID", "HI"]
 
 class Pump():
 
@@ -20,9 +23,6 @@ class Pump():
     - dig_deep_thru_conduit: Navigate through the conduit to extract the glob
     - close_valve: Gracefully stop the flow of the Jetson lifestream flow
     """ 
-    
-    # Flow channel of the lifestream
-    FlowChannel = Literal["LO", "MID", "HI"]
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
     # The flow rate of lifestream from each flow channel in cycles per second (CPS)
@@ -47,7 +47,7 @@ class Pump():
     }    
 
     # The mapping of the conduits leading to the reservoirs of the lifestream
-    LIFESTREAM_CONDUIT_MAP: dict[str, tuple[str, tuple[Any, ...], ...]] = {
+    LIFESTREAM_CONDUIT_MAP: dict[str, tuple[str, tuple[Any, ...]]] = {
         # Logic/workload vitals
         "cpu_user": ("cpu", ("total", "user")),
         "cpu_system": ("cpu", ("total", "system")),
@@ -147,6 +147,7 @@ class Pump():
         """
 
         # Ensure the bin is ready to collect the glob
+        bin.setdefault("run", 0)
         bin.setdefault("glob", {})
         
         # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running and ready
@@ -222,7 +223,10 @@ class Pump():
     def _build_conduit_map_by_channel(cls) -> dict[FlowChannel, list[tuple[str, tuple[str, tuple[Any, ...]]]]]:
         """Return the conduit map for each flow channel"""
         return {
-                channel: [(k, v) for k, v in cls.LIFESTREAM_CONDUIT_MAP.items() if cls.LIFESTREAM_FLOW_RATE[v[0]] == channel]
+                cast(FlowChannel, channel): [
+                    (k, v) for k, v in cls.LIFESTREAM_CONDUIT_MAP.items() 
+                    if cls.LIFESTREAM_FLOW_RATE.get(v[0]) == channel
+                ]
                 for channel in ["LO", "MID", "HI"]
             }
             

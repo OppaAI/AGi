@@ -151,9 +151,11 @@ class VitalTerminalCore(Node):
         msg = VitalPulse()
         msg.robot_id = ROBOT_ID
         msg.user_id = USER_ID
-        msg.cpu_temp = max(self.vital_dump["pump"]["glob"]["cpu_temp"])
-        msg.gpu_temp = max(self.vital_dump["pump"]["glob"]["gpu_temp"])
-        
+        cpu_temp_deque = self.vital_dump["pump"]["glob"].get("cpu_temp", [])
+        gpu_temp_deque = self.vital_dump["pump"]["glob"].get("gpu_temp", [])
+        msg.cpu_temp = max((v for v in cpu_temp_deque if v is not None), default=0.0)
+        msg.gpu_temp = max((v for v in gpu_temp_deque if v is not None), default=0.0)
+       
         # ⭐ FIX: Assign structured time message
         # Assuming VitalPulse.timestamp is of type builtin_interfaces/msg/Time
         msg.timestamp = self.get_clock().now().to_msg()
@@ -207,22 +209,22 @@ class VitalTerminalCore(Node):
             "heart_step": self.heart_step,
             "opm": self.current_opm,
             "rtt": self.current_rtt,
-            "system_cpu_load%": vital_manifest["cpu_system"],
-            "user_cpu_load%": vital_manifest["cpu_user"],
-            "cpu_temp": vital_manifest["cpu_temp"],
-            "gpu_load%": vital_manifest["gpu_load"],
-            "gpu_temp": vital_manifest["gpu_temp"],
-            "tj_temp": vital_manifest["tj_temp"],
-            "fan_speed": vital_manifest["fan_speed"],
-            "ram_used%": vital_manifest["ram_used"],
-            "swap_used%": vital_manifest["swap_used"],
-            "emc_load%": vital_manifest["emc_load"],
-            "vdd_cpu_gpu_cv": vital_manifest["vdd_cpu_gpu_cv"],
-            "vdd_soc": vital_manifest["vdd_soc"],
-            "voltage_soc": vital_manifest["voltage_soc"],
-            "current_soc": vital_manifest["current_soc"],
-            "power_soc": vital_manifest["power_soc"],
-            "disk_used%": vital_manifest["disk_used"],
+            "system_cpu_load%": max(vital_manifest["cpu_system"]),
+            "user_cpu_load%": max(vital_manifest["cpu_user"]),
+            "cpu_temp": max(vital_manifest["cpu_temp"]),
+            "gpu_load%": max(vital_manifest["gpu_load"]),
+            "gpu_temp": max(vital_manifest["gpu_temp"]),
+            "tj_temp": max(vital_manifest["tj_temp"]),
+            "fan_speed": max(vital_manifest["fan_speed"]),
+            "ram_used%": max(vital_manifest["ram_used"]),
+            "swap_used%": max(vital_manifest["swap_used"]),
+            "emc_load%": max(vital_manifest["emc_load"]),
+            "vdd_cpu_gpu_cv": max(vital_manifest["vdd_cpu_gpu_cv"]),
+            "vdd_soc": max(vital_manifest["vdd_soc"]),
+            "voltage_soc": max(vital_manifest["voltage_soc"]),
+            "current_soc": max(vital_manifest["current_soc"]),
+            "power_soc": max(vital_manifest["power_soc"]),
+            "disk_used%": max(vital_manifest["disk_used"]),
             
             "linked": self.vc_linked
         }
@@ -251,7 +253,7 @@ class VitalTerminalCore(Node):
         # Atomically commit the vital dump snapshot
         self.vital_dump[module] = copy.deepcopy(vital_dump)
 
-    def current_rclpy_time_sec(self) -> int:
+    def current_rclpy_time_sec(self) -> float:
         """Helper to get current time in seconds"""
         return self.get_clock().now().nanoseconds * 1e-9
 
@@ -278,7 +280,7 @@ def main(args=None):
         node.get_logger().info("\nVital Terminal Core stopped.")
 
     # Clean up
-    node.pump.close()
+    node.pump.close_valve()
     node.destroy_node()
     rclpy.shutdown()
 
