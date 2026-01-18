@@ -6,16 +6,23 @@ Changelog for package Vital Circulatory System
 
 **Description:** This system monitors and manages the vital signs of AGi robots, including their operational status, user interactions, and network connectivity. It provides real-time feedback and alerts for critical conditions, ensuring the smooth operation of the AGi ecosystem.
 
+Future Implementation Roadmap
+-----------------------------
+* Add the following modules to VTC:
+* - Regulator: Normalizes raw sensor data into proper format and regulates the oscillation rhythm according to RTT
+* - Oscillator: Packs and encodes sensor data into vital pulse signal and publishes at oscillation rhythm
+* - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
+
+
 Forthcoming
 -----------
 * Added launch file to launch vtc and vcc nodes based on role parameter
 * Changed the threaded terminal print to use rclpy logger
 * Added QoS Profile to vital pulse signal and response
 * Implemented PRO2 architectural for VTC
-* - Pump: Collects raw sensor data for different sensors using Tripe-Level Polling (TLP) technique
-* - Regulator: Normalizes raw sensor data into proper format and regulates the oscillation rhythm according to RTT
-* - Oscillator: Packs and encodes sensor data into vital pulse signal and publishes at oscillation rhythm
-* - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
+* - Pump: Collects glob from different lifestream flow channels using Triple-Level Polling (TLP) technique
+* Separated the Pump Module to its own module to have better modularity
+* Changed the naming schema to have more evocative and memorable terminologies
 
 0.1.2 (2026-01-01)
 ------------------

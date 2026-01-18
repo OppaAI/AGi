@@ -6,19 +6,22 @@ from typing import Any, Literal
 class Pump():
 
     """
-    Pump Chamber:
-    - Harvests useful glob from the Jetson lifestream
-    - Enhances the lifestream with additional context and metadata
-    - Maintains a stream of consciousness (SOC) of the lifestream
-    - Exports the lifestream to the vital terminal core
-    
-    - which_flow_rate_for_this_channel: Returns polling frequency for a given level
-    - what_rhythm_for_this_channel: Returns polling rhythm (sec) for a given level
-    - collect_lifestream_into_bin: Collects lifestream based on polling level
-    - harvest_glob_from_lifestream: Harvest lifestream from a given channel of reservoir and put into the bin
+    Pump Module:
+    - Harvests useful glob from the Jetson lifestream using Triple Action Pump (TAP) technique
+    - Maintains a stream of consciousness (SOC) of the harvested glob
+    - Exports the harvested glob to the vital terminal core for determining the health status
+
+    Functions:
+    - which_flow_rate_for_this_channel: Return the flow rate (CPS) for a given channel
+    - what_pumping_rhythm_for_this_channel: Return the pumping rhythm (sec) for a given channel
+    - connect_conduits_to_collection_points: Connect the pump conduits to the collection points of the Jetson lifestream
+    - engage_tap_to_harvest_glob: Harvest glob from the Jetson lifestream and put into the bin using TAP technique
+    - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
+    - dig_deep_thru_conduit: Navigate through the conduit to extract the glob
+    - close_valve: Gracefully stop the flow of the Jetson lifestream flow
     """ 
     
-    # Flow channel of harvest of the lifestream
+    # Flow channel of the lifestream
     FlowChannel = Literal["LO", "MID", "HI"]
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
@@ -86,17 +89,15 @@ class Pump():
     def __init__(self):
         """
         This is the initialization of the pump:
-        1. Set the maximum flow rate of the Jetson lifestream and start the streamflow
-        2. ...
+        - Set the maximum flow rate of the Jetson lifestream and start the streamflow
         """
         
-        """1. Let's get the Jetson lifestream running at the maximum flow rate"""
-        # Connect to the Jetson lifestream to initialize the streamflow
+        # Connect to the Jetson lifestream to initialize the streamflow and start the streamflow
         self.jetson_lifestream = None
         self.jetson_collection_points = None
         try:
             # Set the maximum flow rate of the Jetson lifestream
-            self.jetson_lifestream = jtop(interval=self.what_rhythm_for_this_channel("HI"))
+            self.jetson_lifestream = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
             # Start the streamflow
             self.jetson_lifestream.start()
 
@@ -107,33 +108,32 @@ class Pump():
 
         # Build the explicit conduit map for each flow channel
         self._CONDUITS_BY_CHANNEL = self._build_conduit_map_by_channel()
-
+    
     def close_valve(self):
-        """Ensure the flow of the Jetson lifestream is gracefully stopped when the pump is shut down."""
+        """Gracefully stop the flow of the Jetson lifestream"""
         if self.jetson_lifestream and self.jetson_lifestream.ok():
             self.jetson_lifestream.close()
 
-    @classmethod
-    def _build_conduit_map_by_channel(cls) -> dict[FlowChannel, list[tuple[str, tuple[str, tuple[Any, ...]]]]]:
-        """Return the conduit map for each flow channel"""
-        return {
-                channel: [(k, v) for k, v in cls.LIFESTREAM_CONDUIT_MAP.items() if cls.LIFESTREAM_FLOW_RATE[v[0]] == channel]
-                for channel in ["LO", "MID", "HI"]
-            }
-            
-    @classmethod
-    def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
-        """Return the flow rate of lifestream for a given flow channel"""
-        return cls.FLOW_RATE[channel]
-    
-    @classmethod
-    def what_rhythm_for_this_channel(cls, channel: FlowChannel) -> float:
-        """Return polling rhythm (sec) for a given level"""
-        return 1.0 / cls.which_flow_rate_for_this_channel(channel)
-    
-    def collect_lifestream_into_bin(self, bin: dict[str, Any]) -> dict[str, Any]:
+    def dig_deep_thru_conduit(self, data: Any, path: tuple[Any, ...]) -> Any:
+        """Helper to navigate through the conduit to collect the glob."""
+        for key in path:
+            # Handle different types of conduit junctions
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            elif isinstance(data, list) and isinstance(key, int):
+                if 0 <= key < len(data):
+                    data = data[key]
+                else:
+                    # Not a valid index, stop traversing
+                    return None
+            else:
+                # Not a valid conduit junction, stop traversing
+                return None
+        return data
+  
+    def engage_tap_to_harvest_glob(self, bin: dict[str, Any]) -> dict[str, Any]:
         """
-        Collect glob from the Jetson lifestream and put into the bin:
+        Collect glob from the Jetson lifestream and put into the bin using Triple Action Pump (TAP) technique:
         - Connect the pump conduits to the collection points of the Jetson lifestream:
             - High flow channel: Collect crucial workload and energy vitals
             - Mid flow channel: Collect sensory vitals
@@ -149,7 +149,7 @@ class Pump():
         # Ensure the bin is ready to collect the glob
         bin.setdefault("glob", {})
         
-        # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running
+        # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running and ready
         if self.jetson_lifestream and self.jetson_lifestream.ok():
             # Connect the conduits to the collection points of the Jetson lifestream
             self.jetson_collection_points = {
@@ -206,7 +206,7 @@ class Pump():
                     if diverted_lifestream is not None:
                         glob = self.dig_deep_thru_conduit(diverted_lifestream, path)
 
-                    # Filter out the impurity or empty glob
+                    # Sift out the impurity or empty glob
                     if glob == -256:
                         glob = None
                 except Exception:
@@ -218,26 +218,27 @@ class Pump():
                 
         return bin
 
-    def dig_deep_thru_conduit(self, data: Any, path: tuple[Any, ...]) -> Any:
-        """Helper to navigate through the conduit to collect the glob."""
-        for key in path:
-            # Handle different types of conduit junctions
-            if isinstance(data, dict) and key in data:
-                data = data[key]
-            elif isinstance(data, list) and isinstance(key, int):
-                if 0 <= key < len(data):
-                    data = data[key]
-                else:
-                    # Not a valid index, stop traversing
-                    return None
-            else:
-                # Not a valid conduit junction, stop traversing
-                return None
-        return data
+    @classmethod
+    def _build_conduit_map_by_channel(cls) -> dict[FlowChannel, list[tuple[str, tuple[str, tuple[Any, ...]]]]]:
+        """Return the conduit map for each flow channel"""
+        return {
+                channel: [(k, v) for k, v in cls.LIFESTREAM_CONDUIT_MAP.items() if cls.LIFESTREAM_FLOW_RATE[v[0]] == channel]
+                for channel in ["LO", "MID", "HI"]
+            }
+            
+    @classmethod
+    def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
+        """Return the flow rate of lifestream for a given flow channel"""
+        return cls.FLOW_RATE[channel]
+    
+    @classmethod
+    def what_pumping_rhythm_for_this_channel(cls, channel: FlowChannel) -> float:
+        """Return pumping rhythm (sec) for a given level"""
+        return 1.0 / cls.which_flow_rate_for_this_channel(channel)
     
 if __name__ == "__main__":
 
-    # Run the diagnosis of the Pump Chamber to check if working as expected
+    # Run the diagnosis of the Pump Module to check if working as expected
     import time
 
     def color_temp(temp):
@@ -246,11 +247,11 @@ if __name__ == "__main__":
             return "\033[38;5;240m"  # Gray for unknown
         return "\033[38;5;196m" if temp > 80 else "\033[38;5;46m"
     
-    # Initialize the Pump Chamber
+    # Initialize the Pump Module
     pump = Pump()
     
     # Start the diagnosis
-    print("--- DIAGNOSING VTC PUMP CHAMBER ---")
+    print("--- DIAGNOSING VTC PUMP MODULE ---")
     glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
 
     # Run the diagnosis for 30 pump cycles
@@ -258,8 +259,8 @@ if __name__ == "__main__":
         for i in range(30):
             # Collect the glob from the lifestream
             glob["run"] = i
-            glob["timestamp"] = time.time()
-            glob = pump.collect_lifestream_into_bin(glob)
+            glob["timestamp"] = time.strftime("%H:%M:%S")
+            glob = pump.engage_tap_to_harvest_glob(glob)
             
             # Get the worst case scenario of the vitals, if any
             cpu_load_deque = glob.get("glob", {}).get("cpu_user")
@@ -288,6 +289,6 @@ if __name__ == "__main__":
         # Stop the diagnosis if user interrupts
         print("\nDiagnosis is stopped by user.")
     finally:
-        # Close the Pump Chamber and end the diagnosis
+        # Close the Pump Module and end the diagnosis
         pump.close_valve()
-        print("--- VTC PUMP DIAGNOSIS COMPLETE ---")
+        print("--- VTC PUMP MODULE DIAGNOSIS COMPLETE ---")
