@@ -9,7 +9,8 @@ def explore_jetson_keys():
 
         # 1. Print top-level keys
         top_keys = list(jetson.stats.keys())
-        board_keys = list(jetson.board.keys())
+        board = getattr(jetson, 'board', {}) or {}
+        board_keys = list(board.keys())
         print("Top-level keys:", top_keys)
         print("Board keys:", board_keys)
 
