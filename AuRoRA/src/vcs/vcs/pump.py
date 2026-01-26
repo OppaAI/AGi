@@ -29,7 +29,7 @@ class Pump():
     - what_pumping_rhythm_for_this_channel: Return the pumping rhythm (sec) for a given channel
     - engage_tap_to_harvest_glob: Harvest glob from the Jetson lifestream and put into the bin using TAP technique
     - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
-    - dig_deep_thru_conduit: Navigate through the conduit to extract the glob
+    - trace_thru_conduit: Trace through the conduit to extract the glob
     - close_valve: Gracefully stop the flow of the Jetson lifestream flow
     """ 
 
@@ -55,6 +55,7 @@ class Pump():
         "energy": "MID"
     }    
 
+    COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
     def __init__(self):
         """
@@ -84,22 +85,16 @@ class Pump():
         if self.jetson_lifestream and self.jetson_lifestream.ok():
             self.jetson_lifestream.close()
 
-    def dig_deep_thru_conduit(self, data: Any, path: ConduitJunction) -> Any:
-        """Helper to navigate through the conduit to collect the glob."""
-        for key in path:
-            # Handle different types of conduit junctions
-            if isinstance(data, Dict) and key in data:
-                data = data[key]
-            elif isinstance(data, List) and isinstance(key, int):
-                if 0 <= key < len(data):
-                    data = data[key]
-                else:
-                    # Not a valid index, stop traversing
-                    return None
-            else:
-                # Not a valid conduit junction, stop traversing
+    def trace_thru_conduit(self, lifestream: Any, path: ConduitJunction) -> Any:
+        """Helper to trace through the conduit to collect the glob."""
+        for collection_point in path:
+            try:
+                # If the collection point is located
+                lifestream = lifestream[collection_point]
+            except (KeyError, IndexError, TypeError):
+                # If the conduit is blocked (invalid key/index), stop traversing.
                 return None
-        return data
+        return lifestream
   
     def engage_tap_to_harvest_glob(self, bin: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -121,16 +116,17 @@ class Pump():
         bin.setdefault("glob", {})
         
         # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running and ready
+        self.jetson_collection_points = {}
         if self.jetson_lifestream and self.jetson_lifestream.ok():
             # Connect the conduits to the collection points of the Jetson lifestream
             self.jetson_collection_points = {
-                "cpu": dict(self.jetson_lifestream.cpu),
-                "gpu": dict(self.jetson_lifestream.gpu),
-                "temperature": dict(self.jetson_lifestream.temperature),
-                "fan": dict(self.jetson_lifestream.fan),
-                "memory": dict(self.jetson_lifestream.memory),
-                "disk": dict(self.jetson_lifestream.disk),
-                "power": dict(self.jetson_lifestream.power)
+                "cpu": self.jetson_lifestream.cpu,
+                "gpu": self.jetson_lifestream.gpu,
+                "temperature": self.jetson_lifestream.temperature,
+                "fan": self.jetson_lifestream.fan,
+                "memory": self.jetson_lifestream.memory,
+                "disk": self.jetson_lifestream.disk,
+                "power": self.jetson_lifestream.power
             }
 
         # Engage the Triple Action Pump (TAP) to harvest glob from the lifestream
@@ -169,18 +165,18 @@ class Pump():
 
             glob = None
 
-            # Only dig into the conduit if it's connection to the Jetson lifestream is established
+            # Only trace the conduit if it's connection to the Jetson lifestream is established
             if self.jetson_collection_points:
                 try:
-                    # Dig deep into the conduit to collect the glob
+                    # Trace through the conduit to collect the glob
                     diverted_lifestream = self.jetson_collection_points.get(collection_point)
 
-                    # Only dig into the conduit if it's connection to the Jetson lifestream is established
+                    # Only trace through the conduit if it's connection to the Jetson lifestream is established
                     if diverted_lifestream is not None:
-                        glob = self.dig_deep_thru_conduit(diverted_lifestream, path)
+                        glob = self.trace_thru_conduit(diverted_lifestream, path)
 
                     # Sift out the impurity or empty glob
-                    if glob == -256:
+                    if glob == self.COLLECTION_POINT_NOT_AVAILABLE:
                         glob = None
                 except Exception:
                     # No glob to collect if conduit is not accessible
