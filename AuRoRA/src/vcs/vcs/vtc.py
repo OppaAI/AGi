@@ -151,9 +151,9 @@ class VitalTerminalCore(Node):
         msg = VitalPulse()
         msg.robot_id = ROBOT_ID
         msg.user_id = USER_ID
-        cpu_temp_deque = self.vital_dump["pump"]["glob"].get("cpu_temp", [])
-        gpu_temp_deque = self.vital_dump["pump"]["glob"].get("gpu_temp", [])
-        msg.cpu_temp = max((v for v in cpu_temp_deque if v is not None), default=0.0)
+        temperature_cpu_deque = self.vital_dump["pump"]["glob"].get("body_temp.p_unit", [])
+        gpu_temp_deque = self.vital_dump["pump"]["glob"].get("body_temp.a_unit", [])
+        msg.cpu_temp = max((v for v in temperature_cpu_deque if v is not None), default=0.0)
         msg.gpu_temp = max((v for v in gpu_temp_deque if v is not None), default=0.0)
        
         # ⭐ FIX: Assign structured time message
@@ -209,22 +209,22 @@ class VitalTerminalCore(Node):
             "heart_step": self.heart_step,
             "opm": self.current_opm,
             "rtt": self.current_rtt,
-            "system_cpu_load%": max(vital_manifest["cpu_system"]),
-            "user_cpu_load%": max(vital_manifest["cpu_user"]),
-            "cpu_temp": max(vital_manifest["cpu_temp"]),
-            "gpu_load%": max(vital_manifest["gpu_load"]),
-            "gpu_temp": max(vital_manifest["gpu_temp"]),
-            "tj_temp": max(vital_manifest["tj_temp"]),
-            "fan_speed": max(vital_manifest["fan_speed"]),
-            "ram_used%": max(vital_manifest["ram_used"]),
-            "swap_used%": max(vital_manifest["swap_used"]),
-            "emc_load%": max(vital_manifest["emc_load"]),
-            "vdd_cpu_gpu_cv": max(vital_manifest["vdd_cpu_gpu_cv"]),
-            "vdd_soc": max(vital_manifest["vdd_soc"]),
-            "voltage_soc": max(vital_manifest["voltage_soc"]),
-            "current_soc": max(vital_manifest["current_soc"]),
-            "power_soc": max(vital_manifest["power_soc"]),
-            "disk_used%": max(vital_manifest["disk_used"]),
+            "system_cpu_load%": max(vital_manifest["p_unit.system"]),
+            "user_cpu_load%": max(vital_manifest["p_unit.user"]),
+            "cpu_temp": max(vital_manifest["body_temp.p_unit"]),
+            "gpu_load%": max(vital_manifest["a_unit.load"]),
+            "gpu_temp": max(vital_manifest["body_temp.a_unit"]),
+            "tj_temp": max(vital_manifest["body_temp.junction"]),
+            "fan_speed": max(vital_manifest["air_flow.rate"]),
+            "ram_used%": max(vital_manifest["memory.stm.used"]),
+            "swap_used%": max(vital_manifest["memory.virtual.used"]),
+            "emc_load%": max(vital_manifest["memory.controller.load"]),
+            "vdd_cpu_gpu_cv": max(vital_manifest["energy.units"]),
+            "vdd_soc": max(vital_manifest["energy.core"]),
+            "voltage_soc": max(vital_manifest["energy.voltage"]),
+            "current_soc": max(vital_manifest["energy.current"]),
+            "power_soc": max(vital_manifest["energy.power"]),
+            "disk_used%": max(vital_manifest["memory.ltm.used"]),
             
             "linked": self.vc_linked
         }

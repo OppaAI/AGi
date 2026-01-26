@@ -1,10 +1,20 @@
 # System modules
+from ament_index_python.packages import get_package_share_directory
 from collections import deque
 from jtop import jtop
-from typing import Any, cast, Literal
-    
+from pathlib import Path
+from typing import Any, Dict, List, Literal
+import yaml
+
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
+
+# The robot spec file
+ConduitJunction = tuple[Any, ...]
+ConduitMap = tuple[str, ConduitJunction]
+
+# TODO: to be moved to a global constants file
+ROBOT_SPEC_FILE: str = "robot_spec.yaml"
 
 class Pump():
 
@@ -17,7 +27,6 @@ class Pump():
     Functions:
     - which_flow_rate_for_this_channel: Return the flow rate (CPS) for a given channel
     - what_pumping_rhythm_for_this_channel: Return the pumping rhythm (sec) for a given channel
-    - connect_conduits_to_collection_points: Connect the pump conduits to the collection points of the Jetson lifestream
     - engage_tap_to_harvest_glob: Harvest glob from the Jetson lifestream and put into the bin using TAP technique
     - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
     - dig_deep_thru_conduit: Navigate through the conduit to extract the glob
@@ -26,65 +35,26 @@ class Pump():
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
     # The flow rate of lifestream from each flow channel in cycles per second (CPS)
-    FLOW_RATE : dict[FlowChannel, int] = {
+    FLOW_RATE : Dict[FlowChannel, int] = {
         "LO": 1,    # 1 CPS (60 ppm)
         "MID": 5,   # 5 CPS (300 ppm)
         "HI": 10    # 10 CPS (600 ppm)
         }
 
     # The maximum capacity of stream stored in the bin
-    MAX_STREAM_CAPACITY = 10
+    MAX_STREAM_CAPACITY: int = 10
 
     # The flow rate of lifestream
-    LIFESTREAM_FLOW_RATE: dict[str, FlowChannel] = {
-        "cpu": "HI",
-        "gpu": "HI",
-        "temperature": "HI",
-        "fan": "MID",
-        "memory": "MID",
-        "power": "MID",
-        "disk": "LO"
+    LIFESTREAM_FLOW_RATE: Dict[str, FlowChannel] = {
+        "p_unit": "HI",
+        "a_unit": "HI",
+        "temp": "HI",
+        "air_flow": "MID",
+        "stm": "MID",
+        "ltm": "LO",
+        "energy": "MID"
     }    
 
-    # The mapping of the conduits leading to the reservoirs of the lifestream
-    LIFESTREAM_CONDUIT_MAP: dict[str, tuple[str, tuple[Any, ...]]] = {
-        # Logic/workload vitals
-        "cpu_user": ("cpu", ("total", "user")),
-        "cpu_system": ("cpu", ("total", "system")),
-
-        # Neural/Sensory processing vitals
-        "gpu_load": ("gpu", ("gpu", "status", "load")),
-
-        # Body temperature vitals
-        "cpu_temp": ("temperature", ("cpu", "temp")),
-        "gpu_temp": ("temperature", ("gpu", "temp")),
-        "soc0_temp": ("temperature", ("soc0", "temp")),
-        "soc1_temp": ("temperature", ("soc1", "temp")),
-        "soc2_temp": ("temperature", ("soc2", "temp")),
-        "tj_temp": ("temperature", ("tj", "temp")),
-        "cv0_temp": ("temperature", ("cv0", "temp")),
-        "cv1_temp": ("temperature", ("cv1", "temp")),
-
-        # Air intake vitals
-        "fan_speed": ("fan", ("pwmfan", "speed", 0)),
-
-        # STM retainment vitals
-        "ram_total": ("memory", ("RAM", "tot")),
-        "ram_used": ("memory", ("RAM", "used")),
-        "swap_total": ("memory", ("SWAP", "tot")),
-        "swap_used": ("memory", ("SWAP", "used")),
-        "emc_load": ("memory", ("EMC", "cur")),
-
-        # Energy level vitals
-        "vdd_cpu_gpu_cv": ("power", ("rail", "VDD_CPU_GPU_CV", "power")),
-        "vdd_soc": ("power", ("rail", "VDD_SOC", "power")),
-        "voltage_soc": ("power", ("tot", "volt")),
-        "current_soc": ("power", ("tot", "curr")),
-        "power_soc": ("power", ("tot", "power")),
-
-        # Long term retainment vitals
-        "disk_used": ("disk", ("used",)),
-    }
     
     def __init__(self):
         """
@@ -106,21 +76,21 @@ class Pump():
             #TODO: Log the error in the log file
             self.jetson_lifestream = None
 
-        # Build the explicit conduit map for each flow channel
-        self._CONDUITS_BY_CHANNEL = self._build_conduit_map_by_channel()
+        # Build the explicit conduit map
+        self._CONDUIT_MAP: Dict[FlowChannel, List[ConduitMap]] = self._build_conduit_map()
     
     def close_valve(self):
         """Gracefully stop the flow of the Jetson lifestream"""
         if self.jetson_lifestream and self.jetson_lifestream.ok():
             self.jetson_lifestream.close()
 
-    def dig_deep_thru_conduit(self, data: Any, path: tuple[Any, ...]) -> Any:
+    def dig_deep_thru_conduit(self, data: Any, path: ConduitJunction) -> Any:
         """Helper to navigate through the conduit to collect the glob."""
         for key in path:
             # Handle different types of conduit junctions
-            if isinstance(data, dict) and key in data:
+            if isinstance(data, Dict) and key in data:
                 data = data[key]
-            elif isinstance(data, list) and isinstance(key, int):
+            elif isinstance(data, List) and isinstance(key, int):
                 if 0 <= key < len(data):
                     data = data[key]
                 else:
@@ -131,7 +101,7 @@ class Pump():
                 return None
         return data
   
-    def engage_tap_to_harvest_glob(self, bin: dict[str, Any]) -> dict[str, Any]:
+    def engage_tap_to_harvest_glob(self, bin: Dict[str, Any]) -> Dict[str, Any]:
         """
         Collect glob from the Jetson lifestream and put into the bin using Triple Action Pump (TAP) technique:
         - Connect the pump conduits to the collection points of the Jetson lifestream:
@@ -155,12 +125,12 @@ class Pump():
             # Connect the conduits to the collection points of the Jetson lifestream
             self.jetson_collection_points = {
                 "cpu": dict(self.jetson_lifestream.cpu),
-                "fan": dict(self.jetson_lifestream.fan),
                 "gpu": dict(self.jetson_lifestream.gpu),
-                "memory": dict(self.jetson_lifestream.memory),
-                "power": dict(self.jetson_lifestream.power),
                 "temperature": dict(self.jetson_lifestream.temperature),
-                "disk": dict(self.jetson_lifestream.disk)
+                "fan": dict(self.jetson_lifestream.fan),
+                "memory": dict(self.jetson_lifestream.memory),
+                "disk": dict(self.jetson_lifestream.disk),
+                "power": dict(self.jetson_lifestream.power)
             }
 
         # Engage the Triple Action Pump (TAP) to harvest glob from the lifestream
@@ -181,7 +151,7 @@ class Pump():
         
         return bin
             
-    def harvest_glob_from_lifestream(self, bin: dict[str, Any], channel: FlowChannel) -> dict[str, Any]:
+    def harvest_glob_from_lifestream(self, bin: Dict[str, Any], channel: FlowChannel) -> Dict[str, Any]:
         """
         Harvest useful glob from a given channel of lifestream into the bin:
         - Follow the conduit map paths to locate the collection point and collect the glob
@@ -192,7 +162,7 @@ class Pump():
             dict[str, Any]: bin filled with useful glob from the given channel of lifestream
         """
         # Follow the conduit map paths to locate the collection point and collect the glob
-        for key, (collection_point, path) in self._CONDUITS_BY_CHANNEL[channel]:
+        for key, (collection_point, path) in self._CONDUIT_MAP[channel]:
             # Ensure deque exists in the bin
             if key not in bin["glob"]:
                 bin["glob"][key] = deque(maxlen=self.MAX_STREAM_CAPACITY)
@@ -203,7 +173,9 @@ class Pump():
             if self.jetson_collection_points:
                 try:
                     # Dig deep into the conduit to collect the glob
-                    diverted_lifestream = self.jetson_collection_points.get(collection_point)                    
+                    diverted_lifestream = self.jetson_collection_points.get(collection_point)
+
+                    # Only dig into the conduit if it's connection to the Jetson lifestream is established
                     if diverted_lifestream is not None:
                         glob = self.dig_deep_thru_conduit(diverted_lifestream, path)
 
@@ -220,16 +192,30 @@ class Pump():
         return bin
 
     @classmethod
-    def _build_conduit_map_by_channel(cls) -> dict[FlowChannel, list[tuple[str, tuple[str, tuple[Any, ...]]]]]:
-        """Return the conduit map for each flow channel"""
-        return {
-                cast(FlowChannel, channel): [
-                    (k, v) for k, v in cls.LIFESTREAM_CONDUIT_MAP.items() 
-                    if cls.LIFESTREAM_FLOW_RATE.get(v[0]) == channel
-                ]
-                for channel in ["LO", "MID", "HI"]
-            }
-            
+    def _build_conduit_map(cls) -> Dict[FlowChannel, List[ConduitMap]]:
+        """Return the conduit map grouped by flow channel"""
+        # Read the conduit map blueprint from the robot spec file
+        conduit_map_blueprint: Dict[str, Any] = cls.retrieve_conduit_map_blueprint_from_hardware_spec()
+        if not conduit_map_blueprint:
+            raise ValueError("Conduit map blueprint not found.")
+        
+        channels: Dict[FlowChannel, List[ConduitMap]] = {"LO": [], "MID": [], "HI": []}
+
+        def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
+            """Helper function to recursively locate conduit heads from the blueprint"""
+            for conduit_name, spec in conduit_map_blueprint.items():
+                conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
+                if isinstance(spec, list):
+                    module_name: str = spec[0]
+                    junction_path: ConduitJunction = tuple(spec[1])
+                    flow_rate: FlowChannel = cls.LIFESTREAM_FLOW_RATE.get(module_name, "LO")
+                    channels[flow_rate].append((conduit_junction, (module_name, junction_path)))
+                elif isinstance(spec, dict):
+                    locate_conduit_heads(spec, conduit_junction)
+
+        locate_conduit_heads(conduit_map_blueprint)
+        return channels
+
     @classmethod
     def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
         """Return the flow rate of lifestream for a given flow channel"""
@@ -240,6 +226,38 @@ class Pump():
         """Return pumping rhythm (sec) for a given level"""
         return 1.0 / cls.which_flow_rate_for_this_channel(channel)
     
+    @staticmethod
+    def retrieve_conduit_map_blueprint_from_hardware_spec() -> Dict[str, Any]:
+        """Retrieve the conduit map blueprint from the robot hardware spec"""
+        # Use the path set in ROS2 package to locate the robot hardware spec
+        spec_potential_paths = []
+        try:
+            spec_potential_paths.append(Path(get_package_share_directory("vcs")) / "config" / ROBOT_SPEC_FILE)
+        except Exception:
+            pass
+
+        # Also check the current working directory for the robot hardware spec
+        spec_potential_paths.append(Path("config") / ROBOT_SPEC_FILE)
+
+        # Locate the robot hardware spec and extract the lifestream conduit map blueprint
+        for spec_path in spec_potential_paths:
+            if spec_path.exists() and spec_path.is_file():
+                try:
+                    with open(spec_path, 'r') as file:
+                        # Read the VCS section from the robot spec YAML file
+                        data = yaml.safe_load(file)
+                        data = data.get("vcs") if isinstance(data, dict) else None
+                        
+                        # Extract the conduit map blueprint from the VCS section
+                        if data and "conduit_map_blueprint" in data:
+                            return data["conduit_map_blueprint"]
+                except yaml.YAMLError as e:
+                    # TODO: Log the error in the log file
+                    raise ValueError(f"Error parsing YAML file: {e}") from e
+                
+        # Return an empty conduit map blueprint if no valid conduit map blueprint is found
+        return {}
+        
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
@@ -267,25 +285,25 @@ if __name__ == "__main__":
             glob = pump.engage_tap_to_harvest_glob(glob)
             
             # Get the worst case scenario of the vitals, if any
-            cpu_load_deque = glob.get("glob", {}).get("cpu_user")
+            cpu_load_deque = glob.get("glob", {}).get("body_load.p_unit")
             cpu_load = max([v for v in cpu_load_deque if v is not None], default=None) if cpu_load_deque else None
-            cpu_temp_deque = glob.get("glob", {}).get("cpu_temp")
-            cpu_temp = max([v for v in cpu_temp_deque if v is not None], default=None) if cpu_temp_deque else None
-            gpu_load_deque = glob.get("glob", {}).get("gpu_load")
+            temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
+            temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
+            gpu_load_deque = glob.get("glob", {}).get("body_load.a_unit")
             gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
-            gpu_temp_deque = glob.get("glob", {}).get("gpu_temp")
-            gpu_temp = max([v for v in gpu_temp_deque if v is not None], default=None) if gpu_temp_deque else None
+            temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
+            temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
 
             # Color code the temperature based on the value
-            cpu_color = color_temp(cpu_temp)
-            gpu_color = color_temp(gpu_temp)
+            cpu_color = color_temp(temperature_cpu)
+            gpu_color = color_temp(temperature_gpu)
             cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
-            cpu_temp_str = f"{cpu_temp}°C" if cpu_temp is not None else "N/A"
+            temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
             gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
-            gpu_temp_str = f"{gpu_temp}°C" if gpu_temp is not None else "N/A"
+            temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
             print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
-            print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{cpu_temp_str}\033[0m")
-            print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{gpu_temp_str}\033[0m")
+            print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
+            print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
                         
             time.sleep(0.1)
             
