@@ -26,7 +26,8 @@ Forthcoming
 * Implemented impurity detection and removal to ensure clean glob is harvested
 * Transitioned the naming schema to a "Biological Hardware" schema with more evocative and memorable terminologies
 * Added a standalone validation block in the pump module for real-time verification of its integrity
-
+* Added Robot Spec YAML to define the robot's hardware and software specifications for better adaptability
+* Added dynamic conduit mapping to allow flexible and customizable data collection points
 
 0.1.2 (2026-01-01)
 ------------------
