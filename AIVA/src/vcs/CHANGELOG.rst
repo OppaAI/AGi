@@ -6,8 +6,8 @@ Changelog for package Vital Circulatory System
 
 **Description:** This system monitors and manages the vital signs of AGi robots, including their operational status, user interactions, and network connectivity. It provides real-time feedback and alerts for critical conditions, ensuring the smooth operation of the AGi ecosystem.
 
-Forthcoming
------------
+0.1.3 (2026-01-26)
+------------------
 * Added launch file to launch vtc and vcc nodes based on role parameter
 * Changed the threaded terminal print to use rclpy logger
 
