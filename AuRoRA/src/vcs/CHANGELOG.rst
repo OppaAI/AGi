@@ -14,8 +14,8 @@ Future Implementation Roadmap
 * - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 
-Forthcoming
------------
+0.1.3 (2026-01-26)
+------------------
 * Added launch file to launch vtc and vcc nodes based on role parameter
 * Changed the threaded terminal print to use rclpy logger
 * Added QoS Profile to vital pulse signal and response
