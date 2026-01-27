@@ -52,17 +52,6 @@ class Pump():
     # The maximum capacity of stream stored in the bin
     MAX_STREAM_CAPACITY: int = 16
 
-    # The flow rate of lifestream
-    LIFESTREAM_FLOW_RATE: Dict[str, FlowChannel] = {
-        "p_unit": "HI",
-        "a_unit": "HI",
-        "temp": "HI",
-        "air_flow": "MID",
-        "stm": "MID",
-        "ltm": "LO",
-        "energy": "MID"
-    }    
-
     COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
     def __init__(self):
@@ -140,20 +129,6 @@ class Pump():
         bin.setdefault("run", 0)
         bin.setdefault("glob", {})
         
-        # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running and ready
-        self.jetson_collection_points = {}
-        if self.jetson_lifestream and self.jetson_lifestream.ok():
-            # Connect the conduits to the collection points of the Jetson lifestream
-            self.jetson_collection_points = {
-                "cpu": self.jetson_lifestream.cpu,
-                "gpu": self.jetson_lifestream.gpu,
-                "temperature": self.jetson_lifestream.temperature,
-                "fan": self.jetson_lifestream.fan,
-                "memory": self.jetson_lifestream.memory,
-                "disk": self.jetson_lifestream.disk,
-                "power": self.jetson_lifestream.power
-            }
-
         # Engage the Triple Action Pump (TAP) to harvest glob from the lifestream
         # Calculate how many runs for each pump cycle and midpoint of the cycle
         run_per_cycle = self.which_flow_rate_for_this_channel("HI") // self.which_flow_rate_for_this_channel("LO")
@@ -216,28 +191,34 @@ class Pump():
         
         channels: Dict[FlowChannel, List[Conduit]] = {"HI": [], "MID": [], "LO": []}
         
-        # Fetch all unique collection points from mapping first
+        # Get ready to create a clone duplicate of the conduit map for reference
         cloned_conduit_map = {}
-        if self.jetson_lifestream and self.jetson_lifestream.ok():
-            # LIFESTREAM_FLOW_RATE keys contain the collection points for the lifestream
-            for module_name in self.LIFESTREAM_FLOW_RATE.keys():
-                cloned_conduit_map[module_name] = getattr(self.jetson_lifestream, module_name, None)
-        
+               
         def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
             """Helper function to recursively locate conduit heads from the blueprint"""
-            for conduit_name, spec in conduit_map_blueprint.items():
+            for conduit_name, path in conduit_map_blueprint.items():
                 conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
-                if isinstance(spec, list):
-                    module_name, junction_path = spec[0], tuple(spec[1])
+                
+                if isinstance(path, list):
+                    # Format of the junction: [Module, Path_Tuple, Flow_Channel]
+                    module_name, junction_path = path[0], tuple(path[1])
+                    # Pull the channel from robot spec YAML file, or default to LO if not available
+                    flow_rate = path[2] if len(path) > 2 else "LO"
 
+                    # Lazy cache by calling once per unique module
+                    if module_name not in cloned_conduit_map:
+                        if self.jetson_lifestream and self.jetson_lifestream.ok():
+                            cloned_conduit_map[module_name] = getattr(self.jetson_lifestream, module_name, None)
+                        else:
+                            cloned_conduit_map[module_name] = None
+                    
                     # Pre-bind the collection point to the conduit using the cloned conduit map
                     collection_point = cloned_conduit_map.get(module_name)
-                    flow_rate: FlowChannel = self.LIFESTREAM_FLOW_RATE.get(module_name, "LO")
                     
                     # Create the conduit and add it to the channel
                     channels[flow_rate].append(Conduit(conduit_junction, collection_point,junction_path))
-                elif isinstance(spec, dict):
-                    locate_conduit_heads(spec, conduit_junction)
+                elif isinstance(path, dict):
+                    locate_conduit_heads(path, conduit_junction)
 
         locate_conduit_heads(conduit_map_blueprint)
 
