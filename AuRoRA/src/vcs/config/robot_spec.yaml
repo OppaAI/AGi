@@ -8,48 +8,48 @@
 
 vcs:
   conduit_map_blueprint:
-    # Processing core vitals
+    # Processing core vitals - High Priority
     p_unit:
-      user: ["cpu", ["total", "user"]] # CPU user load
-      system: ["cpu", ["total", "system"]] # CPU system load
+      user: ["cpu", ["total", "user"], "HI"] # CPU user load
+      system: ["cpu", ["total", "system"], "HI"] # CPU system load
 
-    # Arithmetic core vitals
+    # Arithmetic core vitals - High Priority
     a_unit:
-      load: ["gpu", ["gpu", "status", "load"]] # GPU load
+      load: ["gpu", ["gpu", "status", "load"], "HI"] # GPU load
 
-    # Body temperature vitals
+    # Body temperature vitals - Mid Priority
     body_temp:
-      p_unit: ["temperature", ["cpu", "temp"]] # CPU temperature
-      a_unit: ["temperature", ["gpu", "temp"]] # GPU temperature
-      zone0: ["temperature", ["soc0", "temp"]] # SOC0 temperature
-      zone1: ["temperature", ["soc1", "temp"]] # SOC1 temperature
-      zone2: ["temperature", ["soc2", "temp"]] # SOC2 temperature
-      junction: ["temperature", ["tj", "temp"]] # Junction temperature
+      p_unit: ["temperature", ["cpu", "temp"], "MID"] # CPU temperature
+      a_unit: ["temperature", ["gpu", "temp"], "MID"] # GPU temperature
+      zone0: ["temperature", ["soc0", "temp"], "MID"] # SOC0 temperature
+      zone1: ["temperature", ["soc1", "temp"], "MID"] # SOC1 temperature
+      zone2: ["temperature", ["soc2", "temp"], "MID"] # SOC2 temperature
+      junction: ["temperature", ["tj", "temp"], "MID"] # Junction temperature
 
-    # Air flow vitals
+    # Air flow vitals - Mid Priority
     air_flow:
-      rate: ["fan", ["pwmfan", "speed", 0]] # Fan speed
+      rate: ["fan", ["pwmfan", "speed", 0], "MID"] # Fan speed
 
-    # Memory (STM) vitals
+    # Memory (STM) vitals - Lo Priority
     memory:
       stm:
-        total: ["memory", ["RAM", "tot"]] # RAM total space
-        used: ["memory", ["RAM", "used"]] # RAM used space
+        total: ["memory", ["RAM", "tot"], "LO"] # RAM total space
+        used: ["memory", ["RAM", "used"], "LO"] # RAM used space
       virtual:
-        total: ["memory", ["SWAP", "tot"]] # Swap total space
-        used: ["memory", ["SWAP", "used"]] # Swap used space
+        total: ["memory", ["SWAP", "tot"], "LO"] # Swap total space
+        used: ["memory", ["SWAP", "used"], "LO"] # Swap used space
       controller:
-        load: ["memory", ["EMC", "cur"]] # EMC load
+        load: ["memory", ["EMC", "cur"], "LO"] # EMC load
       ltm:
-        used: ["disk", ["used"]] # Disk used space
+        used: ["disk", ["used"], "LO"] # Disk used space
 
-    # Energy level vitals
+    # Energy level vitals - High Priority
     energy:
-      units: ["power", ["rail", "VDD_CPU_GPU_CV", "power"]] # VDD_CPU_GPU_CV
-      core: ["power", ["rail", "VDD_SOC", "power"]] # VDD_SOC
-      voltage: ["power", ["tot", "volt"]] # Voltage
-      current: ["power", ["tot", "curr"]] # Current
-      power: ["power", ["tot", "power"]] # Power
+      units: ["power", ["rail", "VDD_CPU_GPU_CV", "power"], "HI"] # VDD_CPU_GPU_CV
+      core: ["power", ["rail", "VDD_SOC", "power"], "HI"] # VDD_SOC
+      voltage: ["power", ["tot", "volt"], "HI"] # Voltage
+      current: ["power", ["tot", "curr"], "HI"] # Current
+      power: ["power", ["tot", "power"], "HI"] # Power
 
 
 # --- PART 2: KINETIC APPENDAGES (Actuators & Servos) ---
