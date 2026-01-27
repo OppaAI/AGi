@@ -6,6 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Dict, List, Literal, NamedTuple
 import threading
+import time
 import yaml
 
 # Define the flow channel type of the lifestream
@@ -69,7 +70,6 @@ class Pump():
         
         # Connect to the Jetson lifestream to initialize the streamflow and start the streamflow
         self.jetson_lifestream = None
-        self.jetson_collection_points = None
         try:
             # Set the maximum flow rate of the Jetson lifestream
             self.jetson_lifestream = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
@@ -227,17 +227,32 @@ class Pump():
 
     def _smoke_test_floodgates(self)-> bool:
         """Perform a smoke test on all floodgates to ensure they are working properly."""
-        if self.state == "DEGRADED": return False
+        # Give lifestream floodgates up to 2 seconds to warm up in order to fetch the first glob of data
+        time_limit = time.time() + 2.0
 
-        for channel, conduits in self._CONDUIT_MAP.items():
-            for conduit in conduits:
-                test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.path)
-                if test_bin is None:
-                    #TODO: Log the error in the log file
-                    print(f"Error: Conduit {conduit.name} is unreachable via {conduit.path}.")
-                    return False
-        return True
+        while time.time() < time_limit:
+            smoke_test = True
+            for channel, conduits in self._CONDUIT_MAP.items():
+                for conduit in conduits:
+                    # Conduct a DEEP trace to detect any anomaly in the conduit map blueprint
+                    test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.path)
+                    if test_bin is None:
+                        smoke_test = False
+                        break    
 
+                if not smoke_test:
+                    break
+                
+            if smoke_test:
+                return True
+        
+            # Wait for the lifestream floodgates to warm up
+            time.sleep(0.1)
+            
+        #TODO: Log the error in the log file
+        print("Error: Smoke test failed. Some conduits are not connected properly to the collection points.")
+        return False
+    
     @classmethod
     def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
         """Return the flow rate of lifestream for a given flow channel"""
