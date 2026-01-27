@@ -215,25 +215,23 @@ class Pump():
             raise ValueError("Conduit map blueprint not found.")
         
         channels: Dict[FlowChannel, List[Conduit]] = {"HI": [], "MID": [], "LO": []}
-
+        
+        # Fetch all unique collection points from mapping first
+        cloned_conduit_map = {}
+        if self.jetson_lifestream and self.jetson_lifestream.ok():
+            # LIFESTREAM_FLOW_RATE keys contain the collection points for the lifestream
+            for module_name in self.LIFESTREAM_FLOW_RATE.keys():
+                cloned_conduit_map[module_name] = getattr(self.jetson_lifestream, module_name, None)
+        
         def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
             """Helper function to recursively locate conduit heads from the blueprint"""
             for conduit_name, spec in conduit_map_blueprint.items():
                 conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
                 if isinstance(spec, list):
-                    module_name: str = spec[0]
-                    junction_path: ConduitJunction = tuple(spec[1])
+                    module_name, junction_path = spec[0], tuple(spec[1])
 
-                    # Pre-bind the collection point to the conduit
-                    collection_point = None
-                    if self.jetson_lifestream and self.jetson_lifestream.ok():
-                        try:
-                            # Grab the collection point from the jetson lifestream
-                            collection_point = getattr(self.jetson_lifestream, module_name)
-                        except AttributeError:
-                            #TODO: Log the error in the log file
-                            print(f"Error: Collection point {module_name} not found in Jetson lifestream.")
-
+                    # Pre-bind the collection point to the conduit using the cloned conduit map
+                    collection_point = cloned_conduit_map.get(module_name)
                     flow_rate: FlowChannel = self.LIFESTREAM_FLOW_RATE.get(module_name, "LO")
                     
                     # Create the conduit and add it to the channel
