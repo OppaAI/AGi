@@ -10,6 +10,16 @@ Forthcoming
 -----------
 * Added launch file to launch vtc and vcc nodes based on role parameter
 * Changed the threaded terminal print to use rclpy logger
+* Added QoS Profile to vital pulse signal and response
+* Established the framework to implement PRO2 architectural for VTC:
+* - Pump: Collects glob from different lifestream flow channels
+* Decoupled the Pump Module to its own module to have better modularity
+* Optimized lifestream collection using Triple Action Pump (TAP) technique to prioritize crucial glob while conserving memory footprints
+* Implemented impurity detection and removal to ensure clean glob is harvested
+* Transitioned the naming schema to a "Biological Hardware" schema with more evocative and memorable terminologies
+* Added a standalone validation block in the pump module for real-time verification of its integrity
+* Added Robot Spec YAML to define the robot's hardware and software specifications for better adaptability
+* Added dynamic conduit mapping to allow flexible and customizable data collection points
 
 0.1.2 (2026-01-01)
 ------------------
