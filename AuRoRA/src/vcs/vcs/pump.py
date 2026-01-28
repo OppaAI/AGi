@@ -44,7 +44,7 @@ class Pump():
     - engage_tap_to_harvest_glob: Harvest glob from the Jetson reservoir and put into the bin using TAP technique
     - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
     - trace_thru_conduit: Trace through the conduit to extract the glob
-    - close_valve: Gracefully stop the flow of the Jetson reservoir flow
+    - close_floodgate: Gracefully stop the flow of the Jetson reservoir flow
     """ 
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
@@ -100,7 +100,7 @@ class Pump():
         # Verify the conduit map by performing a smoke test
         self.state = "DEGRADED" if not self._smoke_test_floodgates() else "RUN"
     
-    def close_valve(self):
+    def close_floodgate(self):
         """Gracefully stop the flow of the Jetson reservoir"""
         if self.jetson_reservoir and self.jetson_reservoir.ok():
             self.jetson_reservoir.close()
@@ -325,6 +325,19 @@ class Pump():
         # Return an empty conduit map blueprint if no valid conduit map blueprint is found
         return {}
         
+    def __enter__(self):
+            """Prepare the pump for a high-speed heist."""
+            return self
+    
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            """Clean up the mess, even if we tripped the alarms."""
+            if exc_type:
+                # Maybe log that we're bailing out because of a meatbag error
+                print(f"Bailing out! Error detected: {exc_val}")
+            
+            self.close_floodgate()
+            # Returning False (default) ensures the exception still propagates
+            return False        
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
@@ -337,50 +350,48 @@ if __name__ == "__main__":
         return "\033[38;5;196m" if temp > 80 else "\033[38;5;46m"
     
     # Initialize the Pump Module
-    pump = Pump()
+    with Pump() as pump:
     
-    # Start the diagnosis
-    print("--- DIAGNOSING VTC PUMP MODULE ---")
-    glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
-
-    # Run the diagnosis for 30 pump cycles
-    try:
-        for i in range(30):
-            # Collect the glob from the lifestream
-            glob["run"] = i
-            glob["timestamp"] = time.strftime("%H:%M:%S")
-            glob = pump.engage_tap_to_harvest_glob(glob)
+        # Start the diagnosis
+        print("--- DIAGNOSING VTC PUMP MODULE ---")
+        glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
+    
+        # Run the diagnosis for 30 pump cycles
+        try:
+            for i in range(30):
+                # Collect the glob from the lifestream
+                glob["run"] = i
+                glob["timestamp"] = time.strftime("%H:%M:%S")
+                glob = pump.engage_tap_to_harvest_glob(glob)
+                
+                # Get the worst case scenario of the vitals, if any
+                cpu_load_deque = glob.get("glob", {}).get("body_load.p_unit")
+                cpu_load = max([v for v in cpu_load_deque if v is not None], default=None) if cpu_load_deque else None
+                temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
+                temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
+                gpu_load_deque = glob.get("glob", {}).get("body_load.a_unit")
+                gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
+                temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
+                temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
+                disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
+                disk_usage = max([v for v in disk_usage_deque if v is not None], default=None) if disk_usage_deque else None
+    
+                # Color code the temperature based on the value
+                cpu_color = color_temp(temperature_cpu)
+                gpu_color = color_temp(temperature_gpu)
+                cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
+                temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
+                gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
+                temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
+                disk_usage_str = f"{disk_usage:.2f}%" if disk_usage is not None else "N/A"
+                print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
+                print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
+                print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
+                print(f" Disk Usage: {disk_usage_str}")
+                            
+                
+        except KeyboardInterrupt:
+            # Stop the diagnosis if user interrupts
+            print("\nDiagnosis is stopped by user.")
             
-            # Get the worst case scenario of the vitals, if any
-            cpu_load_deque = glob.get("glob", {}).get("body_load.p_unit")
-            cpu_load = max([v for v in cpu_load_deque if v is not None], default=None) if cpu_load_deque else None
-            temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
-            temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
-            gpu_load_deque = glob.get("glob", {}).get("body_load.a_unit")
-            gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
-            temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
-            temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
-            disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
-            disk_usage = max([v for v in disk_usage_deque if v is not None], default=None) if disk_usage_deque else None
-
-            # Color code the temperature based on the value
-            cpu_color = color_temp(temperature_cpu)
-            gpu_color = color_temp(temperature_gpu)
-            cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
-            temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
-            gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
-            temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
-            disk_usage_str = f"{disk_usage:.2f}%" if disk_usage is not None else "N/A"
-            print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
-            print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
-            print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
-            print(f" Disk Usage: {disk_usage_str}")
-                        
-            
-    except KeyboardInterrupt:
-        # Stop the diagnosis if user interrupts
-        print("\nDiagnosis is stopped by user.")
-    finally:
-        # Close the Pump Module and end the diagnosis
-        pump.close_valve()
-        print("--- VTC PUMP MODULE DIAGNOSIS COMPLETE ---")
+    print("--- VTC PUMP MODULE DIAGNOSIS COMPLETE ---")
