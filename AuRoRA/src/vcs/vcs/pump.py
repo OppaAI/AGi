@@ -1,10 +1,11 @@
 # System modules
+from re import U
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
 from jtop import jtop
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Dict, List, Literal, NamedTuple
+from typing import Any, cast, Dict, List, Literal, NamedTuple, Tuple, Union
 import threading
 import time
 import yaml
@@ -12,34 +13,38 @@ import yaml
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
 
-# The robot spec file
-ConduitJunction = tuple[Any, ...]
-ConduitMap = tuple[str, ConduitJunction]
+# Architectural conduit type used to define each conduit component in the conduit map
+# Conduit junction types used to trace through the conduit path
+ConduitJunctionPoint = Union[str, int]                  # String for junction name, int for junction index
+ConduitJunctionList = tuple[ConduitJunctionPoint, ...]  # List of junction points in the conduit path
+
+# Frozen conduit junction type used to define the conduit path
+class ConduitType(NamedTuple):
+    conduit_id: str                    # ID of the conduit
+    collection_point: Any              # Pre-bound collection point (eg. self.jetson_reservoir.cpu)
+    junction_path: ConduitJunctionList # Path of junctions to trace through the conduit
+
+# Immutable conduit map type for conduit path
+ConduitMapBlueprint = MappingProxyType[FlowChannel, Tuple[ConduitType, ...]]    # Conduit map blueprint
 
 # TODO: to be moved to a global constants file
 ROBOT_SPEC_FILE: str = "robot_spec.yaml"
-
-# Define an immutable structure for the conduit map
-class Conduit(NamedTuple):
-    name: str               # Immutable name of the collection point
-    collection_point: Any   # Pre-bound collection point (eg. self.jetson.cpu)
-    path: tuple             # Immutable path to the glob
 
 class Pump():
 
     """
     Pump Module:
-    - Harvests useful glob from the Jetson lifestream using Triple Action Pump (TAP) technique
+    - Harvests useful glob from the Jetson reservoir using Triple Action Pump (TAP) technique
     - Maintains a stream of consciousness (SOC) of the harvested glob
     - Exports the harvested glob to the vital terminal core for determining the health status
 
     Functions:
     - which_flow_rate_for_this_channel: Return the flow rate (CPS) for a given channel
     - what_pumping_rhythm_for_this_channel: Return the pumping rhythm (sec) for a given channel
-    - engage_tap_to_harvest_glob: Harvest glob from the Jetson lifestream and put into the bin using TAP technique
+    - engage_tap_to_harvest_glob: Harvest glob from the Jetson reservoir and put into the bin using TAP technique
     - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
     - trace_thru_conduit: Trace through the conduit to extract the glob
-    - close_valve: Gracefully stop the flow of the Jetson lifestream flow
+    - close_valve: Gracefully stop the flow of the Jetson reservoir flow
     """ 
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
@@ -53,13 +58,14 @@ class Pump():
     # The maximum capacity of stream stored in the bin
     MAX_STREAM_CAPACITY: int = 16
 
+    # Sentinel value indicating collection point is not available
     COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
     def __init__(self):
         """
         This is the initialization of the pump:
         - Initialize the pump state and lock
-        - Set the maximum flow rate of the Jetson lifestream and start the streamflow
+        - Set the maximum flow rate of the Jetson reservoir and start the streamflow
         - Build the explicit conduit map
         - Transition to the "RUN" state
         """
@@ -68,38 +74,38 @@ class Pump():
         self.state = "INIT"
         self._lock = threading.Lock()
         
-        # Connect to the Jetson lifestream to initialize the streamflow and start the streamflow
-        self.jetson_lifestream = None
+        # Connect to the Jetson reservoir to initialize the running of the lifestream
+        self.jetson_reservoir = None
         try:
-            # Set the maximum flow rate of the Jetson lifestream
-            self.jetson_lifestream = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
-            # Start the streamflow
-            self.jetson_lifestream.start()
+            # Set to maximum flow rate of the Jetson reservoir
+            self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
+            # Start running the Jetson lifestream out of the reservoir
+            self.jetson_reservoir.start()
 
-            # Wait for the streamflow to be ready
-            if not self.jetson_lifestream.ok():
+            # Wait for the floodgate to be ready to open
+            if not self.floodgate_is_ready_to_open():
                 #TODO: Log the error in the log file
-                raise RuntimeError("Jetson lifestream is running empty.")
+                raise RuntimeError("Error: Jetson reservoir is not ready to open floodgate.")
 
         except Exception as e:
-            # In case of error, log the error and tell the pump that the Jetson lifestream is running empty
+            # In case of error, log the error and tell the pump that the Jetson reservoir is running empty
             #TODO: Log the error in the log file
-            print(f"Error: Jetson lifestream failed to run: {e}")
+            print(f"Error: Jetson reservoir failed to run: {e}")
             self.state = "DEGRADED"
-            self.jetson_lifestream = None
+            self.jetson_reservoir = None
 
         # Build the explicit conduit map
-        self._CONDUIT_MAP: Dict[FlowChannel, tuple[Conduit, ...]] = self._build_conduit_map()
+        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()       
 
         # Verify the conduit map by performing a smoke test
         self.state = "DEGRADED" if not self._smoke_test_floodgates() else "RUN"
     
     def close_valve(self):
-        """Gracefully stop the flow of the Jetson lifestream"""
-        if self.jetson_lifestream and self.jetson_lifestream.ok():
-            self.jetson_lifestream.close()
+        """Gracefully stop the flow of the Jetson reservoir"""
+        if self.jetson_reservoir and self.jetson_reservoir.ok():
+            self.jetson_reservoir.close()
 
-    def trace_thru_conduit(self, lifestream: Any, path: ConduitJunction) -> Any:
+    def trace_thru_conduit(self, lifestream: Any, path: ConduitJunctionList) -> Any:
         """Helper to trace through the conduit to collect the glob."""
         for collection_point in path:
             try:
@@ -112,8 +118,8 @@ class Pump():
   
     def engage_tap_to_harvest_glob(self, bin: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Collect glob from the Jetson lifestream and put into the bin using Triple Action Pump (TAP) technique:
-        - Connect the pump conduits to the collection points of the Jetson lifestream:
+        Collect glob from the Jetson reservoir and put into the bin using Triple Action Pump (TAP) technique:
+        - Connect the pump conduits to the collection points of the Jetson reservoir:
             - High flow channel: Collect crucial workload and energy vitals
             - Mid flow channel: Collect sensory vitals
             - Low flow channel: Collect memory vitals
@@ -158,69 +164,69 @@ class Pump():
             dict[str, Any]: bin filled with useful glob from the given channel of lifestream
         """
         # Load the frozen conduit map for the given channel
-        conduit_map: tuple[Conduit, ...] = self._CONDUIT_MAP.get(channel, ())
+        conduit_map: tuple[ConduitType, ...] = self._CONDUIT_MAP.get(channel, ())
         
         # Wrap the entire flow update in a lock to ensure thread safety
         with self._lock:
             for conduit in conduit_map:
                 # Ensure deque exists in the bin
-                if conduit.name not in bin["glob"]:
-                    bin["glob"][conduit.name] = deque(maxlen=self.MAX_STREAM_CAPACITY)
+                if conduit.conduit_id not in bin["glob"]:
+                    bin["glob"][conduit.conduit_id] = deque(maxlen=self.MAX_STREAM_CAPACITY)
 
                 # Harvest the glob from the lifestream via the conduit path
                 glob = None
-                if self.jetson_lifestream and self.jetson_lifestream.ok():
+                if self.jetson_reservoir and self.jetson_reservoir.ok():
                     # Only trace the conduit if it's connection to the Jetson lifestream is established
-                    if conduit.collection_point is not None:
-                        glob = self.trace_thru_conduit(conduit.collection_point, conduit.path)
+                    if conduit.collection_point is not None: 
+                        glob = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
 
                     # Sift out the impurity or empty glob
                     if glob == self.COLLECTION_POINT_NOT_AVAILABLE:
                         glob = None
 
                 # Append the glob to the deque in the bin, even if it is None
-                bin["glob"][conduit.name].append(glob)               
+                bin["glob"][conduit.conduit_id].append(glob)               
         return bin
 
-    def _build_conduit_map(self) -> Dict[FlowChannel, tuple[Conduit, ...]]:
+    def _build_conduit_map(self) -> ConduitMapBlueprint:
         """Return the conduit map grouped by flow channel"""
         # Read the conduit map blueprint from the robot spec file
-        conduit_map_blueprint: Dict[str, Any] = self.retrieve_conduit_map_blueprint_from_hardware_spec()
+        t0 = time.perf_counter()
+        conduit_map_blueprint: ConduitMapBlueprint = self.retrieve_conduit_map_blueprint_from_hardware_spec()
         if not conduit_map_blueprint:
             raise ValueError("Conduit map blueprint not found.")
         
-        channels: Dict[FlowChannel, List[Conduit]] = {"HI": [], "MID": [], "LO": []}
+        channels: Dict[FlowChannel, List[ConduitType]] = {"HI": [], "MID": [], "LO": []}
         
         # Get ready to create a clone duplicate of the conduit map for reference
-        cloned_conduit_map = {}
-               
+        cloned_conduit_map: Dict[str, Any] = {}
+
         def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
             """Helper function to recursively locate conduit heads from the blueprint"""
             for conduit_name, path in conduit_map_blueprint.items():
                 conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
-                
-                if isinstance(path, list):
-                    # Format of the junction: [Module, Path_Tuple, Flow_Channel]
-                    module_name, junction_path = path[0], tuple(path[1])
+
+                if type(path) is dict:
+                    # Recursive case: traverse deeper into the conduit map
+                    locate_conduit_heads(path, conduit_junction)
+                if type(path) is list:
+                    # Format of the junction: [Module, [Path_Tuple], Flow_Channel]
+                    module_name, junction_path, *config = path
                     # Pull the channel from robot spec YAML file, or default to LO if not available
-                    flow_rate = path[2] if len(path) > 2 else "LO"
+                    flow_rate = config[0] if config else "LO"
 
                     # Lazy cache by calling once per unique module
                     if module_name not in cloned_conduit_map:
-                        if self.jetson_lifestream and self.jetson_lifestream.ok():
-                            cloned_conduit_map[module_name] = getattr(self.jetson_lifestream, module_name, None)
-                        else:
-                            cloned_conduit_map[module_name] = None
+                        cloned_conduit_map[module_name] = getattr(self.jetson_reservoir, module_name, None) if self.floodgate_is_ready_to_open() else None
                     
                     # Pre-bind the collection point to the conduit using the cloned conduit map
                     collection_point = cloned_conduit_map.get(module_name)
                     
                     # Create the conduit and add it to the channel
-                    channels[flow_rate].append(Conduit(conduit_junction, collection_point,junction_path))
-                elif isinstance(path, dict):
-                    locate_conduit_heads(path, conduit_junction)
+                    channels[flow_rate].append(ConduitType(conduit_junction, collection_point, uple(junction_path)))
 
         locate_conduit_heads(conduit_map_blueprint)
+        print(f"Conduit map built in {time.perf_counter() - t0:.6f} seconds")
 
         # Freeze the conduit map for each flow channel
         return MappingProxyType({channel: tuple(conduits) for channel, conduits in channels.items()})
@@ -235,7 +241,7 @@ class Pump():
             for channel, conduits in self._CONDUIT_MAP.items():
                 for conduit in conduits:
                     # Conduct a DEEP trace to detect any anomaly in the conduit map blueprint
-                    test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.path)
+                    test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
                     if test_bin is None:
                         smoke_test = False
                         break    
@@ -253,6 +259,10 @@ class Pump():
         print("Error: Smoke test failed. Some conduits are not connected properly to the collection points.")
         return False
     
+    def floodgate_is_ready_to_open(self) -> bool:
+        """Check if the floodgate is ready to open (i.e., Jetson reservoir is connected and OK)"""
+        return self.jetson_reservoir is not None and self.jetson_reservoir.ok()
+
     @classmethod
     def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
         """Return the flow rate of lifestream for a given flow channel"""
@@ -264,7 +274,7 @@ class Pump():
         return 1.0 / cls.which_flow_rate_for_this_channel(channel)
     
     @staticmethod
-    def retrieve_conduit_map_blueprint_from_hardware_spec() -> Dict[str, Any]:
+    def retrieve_conduit_map_blueprint_from_hardware_spec() -> ConduitMapBlueprint:
         """Retrieve the conduit map blueprint from the robot hardware spec"""
         # Use the path set in ROS2 package to locate the robot hardware spec
         spec_potential_paths = []
@@ -330,6 +340,8 @@ if __name__ == "__main__":
             gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
             temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
             temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
+            disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
+            disk_usage = max([v for v in disk_usage_deque if v is not None], default=None) if disk_usage_deque else None
 
             # Color code the temperature based on the value
             cpu_color = color_temp(temperature_cpu)
@@ -338,11 +350,12 @@ if __name__ == "__main__":
             temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
             gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
             temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
+            disk_usage_str = f"{disk_usage:.2f}%" if disk_usage is not None else "N/A"
             print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
             print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
             print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
+            print(f" Disk Usage: {disk_usage_str}")
                         
-            time.sleep(0.1)
             
     except KeyboardInterrupt:
         # Stop the diagnosis if user interrupts
