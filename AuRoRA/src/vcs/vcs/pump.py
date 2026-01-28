@@ -234,7 +234,7 @@ class Pump():
                     locate_conduit_heads(path, conduit_junction)
                 elif type(path) is list:
                     # Destruct the junction path to identify each component
-                    module_name, raw_path, *config = path
+                    module_name, junction_path, *config = path
                     
                     # Pull the channel from robot spec YAML file, or default to LO if not available
                     flow_rate = cast(FlowChannel, config[0] if config else "LO")
