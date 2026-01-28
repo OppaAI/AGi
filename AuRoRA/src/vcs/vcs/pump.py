@@ -1,7 +1,7 @@
 # System modules
-from re import U
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from jtop import jtop
 from pathlib import Path
 from types import MappingProxyType
@@ -189,48 +189,68 @@ class Pump():
         return bin
 
     def _build_conduit_map(self) -> ConduitMapBlueprint:
-        """Return the conduit map grouped by flow channel"""
-        # Read the conduit map blueprint from the robot spec file
+        """Return the conduit map grouped by flow channel using parallel initialization"""
         t0 = time.perf_counter()
-        conduit_map_blueprint: ConduitMapBlueprint = self.retrieve_conduit_map_blueprint_from_hardware_spec()
-        if not conduit_map_blueprint:
+        
+        # # Read the conduit map blueprint from the robot spec file
+        blueprint = self.retrieve_conduit_map_blueprint_from_hardware_spec()
+        if not blueprint:
             raise ValueError("Conduit map blueprint not found.")
-        
-        channels: Dict[FlowChannel, List[ConduitType]] = {"HI": [], "MID": [], "LO": []}
-        
+    
+        # --- STEP 1: THE SCOUT (Find unique hardware modules) ---
+        # Read the conduit blueprint map to find out the names of the collection point
+        unique_modules = set()
+        def scout(data: Dict[str, Any]):
+            for val in data.values():
+                if type(val) is dict:
+                    scout(val)
+                elif type(val) is list:
+                    unique_modules.add(val[0]) # Always index 0 per your spec
+        scout(blueprint)
+    
+        # --- STEP 2: THE HAMMER (Parallel Hardware Handshake) ---
         # Get ready to create a clone duplicate of the conduit map for reference
         cloned_conduit_map: Dict[str, Any] = {}
-
-        def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
-            """Helper function to recursively locate conduit heads from the blueprint"""
-            for conduit_name, path in conduit_map_blueprint.items():
-                conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
-
+        
+        def fetch_hardware(name):
+            # This is where the 0.1s lag is neutralized by threading
+            return name, getattr(self.jetson_reservoir, name, None)
+    
+        if self.floodgate_is_ready_to_open() and unique_modules:
+            # Spawn one thread per module to pay the hardware tax all at once
+            with ThreadPoolExecutor(max_workers=len(unique_modules)) as executor:
+                results = executor.map(fetch_hardware, unique_modules)
+                cloned_conduit_map = dict(results)
+    
+        # --- STEP 3: THE BUILDER (Create the actual ConduitType objects) ---
+        channels: Dict[FlowChannel, List[ConduitType]] = {"HI": [], "MID": [], "LO": []}
+    
+        def locate_conduit_heads(data: Dict[str, Any], junction: str = ""):
+            for name, path in data.items():
+                conduit_junction = f"{junction}.{name}" if junction else name
+                
                 if type(path) is dict:
                     # Recursive case: traverse deeper into the conduit map
                     locate_conduit_heads(path, conduit_junction)
-                if type(path) is list:
-                    # Format of the junction: [Module, [Path_Tuple], Flow_Channel]
-                    module_name, junction_path, *config = path
+                elif type(path) is list:
+                    # Destruct the junction path to identify each component
+                    module_name, raw_path, *config = path
+                    
                     # Pull the channel from robot spec YAML file, or default to LO if not available
-                    flow_rate = config[0] if config else "LO"
-
-                    # Lazy cache by calling once per unique module
-                    if module_name not in cloned_conduit_map:
-                        cloned_conduit_map[module_name] = getattr(self.jetson_reservoir, module_name, None) if self.floodgate_is_ready_to_open() else None
+                    flow_rate = cast(FlowChannel, config[0] if config else "LO")
                     
                     # Pre-bind the collection point to the conduit using the cloned conduit map
                     collection_point = cloned_conduit_map.get(module_name)
                     
                     # Create the conduit and add it to the channel
-                    channels[flow_rate].append(ConduitType(conduit_junction, collection_point, uple(junction_path)))
-
-        locate_conduit_heads(conduit_map_blueprint)
-        print(f"Conduit map built in {time.perf_counter() - t0:.6f} seconds")
-
+                    channels[flow_rate].append(ConduitType(conduit_junction, collection_point, tuple(junction_path)))
+    
+        locate_conduit_heads(blueprint)
+        
         # Freeze the conduit map for each flow channel
-        return MappingProxyType({channel: tuple(conduits) for channel, conduits in channels.items()})
-
+        print(f"Conduit map built in {time.perf_counter() - t0:.6f} seconds")
+        return MappingProxyType({ch: tuple(con) for ch, con in channels.items()})
+   
     def _smoke_test_floodgates(self)-> bool:
         """Perform a smoke test on all floodgates to ensure they are working properly."""
         # Give lifestream floodgates up to 2 seconds to warm up in order to fetch the first glob of data
