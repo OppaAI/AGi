@@ -297,6 +297,7 @@ class Pump():
         """Prunes broken conduits and ensures at least some data is flowing."""
         # Give lifestream floodgates up to half a second to warm up in order to fetch the first glob of data
         time_limit = time.time() + 0.5
+        broken_conduits: List[Tuple[FlowChannel, ConduitType]] = set()
         
         while time.time() < time_limit:
             broken_conduits = []
