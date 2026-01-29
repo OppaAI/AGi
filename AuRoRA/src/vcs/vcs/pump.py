@@ -1,7 +1,9 @@
 # System modules
+from calendar import c
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 from jtop import jtop
 from pathlib import Path
 from types import MappingProxyType
@@ -29,6 +31,13 @@ ConduitMapBlueprint = MappingProxyType[FlowChannel, Tuple[ConduitType, ...]]    
 
 # TODO: to be moved to a global constants file
 ROBOT_SPEC_FILE: str = "robot_spec.yaml"
+
+# Pump Module states
+class PumpState(str, Enum):
+    INIT = "INIT"
+    RUN = "RUN"
+    DEGRADED = "DEGRADED"
+    OFF = "OFF"
 
 class Pump():
 
@@ -63,43 +72,48 @@ class Pump():
     
     def __init__(self):
         """
-        This is the initialization of the pump:
-        - Initialize the pump state and lock
-        - Set the maximum flow rate of the Jetson reservoir and start the streamflow
+        Run the initialization of the pump module:
+        - Set up "INIT" state and lock
+        - Connect to the Jetson reservoir
         - Build the explicit conduit map
-        - Transition to the "RUN" state
+        - Verify the conduit map by performing a smoke test
+        - Transition to the "RUN" state if all checks pass
+
+        Returns:
+            None
         """
 
-        # Initialize the pump state and lock
-        self.state = "INIT"
+        # Set up "INIT" state and lock
+        self.state: PumpState = PumpState.INIT
         self._lock = threading.Lock()
         
-        # Connect to the Jetson reservoir to initialize the running of the lifestream
-        self.jetson_reservoir = None
-        try:
-            # Set to maximum flow rate of the Jetson reservoir
-            self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
-            # Start running the Jetson lifestream out of the reservoir
-            self.jetson_reservoir.start()
-
-            # Wait for the floodgate to be ready to open
-            if not self.floodgate_is_ready_to_open():
-                #TODO: Log the error in the log file
-                raise RuntimeError("Error: Jetson reservoir is not ready to open floodgate.")
-
-        except Exception as e:
-            # In case of error, log the error and tell the pump that the Jetson reservoir is running empty
-            #TODO: Log the error in the log file
-            print(f"Error: Jetson reservoir failed to run: {e}")
-            self.state = "DEGRADED"
-            self.jetson_reservoir = None
-
+        # Connect to the Jetson reservoir
+        t0 = time.perf_counter()
+        if not self._connect_to_jetson_reservoir():
+            self.state = PumpState.DEGRADED
+            return
+        print(f"Connected to Jetson reservoir in {time.perf_counter() - t0:.6f} seconds")
+        
         # Build the explicit conduit map
-        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()       
-
+        t0 = time.perf_counter()
+        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()        
+        print(f"Built conduit map in {time.perf_counter() - t0:.6f} seconds")
+        
         # Verify the conduit map by performing a smoke test
-        self.state = "DEGRADED" if not self._smoke_test_floodgates() else "RUN"
-    
+        t0 = time.perf_counter()
+        if not self._smoke_test_floodgates():
+            self.state = PumpState.DEGRADED
+            return
+        print(f"Verified conduit map in {time.perf_counter() - t0:.6f} seconds")
+        
+        # Transition to the "RUN" state
+        self.state = PumpState.RUN
+
+    def terminate(self):
+        """Terminate the pump module and close the floodgate."""
+        self.close_floodgate()
+        self.state = PumpState.OFF
+   
     def close_floodgate(self):
         """Gracefully stop the flow of the Jetson reservoir"""
         if self.jetson_reservoir and self.jetson_reservoir.ok():
@@ -190,9 +204,7 @@ class Pump():
 
     def _build_conduit_map(self) -> ConduitMapBlueprint:
         """Return the conduit map grouped by flow channel using parallel initialization"""
-        t0 = time.perf_counter()
-        
-        # # Read the conduit map blueprint from the robot spec file
+        # Read the conduit map blueprint from the robot spec file
         blueprint = self.retrieve_conduit_map_blueprint_from_hardware_spec()
         if not blueprint:
             raise ValueError("Conduit map blueprint not found.")
@@ -210,77 +222,112 @@ class Pump():
     
         # --- STEP 2: THE HAMMER (Parallel Hardware Handshake) ---
         # Get ready to create a clone duplicate of the conduit map for reference
-        cloned_conduit_map: Dict[str, Any] = {}
+        self.cloned_conduit_map: Dict[str, Any] = {}
         
         def fetch_hardware(name):
             # This is where the 0.1s lag is neutralized by threading
             return name, getattr(self.jetson_reservoir, name, None)
     
-        if self.floodgate_is_ready_to_open() and unique_modules:
+        if self.floodgate_is_open() and unique_modules:
             # Spawn one thread per module to pay the hardware tax all at once
             with ThreadPoolExecutor(max_workers=len(unique_modules)) as executor:
                 results = executor.map(fetch_hardware, unique_modules)
-                cloned_conduit_map = dict(results)
+                self.cloned_conduit_map = dict(results)
     
         # --- STEP 3: THE BUILDER (Create the actual ConduitType objects) ---
         channels: Dict[FlowChannel, List[ConduitType]] = {"HI": [], "MID": [], "LO": []}
     
-        def locate_conduit_heads(data: Dict[str, Any], junction: str = ""):
-            for name, path in data.items():
-                conduit_junction = f"{junction}.{name}" if junction else name
-                
-                if type(path) is dict:
-                    # Recursive case: traverse deeper into the conduit map
-                    locate_conduit_heads(path, conduit_junction)
-                elif type(path) is list:
-                    # Destruct the junction path to identify each component
-                    module_name, junction_path, *config = path
-                    
-                    # Pull the channel from robot spec YAML file, or default to LO if not available
-                    flow_rate = cast(FlowChannel, config[0] if config else "LO")
-                    
-                    # Pre-bind the collection point to the conduit using the cloned conduit map
-                    collection_point = cloned_conduit_map.get(module_name)
-                    
-                    # Create the conduit and add it to the channel
-                    channels[flow_rate].append(ConduitType(conduit_junction, collection_point, tuple(junction_path)))
-    
-        locate_conduit_heads(blueprint)
+        self._locate_conduit_heads(blueprint, channels)
         
         # Freeze the conduit map for each flow channel
-        print(f"Conduit map built in {time.perf_counter() - t0:.6f} seconds")
         return MappingProxyType({ch: tuple(con) for ch, con in channels.items()})
-   
-    def _smoke_test_floodgates(self)-> bool:
-        """Perform a smoke test on all floodgates to ensure they are working properly."""
-        # Give lifestream floodgates up to 2 seconds to warm up in order to fetch the first glob of data
-        time_limit = time.time() + 2.0
+       
+    def _connect_to_jetson_reservoir(self) -> bool:
+        """
+        Connect to the Jetson reservoir to initialize the running of the lifestream
+        - Adjust the flow rate of the Jetson reservoir
+        - Start running the Jetson lifestream out of the reservoir
+        - Check if the floodgate is open
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
 
+        self.jetson_reservoir = None
+        try:
+            # Adjust the flow rate of the Jetson reservoir
+            self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
+            # Start running the Jetson lifestream out of the reservoir
+            self.jetson_reservoir.start()
+
+            # Wait for the floodgate to be open
+            if not self.floodgate_is_open():
+                #TODO: Log the error in the log file
+                raise RuntimeError("Error: Jetson floodgate is not open.")
+            
+            return True
+
+        except Exception as e:
+            # In case of error, log the error and tell the pump that the Jetson reservoir is running empty
+            #TODO: Log the error in the log file
+            print(f"Error: Jetson reservoir failed to run: {e}")
+            self.jetson_reservoir = None
+            return False
+        
+    def _locate_conduit_heads(self, data: Dict[str, Any], channels: Dict[FlowChannel, List[ConduitType]], junction: str = ""):
+        for name, path in data.items():
+            conduit_junction = f"{junction}.{name}" if junction else name
+            
+            if type(path) is dict:
+                # Recursive case: traverse deeper into the conduit map
+                self._locate_conduit_heads(path, channels, conduit_junction)
+            elif type(path) is list:
+                # Destruct the junction path to identify each component
+                module_name, junction_path, *config = path
+                
+                # Pull the channel from robot spec YAML file, or default to LO if not available
+                flow_rate = cast(FlowChannel, config[0] if config else "LO")
+                
+                # Pre-bind the collection point to the conduit using the cloned conduit map
+                collection_point = self.cloned_conduit_map.get(module_name)
+                
+                # Create the conduit and add it to the channel
+                channels[flow_rate].append(ConduitType(conduit_junction, collection_point, tuple(junction_path)))
+
+    def _smoke_test_floodgates(self) -> bool:
+        """Prunes broken conduits and ensures at least some data is flowing."""
+        # Give lifestream floodgates up to half a second to warm up in order to fetch the first glob of data
+        time_limit = time.time() + 0.5
+        
         while time.time() < time_limit:
-            smoke_test = True
+            broken_conduits = []
+            
+            # Identify the 'dry' conduits
             for channel, conduits in self._CONDUIT_MAP.items():
                 for conduit in conduits:
                     # Conduct a DEEP trace to detect any anomaly in the conduit map blueprint
                     test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
                     if test_bin is None:
-                        smoke_test = False
-                        break    
+                        broken_conduits.append((channel, conduit))
 
-                if not smoke_test:
-                    break
-                
-            if smoke_test:
+            # If everything is fine, we're golden
+            if not broken_conduits:
                 return True
-        
-            # Wait for the lifestream floodgates to warm up
+                
+            # If we found issues, we don't give up yet! 
+            # We wait a bit to see if the hardware wakes up.
             time.sleep(0.1)
-            
-        #TODO: Log the error in the log file
-        print("Error: Smoke test failed. Some conduits are not connected properly to the collection points.")
-        return False
+
+        # Final Verdict: Prune what's broken
+        if broken_conduits:
+            for channel, conduit in broken_conduits:
+                print(f"Warning: Pruning dead conduit: {channel} -> {conduit.junction_path}")
+                # Logic here to remove from self._CONDUIT_MAP
+                
+        # Return True if we still have at least SOME conduits left
+        return len(self._CONDUIT_MAP) > 0
     
-    def floodgate_is_ready_to_open(self) -> bool:
-        """Check if the floodgate is ready to open (i.e., Jetson reservoir is connected and OK)"""
+    def floodgate_is_open(self) -> bool:
+        """Check if the floodgate is open (i.e., Jetson reservoir is connected and OK)"""
         return self.jetson_reservoir is not None and self.jetson_reservoir.ok()
 
     @classmethod
@@ -326,18 +373,18 @@ class Pump():
         return {}
         
     def __enter__(self):
-            """Prepare the pump for a high-speed heist."""
-            return self
+        """Prepare the pump for a high-speed heist."""
+        return self
     
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            """Clean up the mess, even if we tripped the alarms."""
-            if exc_type:
-                # Maybe log that we're bailing out because of a meatbag error
-                print(f"Bailing out! Error detected: {exc_val}")
-            
-            self.close_floodgate()
-            # Returning False (default) ensures the exception still propagates
-            return False        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Clean up the mess, even if we tripped the alarms."""
+        if exc_type:
+            # Maybe log that we're bailing out because of a meatbag error
+            print(f"Bailing out! Error detected: {exc_val}")
+        
+        self.terminate()
+        # Returning False (default) ensures the exception still propagates
+        return False        
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
