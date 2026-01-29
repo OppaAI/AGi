@@ -1,5 +1,4 @@
 # System modules
-from calendar import c
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -116,7 +115,7 @@ class Pump():
    
     def close_floodgate(self):
         """Gracefully stop the flow of the Jetson reservoir"""
-        if self.jetson_reservoir and self.jetson_reservoir.ok():
+        if self.jetson_reservoir is not None:
             self.jetson_reservoir.close()
 
     def trace_thru_conduit(self, lifestream: Any, path: ConduitJunctionList) -> Any:
@@ -177,29 +176,31 @@ class Pump():
         Returns:
             dict[str, Any]: bin filled with useful glob from the given channel of lifestream
         """
+        # Check the gate once here just to know if tracing is necessary.
+        floodgate_is_open = self.floodgate_is_open()
+        
         # Load the frozen conduit map for the given channel
         conduit_map: tuple[ConduitType, ...] = self._CONDUIT_MAP.get(channel, ())
         
-        # Wrap the entire flow update in a lock to ensure thread safety
-        with self._lock:
-            for conduit in conduit_map:
-                # Ensure deque exists in the bin
-                if conduit.conduit_id not in bin["glob"]:
-                    bin["glob"][conduit.conduit_id] = deque(maxlen=self.MAX_STREAM_CAPACITY)
+        for conduit in conduit_map:
+            # Harvest the glob from the lifestream via the conduit path
+            glob = None
+            if floodgate_is_open and conduit.collection_point is not None:
+                # Only trace the conduit if it's connection to the Jetson lifestream is established
+                glob = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
 
-                # Harvest the glob from the lifestream via the conduit path
-                glob = None
-                if self.jetson_reservoir and self.jetson_reservoir.ok():
-                    # Only trace the conduit if it's connection to the Jetson lifestream is established
-                    if conduit.collection_point is not None: 
-                        glob = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
+                # Sift out the impurity or empty glob
+                if glob == self.COLLECTION_POINT_NOT_AVAILABLE:
+                    glob = None
+                    
+                with self._lock:
+                    # Wrap the entire flow update in a lock to ensure thread safety
+                    # Ensure deque exists in the bin
+                    if conduit.conduit_id not in bin["glob"]:
+                        bin["glob"][conduit.conduit_id] = deque(maxlen=self.MAX_STREAM_CAPACITY)
 
-                    # Sift out the impurity or empty glob
-                    if glob == self.COLLECTION_POINT_NOT_AVAILABLE:
-                        glob = None
-
-                # Append the glob to the deque in the bin, even if it is None
-                bin["glob"][conduit.conduit_id].append(glob)               
+                    # Append the glob to the deque in the bin, even if it is None
+                    bin["glob"][conduit.conduit_id].append(glob)               
         return bin
 
     def _build_conduit_map(self) -> ConduitMapBlueprint:
@@ -223,12 +224,16 @@ class Pump():
         # --- STEP 2: THE HAMMER (Parallel Hardware Handshake) ---
         # Get ready to create a clone duplicate of the conduit map for reference
         self.cloned_conduit_map: Dict[str, Any] = {}
-        
-        def fetch_hardware(name):
-            # This is where the 0.1s lag is neutralized by threading
-            return name, getattr(self.jetson_reservoir, name, None)
+
     
-        if self.floodgate_is_open() and unique_modules:
+        if not self.floodgate_is_open():
+            # (TODO) Logging here
+            print("Jetson reservoir is bone dry. Skipping hardware handshake.")
+        elif unique_modules:           
+            def fetch_hardware(name):
+                # This is where the 0.1s lag is neutralized by threading
+                return name, getattr(self.jetson_reservoir, name, None)
+        
             # Spawn one thread per module to pay the hardware tax all at once
             with ThreadPoolExecutor(max_workers=len(unique_modules)) as executor:
                 results = executor.map(fetch_hardware, unique_modules)
@@ -296,10 +301,10 @@ class Pump():
     def _smoke_test_floodgates(self) -> bool:
         """Prunes broken conduits and ensures at least some data is flowing."""
         # Give lifestream floodgates up to half a second to warm up in order to fetch the first glob of data
-        time_limit = time.time() + 0.5
-        broken_conduits: List[Tuple[FlowChannel, ConduitType]] = set()
+        time_limit = time.monotonic() + 0.5
+        broken_conduits: List[Tuple[FlowChannel, ConduitType]] = []
         
-        while time.time() < time_limit:
+        while time.monotonic() < time_limit:
             broken_conduits = []
             
             # Identify the 'dry' conduits
@@ -318,12 +323,19 @@ class Pump():
             # We wait a bit to see if the hardware wakes up.
             time.sleep(0.1)
 
-        # Final Verdict: Prune what's broken
+        # Prune out the non-functional conduits
         if broken_conduits:
-            for channel, conduit in broken_conduits:
-                print(f"Warning: Pruning dead conduit: {channel} -> {conduit.junction_path}")
-                # Logic here to remove from self._CONDUIT_MAP
-                
+            # Rebuild the map without the broken conduits
+            pruned_conduit_map = {}
+            broken_conduit_ids = {conduit.conduit_id for _, conduit in broken_conduits}
+            for channel, conduit_list in self._CONDUIT_MAP.items():
+                functional_conduit = tuple(conduit for conduit in conduit_list if conduit.conduit_id not in broken_conduit_ids)
+                if functional_conduit: pruned_conduit_map[channel] = functional_conduit
+                    
+            # Re-freeze the map with functional conduits
+            self._CONDUIT_MAP = MappingProxyType(pruned_conduit_map)
+            print(f"Warning: Pruned {len(broken_conduit_ids)} broken conduits.")
+            
         # Return True if we still have at least SOME conduits left
         return len(self._CONDUIT_MAP) > 0
     
@@ -436,7 +448,7 @@ if __name__ == "__main__":
                 print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
                 print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
                 print(f" Disk Usage: {disk_usage_str}")
-                            
+                time.sleep(0.1)
                 
         except KeyboardInterrupt:
             # Stop the diagnosis if user interrupts
