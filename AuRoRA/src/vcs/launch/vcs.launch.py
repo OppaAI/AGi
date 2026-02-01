@@ -17,6 +17,13 @@ def generate_launch_description():
         ),
 
         Node(
+            package='scs',
+            executable='scs_igniter',
+            name='scs_igniter',
+            output='screen',
+        ),
+
+        Node(
             package='vcs',
             executable='vital_terminal_core',
             name='vital_terminal_core',

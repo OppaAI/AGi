@@ -6,10 +6,13 @@ from enum import Enum
 from jtop import jtop
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, cast, Dict, List, Literal, NamedTuple, Tuple, Union
+from typing import Any, cast, Dict, List, Literal, NamedTuple, Optional, Tuple, Union
 import threading
 import time
 import yaml
+
+# AGi modules
+from scs.igniter_temp import EEEAggregator
 
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
@@ -69,7 +72,7 @@ class Pump():
     # Sentinel value indicating collection point is not available
     COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
-    def __init__(self):
+    def __init__(self, logger: Optional[EEEAggregator] = None):
         """
         Run the initialization of the pump module:
         - Set up "INIT" state and lock
@@ -85,6 +88,9 @@ class Pump():
         # Set up "INIT" state and lock
         self.state: PumpState = PumpState.INIT
         self._lock = threading.Lock()
+        self.logger = logger
+
+        if self.logger: self.logger.info("VTC Pump Module: Initializing...")
         
         # Connect to the Jetson reservoir
         t0 = time.perf_counter()
@@ -102,11 +108,13 @@ class Pump():
         t0 = time.perf_counter()
         if not self._smoke_test_floodgates():
             self.state = PumpState.DEGRADED
+            if self.logger: self.logger.error("VTC Pump Module: Smoke test failed.")
             return
         print(f"Verified conduit map in {time.perf_counter() - t0:.6f} seconds")
         
         # Transition to the "RUN" state
         self.state = PumpState.RUN
+        if self.logger: self.logger.info("VTC Pump Module: Running...")
 
     def terminate(self):
         """Terminate the pump module and close the floodgate."""
@@ -397,61 +405,72 @@ class Pump():
         
         self.terminate()
         # Returning False (default) ensures the exception still propagates
-        return False        
+        return False
+    
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
     import time
+    CALLER_ID = "VCS.VTC.Pump"
 
-    def color_temp(temp):
-        """Color code the temperature based on the value."""
-        if temp is None:
-            return "\033[38;5;240m"  # Gray for unknown
-        return "\033[38;5;196m" if temp > 80 else "\033[38;5;46m"
+    # Set up the logger for the Pump Module
+    logger = EEEAggregator(CALLER_ID)
     
     # Initialize the Pump Module
-    with Pump() as pump:
+    with Pump(logger) as pump:
     
         # Start the diagnosis
-        print("--- DIAGNOSING VTC PUMP MODULE ---")
+        logger.info("Diagnosing VTC Pump Module...")
         glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
     
         # Run the diagnosis for 30 pump cycles
         try:
             for i in range(30):
                 # Collect the glob from the lifestream
+
                 glob["run"] = i
                 glob["timestamp"] = time.strftime("%H:%M:%S")
                 glob = pump.engage_tap_to_harvest_glob(glob)
                 
                 # Get the worst case scenario of the vitals, if any
-                cpu_load_deque = glob.get("glob", {}).get("body_load.p_unit")
-                cpu_load = max([v for v in cpu_load_deque if v is not None], default=None) if cpu_load_deque else None
+                cpu_user_load_deque = glob.get("glob", {}).get("p_unit.user")
+                cpu_sys_load_deque = glob.get("glob", {}).get("p_unit.system")
+                cpu_user = max([v for v in cpu_user_load_deque if v is not None], default=None) if cpu_user_load_deque else None
+                cpu_sys = max([v for v in cpu_sys_load_deque if v is not None], default=None) if cpu_sys_load_deque else None
+                cpu_load = (cpu_user + cpu_sys) if (cpu_user is not None and cpu_sys is not None) else None
+
                 temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
                 temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
-                gpu_load_deque = glob.get("glob", {}).get("body_load.a_unit")
+
+                gpu_load_deque = glob.get("glob", {}).get("a_unit.load")
                 gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
+
                 temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
                 temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
+
                 disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
                 disk_usage = max([v for v in disk_usage_deque if v is not None], default=None) if disk_usage_deque else None
     
-                # Color code the temperature based on the value
-                cpu_color = color_temp(temperature_cpu)
-                gpu_color = color_temp(temperature_gpu)
                 cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
                 temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
                 gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
                 temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
                 disk_usage_str = f"{disk_usage:.2f}%" if disk_usage is not None else "N/A"
-                print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
-                print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
-                print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
-                print(f" Disk Usage: {disk_usage_str}")
+
+                run = f"Run #: {glob['run']+1:02d}"
+                cpu_info = f" CPU Load: {cpu_load_str} | CPU: {temperature_cpu_str}"
+                gpu_info = f" GPU Load: {gpu_load_str} | GPU: {temperature_gpu_str}"
+                disk_info = f" Disk Usage: {disk_usage_str}"
+                
+                if temperature_cpu > 80 or temperature_gpu > 80:
+                    logger.warn(f"{run} |{cpu_info} |{gpu_info} |{disk_info}")
+                else:
+                    logger.info(f"{run} |{cpu_info} |{gpu_info} |{disk_info}")
                 time.sleep(0.1)
                 
         except KeyboardInterrupt:
             # Stop the diagnosis if user interrupts
-            print("\nDiagnosis is stopped by user.")
+            logger.info("Diagnosis is stopped by user.")
             
-    print("--- VTC PUMP MODULE DIAGNOSIS COMPLETE ---")
+    logger.info("VTC Pump Module: Diagnosis complete.")
+    pump.terminate()

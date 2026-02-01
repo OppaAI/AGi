@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 from glob import glob
 
-package_name = 'vcs'
+package_name = 'scs'
 
 setup(
     name=package_name,
@@ -11,14 +11,14 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*.launch.py'))),
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*.yaml'))),
+        #(os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*.launch.py'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='Vital Circulatory System for AGi',
+    description='Semantic Cognitive System for AGi',
     license='GPL-3.0-only',
     extras_require={
         'test': [
@@ -26,6 +26,8 @@ setup(
         ],
     },
     entry_points={
-        'console_scripts': ['vital_terminal_core = vcs.vtc:main'],
+        'console_scripts': [
+            'scs_igniter = scs.igniter_temp:main'
+        ],
     },
 )

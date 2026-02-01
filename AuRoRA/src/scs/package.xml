@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+
+<package format="3">
+  <!-- Basic package information -->
+  <name>scs</name>
+  <version>0.1.3</version>
+  <description>Semantic Cognitive System for AGi</description>
+  
+  <!-- Maintainer and author information -->
+  <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
+  <author email="oppa.ai.org@gmail.com">OppaAI</author>
+  <license file="LICENSE">GPL-3.0-only</license>
+
+  <!-- Repository URLs -->
+  <url type="website">https://github.com/OppaAI/AGi-ROS</url>
+  <url type="repository">https://github.com/OppaAI/AGi-ROS/tree/main/robot/src/vcs</url>
+  <url type="bugtracker">https://github.com/OppaAI/AGi-ROS/issues</url>
+
+  <!-- Build tool dependencies -->
+  <buildtool_depend>ament_python</buildtool_depend>
+  
+  <!-- Runtime dependencies -->
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>vp</depend>
+  
+  <!-- Test Dependencies -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <!-- Export tags -->
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+
+</package>

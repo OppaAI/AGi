@@ -6,18 +6,21 @@
 # - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 # System modules
+from re import L
+from typing import Callable
 import copy
 from builtin_interfaces.msg import Time
 
-# ROS 2 modules
+# ROS2 modules
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 
-# AGi VCS modules
+# AGi modules
 from vp.msg import VitalPulse   # Vital Pulse message definition
-from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
+from vcs.pump import CALLER_ID, Pump   # Pump: Collects useful glob from the lifestream
+from scs.igniter_temp import LoggerProxy  # LoggerProxy for logging
 
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
@@ -25,6 +28,8 @@ ASCII_HEART = "❤"
 
 ROBOT_ID = "AuRoRA_Zero_Prototype"
 SYSTEM_ID = "VCS"
+NODE_ID = "VTC"
+CALLER_ID = f"{SYSTEM_ID}.{NODE_ID}"
 USER_ID = "OppaAI"
 VITAL_PULSE_SIGNAL = "vital_pulse_signal"
 VITAL_PULSE_RESPONSE = "vital_pulse_response"
@@ -49,7 +54,9 @@ class Regulator():
 
 class VitalTerminalCore(Node):
     def __init__(self):
-        super().__init__("vital_terminal_core", namespace=ROBOT_ID + "/" + SYSTEM_ID)
+        super().__init__(NODE_ID, namespace=ROBOT_ID + "/" + SYSTEM_ID)
+        self.log = LoggerProxy(CALLER_ID)
+        self.log.info("Vital Terminal Core: Initializing...")
 
         # 1. State Initialization
         self.heart_step = 0
@@ -78,8 +85,8 @@ class VitalTerminalCore(Node):
             }
         }
 
-        # Initiate the 4 modules
-        self.pump = Pump()  # Pump: Collects useful glob from the lifestream
+        # Initiate the 4 modules: Pump, Regulator, Oscillator, Orchestrator
+        self.pump = Pump(logger=LoggerProxy(CALLER_ID + ".Pump"))
         
         # Tracking variables for RTT and Timeout (FIX)
         self.fire_timestamp = None
@@ -242,6 +249,8 @@ class VitalTerminalCore(Node):
             f"Server Status: {status} "
             f"{RESET_COLOR}".ljust(100)
         )
+        
+        self.log.info(f"VTC warning: CPU Temp high")
 
     def commit_vital_dump(self, module: str, vital_dump: dict[str, any]):
         """Commit vital dump with latest data"""
@@ -280,7 +289,7 @@ def main(args=None):
         node.get_logger().info("\nVital Terminal Core stopped.")
 
     # Clean up
-    node.pump.close_valve()
+    node.pump.terminate()
     node.destroy_node()
     rclpy.shutdown()
 

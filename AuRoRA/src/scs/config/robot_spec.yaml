@@ -1,0 +1,70 @@
+# robot_spec.yaml - The Complete Robot Genome
+
+# --- PART 1: VITAL CIRCULATORY SYSTEM (VCS) ---
+# Define the conduit map blueprint for vitals monitoring in VCS
+# Each entry maps a vital sign to its corresponding jtop data path
+# The structure is: {vital_name: {unit_name: [module_name, [data_path_elements...]]}}
+# Example: p_unit: user: ["cpu", ["total", "user"]]
+
+vcs:
+  conduit_map_blueprint:
+    # Processing core vitals - High Priority
+    p_unit:
+      user: ["cpu", ["total", "user"], "HI"] # CPU user load
+      system: ["cpu", ["total", "system"], "HI"] # CPU system load
+
+    # Arithmetic core vitals - High Priority
+    a_unit:
+      load: ["gpu", ["gpu", "status", "load"], "HI"] # GPU load
+
+    # Body temperature vitals - Mid Priority
+    body_temp:
+      p_unit: ["temperature", ["cpu", "temp"], "MID"] # CPU temperature
+      a_unit: ["temperature", ["gpu", "temp"], "MID"] # GPU temperature
+      zone0: ["temperature", ["soc0", "temp"], "MID"] # SOC0 temperature
+      zone1: ["temperature", ["soc1", "temp"], "MID"] # SOC1 temperature
+      zone2: ["temperature", ["soc2", "temp"], "MID"] # SOC2 temperature
+      junction: ["temperature", ["tj", "temp"], "MID"] # Junction temperature
+
+    # Air flow vitals - Mid Priority
+    air_flow:
+      rate: ["fan", ["pwmfan", "speed", 0], "MID"] # Fan speed
+
+    # Memory (STM) vitals - Lo Priority
+    memory:
+      stm:
+        total: ["memory", ["RAM", "tot"], "LO"] # RAM total space
+        used: ["memory", ["RAM", "used"], "LO"] # RAM used space
+      virtual:
+        total: ["memory", ["SWAP", "tot"], "LO"] # Swap total space
+        used: ["memory", ["SWAP", "used"], "LO"] # Swap used space
+      controller:
+        load: ["memory", ["EMC", "cur"], "LO"] # EMC load
+      ltm:
+        used: ["disk", ["used"], "LO"] # Disk used space
+
+    # Energy level vitals - High Priority
+    energy:
+      units: ["power", ["rail", "VDD_CPU_GPU_CV", "power"], "HI"] # VDD_CPU_GPU_CV
+      core: ["power", ["rail", "VDD_SOC", "power"], "HI"] # VDD_SOC
+      voltage: ["power", ["tot", "volt"], "HI"] # Voltage
+      current: ["power", ["tot", "curr"], "HI"] # Current
+      power: ["power", ["tot", "power"], "HI"] # Power
+
+
+# --- PART 2: KINETIC APPENDAGES (Actuators & Servos) ---
+#actuators:
+#  drive_train:
+#    left_motor: { id: 0x01, type: "CAN_BUS", max_rpm: 3000 }
+#    right_motor: { id: 0x02, type: "CAN_BUS", max_rpm: 3000 }
+#  manipulator:
+#    arm_joint_1: { pin: 12, protocol: "PWM", range: [0, 180] }
+
+# --- PART 3: PERCEPTION SENSORS (Eyes & Ears) ---
+#perception:
+#  lidar: { port: "/dev/ttyUSB0", baud: 115200, frame_id: "laser_link" }
+#  imu: { address: 0x68, bus: 1, freq: 100 }
+
+# --- PART 4: EXTERNAL POWER (The Battery Pack) ---
+#power_management:
+#  bms: { type: "smart_bms", protocol: "UART", cell_count: 4 }
