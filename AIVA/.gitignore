@@ -16,6 +16,7 @@ Thumbs.db
 /build/
 /install/
 /log/
+/logs/
 
 # ROS 2 specific temp files
 *.egg-info/
