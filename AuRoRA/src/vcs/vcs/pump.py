@@ -2,14 +2,20 @@
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from enum import Enum
 from jtop import jtop
+import os, psutil
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, cast, Dict, List, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Any, cast, Dict, List, Literal, NamedTuple, Tuple, Union
 import threading
 import time
 import yaml
+
+# AGi modules
+from scs.igniter_temp import StateOfModule
+
+# Identifiers of this process
+PROC_ID = "VCS.VTC.Pump"
 
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
@@ -30,13 +36,6 @@ ConduitMapBlueprint = MappingProxyType[FlowChannel, Tuple[ConduitType, ...]]    
 
 # TODO: to be moved to a global constants file
 ROBOT_SPEC_FILE: str = "robot_spec.yaml"
-
-# Pump Module states
-class PumpState(str, Enum):
-    INIT = "INIT"
-    RUN = "RUN"
-    DEGRADED = "DEGRADED"
-    OFF = "OFF"
 
 class Pump():
 
@@ -83,35 +82,52 @@ class Pump():
         """
 
         # Set up "INIT" state and lock
-        self.state: PumpState = PumpState.INIT
+        self.process = psutil.Process(os.getpid())
+        self.state: StateOfModule = StateOfModule.INIT
         self._lock = threading.Lock()
 
+        self.logger = system_logger(PROC_ID)
+        self.logger.info("Pump Module Activation Sequence initiated...")
+
         # Connect to the Jetson reservoir
+        #(TODO): to remove time logger
         t0 = time.perf_counter()
+        p0 = self.process.memory_info().rss
         if not self._connect_to_jetson_reservoir():
-            self.state = PumpState.DEGRADED
+            self.logger.error("Connection to Jetson Reservoir...[ABORT]")
+            self.state = StateOfModule.DEGRADED
             return
-        print(f"Connected to Jetson reservoir in {time.perf_counter() - t0:.6f} seconds")
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Connection to Jetson Reservoir...[CLEAR] - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
         
         # Build the explicit conduit map
         t0 = time.perf_counter()
-        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()        
-        print(f"Built conduit map in {time.perf_counter() - t0:.6f} seconds")
+        p0 = self.process.memory_info().rss
+        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Rebuilding of Conduit Map Blueprint...[CLEAR] - {sum(len(v) for v in self._CONDUIT_MAP.values())} conduits - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
         
         # Verify the conduit map by performing a smoke test
         t0 = time.perf_counter()
+        p0 = self.process.memory_info().rss
         if not self._smoke_test_floodgates():
-            self.state = PumpState.DEGRADED
+            self.logger.error("Validation with Smoke Test...[ABORT]")
+            self.state = StateOfModule.DEGRADED
             return
-        print(f"Verified conduit map in {time.perf_counter() - t0:.6f} seconds")
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Validation with Smoke Test...[CLEAR] - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
         
         # Transition to the "RUN" state
-        self.state = PumpState.RUN
+        self.state = StateOfModule.RUN
+        self.logger.info("Pump Module Activation Sequence completed...[SYSTEM ALL GREEN]")
 
     def terminate(self):
         """Terminate the pump module and close the floodgate."""
         self.close_floodgate()
-        self.state = PumpState.OFF
+        self.state = StateOfModule.OFF
    
     def close_floodgate(self):
         """Gracefully stop the flow of the Jetson reservoir"""
@@ -247,7 +263,7 @@ class Pump():
         # Freeze the conduit map for each flow channel
         return MappingProxyType({ch: tuple(con) for ch, con in channels.items()})
        
-    def _connect_to_jetson_reservoir(self) -> bool:
+    def _connect_to_jetson_reservoir(self)-> bool:
         """
         Connect to the Jetson reservoir to initialize the running of the lifestream
         - Adjust the flow rate of the Jetson reservoir
@@ -259,6 +275,7 @@ class Pump():
 
         self.jetson_reservoir = None
         try:
+            self.logger.debug(f"Establishing connection to Jetson reservoir with interval={self.what_pumping_rhythm_for_this_channel('HI')...}")
             # Adjust the flow rate of the Jetson reservoir
             self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
             # Start running the Jetson lifestream out of the reservoir
@@ -266,15 +283,15 @@ class Pump():
 
             # Wait for the floodgate to be open
             if not self.floodgate_is_open():
-                #TODO: Log the error in the log file
-                raise RuntimeError("Error: Jetson floodgate is not open.")
+                self.logger.fatal("Opening Floodgate of Jetson Reservoir...[ABORT]")
+                raise RuntimeError("CRITICAL: Floodgate of Jetson Reservoir cannot open.")
             
+            self.logger.info("Opening Floodgate of Jetson Reservoir...[CLEAR]")
             return True
 
         except Exception as e:
             # In case of error, log the error and tell the pump that the Jetson reservoir is running empty
-            #TODO: Log the error in the log file
-            print(f"Error: Jetson reservoir failed to run: {e}")
+            self.logger.exception(f"Error: Jetson reservoir failed to run: {e}")
             self.jetson_reservoir = None
             return False
         
@@ -411,8 +428,7 @@ if __name__ == "__main__":
         return max(values) if values else None
     
     # Initialize the logger
-    CALLER_ID = "VCS.VTC.Pump"
-    logger = EEEAggregator(CALLER_ID)
+    logger = EEEAggregator(PROC_ID)
     logger.info("Initializing VTC Pump Module Diagnosis...")
 
     # Initialize the Pump Module

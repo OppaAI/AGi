@@ -10,6 +10,7 @@ This module includes the following features that load at startup:
 """
 
 # System modules
+from enum import Enum
 from typing import Any, Callable
 global_logger: Any
 
@@ -23,6 +24,14 @@ from rclpy.node import Node
 
 # AGi modules
 from scs.eee import EEEAggregator
+
+# State of all modules for the robot
+class StateOfModule(str, Enum):
+    INIT = "INIT"
+    RUN = "RUN"
+    DEGRADED = "DEGRADED"
+    OFF = "OFF"
+
 
 class Igniter(Node):
     """

@@ -22,14 +22,16 @@ from scs.eee import EEEAggregator  # Emergency and Exception Event Aggregator
 from vp.msg import VitalPulse   # Vital Pulse message definition
 from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
 
+# Identifiers of this process
+ROBOT_ID = "AuRoRA_Zero_Prototype"
+SYSTEM_ID = "VCS"
+NODE_ID = "VTC"
+PROC_ID = f"{SYSTEM_ID}.{NODE_ID}"
+
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
 ASCII_HEART = "❤"
 
-ROBOT_ID = "AuRoRA_Zero_Prototype"
-SYSTEM_ID = "VCS"
-NODE_ID = "VTC"
-CALLER_ID = f"{SYSTEM_ID}.{NODE_ID}"
 USER_ID = "OppaAI"
 VITAL_PULSE_SIGNAL = "vital_pulse_signal"
 VITAL_PULSE_RESPONSE = "vital_pulse_response"
@@ -56,7 +58,7 @@ class VitalTerminalCore(Node):
     def __init__(self):
         super().__init__(NODE_ID, namespace=ROBOT_ID + "/" + SYSTEM_ID)
 
-        self.logger = system_logger(CALLER_ID)
+        self.logger = system_logger(PROC_ID)
         self.logger.info("Vital Terminal Core (VTC) ❤️ at INIT state.")
         self.state = "INIT"
 
