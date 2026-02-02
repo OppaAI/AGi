@@ -18,8 +18,8 @@ def generate_launch_description():
 
         Node(
             package='scs',
-            executable='scs_igniter',
-            name='scs_igniter',
+            executable='igniter',
+            name='igniter',
             output='screen',
         ),
 

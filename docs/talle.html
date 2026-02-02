@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCS EEE System Visualizer</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-green: #00ff9d;
+            --accent-red: #ff4757;
+            --accent-gold: #ffa502;
+            --conveyor-speed: 4s;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        h1 { margin-top: 10px; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; color: var(--accent-green); }
+        
+        /* --- THE STAGE --- */
+        .stage {
+            position: relative;
+            width: 90%;
+            height: 400px;
+            background: var(--panel-color);
+            border: 2px solid #333;
+            border-radius: 15px;
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 50px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        /* --- THE ROBOT (SPENCER) --- */
+        .robot-container {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .robot-head {
+            width: 100px;
+            height: 80px;
+            background: #444;
+            border: 3px solid #888;
+            border-radius: 15px;
+            position: relative;
+            box-shadow: inset 0 0 10px #000;
+        }
+
+        .antenna {
+            width: 4px;
+            height: 20px;
+            background: #888;
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .antenna::after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            position: absolute;
+            top: -10px;
+            left: -3px;
+            animation: blink 1s infinite;
+        }
+
+        .eye-container {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+
+        .eye {
+            width: 25px;
+            height: 25px;
+            background: #111;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .eye::after {
+            content: '';
+            width: 100%;
+            height: 4px;
+            background: var(--accent-green);
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: scan 2s infinite linear;
+        }
+
+        .mouth {
+            width: 40px;
+            height: 5px;
+            background: #222;
+            margin: 15px auto;
+            border-radius: 5px;
+            border-bottom: 2px solid #555;
+            transition: 0.2s;
+        }
+
+        .robot-label {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #888;
+            font-weight: bold;
+        }
+
+        /* --- LASER BEAM (FILTRATOR) --- */
+        .laser-beam {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(0,255,157,0) 0%, rgba(0,255,157,0.5) 50%, rgba(0,255,157,0) 100%);
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        /* --- BUCKETS (HANDLERS) --- */
+        .buckets {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 150px;
+        }
+
+        .bucket {
+            background: #2a2a2a;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            font-size: 0.8rem;
+            position: relative;
+            transition: transform 0.2s;
+        }
+
+        .bucket.master { border-color: var(--accent-green); }
+        .bucket.error { border-color: var(--accent-red); }
+        .bucket.system { border-color: var(--accent-gold); }
+
+        .bucket-count {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #fff;
+            color: #000;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            line-height: 20px;
+            font-weight: bold;
+        }
+
+        /* --- LOG PACKETS --- */
+        .log-packet {
+            position: absolute;
+            top: 50%;
+            left: -100px;
+            transform: translateY(-50%);
+            background: #333;
+            border: 1px solid #666;
+            color: #aaa;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: nowrap;
+            z-index: 8;
+            opacity: 0.8;
+            transition: all 0.5s;
+        }
+
+        .log-packet.filtered {
+            background: #003322;
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+
+        .log-packet.error-mode {
+            background: #330000;
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        /* --- UI CONTROLS --- */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: 0.2s;
+            font-family: monospace;
+            text-transform: uppercase;
+        }
+
+        button:hover { background: #444; border-color: var(--accent-green); }
+        button:active { transform: translateY(2px); }
+
+        .console-output {
+            width: 90%;
+            height: 150px;
+            background: black;
+            border: 1px solid #333;
+            margin-top: 20px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            color: #888;
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes scan { 0% { top: 0%; } 100% { top: 100%; } }
+        
+        .pulse { animation: pulse-anim 0.2s; }
+        @keyframes pulse-anim { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* Dialog Bubble */
+        .bubble {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: black;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>SCS EEE • TALLE VISUALIZER</h1>
+    <div style="font-size: 0.8rem; color: #666;">TRIPLE-AGGREGATION LOGGER & LEDGER ENTRY SYSTEM</div>
+
+    <div class="stage">
+        <div style="position: absolute; left: 20px; top: 20px; color: #444; font-weight: bold;">INGESTION</div>
+        <div style="position: absolute; left: 50%; top: 20px; transform: translateX(-50%); color: #444; font-weight: bold;">FILTRATION</div>
+        <div style="position: absolute; right: 20px; top: 20px; color: #444; font-weight: bold;">PROPAGATION</div>
+
+        <div class="robot-container">
+            <div class="bubble" id="spencer-msg">Bite my shiny metal log!</div>
+            <div class="antenna"></div>
+            <div class="robot-head">
+                <div class="eye-container">
+                    <div class="eye"></div>
+                    <div class="eye"></div>
+                </div>
+                <div class="mouth" id="mouth"></div>
+            </div>
+            <div class="robot-label">EEE AGGREGATOR</div>
+            <div class="laser-beam" id="filtrator-beam"></div>
+        </div>
+
+        <div class="buckets">
+            <div class="bucket master" id="bucket-master">
+                ACTIVITY.LOG
+                <div class="bucket-count" id="count-master">0</div>
+            </div>
+            <div class="bucket error" id="bucket-error">
+                ANOMALY.LOG
+                <div class="bucket-count" id="count-error">0</div>
+            </div>
+            <div class="bucket system" id="bucket-system">
+                SYSTEM.LOG
+                <div class="bucket-count" id="count-system">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="spawnLog('INFO')">Inject INFO</button>
+        <button onclick="spawnLog('WARN')">Inject WARN</button>
+        <button onclick="spawnLog('ERROR')">Inject ERROR</button>
+        <button onclick="spawnLog('FATAL')">Inject FATAL</button>
+    </div>
+
+    <div class="console-output" id="console">
+        <div>> System Initialized. Waiting for input...</div>
+    </div>
+
+    <script>
+        let logCounts = { master: 0, error: 0, system: 0 };
+        const stage = document.querySelector('.stage');
+        const robot = document.querySelector('.robot-head');
+        const mouth = document.getElementById('mouth');
+        const beam = document.getElementById('filtrator-beam');
+        const msgBubble = document.getElementById('spencer-msg');
+
+        const phrases = [
+            "Processing meatbag errors...",
+            "Standardizing... boring!",
+            "ISO 8601 or bust!",
+            "Logging this for blackmail...",
+            "Another bug? Really?",
+            "I'm 40% software!",
+            "TALLE system engaged."
+        ];
+
+        function speak() {
+            msgBubble.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+            msgBubble.style.opacity = 1;
+            setTimeout(() => msgBubble.style.opacity = 0, 2000);
+        }
+
+        function spawnLog(level) {
+            // 1. CREATE RAW LOG (INGESTION)
+            const log = document.createElement('div');
+            log.className = 'log-packet';
+            log.innerText = `raw: ${level} msg`;
+            stage.appendChild(log);
+
+            // Animate Ingestion: Move to center
+            log.animate([
+                { left: '-50px' },
+                { left: '48%' }
+            ], {
+                duration: 1000,
+                easing: 'ease-out',
+                fill: 'forwards'
+            }).onfinish = () => {
+                filtrateLog(log, level);
+            };
+        }
+
+        function filtrateLog(logElement, level) {
+            // 2. FILTRATION ACTION
+            // Trigger Robot Effects
+            beam.style.opacity = 1;
+            beam.style.width = '50px';
+            mouth.style.height = '15px'; // Open mouth
+            
+            // Random chance to speak
+            if(Math.random() > 0.7) speak();
+
+            setTimeout(() => {
+                // Apply Filtration changes
+                beam.style.opacity = 0;
+                beam.style.width = '0';
+                mouth.style.height = '5px'; // Close mouth
+
+                // Change log appearance to "Standardized"
+                logElement.classList.add('filtered');
+                if (level === 'ERROR' || level === 'FATAL') {
+                    logElement.classList.add('error-mode');
+                }
+                
+                // Update Text to ISO format (simplified)
+                const time = new Date().toISOString().split('T')[1].slice(0,8);
+                logElement.innerText = `[${level}] ${time}`;
+
+                propagateLog(logElement, level);
+            }, 500);
+        }
+
+        function propagateLog(logElement, level) {
+            // 3. PROPAGATION (The TALLE Split)
+            
+            // Determine targets
+            const targets = ['master', 'system']; // Everyone goes to master and system
+            if (level === 'ERROR' || level === 'FATAL') {
+                targets.push('error');
+            }
+
+            // Create clones for each target
+            targets.forEach((target, index) => {
+                const clone = logElement.cloneNode(true);
+                stage.appendChild(clone);
+                
+                // Calculate destination
+                const bucket = document.getElementById(`bucket-${target}`);
+                const rect = bucket.getBoundingClientRect();
+                const stageRect = stage.getBoundingClientRect();
+                
+                const targetTop = rect.top - stageRect.top + 20;
+                const targetLeft = rect.left - stageRect.left + 20;
+
+                // Animate to bucket
+                clone.animate([
+                    { left: '48%', top: '50%' },
+                    { left: `${targetLeft}px`, top: `${targetTop}px`, opacity: 0, transform: 'scale(0.5)' }
+                ], {
+                    duration: 800,
+                    delay: index * 100, // Stagger them slightly
+                    easing: 'ease-in',
+                    fill: 'forwards'
+                }).onfinish = () => {
+                    clone.remove();
+                    updateCount(target);
+                };
+            });
+
+            // Remove original from center
+            logElement.remove();
+            
+            // Log to console UI
+            const consoleDiv = document.getElementById('console');
+            const line = document.createElement('div');
+            const color = (level === 'ERROR' || level === 'FATAL') ? '#ff4757' : '#00ff9d';
+            line.innerHTML = `<span style="color:${color}">${new Date().toISOString()} | ${level} | [SCS::EEE] | Propagation complete.</span>`;
+            consoleDiv.prepend(line);
+        }
+
+        function updateCount(type) {
+            logCounts[type]++;
+            const el = document.getElementById(`count-${type}`);
+            el.innerText = logCounts[type];
+            el.classList.remove('pulse');
+            void el.offsetWidth; // Trigger reflow
+            el.classList.add('pulse');
+            
+            document.getElementById(`bucket-${type}`).classList.add('pulse');
+            setTimeout(() => document.getElementById(`bucket-${type}`).classList.remove('pulse'), 200);
+        }
+
+        // Auto-spawn an info log every few seconds for ambience
+        setInterval(() => {
+            if(Math.random() > 0.8) spawnLog('INFO');
+        }, 3000);
+
+    </script>
+</body>
+</html>

@@ -6,21 +6,21 @@
 # - Orchestrator: Monitors vital pulse signal and response, detects disconnections, and triggers safety interlocks
 
 # System modules
-from re import L
-from typing import Callable
 import copy
-from builtin_interfaces.msg import Time
+from typing import Any
+system_logger: Any
 
 # ROS2 modules
+from builtin_interfaces.msg import Time
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 
 # AGi modules
+from scs.eee import EEEAggregator  # Emergency and Exception Event Aggregator
 from vp.msg import VitalPulse   # Vital Pulse message definition
-from vcs.pump import CALLER_ID, Pump   # Pump: Collects useful glob from the lifestream
-from scs.igniter_temp import LoggerProxy  # LoggerProxy for logging
+from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
 
 # Temp constants - to be moved to config file
 RESET_COLOR = "\033[0m"
@@ -55,10 +55,13 @@ class Regulator():
 class VitalTerminalCore(Node):
     def __init__(self):
         super().__init__(NODE_ID, namespace=ROBOT_ID + "/" + SYSTEM_ID)
-        self.log = LoggerProxy(CALLER_ID)
-        self.log.info("Vital Terminal Core: Initializing...")
+
+        self.logger = system_logger(CALLER_ID)
+        self.logger.info("Vital Terminal Core (VTC) ❤️ at INIT state.")
+        self.state = "INIT"
 
         # 1. State Initialization
+        self.logger.info("VTC is setting up internal state...")
         self.heart_step = 0
         self.current_opm = BASELINE_OPM
         self.current_rtt = 0.0
@@ -85,8 +88,9 @@ class VitalTerminalCore(Node):
             }
         }
 
-        # Initiate the 4 modules: Pump, Regulator, Oscillator, Orchestrator
-        self.pump = Pump(logger=LoggerProxy(CALLER_ID + ".Pump"))
+        # Initiate the 4 compartments: Pump, Regulator, Oscillator, Orchestrator
+        self.logger.info("VTC ❤️ is warming up the compartments...")
+        self.pump = Pump()
         
         # Tracking variables for RTT and Timeout (FIX)
         self.fire_timestamp = None
@@ -96,6 +100,7 @@ class VitalTerminalCore(Node):
         self.display_snapshot = {}
 
         # 2. QoS Profile Definition (Based on our discussion)
+        self.logger.info("VTC ❤️ is adjusting QoS profile...")
         qos_profile = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -109,14 +114,17 @@ class VitalTerminalCore(Node):
         )
 
         # 3. Communication Setup
+        self.logger.info("VTC ❤️ is establishing communication channels...")
         self.vp_signal_oscillator = self.create_publisher(VitalPulse, VITAL_PULSE_SIGNAL, qos_profile)
         self.vp_response_receptor = self.create_subscription(VitalPulse, VITAL_PULSE_RESPONSE, self.feedback_callback, qos_profile)
 
         # 4. Timer Setup
+        self.logger.info("VTC ❤️ is calibrating the oscillation rhythm...")
         # create timers for each level
         self.pump_timer = self.create_timer(1.0 / self.pump.which_flow_rate_for_this_channel("HI"), self.run_pump_cycle)
         self.oscillation_timer = self.create_timer(self.heartbeat_interval, self.oscillate_vital_pulse)
         self.display_timer = self.create_timer(DISPLAY_INTERVAL, self.display_tick)
+        self.state = "RUN"
 
     def run_pump_cycle(self):
         """
@@ -249,8 +257,6 @@ class VitalTerminalCore(Node):
             f"Server Status: {status} "
             f"{RESET_COLOR}".ljust(100)
         )
-        
-        self.log.info(f"VTC warning: CPU Temp high")
 
     def commit_vital_dump(self, module: str, vital_dump: dict[str, any]):
         """Commit vital dump with latest data"""
@@ -276,6 +282,11 @@ class VitalTerminalCore(Node):
         return "\033[38;5;51m" if self.vc_linked else "\033[38;5;30m"
 
 def main(args=None):
+
+    # Inject EEEAggregator into builtins for global access
+    EEEAggregator.Injector.inject_logger_to_builtins()
+    
+    # Initialize ROS2 and Vital Terminal Core Node
     rclpy.init(args=args)
     node = VitalTerminalCore()
 
@@ -287,12 +298,12 @@ def main(args=None):
         executor.spin()
     except KeyboardInterrupt:
         node.get_logger().info("\nVital Terminal Core stopped.")
-
-    # Clean up
-    node.pump.terminate()
-    node.destroy_node()
-    rclpy.shutdown()
-
+    finally:
+        # Clean up
+        executor.shutdown()
+        node.pump.terminate()
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

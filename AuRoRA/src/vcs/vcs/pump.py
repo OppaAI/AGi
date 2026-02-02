@@ -11,9 +11,6 @@ import threading
 import time
 import yaml
 
-# AGi modules
-from scs.igniter_temp import EEEAggregator
-
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
 
@@ -72,7 +69,7 @@ class Pump():
     # Sentinel value indicating collection point is not available
     COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
-    def __init__(self, logger: Optional[EEEAggregator] = None):
+    def __init__(self):
         """
         Run the initialization of the pump module:
         - Set up "INIT" state and lock
@@ -88,10 +85,7 @@ class Pump():
         # Set up "INIT" state and lock
         self.state: PumpState = PumpState.INIT
         self._lock = threading.Lock()
-        self.logger = logger
 
-        if self.logger: self.logger.info("VTC Pump Module: Initializing...")
-        
         # Connect to the Jetson reservoir
         t0 = time.perf_counter()
         if not self._connect_to_jetson_reservoir():
@@ -108,13 +102,11 @@ class Pump():
         t0 = time.perf_counter()
         if not self._smoke_test_floodgates():
             self.state = PumpState.DEGRADED
-            if self.logger: self.logger.error("VTC Pump Module: Smoke test failed.")
             return
         print(f"Verified conduit map in {time.perf_counter() - t0:.6f} seconds")
         
         # Transition to the "RUN" state
         self.state = PumpState.RUN
-        if self.logger: self.logger.info("VTC Pump Module: Running...")
 
     def terminate(self):
         """Terminate the pump module and close the floodgate."""
@@ -410,24 +402,40 @@ class Pump():
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
+    from scs.eee import EEEAggregator
+    from typing import List
     import time
-    CALLER_ID = "VCS.VTC.Pump"
-
-    # Set up the logger for the Pump Module
-    logger = EEEAggregator(CALLER_ID)
     
+    def worst_case_aggregation(values: List[float]) -> float | None:
+        """Return the worst case scenario of the vitals, if any"""
+        return max(values) if values else None
+    
+    # Initialize the logger
+    CALLER_ID = "VCS.VTC.Pump"
+    logger = EEEAggregator(CALLER_ID)
+    logger.info("Initializing VTC Pump Module Diagnosis...")
+
     # Initialize the Pump Module
-    with Pump(logger) as pump:
+    with Pump() as pump:
     
         # Start the diagnosis
         logger.info("Diagnosing VTC Pump Module...")
         glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
     
-        # Run the diagnosis for 30 pump cycles
-        try:
-            for i in range(30):
-                # Collect the glob from the lifestream
+        # Initialize the vitals containers
+        cpu_loads = {}; cpu_temps = {}
+        gpu_loads = {}; gpu_temps = {}
+        disk_usages = {}
 
+        TEST_RUNS = 10
+
+        # Run the diagnosis for pump cycles defined in TEST_RUNS
+        try:
+            # Record the start time
+            time_start = time.perf_counter()
+
+            for i in range(TEST_RUNS):
+                # Collect the glob from the lifestream
                 glob["run"] = i
                 glob["timestamp"] = time.strftime("%H:%M:%S")
                 glob = pump.engage_tap_to_harvest_glob(glob)
@@ -435,42 +443,38 @@ if __name__ == "__main__":
                 # Get the worst case scenario of the vitals, if any
                 cpu_user_load_deque = glob.get("glob", {}).get("p_unit.user")
                 cpu_sys_load_deque = glob.get("glob", {}).get("p_unit.system")
-                cpu_user = max([v for v in cpu_user_load_deque if v is not None], default=None) if cpu_user_load_deque else None
-                cpu_sys = max([v for v in cpu_sys_load_deque if v is not None], default=None) if cpu_sys_load_deque else None
+                cpu_user = worst_case_aggregation(cpu_user_load_deque)
+                cpu_sys = worst_case_aggregation(cpu_sys_load_deque)
                 cpu_load = (cpu_user + cpu_sys) if (cpu_user is not None and cpu_sys is not None) else None
 
                 temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
-                temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
+                temperature_cpu = worst_case_aggregation(temperature_cpu_deque)
 
                 gpu_load_deque = glob.get("glob", {}).get("a_unit.load")
-                gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
+                gpu_load = worst_case_aggregation(gpu_load_deque)
 
                 temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
-                temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
+                temperature_gpu = worst_case_aggregation(temperature_gpu_deque)
 
                 disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
-                disk_usage = max([v for v in disk_usage_deque if v is not None], default=None) if disk_usage_deque else None
+                disk_usage = worst_case_aggregation(disk_usage_deque)
     
-                cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
-                temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
-                gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
-                temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
-                disk_usage_str = f"{disk_usage:.2f}%" if disk_usage is not None else "N/A"
+                cpu_loads[i] = cpu_load if cpu_load is not None else -1
+                cpu_temps[i] = temperature_cpu if temperature_cpu is not None else -1
+                gpu_loads[i] = gpu_load if gpu_load is not None else -1
+                gpu_temps[i] = temperature_gpu if temperature_gpu is not None else -1
+                disk_usages[i] = disk_usage if disk_usage is not None else -1
 
-                run = f"Run #: {glob['run']+1:02d}"
-                cpu_info = f" CPU Load: {cpu_load_str} | CPU: {temperature_cpu_str}"
-                gpu_info = f" GPU Load: {gpu_load_str} | GPU: {temperature_gpu_str}"
-                disk_info = f" Disk Usage: {disk_usage_str}"
-                
-                if temperature_cpu > 80 or temperature_gpu > 80:
-                    logger.warn(f"{run} |{cpu_info} |{gpu_info} |{disk_info}")
-                else:
-                    logger.info(f"{run} |{cpu_info} |{gpu_info} |{disk_info}")
-                time.sleep(0.1)
-                
+                #time.sleep(0.1)
+
+            if max(cpu_loads.values()) > 80 or max(gpu_loads.values()) > 80:
+                logger.warn(f"CPU Load: {max(cpu_loads.values()):.2f}% | CPU Temp: {max(cpu_temps.values()):.2f}°C | GPU Load: {max(gpu_loads.values()):.2f}% | GPU Temp: {max(gpu_temps.values()):.2f}°C | Disk Usage: {max(disk_usages.values()):.2f}%")
+            else:
+                logger.info(f"CPU Load: {max(cpu_loads.values()):.2f}% | CPU Temp: {max(cpu_temps.values()):.2f}°C | GPU Load: {max(gpu_loads.values()):.2f}% | GPU Temp: {max(gpu_temps.values()):.2f}°C | Disk Usage: {max(disk_usages.values()):.2f}%")
+
         except KeyboardInterrupt:
             # Stop the diagnosis if user interrupts
-            logger.info("Diagnosis is stopped by user.")
+            logger.info("VTC Pump Module Diagnosis is interrupted by user.")
             
-    logger.info("VTC Pump Module: Diagnosis complete.")
+    logger.info(f"VTC Pump Module Diagnosis successful. Time taken: Total {(time.perf_counter() - time_start):.6f} seconds; Average {((time.perf_counter() - time_start)/TEST_RUNS):.6f} seconds per run")
     pump.terminate()

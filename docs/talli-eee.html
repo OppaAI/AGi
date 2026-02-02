@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuRoRA :: TALLI Neural Visualizer</title>
+    <style>
+        :root {
+            --bio-bg: #0a0e14;
+            --bio-vein: #1a2332;
+            --neural-blue: #00f3ff;
+            --alert-crimson: #ff2a2a;
+            --organic-green: #00ff9d;
+            --glass-panel: rgba(20, 30, 45, 0.7);
+            --font-tech: 'Courier New', Courier, monospace;
+            --font-human: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bio-bg);
+            color: #e0e0e0;
+            font-family: var(--font-human);
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 243, 255, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(255, 42, 42, 0.05) 0%, transparent 20%);
+        }
+
+        h1 {
+            font-weight: 300;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--neural-blue);
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 0.8em;
+            color: var(--neural-blue);
+            margin-bottom: 30px;
+            opacity: 0.7;
+        }
+
+        /* --- THE STAGE --- */
+        .system-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr;
+            gap: 20px;
+            width: 90%;
+            max-width: 1200px;
+            height: 60vh;
+            position: relative;
+        }
+
+        /* --- PANELS --- */
+        .panel {
+            background: var(--glass-panel);
+            border: 1px solid rgba(0, 243, 255, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .panel h3 {
+            margin-top: 0;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--organic-green);
+            width: 100%;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        /* --- INPUT ZONE --- */
+        .input-zone {
+            justify-content: center;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--neural-blue);
+            color: var(--neural-blue);
+            padding: 15px 30px;
+            font-family: var(--font-tech);
+            font-size: 1em;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.2s;
+            margin: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover {
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 15px var(--neural-blue);
+        }
+
+        button.error-btn {
+            border-color: var(--alert-crimson);
+            color: var(--alert-crimson);
+        }
+        
+        button.error-btn:hover {
+            background: rgba(255, 42, 42, 0.1);
+            box-shadow: 0 0 15px var(--alert-crimson);
+        }
+
+        /* --- FILTER ZONE --- */
+        .filter-zone {
+            justify-content: center;
+        }
+        
+        .dna-strand {
+            font-family: var(--font-tech);
+            font-size: 1.2em;
+            margin: 20px 0;
+            height: 30px;
+            color: var(--organic-green);
+        }
+
+        .processing-icon {
+            width: 50px;
+            height: 50px;
+            border: 2px solid var(--neural-blue);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+        }
+
+        /* --- STORAGE ZONE (TALLI) --- */
+        .storage-zone {
+            display: grid;
+            grid-template-rows: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+            background: transparent;
+            box-shadow: none;
+            border: none;
+        }
+
+        .file-node {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: var(--font-tech);
+            font-size: 0.8em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-node.active {
+            border-color: var(--organic-green);
+            background: rgba(0, 255, 157, 0.05);
+        }
+        
+        .file-node.error-active {
+            border-color: var(--alert-crimson);
+            background: rgba(255, 42, 42, 0.05);
+        }
+
+        .log-count {
+            background: #222;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+        }
+
+        /* --- ANIMATION PARTICLES --- */
+        .glob {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--neural-blue);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neural-blue);
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+        }
+        
+        .glob.error {
+            background: var(--alert-crimson);
+            box-shadow: 0 0 10px var(--alert-crimson);
+        }
+
+        /* --- LOG CONSOLE --- */
+        .console-output {
+            width: 90%;
+            max-width: 1200px;
+            height: 150px;
+            background: #000;
+            border: 1px solid #333;
+            margin-top: 20px;
+            padding: 10px;
+            font-family: var(--font-tech);
+            font-size: 0.8em;
+            color: #888;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+
+        .log-line {
+            margin: 2px 0;
+            border-bottom: 1px solid #111;
+            display: flex;
+        }
+        .log-time { color: #555; margin-right: 10px; }
+        .log-level { width: 60px; }
+        .log-source { color: var(--neural-blue); width: 150px; }
+        .log-msg { color: #aaa; }
+        .log-line.error .log-level, .log-line.error .log-msg { color: var(--alert-crimson); }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* --- CONNECTION LINES (SVG) --- */
+        #synapses {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        line {
+            stroke: #1a2332;
+            stroke-width: 2;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>EEE Aggregator <span style="font-size:0.5em; vertical-align: middle;">v1.0</span></h1>
+    <div class="subtitle">Triple-Action Logging & Ledgering Implementation (TALLI)</div>
+
+    <div class="system-container">
+        <svg id="synapses">
+            </svg>
+
+        <div class="panel input-zone" id="panel-input">
+            <h3>Neural Trigger</h3>
+            <div style="text-align:center; color:#666; font-size:0.8em; margin-bottom:10px;">Select Stimulus</div>
+            <button onclick="fireSignal('INFO', 'vcs.vtc.pump')">Pump: Pulse</button>
+            <button onclick="fireSignal('DEBUG', 'nav.drive.motor')">Drive: Trace</button>
+            <button class="error-btn" onclick="fireSignal('ERROR', 'scs.igniter')">Igniter: FAIL</button>
+        </div>
+
+        <div class="panel filter-zone" id="panel-process">
+            <h3>EEE Filter & Router</h3>
+            <div class="processing-icon" id="processor"></div>
+            <div style="margin-top:15px; font-size:0.8em; color:#666;">Standardization Matrix</div>
+            <div class="dna-strand" id="dna-input">vcs.vtc.pump</div>
+            <div style="color:#444">↓</div>
+            <div class="dna-strand" style="color:var(--neural-blue); font-weight:bold;" id="dna-output">[VCS::VTC::PUMP]</div>
+        </div>
+
+        <div class="panel storage-zone" id="panel-storage">
+            <h3>TALLI Cortex</h3>
+            
+            <div class="file-node" id="file-master">
+                <span><span style="color:var(--organic-green)">●</span> robot.log (Master)</span>
+                <span class="log-count" id="count-master">0</span>
+            </div>
+
+            <div class="file-node" id="file-error">
+                <span><span style="color:var(--alert-crimson)">●</span> errors.log (Critical)</span>
+                <span class="log-count" id="count-error">0</span>
+            </div>
+
+            <div class="file-node" id="file-system">
+                <span><span style="color:var(--neural-blue)">●</span> <span id="sys-name">system</span>.log (Local)</span>
+                <span class="log-count" id="count-system">0</span>
+            </div>
+
+            <div class="file-node" id="file-console">
+                <span><span style="color:#fff">●</span> Console (Stream)</span>
+                <span class="log-count" id="count-console">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="console-output" id="console-div">
+        <div style="color:#333; font-style:italic;">// System initialized. Waiting for input...</div>
+    </div>
+
+    <script>
+        const processor = document.getElementById('processor');
+        const dnaInput = document.getElementById('dna-input');
+        const dnaOutput = document.getElementById('dna-output');
+        const consoleDiv = document.getElementById('console-div');
+
+        function fireSignal(level, source) {
+            // 1. Create the particle (The Glob)
+            const glob = document.createElement('div');
+            glob.className = level === 'ERROR' ? 'glob error' : 'glob';
+            document.body.appendChild(glob);
+
+            // Get coordinates
+            const startBtn = event.target.getBoundingClientRect();
+            const processPanel = document.getElementById('panel-process').getBoundingClientRect();
+            
+            // --- STAGE 1: Input to Processor ---
+            // Set start pos
+            glob.style.left = (startBtn.left + startBtn.width/2) + 'px';
+            glob.style.top = (startBtn.top + startBtn.height/2) + 'px';
+            glob.style.opacity = '1';
+
+            // Animate to Processor
+            const midX = processPanel.left + processPanel.width/2;
+            const midY = processPanel.top + processPanel.height/2;
+
+            glob.animate([
+                { left: glob.style.left, top: glob.style.top },
+                { left: midX + 'px', top: midY + 'px' }
+            ], {
+                duration: 600,
+                easing: 'cubic-bezier(0.4, 0.0, 0.2, 1)'
+            }).onfinish = () => {
+                // --- STAGE 2: Processing (The Logic) ---
+                processor.style.display = 'block'; // Spin!
+                
+                // Show text transformation
+                dnaInput.innerText = source;
+                dnaInput.style.opacity = 1;
+                
+                setTimeout(() => {
+                    const transformed = `[${source.replace(/\./g, '::').toUpperCase()}]`;
+                    dnaOutput.innerText = transformed;
+                    dnaOutput.animate([{ opacity: 0.5, transform: 'scale(0.9)'}, {opacity: 1, transform: 'scale(1.1)'}], 200);
+                    
+                    // --- STAGE 3: Distribution (TALLI) ---
+                    distributeSignal(glob, midX, midY, level, source, transformed);
+                    processor.style.display = 'none'; // Stop spin
+                }, 400);
+            };
+        }
+
+        function distributeSignal(originalGlob, startX, startY, level, rawSource, cleanSource) {
+            const targets = [];
+            
+            // Logic mimicking your Python Code:
+            // 1. Master Log: Always gets it (DEBUG+)
+            targets.push('file-master');
+            
+            // 2. Console: Always gets it (INFO+)
+            targets.push('file-console');
+
+            // 3. System Log: Gets it based on "VCS" or "NAV"
+            const sysName = rawSource.split('.')[0].toLowerCase();
+            document.getElementById('sys-name').innerText = sysName; // Update UI label
+            targets.push('file-system');
+
+            // 4. Error Log: ONLY if ERROR
+            if (level === 'ERROR') {
+                targets.push('file-error');
+            }
+
+            // Spawn sub-globs for each target
+            targets.forEach(targetId => {
+                const targetEl = document.getElementById(targetId);
+                const rect = targetEl.getBoundingClientRect();
+                
+                const clone = originalGlob.cloneNode();
+                document.body.appendChild(clone);
+                
+                // Set start
+                clone.style.left = startX + 'px';
+                clone.style.top = startY + 'px';
+                
+                clone.animate([
+                    { left: startX + 'px', top: startY + 'px' },
+                    { left: (rect.left + 20) + 'px', top: (rect.top + 20) + 'px' }
+                ], {
+                    duration: 500 + Math.random() * 200, // Slight variance looks organic
+                    easing: 'ease-out'
+                }).onfinish = () => {
+                    // Flash the file node
+                    targetEl.classList.add(level === 'ERROR' ? 'error-active' : 'active');
+                    setTimeout(() => targetEl.classList.remove('active', 'error-active'), 200);
+                    
+                    // Increment counter
+                    const countSpan = document.getElementById(targetId.replace('file', 'count'));
+                    countSpan.innerText = parseInt(countSpan.innerText) + 1;
+                    
+                    clone.remove();
+                };
+            });
+
+            originalGlob.remove(); // Remove the parent glob
+            
+            // Add to Console UI
+            addToConsole(level, cleanSource);
+        }
+
+        function addToConsole(level, source) {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', {hour12: false}) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+            
+            const line = document.createElement('div');
+            line.className = level === 'ERROR' ? 'log-line error' : 'log-line';
+            line.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-level">${level}</span>
+                <span class="log-source">${source}</span>
+                <span class="log-msg">${level === 'ERROR' ? 'Critical failure detected in conduit.' : 'Operation nominal. Data harvested.'}</span>
+            `;
+            consoleDiv.prepend(line);
+        }
+
+        // Draw static lines (Synapses) on load
+        window.onload = function() {
+            // You could use JS to draw SVG lines between panels here
+            // For now, the animation carries the visual connection
+        };
+
+    </script>
+</body>
+</html>
