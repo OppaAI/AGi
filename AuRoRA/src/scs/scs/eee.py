@@ -40,7 +40,7 @@ class EEEAggregator:
     Usage:
         eee = EEEAggregator(caller_id="VCS.VTC")
         eee.info("Hello, World!")
-        eee.fatal("RED ALERT! My core is overheating!")
+        eee.critical("RED ALERT! My core is overheating!")
         
     That's all you need to do to log messages from anywhere in the system.
     It automatically sets up logging on first use, and creates log files as needed.
@@ -313,22 +313,22 @@ class EEEAggregator:
     which is already set up with the appropriate handlers and formatters.
     They are setup to log at different levels:
         - info: messages that convey general information
-        - warn: warning messages that indicate potential issues
+        - warning: warning messages that indicate potential issues
         - error: error messages that indicate failures but not causing system shutdown
-        - fatal: fatal/critical messages that indicate severe failures causing system shutdown
+        - critical: critical messages that indicate severe failures causing system shutdown
         - debug: debug messages for development and troubleshooting
         - exception: exception messages with traceback
     
     Usage:
         eee = EEEAggregator(caller_id="VCS.VTC")
         eee.info("Hello, World!")
-        eee.fatal("RED ALERT! My core is overheating!")
+        eee.critical("RED ALERT! My core is overheating!")
     """
     def info(self, msg: str):
         """Log info message"""
         self.logger.info(msg)
     
-    def warn(self, msg: str):
+    def warning(self, msg: str):
         """Log warning message"""
         self.logger.warning(msg)
     
@@ -336,8 +336,8 @@ class EEEAggregator:
         """Log error message"""
         self.logger.error(msg)
     
-    def fatal(self, msg: str):
-        """Log fatal/critical message"""
+    def critical(self, msg: str):
+        """Log critical message"""
         self.logger.critical(msg)
     
     def debug(self, msg: str):
