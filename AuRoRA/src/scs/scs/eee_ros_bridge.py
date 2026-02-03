@@ -6,7 +6,30 @@ These are OPTIONAL bridging plugins that inject ROS capabilities into EEE.
 import logging
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from rcl_interfaces.msg import Log
+from rclpy.node import Node
+from std_srvs.srv import Trigger
 
+class EEEROSBridge(Node):
+    def __init__(self):
+        super().__init__('eee_ros_bridge')
+        
+        # 1. Start the Channels
+        self.reflex = ReflexPlugin(self)
+        self.awareness = AwarenessPlugin(self)
+        
+        # 2. Add the Health Service (The Ledger Query)
+        self.health_srv = self.create_service(Trigger, '/eee/health', self.handle_health_query)
+        
+        self.get_logger().info("🚀 TALLE 2.0 ROS Bridge is LIVE")
+
+    def handle_health_query(self, request, response):
+        # We query the Reflex cache for an instant answer
+        statuses = self.reflex._cache
+        # If any status is ERROR (2), system is Degraded
+        is_bad = any(s.level == 2 for s in statuses.values())
+        response.success = not is_bad
+        response.message = f"System monitoring {len(statuses)} modules."
+        return response
 
 class ReflexPlugin:
     """
