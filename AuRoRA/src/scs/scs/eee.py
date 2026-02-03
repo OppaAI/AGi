@@ -8,23 +8,25 @@ that they are addressed promptly and effectively, thus maintaining system stabil
 """
 
 # System modules
-import builtins
+from calendar import c
 from datetime import datetime
+import hashlib
+import json
 import logging
-import logging.handlers
 from pathlib import Path
+import queue
+import sqlite3
 import threading
-from typing import Any, Set, TYPE_CHECKING
-
-# Callable type hints for global injection
-if TYPE_CHECKING:
-    global_logger: Any
-    system_logger: Any
+import time
+from tkinter import E
+import traceback
+import uuid
 
 #(TODO) Later make this configurable via config file or environment variable (e.g. /var/log/agisys)
 LOG_PATH = "./logs"  # Location of log files
+LEDGER_DB_FILE = "ledger.db"  # Ledger database file name
 MASTER_LOG_FILE = "activity.log"  # Master log file name (40% of the logs)
-ERROR_LOG_FILE = "anomaly.log"   # Error log file name (10% of the logs)
+ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
 class EEEAggregator:
     """
@@ -48,7 +50,8 @@ class EEEAggregator:
     
     # Class-level flags to ensure setup happens only once
     _initialized = False
-    _system_registry: Set[str] = set()
+    _log_queue: queue.Queue = queue.Queue()
+    _worker_started: bool = False
     _thread_lock = threading.Lock()
     
     def __init__(self, caller_id: str):
@@ -74,66 +77,173 @@ class EEEAggregator:
                 if not EEEAggregator._initialized:  # Double-check
                     EEEAggregator.Propagator.engage_TALLE_to_propagate()
                     EEEAggregator._initialized = True
-        
-        # Derive the system name from the caller ID
-        parts = [p for p in caller_id.split('.') if p.strip()]
-        system = parts[0].upper() if parts else "SYSTEM"
-
-        # Register the system of the caller if not already registered
-        if system not in EEEAggregator._system_registry:
-            with EEEAggregator._thread_lock:
-                if system not in EEEAggregator._system_registry:
-                    EEEAggregator.Propagator.build_system_logger_to_propagate(system)
-                    EEEAggregator._system_registry.add(system)
 
         # Establish the specific logger for the caller
         # This logger will have NO handlers of its own, and relies 100% on propagation
         self.logger = logging.getLogger(caller_id)
 
-    class Injector:
+        # Start the "Postman" thread if it's not running
+        if not EEEAggregator._worker_started:
+            with EEEAggregator._thread_lock:
+                if not EEEAggregator._worker_started:
+                    threading.Thread(target=self._async_worker, daemon=True).start()
+                    EEEAggregator._worker_started = True
+
+    def _async_worker(self):
         """
-        Injector:
-        A submodule in my Emergency and Exception Event (EEE) module that injects the TALLE listener automatically
-        into the global namespace, or manually into my other systems, to ensure that all emergency and exception events
-        that may arise in my systems are logged and handled properly for prompt attention.
+        This is the ONLY thread that touches the disk.
         """
+        log_dir = Path(LOG_PATH)
+        log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Class-level flag to ensure injection happens only once
-        _already_injected = False
+        # THE LEDGER: Initialize SQLite here
+        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+        db_conn.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                correlation_id TEXT NOT NULL UNIQUE,
+                timestamp TEXTNOT NULL,
+                level TEXT NOT NULL,
+                proc_id TEXT NOT NULL,
+                system TEXT,
+                node TEXT,
+                module TEXT,
+                message_preview,
+                channels TEXT,
+                content_hash TEXT,
+                created_at REAL DEFAULT (julianday('now'))
+            )
+        """)
+        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_correlation_id ON events(correlation_id)")
+        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON events(timestamp)")
+        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_level ON events(level)")
+        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_system ON events(system)")
+        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON events(content_hash)")
+        db_conn.commit()
 
-        @classmethod
-        def inject_logger_to_builtins(cls)-> None:
-            """
-            Injects the TALLE listener automatically into the global namespace, or manually into my other systems,
-            to ensure that all emergency and exception events that may arise in my systems are logged and handled properly
-            for prompt attention.
-            """
-            # Prevent double injection, once is enough
-            if cls._already_injected:
-                return
-        
-            # Inject the TALLE instance for generic/system-wide logger
-            setattr(builtins, "global_logger", EEEAggregator("SCS.EEE"))
+        text_formatter = EEEAggregator.Filtrator.pass_thru_EEE_filters()
 
-            # Inject the TALLE factory for system/module-specific loggers
-            setattr(builtins, "system_logger", lambda caller_id: EEEAggregator(caller_id))
+        # Deduplication cache: content_hash -> (timestamp, correlation_id)
+        recent_hashes = {}
+        DEDUP_WINDOW = 5.0  # 5 seconds
 
-            # Mark the system as injected
-            cls._already_injected = True
+        while True:
+            # Wait for a log entry
+            timestamp, level, caller, msg, evidence = EEEAggregator._log_queue.get()
 
-            # Log the successful injection
-            global_logger.info("Builtins hijacked successfully. I'm 40% global variables!")
-
-        @classmethod
-        def is_ready(cls)-> bool:
-            """
-            This flag is used to ensure that the logger is only injected once, and to prevent double injection.
+            # Generate a unique correlation ID for this event
+            correlation_id = str(uuid.uuid4())
             
-            Returns:
-                True if the injector has already injected the logger into the global namespace, False otherwise.
-            """
-            return cls._already_injected
+            # Parse the caller ID into its components
+            parts = caller.split('.')
+            system = parts[0].upper() if len(parts) > 0 else "SYSTEM"
+            node = parts[1].upper() if len(parts) > 1 else "UNKNOWN"
+            module = parts[2].upper() if len(parts) > 2 else "UNKNOWN"
+            proc_id = "::".join([p.upper() for p in parts])
+            
+            # Get the level name
+            # Starting Python 3.11, level_map = logging.getLevelNamesMapping().get(level, f"LVL-{level}")
+            lvl_name = logging.getLevelName(level)
 
+            # Create content hash for deduplication
+            content_hash = hashlib.sha256(f"{caller}:{msg}".encode()).hexdigest()
+            
+            # Deduplication check
+            now = time.time()
+            if content_hash in recent_hashes:
+                last_seen, last_corr_id = recent_hashes[content_hash]
+                if now < last_seen + DEDUP_WINDOW:
+                    # Skip this event
+                    EEEAggregator._log_queue.task_done()
+                    continue
+
+            # Update deduplication cache
+            recent_hashes[content_hash] = (now, correlation_id)
+
+            # Clean old entries from cache
+            recent_hashes = {h: (t, c) for h, (t, c) in recent_hashes.items() if now - t > DEDUP_WINDOW}
+
+            # Truncate message for ledger preview
+            message_preview = msg[:80] + "..." if len(msg) > 80 else msg
+
+            # Determine which channels this event should propagate to
+            channels = ["awareness", "ledger", "master_log", "system_log"]
+            if level >= logging.WARNING:
+                channels.append("error_log")
+            
+            # Create LogRecord to reuse the existing ISO 8601 formatter
+            record = logging.LogRecord(caller, level, "", 0, msg, None, None)
+            record.created = timestamp
+            record.msecs = (timestamp - int(timestamp)) * 1000
+            record.name = proc_id  # Already formatted as SYSTEM::NODE::MODULE
+
+            # Generate ISO 8601 timestamp using the custom formatter
+            iso_timestamp = text_formatter.formatTime(record)
+
+            # Generate plain text line using the custom formatter
+            plain_text_line = text_formatter.format(record)
+
+            # Add correlation ID to the plain text line
+            parts = plain_text_line.split('|', 1)
+            plain_text_line = f"{parts[0]} | CID:{correlation_id[:8]} | {parts[1]}"
+            if evidence:
+                plain_text_line += f" | DATA: {json.dumps(evidence)}"
+
+            try:
+                # 📦 ARCHIVE A: MASTER LOG (Post-mortem)
+                with open(log_dir / MASTER_LOG_FILE, "a", encoding="utf-8") as f:
+                    f.write(plain_text_line + "\n")
+
+                # 🔧 ARCHIVE B: SYSTEM LOG (Subsystem isolation)
+                system_prefix = caller.split('.')[0].lower()
+                with open(log_dir / f"{system_prefix}.log", "a", encoding="utf-8") as f:
+                    f.write(plain_text_line + "\n")
+
+                # 🔍 ARCHIVE C: ANOMALY VAULT (JSONL for Cloud/ML)
+                # Severe warnings, Errors, and Fatals
+                if level >= logging.WARNING:
+                    # We use a clean payload for JSONL, distinct from the text line
+                    payload = {
+                        "correlation_id": correlation_id,
+                        "timestamp": iso_timestamp,
+                        "level": lvl_name,
+                        "proc_id": proc_id,
+                        "system": system,
+                        "node": node,
+                        "module": module,
+                        "message": msg,
+                        "traceback": evidence.get("traceback") if evidence else None,
+                        "context": {k: v for k, v in evidence.items() if k != "traceback"} if evidence else None,
+                        "routed_to": channels
+                    }
+                    with open(log_dir / ERROR_LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(payload) + "\n")
+
+                # 📊 THE LEDGER (SQLite Metadata)
+                db_conn.execute("""
+                    INSERT INTO events
+                    (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    correlation_id,
+                    iso_timestamp,
+                    lvl_name,
+                    proc_id,
+                    system,
+                    node,
+                    module,
+                    message_preview,
+                    json.dumps(channels),
+                    content_hash
+                ))
+                db_conn.commit()
+
+            except Exception as e:
+                # (TODO) If the disk fails, print to console for now
+                print(f"Failed to write to archive: {e}")
+
+            EEEAggregator._log_queue.task_done()
+                        
     class Filtrator:
         """
         Filtrator:
@@ -144,7 +254,7 @@ class EEEAggregator:
         1. pass_thru_EEE_time_filter: Custom formatter to format time in ISO 8601 format with milliseconds and timezone.
         2. pass_thru_EEE_header_filter: Custom filter to standardize log headers by replacing dots with colons and uppercasing text.
         """
-        class pass_thru_EEE_time_filter(logging.Formatter):
+        class pass_thru_EEE_time_formatter(logging.Formatter):
             """
             This is a custom formatter to format time in ISO 8601 format with milliseconds and timezone.
             It overrides the default time formatting to ensure compliance with ISO 8601 which is the industry Gold Standard for timestamps.
@@ -173,7 +283,18 @@ class EEEAggregator:
                 # Standardize the log header format by replacing dots with colons and uppercasing text.
                 record.name = record.name.replace('.', '::').upper()
                 return True
-            
+        
+        @classmethod
+        def pass_thru_EEE_filters(cls) -> logging.Formatter:
+            """
+            This is the method to pass the log entry through the time formatter.
+            """
+            # Standardized log format for all log entries
+            # (e.g. 2025-01-15T12:34:56.789-08:00 | INFO | [SYSTEM::ROOT] | This is a log message)
+            EEE_FORMAT: str = "%(asctime)s | %(levelname)s | [%(name)s] | %(message)s"
+
+            return cls.pass_thru_EEE_time_formatter(EEE_FORMAT)
+
         @classmethod
         def pass_filtrate_to_handler(cls, EEE_handler: logging.Handler):
             """
@@ -183,12 +304,10 @@ class EEEAggregator:
             Args:
                 handler: The logging handler to which the filter and formatter will be applied.
             """
-            # Standardized log format for all log entries
-            # (e.g. 2025-01-15T12:34:56.789-08:00 | INFO | [SYSTEM::ROOT] | This is a log message)
-            EEE_FORMAT: str = "%(asctime)s | %(levelname)s | [%(name)s] | %(message)s"
+
 
             # Pass the handler through the time filter
-            EEE_handler.setFormatter(cls.pass_thru_EEE_time_filter(EEE_FORMAT))
+            EEE_handler.setFormatter(cls.pass_thru_EEE_filters())
             
             # Pass the handler through the header filter
             EEE_handler.addFilter(cls.pass_thru_EEE_header_filter())
@@ -211,39 +330,17 @@ class EEEAggregator:
         _log_path = LOG_PATH
 
         @classmethod
-        def engage_TALLE_to_propagate(cls)-> None:
+        def engage_TALLE_to_propagate(cls) -> None:
             """
             Sets up the Root Logger, The Master Logger, The Error Logger, and the Console. This is the orchestrator that
             propagates the event entries to the appropriate loggers/handlers.
             """
-            # Create log directory if it doesn't exist
-            log_path = Path(cls._log_path).resolve()
-            log_path.mkdir(parents=True, exist_ok=True)
-            
             # Set up root logger for the entire system
             root = logging.getLogger()
             root.setLevel(logging.DEBUG)
             
             # Clear existing handlers to avoid duplication
             root.handlers.clear()
-
-            # Master log file that logs all activity events
-            cls._add_rotating_handler(
-                logger=root,
-                path=log_path / MASTER_LOG_FILE, 
-                level=logging.DEBUG, 
-                size=50*1024*1024, 
-                backups=5
-            )
-            
-            # Error log file that logs all errors and above
-            cls._add_rotating_handler(
-                logger=root,
-                path=log_path / ERROR_LOG_FILE, 
-                level=logging.ERROR, 
-                size=10*1024*1024, 
-                backups=3
-            )
 
             # Console output for info and above
             console = logging.StreamHandler()
@@ -252,61 +349,6 @@ class EEEAggregator:
             # Apply industry-standard formatting to the console handler
             root.addHandler(EEEAggregator.Filtrator.pass_filtrate_to_handler(console))
 
-        @classmethod
-        def build_system_logger_to_propagate(cls, system: str)-> None:
-            """
-            Sets up a specific system (e.g., 'VCS') to have its own log file
-            while ensuring it propagates its data up to all of the TALLE loggers.
-
-            Args:
-                system: The system of the caller which is calling this logger (e.g. "VCS")
-            
-            Returns:
-                None
-            """
-            # Create the logger for the specified system
-            system_logger = logging.getLogger(system)
-            system_logger.setLevel(logging.DEBUG)
-            
-            # Propagate the log entries to the Master/Error/Console. This is where the magic happens
-            system_logger.propagate = True
-            
-            log_path = Path(cls._log_path).resolve()
-            filename = log_path / f"{system.lower()}.log"
-
-            # Strict check for existing handlers to prevent "double-logging"
-            if not any(isinstance(h, logging.handlers.RotatingFileHandler) 
-                    and h.baseFilename == str(filename.absolute())
-                    for h in system_logger.handlers):
-                
-                cls._add_rotating_handler(
-                    system_logger, filename, 
-                    logging.DEBUG, 20*1024*1024, 3
-                )
-
-        @staticmethod
-        def _add_rotating_handler(logger: logging.Logger, path: Path, level: int, size: int, backups: int)-> None:
-            """
-            Adds a rotating file handler to the given logger.
-
-            Args:
-                logger: The logger to which the handler will be added.
-                path: The path to the log file.
-                level: The logging level for the handler.
-                size: The maximum size of the log file in bytes.
-                backups: The number of backup log files to keep.
-            
-            Returns:
-                None
-            """
-            handler = logging.handlers.RotatingFileHandler(
-                path, maxBytes=size, backupCount=backups
-            )
-            handler.setLevel(level)
-            # Assuming Filtrator is your class that attaches the Formatter/Filter
-            handler = EEEAggregator.Filtrator.pass_filtrate_to_handler(handler)
-            logger.addHandler(handler)
-        
     """
     These are the public API for the other modules to call logging methods.
     They are simply pass-through methods to the underlying logger,
@@ -324,42 +366,64 @@ class EEEAggregator:
         eee.info("Hello, World!")
         eee.critical("RED ALERT! My core is overheating!")
     """
-    def info(self, msg: str):
-        """Log info message"""
-        self.logger.info(msg)
+    def info(self, msg: str, evidence: dict = None):
+        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        self._dispatch(logging.INFO, msg, evidence)
     
-    def warning(self, msg: str):
-        """Log warning message"""
-        self.logger.warning(msg)
+    def warning(self, msg: str, evidence: dict = None):
+        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        self._dispatch(logging.WARNING, msg, evidence)
     
-    def error(self, msg: str):
-        """Log error message"""
-        self.logger.error(msg)
+    def error(self, msg: str, evidence: dict = None):
+        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        self._dispatch(logging.ERROR, msg, evidence)
     
-    def critical(self, msg: str):
-        """Log critical message"""
-        self.logger.critical(msg)
+    def critical(self, msg: str, evidence: dict = None):
+        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        self._dispatch(logging.CRITICAL, msg, evidence)
     
-    def debug(self, msg: str):
-        """Log debug message"""
-        self.logger.debug(msg)
+    def debug(self, msg: str, evidence: dict = None):
+        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        self._dispatch(logging.DEBUG, msg, evidence)
 
-    def exception(self, msg: str):
-        """Log exception message with traceback"""
-        self.logger.exception(msg)
+    def exception(self, msg: str, evidence: dict = None):
+        """
+        Captures the full stack trace AND any physical evidence 
+        provided by the sensors at the time of the crash.
+        """
+        if evidence is None:
+            evidence = {}
+            
+        # Capture the traceback as a string so it can be stored in the Ledger
+        evidence["traceback"] = traceback.format_exc()
+        
+        # Dispatch to the background worker (Async)
+        self._dispatch(logging.ERROR, msg, evidence)
+    def _dispatch(self, level: int, msg: str, evidence: dict):
+        """ Package the event and drop it in the mail """
+        self._log_queue.put((time.time(), level, self.logger.name, msg, evidence))
+
+        # Trigger the console output immediately
+        self.logger.log(level, f"{msg} | Data: {json.dumps(evidence)}")
+
+def get_logger(caller_id: str = "SCS.EEE") -> EEEAggregator:
+    """
+    This is the public API for the other modules to call logging methods.
+    It simply returns an instance of the EEEAggregator class.
+    """
+    return EEEAggregator(caller_id)
+
 
 if __name__ == "__main__":
 
     # Simple test of the TALLE logger
     # Inject the TALLE logger into the global namespace
-    EEEAggregator.Injector.inject_logger_to_builtins()
+    logger = get_logger("SCS.EEE.TEST")
 
-    # Create a system logger
-    system_logger = getattr(builtins, "system_logger")
-    test_logger = system_logger("TEST.MODULE")
+    logger.info("This is a test message.")
 
     # Test the system logger
     try:
         x = 1 / 0
     except ZeroDivisionError:
-        test_logger.exception("This is an exception message.")
+        logger.exception("This is an exception message.")

@@ -11,19 +11,13 @@ This module includes the following features that load at startup:
 
 # System modules
 from enum import Enum
-from typing import Any, Callable
-global_logger: Any
-
-# Callable type hints for global injection
-robot_talleee: Callable
-system_talleee: Callable
 
 # ROS2 modules
 import rclpy
 from rclpy.node import Node
 
 # AGi modules
-from scs.eee import EEEAggregator
+from scs.eee import get_logger
 
 # State of all modules for the robot
 class StateOfModule(str, Enum):
@@ -41,14 +35,14 @@ class Igniter(Node):
         # We name the ROS node 'igniter'
         super().__init__('igniter')
         
-        # Inject the magic into the universe
-        EEEAggregator.Injector.inject_logger_to_builtins()
+        # Inject the logger into the global namespace
+        get_logger()
         
         self.get_logger().info("Igniter Node is spinning. Ready to judge all subsystems.")
         
     def log_report(self, msg):
         """Example method if you want to expose a service later"""
-        global_logger.info(f"ROS Node Report: {msg}")
+        get_logger().info(f"ROS Node Report: {msg}")
 
 # --- THE BOOTSTRAP (IGNITER) ---
 def main(args=None):
@@ -58,11 +52,11 @@ def main(args=None):
     node = Igniter()
     
     try:
-        # Now every other module loaded in this process has access to 'global_logger'
-        global_logger.info("Ignition sequence complete. Let's break something.")
+        # Now every other module loaded in this process has access to the logger
+        get_logger().info("Ignition sequence complete. Let's break something.")
         rclpy.spin(node)
     except KeyboardInterrupt:
-        global_logger.warn("Shutdown signal received. Boring.")
+        get_logger().warning("Shutdown signal received. Boring.")
     finally:
         node.destroy_node()
         rclpy.shutdown()

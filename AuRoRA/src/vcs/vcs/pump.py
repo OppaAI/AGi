@@ -13,6 +13,7 @@ import yaml
 
 # AGi modules
 from scs.igniter_temp import StateOfModule
+from scs.eee import get_logger
 
 # Identifiers of this process
 PROC_ID = "VCS.VTC.Pump"
@@ -86,7 +87,7 @@ class Pump():
         self.state: StateOfModule = StateOfModule.INIT
         self._lock = threading.Lock()
 
-        self.logger = system_logger(PROC_ID)
+        self.logger = get_logger(PROC_ID)
         self.logger.info("Pump Module Activation Sequence initiated...")
 
         # Connect to the Jetson reservoir
@@ -275,7 +276,7 @@ class Pump():
 
         self.jetson_reservoir = None
         try:
-            self.logger.debug(f"Establishing connection to Jetson reservoir with interval={self.what_pumping_rhythm_for_this_channel('HI')...}")
+            self.logger.debug(f"Establishing connection to Jetson reservoir with interval={self.what_pumping_rhythm_for_this_channel('HI')}")
             # Adjust the flow rate of the Jetson reservoir
             self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
             # Start running the Jetson lifestream out of the reservoir
@@ -419,7 +420,6 @@ class Pump():
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
-    from scs.eee import EEEAggregator
     from typing import List
     import time
     
@@ -428,7 +428,7 @@ if __name__ == "__main__":
         return max(values) if values else None
     
     # Initialize the logger
-    logger = EEEAggregator(PROC_ID)
+    logger = get_logger(PROC_ID)
     logger.info("Initializing VTC Pump Module Diagnosis...")
 
     # Initialize the Pump Module

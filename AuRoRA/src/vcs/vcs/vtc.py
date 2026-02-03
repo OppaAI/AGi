@@ -7,8 +7,6 @@
 
 # System modules
 import copy
-from typing import Any
-system_logger: Any
 
 # ROS2 modules
 from builtin_interfaces.msg import Time
@@ -18,7 +16,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy, LivelinessPolicy
 
 # AGi modules
-from scs.eee import EEEAggregator  # Emergency and Exception Event Aggregator
+from scs.eee import get_logger
 from vp.msg import VitalPulse   # Vital Pulse message definition
 from vcs.pump import Pump   # Pump: Collects useful glob from the lifestream
 
@@ -58,7 +56,7 @@ class VitalTerminalCore(Node):
     def __init__(self):
         super().__init__(NODE_ID, namespace=ROBOT_ID + "/" + SYSTEM_ID)
 
-        self.logger = system_logger(PROC_ID)
+        self.logger = get_logger(PROC_ID)
         self.logger.info("Vital Terminal Core (VTC) ❤️ at INIT state.")
         self.state = "INIT"
 
@@ -284,10 +282,7 @@ class VitalTerminalCore(Node):
         return "\033[38;5;51m" if self.vc_linked else "\033[38;5;30m"
 
 def main(args=None):
-
-    # Inject EEEAggregator into builtins for global access
-    EEEAggregator.Injector.inject_logger_to_builtins()
-    
+   
     # Initialize ROS2 and Vital Terminal Core Node
     rclpy.init(args=args)
     node = VitalTerminalCore()
