@@ -13,12 +13,15 @@ This module includes the following features that load at startup:
 from enum import Enum
 
 # ROS2 modules
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from rcl_interfaces.msg import Log
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 
 # AGi modules
 from scs.eee import get_logger, EEEAggregator
-from scs.eee_plugins import ReflexPlugin, AwarenessPlugin  # Optional!
+from scs.eee_ros_bridge import EEEROSBridge, ReflexPlugin, AwarenessPlugin
 
 # State of all modules for the robot
 class StateOfModule(str, Enum):
@@ -57,13 +60,33 @@ class Igniter(Node):
 # --- THE BOOTSTRAP (IGNITER) ---
 def main(args=None):
     rclpy.init(args=args)
-    node = Igniter()
+    
+    # 1. Instantiate both nodes
+    # The Bridge handles the ROS network plumbing
+    bridge_node = EEEROSBridge()
+    
+    # The Igniter handles the robot's logic and plugin management
+    igniter_node = Igniter()
+    
+    # 2. Use the Executor to run them together
+    # This is the "Party Bus" that carries both nodes
+    executor = MultiThreadedExecutor()
+    executor.add_node(bridge_node)
+    executor.add_node(igniter_node)
+    
+    logger = get_logger("SCS.BOOTSTRAP")
+    logger.info("Ignition sequence started. 🍺")
     
     try:
-        rclpy.spin(node)
+        # This spins BOTH nodes simultaneously
+        executor.spin()
+    except KeyboardInterrupt:
+        logger.warning("Shutdown requested by human meatbag.")
     finally:
-        node.shutdown()
-        node.destroy_node()
+        # Cleanup everything
+        igniter_node.shutdown()
+        bridge_node.destroy_node()
+        igniter_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':
