@@ -8,17 +8,17 @@ that they are addressed promptly and effectively, thus maintaining system stabil
 """
 
 # System modules
-from calendar import c
+import atexit
 from datetime import datetime
 import hashlib
 import json
 import logging
 from pathlib import Path
 import queue
+import signal
 import sqlite3
 import threading
 import time
-from tkinter import E
 import traceback
 import uuid
 
@@ -28,6 +28,63 @@ LEDGER_DB_FILE = "ledger.db"  # Ledger database file name
 MASTER_LOG_FILE = "activity.log"  # Master log file name (40% of the logs)
 ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
+class TokenBucketThrottle:
+    """
+    Token bucket algorithm for rate limiting per conduit.
+    Prevents log floods while allowing bursts of critical events.
+    
+    Example:
+        throttle = TokenBucketThrottle(rate=1.0, burst=3)
+        if throttle.allow():
+            # Process event
+        else:
+            # Drop event (throttled)
+    """
+    
+    def __init__(self, rate: float = 1.0, burst: int = 3):
+        """
+        Initialize token bucket.
+        
+        Args:
+            rate: Tokens refilled per second (Hz)
+            burst: Maximum token capacity (burst size)
+        """
+        self.rate = rate          # Events per second
+        self.burst = burst        # Burst capacity
+        self.tokens = burst       # Start with full bucket
+        self.last_update = time.monotonic()
+        self._lock = threading.Lock()
+    
+    def allow(self) -> bool:
+        """
+        Check if event is allowed (has tokens available).
+        
+        Returns:
+            True if event should be processed, False if throttled
+        """
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self.last_update
+            
+            # Refill tokens based on elapsed time
+            self.tokens = min(self.burst, self.tokens + elapsed * self.rate)
+            self.last_update = now
+            
+            # Check if we have at least 1 token
+            if self.tokens >= 1.0:
+                self.tokens -= 1.0
+                return True
+            
+            return False
+    
+    def get_status(self) -> dict:
+        """Get current throttle status (for debugging)."""
+        with self._lock:
+            return {
+                "tokens": round(self.tokens, 2),
+                "rate": self.rate,
+                "burst": self.burst
+            }
 class EEEAggregator:
     """
     This is my centralized Emergency and Exception Event (EEE) Aggregator module, which collects and manages all emergency
@@ -53,7 +110,16 @@ class EEEAggregator:
     _log_queue: queue.Queue = queue.Queue()
     _worker_started: bool = False
     _thread_lock = threading.Lock()
-    
+     _shutdown_registered = False
+
+    _throttles: dict = {}  # Per-proc_id throttles
+    _throttle_config = {
+        "enabled": True,
+        "default_rate": 1.0,   # 1 event per second
+        "burst_size": 3,       # Allow 3-event bursts
+        "critical_bypass": True  # CRITICAL level bypasses throttling
+    }
+
     def __init__(self, caller_id: str):
         """
         This is where the logger is created and initialized.
@@ -76,6 +142,7 @@ class EEEAggregator:
             with EEEAggregator._thread_lock:
                 if not EEEAggregator._initialized:  # Double-check
                     EEEAggregator.Propagator.engage_TALLE_to_propagate()
+                    EEEAggregator._register_shutdown_handlers()
                     EEEAggregator._initialized = True
 
         # Establish the specific logger for the caller
@@ -102,7 +169,7 @@ class EEEAggregator:
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 correlation_id TEXT NOT NULL UNIQUE,
-                timestamp TEXTNOT NULL,
+                timestamp TEXT NOT NULL,
                 level TEXT NOT NULL,
                 proc_id TEXT NOT NULL,
                 system TEXT,
@@ -126,6 +193,9 @@ class EEEAggregator:
         # Deduplication cache: content_hash -> (timestamp, correlation_id)
         recent_hashes = {}
         DEDUP_WINDOW = 5.0  # 5 seconds
+        
+         # Throttling stats (for monitoring)
+        throttled_count = 0
 
         while True:
             # Wait for a log entry
@@ -160,9 +230,40 @@ class EEEAggregator:
             # Update deduplication cache
             recent_hashes[content_hash] = (now, correlation_id)
 
-            # Clean old entries from cache
+            # Clean old entries from cache, keet recent 5 seconds
             recent_hashes = {h: (t, c) for h, (t, c) in recent_hashes.items() if now - t > DEDUP_WINDOW}
-
+            
+            # Throttle check
+            should_throttle = False
+            
+            if EEEAggregator._throttle_config["enabled"]:
+                # CRITICAL level bypasses throttling
+                if level >= logging.CRITICAL and EEEAggregator._throttle_config["critical_bypass"]:
+                    should_throttle = False
+                else:
+                    # Get or create throttle for this proc_id
+                    if proc_id not in EEEAggregator._throttles:
+                        EEEAggregator._throttles[proc_id] = TokenBucketThrottle(
+                            rate=EEEAggregator._throttle_config["default_rate"],
+                            burst=EEEAggregator._throttle_config["burst_size"]
+                        )
+                    
+                    throttle = EEEAggregator._throttles[proc_id]
+                    
+                    # Check if allowed
+                    if not throttle.allow():
+                        should_throttle = True
+                        throttled_count += 1
+                        
+                        # Every 100 throttled events, log a warning
+                        if throttled_count % 100 == 0:
+                            print(f"[EEE] Throttled {throttled_count} events so far. Proc: {proc_id}")
+            
+            # Skip event if throttled
+            if should_throttle:
+                EEEAggregator._log_queue.task_done()
+                continue
+            
             # Truncate message for ledger preview
             message_preview = msg[:80] + "..." if len(msg) > 80 else msg
 
@@ -243,7 +344,61 @@ class EEEAggregator:
                 print(f"Failed to write to archive: {e}")
 
             EEEAggregator._log_queue.task_done()
-                        
+            
+    @classmethod
+    def get_throttle_status(cls) -> dict:
+        """
+        Get current throttling status for all proc_ids.
+        Useful for debugging and monitoring.
+        
+        Returns:
+            Dictionary of proc_id -> throttle status
+        """
+        status = {
+            "enabled": cls._throttle_config["enabled"],
+            "config": cls._throttle_config,
+            "active_throttles": {}
+        }
+        
+        for proc_id, throttle in cls._throttles.items():
+            status["active_throttles"][proc_id] = throttle.get_status()
+    
+    return status
+
+    @classmethod
+    def shutdown(cls):
+        """Gracefully shutdown the async worker and flush all pending events."""
+        if cls._worker_started:
+            print("[EEE] Flushing pending log entries...")
+            cls._log_queue.join()  # Wait for queue to empty
+            print(f"[EEE] All events written. Shutdown complete.")
+    
+    @classmethod
+    def _register_shutdown_handlers(cls):
+        """Register shutdown handlers for clean exit."""
+        if cls._shutdown_registered:
+            return
+        
+        # Register with atexit (normal program exit)
+        atexit.register(cls.shutdown)
+        
+        # Register signal handlers (Ctrl+C, kill)
+        def signal_handler(signum, frame):
+            print(f"\n[EEE] Signal {signum} received. Initiating graceful shutdown...")
+            cls.shutdown()
+            # Re-raise to allow normal termination
+            if signum == signal.SIGINT:
+                raise KeyboardInterrupt
+            elif signum == signal.SIGTERM:
+                import sys
+                sys.exit(0)
+        
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        cls._shutdown_registered = True
+        print("[EEE] Shutdown handlers registered.")
+    
     class Filtrator:
         """
         Filtrator:
@@ -423,7 +578,54 @@ if __name__ == "__main__":
     logger.info("This is a test message.")
 
     # Test the system logger
+    # Test INFO logging entries
+    print("Sending 10 test logs...")
+    for i in range(10):
+        logger.info(f"Test message {i+1}")
+        time.sleep(0.1)
+        
+    # Test critical and exception tracing
     try:
         x = 1 / 0
     except ZeroDivisionError:
+        logger.critical("Robot is UNDER ATTACK!")
         logger.exception("This is an exception message.")
+    
+    print("Testing throttling with burst...")
+    print("Config:", EEEAggregator._throttle_config)
+    print()
+    
+    # Send 10 rapid INFO messages (should be throttled after burst of 3)
+    print("Sending 10 rapid INFO messages (rate=1Hz, burst=3):")
+    for i in range(10):
+        logger.info(f"Rapid message {i+1}")
+        time.sleep(0.05)  # 50ms between messages (20 msgs/sec - way over limit!)
+    
+    print("\nWaiting 2 seconds for bucket to refill...")
+    time.sleep(2)
+    
+    # Send 3 more (should go through after refill)
+    print("Sending 3 more messages (bucket refilled):")
+    for i in range(3):
+        logger.info(f"After refill message {i+1}")
+        time.sleep(0.05)
+    
+    # Test CRITICAL bypass
+    print("\nTesting CRITICAL bypass (should always go through):")
+    for i in range(5):
+        logger.critical(f"CRITICAL message {i+1} - bypasses throttle")
+        time.sleep(0.05)
+    
+    print("\n--- Throttle Status ---")
+    print(EEEAggregator.get_throttle_status())
+    
+    # Flush
+    EEEAggregator.shutdown()
+    
+    print("\nCheck logs - you should see:")
+    print("  - First 3 INFO messages (burst)")
+    print("  - GAPS in sequence (throttled messages)")
+    print("  - 3 messages after refill")
+    print("  - ALL 5 CRITICAL messages (bypass)")
+
+    print("\nExiting (shutdown should flush queue automatically)...")
