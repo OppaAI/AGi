@@ -17,7 +17,8 @@ import rclpy
 from rclpy.node import Node
 
 # AGi modules
-from scs.eee import get_logger
+from scs.eee import get_logger, EEEAggregator
+from scs.eee_plugins import ReflexPlugin, AwarenessPlugin  # Optional!
 
 # State of all modules for the robot
 class StateOfModule(str, Enum):
@@ -31,33 +32,36 @@ class Igniter(Node):
     """
     This is the ROS 2 Wrapper. It acts as a bridge between ROS and your TALLEEE system.
     """
-    def __init__(self):
-        # We name the ROS node 'igniter'
-        super().__init__('igniter')
+    super().__init__('igniter')
         
-        # Inject the logger into the global namespace
-        get_logger()
+        # Load EEE ROS plugins (optional - comment out to disable)
+        self.plugins = []
         
-        self.get_logger().info("Igniter Node is spinning. Ready to judge all subsystems.")
+        try:
+            self.plugins.append(ReflexPlugin(self))
+            self.plugins.append(AwarenessPlugin(self))
+            self.get_logger().info("EEE ROS plugins loaded")
+        except Exception as e:
+            self.get_logger().warn(f"EEE plugins failed: {e}")
+            self.get_logger().warn("Falling back to disk-only logging")
         
-    def log_report(self, msg):
-        """Example method if you want to expose a service later"""
-        get_logger().info(f"ROS Node Report: {msg}")
+        self.get_logger().info("Igniter ready")
+    
+    def shutdown(self):
+        """Cleanup plugins."""
+        for plugin in self.plugins:
+            plugin.shutdown()
+        EEEAggregator.shutdown()
 
 # --- THE BOOTSTRAP (IGNITER) ---
 def main(args=None):
     rclpy.init(args=args)
-    
-    # Initialize the aggregator node
     node = Igniter()
     
     try:
-        # Now every other module loaded in this process has access to the logger
-        get_logger().info("Ignition sequence complete. Let's break something.")
         rclpy.spin(node)
-    except KeyboardInterrupt:
-        get_logger().warning("Shutdown signal received. Boring.")
     finally:
+        node.shutdown()
         node.destroy_node()
         rclpy.shutdown()
 
