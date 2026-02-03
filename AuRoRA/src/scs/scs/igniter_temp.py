@@ -32,20 +32,21 @@ class Igniter(Node):
     """
     This is the ROS 2 Wrapper. It acts as a bridge between ROS and your TALLEEE system.
     """
-    super().__init__('igniter')
+    def __init__(self):
+        super().__init__('igniter')
+        self.eee = get_logger("SCS.IGNITER")
         
         # Load EEE ROS plugins (optional - comment out to disable)
         self.plugins = []
-        
         try:
             self.plugins.append(ReflexPlugin(self))
             self.plugins.append(AwarenessPlugin(self))
-            self.get_logger().info("EEE ROS plugins loaded")
+            self.eee.info("EEE ROS plugins loaded and bridging.")
         except Exception as e:
-            self.get_logger().warn(f"EEE plugins failed: {e}")
-            self.get_logger().warn("Falling back to disk-only logging")
-        
-        self.get_logger().info("Igniter ready")
+            self.get_logger().error(f"EEE Bridge Failure: {e}")
+            self.eee.warning("Operating in 'Silent Mode' (Disk-only)")
+
+        self.eee.info("Ignition sequence complete. System is RUN.")
     
     def shutdown(self):
         """Cleanup plugins."""
