@@ -110,7 +110,8 @@ class EEEAggregator:
     _log_queue: queue.Queue = queue.Queue()
     _worker_started: bool = False
     _thread_lock = threading.Lock()
-     _shutdown_registered = False
+    _shutdown_registered = False
+    _plugins: dict = {}  # plugin_name -> callback
 
     _throttles: dict = {}  # Per-proc_id throttles
     _throttle_config = {
@@ -222,7 +223,7 @@ class EEEAggregator:
             now = time.time()
             if content_hash in recent_hashes:
                 last_seen, last_corr_id = recent_hashes[content_hash]
-                if now < last_seen + DEDUP_WINDOW:
+                if now - last_seen < DEDUP_WINDOW:
                     # Skip this event
                     EEEAggregator._log_queue.task_done()
                     continue
@@ -230,8 +231,8 @@ class EEEAggregator:
             # Update deduplication cache
             recent_hashes[content_hash] = (now, correlation_id)
 
-            # Clean old entries from cache, keet recent 5 seconds
-            recent_hashes = {h: (t, c) for h, (t, c) in recent_hashes.items() if now - t > DEDUP_WINDOW}
+            # Clean old entries from cache, keep recent 5 seconds (dedup window)
+            recent_hashes = {h: (t, c) for h, (t, c) in recent_hashes.items() if now - t <= DEDUP_WINDOW}
             
             # Throttle check
             should_throttle = False
@@ -289,6 +290,29 @@ class EEEAggregator:
             plain_text_line = f"{parts[0]} | CID:{correlation_id[:8]} | {parts[1]}"
             if evidence:
                 plain_text_line += f" | DATA: {json.dumps(evidence)}"
+
+            # Call plugins BEFORE disk writes
+            skip_disk = False
+            for plugin_name, callback in EEEAggregator._plugins.items():
+                try:
+                    if callback(level, msg, evidence or {}, {
+                        "correlation_id": correlation_id,
+                        "proc_id": proc_id,
+                        "system": system,
+                        "node": node,
+                        "module": module
+                    }):
+                        # Plugin handled it - skip disk for non-critical
+                        if level < logging.CRITICAL:
+                            skip_disk = True
+                            break  # Exit plugin loop early
+                except Exception as e:
+                    print(f"[EEE] Plugin {plugin_name} error: {e}")
+
+            # Skip disk writes if plugin handled it
+            if skip_disk:
+                EEEAggregator._log_queue.task_done()
+                continue  # ✅ Now this continues the while True loop
 
             try:
                 # 📦 ARCHIVE A: MASTER LOG (Post-mortem)
@@ -363,7 +387,7 @@ class EEEAggregator:
         for proc_id, throttle in cls._throttles.items():
             status["active_throttles"][proc_id] = throttle.get_status()
     
-    return status
+        return status
 
     @classmethod
     def shutdown(cls):
@@ -399,6 +423,19 @@ class EEEAggregator:
         cls._shutdown_registered = True
         print("[EEE] Shutdown handlers registered.")
     
+    @classmethod
+    def register_plugin(cls, name: str, callback):
+        """Register a plugin to receive events before disk write."""
+        cls._plugins[name] = callback
+        print(f"[EEE] Plugin registered: {name}")
+    
+    @classmethod
+    def unregister_plugin(cls, name: str):
+        """Unregister a plugin."""
+        if name in cls._plugins:
+            del cls._plugins[name]
+            print(f"[EEE] Plugin unregistered: {name}")
+
     class Filtrator:
         """
         Filtrator:
