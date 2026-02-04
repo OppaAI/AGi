@@ -1,0 +1,85 @@
+\documentclass[11pt]{article}
+
+\usepackage{times}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\geometry{margin=1in}
+
+\title{AGi-ROS: A Modular ROS 2 Framework for Bio-Inspired Robot Telemetry and Future Agentic Reasoning}
+\author{OppaAI\\\texttt{update-author-info@placeholder}}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+AGi-ROS is a ROS 2 (Humble) project aimed at building a modular, bio-inspired architecture for robot systems that combine health telemetry, high-level reasoning, and extensible agent behaviors. The current release focuses on a foundational subsystem called the Vital Circulatory System (VCS), which provides heartbeat-like monitoring between robot and server processes. This paper describes the project motivation, system design, VCS implementation, and future research directions for integrating agentic planning and learning modules.
+\end{abstract}
+
+\section{Introduction}
+Robotic systems require robust coordination across sensing, planning, and execution while maintaining safety and observability. AGi-ROS explores a biologically inspired framing that treats the robot-server ecosystem as a living system with vital signals, feedback loops, and modular subsystems. The current codebase emphasizes a reliable heartbeat and telemetry system as the backbone for broader agentic capabilities.
+
+\section{System Overview}
+The repository consists of two main components:
+\begin{itemize}
+    \item \textbf{AuRoRA} (Autonomous Rover Robot Assistant): Robot-side software that gathers hardware vitals and runs local ROS 2 nodes.
+    \item \textbf{AIVA} (AI Virtual Assistant): Server-side software that receives pulses, monitors robots, and provides a coordination point.
+\end{itemize}
+
+The design is intended to evolve into a full agent loop (sense $\rightarrow$ reason $\rightarrow$ plan $\rightarrow$ act), with the VCS as the underlying circulatory layer that ensures connectivity and runtime health.
+
+\section{Vital Circulatory System (VCS)}
+The VCS is a ROS 2 subsystem that models robot-server monitoring as a heartbeat exchange. It is composed of:
+\begin{itemize}
+    \item \textbf{VTC (Vital Terminal Core)}: A robot-side node that collects telemetry, packages data into heartbeat pulses, and publishes them at a set rhythm.
+    \item \textbf{VCC (Vital Central Core)}: A server-side node that receives pulses, estimates RTT, and returns feedback to the robot.
+\end{itemize}
+
+\subsection{Message Format}
+Heartbeat messages use a custom ROS message definition called \texttt{VitalPulse}, containing identifiers, timestamps, and vital statistics such as CPU/GPU temperature. The message structure is intentionally compact to keep telemetry low-latency.
+
+\subsection{Robot-Side Telemetry Collection}
+The robot VTC uses a \textit{Pump} module to collect system health metrics through multiple flow channels (HI/MID/LO sampling rates). The pump maintains bounded buffers for time-series vitals, enabling both rapid updates and longer-term trends while staying within memory constraints.
+
+\subsection{Server-Side Analysis}
+The VCC tracks the last pulse time and flags timeouts to detect disconnections. It provides terminal-based visualization of robot identity and vital statistics to give operators immediate situational awareness.
+
+\section{Implementation Status}
+The following VCS components are implemented in the current codebase:
+\begin{itemize}
+    \item Robot-side VTC node with heartbeat publishing and feedback handling.
+    \item Server-side VCC node with timeout handling and feedback publishing.
+    \item VitalPulse message definition.
+    \item Launch files for role-based deployment (robot vs. server).
+\end{itemize}
+
+Additional modules such as LLM integration, planner adapters, and simulation connectors are planned but not yet implemented in this repository snapshot.
+
+\section{Planned Evaluation}
+Future experiments will focus on:
+\begin{itemize}
+    \item Measuring heartbeat latency and connection robustness across network conditions.
+    \item Scaling VCS to multiple robots and concurrent monitoring.
+    \item Integrating VCS health signals into high-level planner decision-making.
+\end{itemize}
+
+\section{Ethics and Safety Considerations}
+AGi-ROS aims to prioritize safe operation by treating health telemetry and heartbeat feedback as first-class system signals. Any integration with autonomous actuation or LLM-based reasoning should include guardrails, limits on actuation, and fallback mechanisms when telemetry indicates degraded or unsafe states.
+
+\section{Reproducibility}
+The repository provides ROS 2 packages for both robot and server components. A typical workflow is:
+\begin{verbatim}
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch vcs vcs.launch.py role:=robot
+ros2 launch vcs vcs.launch.py role:=server
+\end{verbatim}
+
+The project is available at \url{https://github.com/OppaAI/AGi-ROS}. Update the author contact and add citations or benchmarks before submitting to arXiv.
+
+\section{Conclusion}
+AGi-ROS provides an early-stage, bio-inspired framework for robotic systems with a focus on heartbeat-driven observability. The VCS subsystem offers a concrete, implemented foundation for future work on agentic reasoning, planning, and safe autonomy.
+
+\end{document}
