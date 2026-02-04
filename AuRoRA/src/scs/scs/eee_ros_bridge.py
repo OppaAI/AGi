@@ -26,6 +26,11 @@ class EEEROSBridge(Node):
     """
     
     def __init__(self):
+        """
+        Initialize the EEEROSBridge ROS 2 node, create and register REFLEX and AWARENESS channel plugins, expose the health query service, and install a shutdown hook.
+        
+        Creates ReflexPlugin and AwarenessPlugin instances and stores them in self._plugins, registers a Trigger service at /eee/health handled by _handle_health_query, and creates a dummy subscription to hook into node shutdown. Logs startup information. Raises an exception if channel initialization fails.
+        """
         super().__init__('eee_ros_bridge')
         
         # Store plugins for lifecycle management
@@ -65,11 +70,16 @@ class EEEROSBridge(Node):
 
     def _handle_health_query(self, request, response):
         """
-        Service: Instant health check via REFLEX cache.
+        Handle /eee/health Trigger service requests by summarizing REFLEX diagnostic statuses.
+        
+        Builds a summary of cached DiagnosticStatus entries from the REFLEX plugin, counts ERROR and WARN levels, and populates the Trigger response accordingly. Sets response.success to True only when no ERROR-level statuses are present and response.message to "Modules: <n> | Errors: <e> | Warnings: <w>". Logs a warning if any errors are detected. On exception, sets response.success to False and response.message to the error string.
+        
+        Parameters:
+            request: The incoming Trigger request (unused).
+            response: The Trigger response object to populate.
         
         Returns:
-            success: True if no ERROR-level statuses
-            message: Summary of monitored modules
+            The populated Trigger response object.
         """
         try:
             module_states = self.reflex.get_all_statuses()
@@ -99,7 +109,11 @@ class EEEROSBridge(Node):
         return response
 
     def destroy_node(self):
-        """Clean shutdown of plugins."""
+        """
+        Shut down the bridge, stop registered plugins, flush the EEE disk queue, and destroy the node.
+        
+        Calls each plugin's shutdown method (plugin shutdown errors are logged and ignored), invokes EEEAggregator.shutdown() to flush the disk queue, and then delegates to the superclass destroy_node().
+        """
         self.get_logger().info("Shutting down EEE ROS Bridge...")
         
         for plugin in self._plugins:
@@ -121,6 +135,12 @@ class ReflexPlugin:
     NAME = "reflex"
     
     def __init__(self, ros_node: Node):
+        """
+        Initialize the ReflexPlugin: store the parent ROS node, create the /diagnostics publisher, initialize the status cache, and register the plugin with the EEE aggregator.
+        
+        Parameters:
+            ros_node (Node): Parent ROS 2 node used to create publishers and obtain the node name.
+        """
         self.node = ros_node
         self.robot_id = ros_node.get_name()
         
@@ -136,11 +156,12 @@ class ReflexPlugin:
     
     def _handle(self, level: int, msg: str, evidence: dict, meta: dict) -> bool:
         """
-        EEE plugin callback.
+        Handle an EEE event by publishing a DiagnosticStatus for warning-or-higher events and caching it.
+        
+        Builds a DiagnosticStatus from the provided event data, publishes it to the diagnostics topic, and stores it in the plugin cache for later health queries when the event level is WARNING or higher. If publishing fails, an error is logged and the event is not considered handled.
         
         Returns:
-            True: Event handled (block disk for non-critical)
-            False: Allow fall-through to disk
+            `True` if the event was published and should block disk fallback (level >= WARNING and level < CRITICAL), `False` otherwise.
         """
         if level < logging.WARNING:
             return False
@@ -159,7 +180,18 @@ class ReflexPlugin:
         return level < logging.CRITICAL
     
     def _build_status(self, level: int, msg: str, evidence: dict, meta: dict) -> DiagnosticStatus:
-        """Build DiagnosticStatus from EEE event."""
+        """
+        Construct a ROS DiagnosticStatus representing an EEE event.
+        
+        Parameters:
+            level (int): Numeric log level from EEE; values >= logging.ERROR map to DiagnosticStatus.ERROR, otherwise DiagnosticStatus.WARN.
+            msg (str): Event message; will be truncated to 255 characters for the status.message field.
+            evidence (dict): Mapping of evidence keys to values to include as KeyValue entries. The "traceback" key is skipped; values that cannot be serialized are omitted. Keys and values are truncated to 255 characters.
+            meta (dict): Metadata for the event. Must contain "proc_id" (used for status.name) and "correlation_id" (used as the "cid" KeyValue, truncated to 8 characters).
+        
+        Returns:
+            DiagnosticStatus: A DiagnosticStatus populated with level, name, message, hardware_id, and KeyValue entries derived from evidence and correlation id.
+        """
         status = DiagnosticStatus()
         status.level = DiagnosticStatus.ERROR if level >= logging.ERROR else DiagnosticStatus.WARN
         status.name = meta["proc_id"]
@@ -183,7 +215,12 @@ class ReflexPlugin:
         return status
     
     def _publish(self, status: DiagnosticStatus):
-        """Publish to /diagnostics."""
+        """
+        Publish a DiagnosticArray containing the given DiagnosticStatus to the /diagnostics topic.
+        
+        Parameters:
+            status (DiagnosticStatus): The diagnostic status to include in the published DiagnosticArray.
+        """
         diag = DiagnosticArray()
         diag.header.stamp = self.node.get_clock().now().to_msg()
         diag.header.frame_id = self.robot_id
@@ -191,11 +228,20 @@ class ReflexPlugin:
         self._pub.publish(diag)
     
     def get_all_statuses(self) -> Dict[str, DiagnosticStatus]:
-        """Public accessor for health queries."""
+        """
+        Provide a copy of the cached DiagnosticStatus entries keyed by plugin name.
+        
+        Returns:
+            Dict[str, DiagnosticStatus]: Shallow copy of the internal cache mapping plugin names to their `DiagnosticStatus` objects.
+        """
         return self._cache.copy()
     
     def shutdown(self):
-        """Unregister from EEE."""
+        """
+        Shut down the plugin and clear its cached statuses.
+        
+        Unregisters the plugin from EEEAggregator and clears the internal status cache (_cache).
+        """
         EEEAggregator.unregister_plugin(self.NAME)
         self._cache.clear()
 
@@ -207,6 +253,12 @@ class AwarenessPlugin:
     NAME = "awareness"
     
     def __init__(self, ros_node: Node):
+        """
+        Initialize the AwarenessPlugin and attach a ROS /rosout publisher plus a Python logging handler.
+        
+        Parameters:
+            ros_node (Node): Parent ROS node used to create the /rosout publisher and to obtain the node context for the log handler.
+        """
         self.node = ros_node
         self._pub = ros_node.create_publisher(Log, '/rosout', 100)
         
@@ -218,16 +270,44 @@ class AwarenessPlugin:
         self._handler_added = True
     
     def _create_handler(self):
-        """Create ROS-aware log handler."""
+        """
+        Create a logging.Handler that converts Python log records into ROS `Log` messages and publishes them to /rosout.
+        
+        The returned handler:
+        - Maps Python log levels to ROS `Log` levels.
+        - Formats logger names by replacing '.' with '::' and uppercasing.
+        - Preserves messages that already contain a correlation ID substring "CID:".
+        - Uses the captured node clock for message timestamps and the captured publisher to publish messages.
+        - Enters a permanent local fallback on the first exception encountered to avoid repeated publish errors.
+        
+        Returns:
+            logging.Handler: A handler instance that emits converted ROS `Log` messages and suppresses further emits after a failure.
+        """
         node = self.node  # Capture for closure
         pub = self._pub
         
         class ROSLogHandler(logging.Handler):
             def __init__(self):
+                """
+                Initialize the ROS log handler and set the internal fallback flag.
+                
+                Initializes the base logging.Handler and sets an internal `_fallback` flag used to suppress further publish attempts after a handler failure.
+                """
                 super().__init__()
                 self._fallback = False  # Flag if ROS fails
             
             def emit(self, record):
+                """
+                Publish a Python logging.Record to the ROS /rosout publisher as an rclpy Log message.
+                
+                Converts the input `record` into an rclpy Log message (mapping level, formatting the message, and setting the timestamp and logger name) and publishes it to the configured ROS publisher when the node is active. If the node is shutting down the record is skipped. On any exception the handler enters a permanent fallback state to avoid repeated failures.
+                
+                Parameters:
+                    record (logging.LogRecord): The Python log record to convert and publish.
+                
+                Returns:
+                    None
+                """
                 if self._fallback:
                     return  # ROS is dead, don't spam errors
                 
@@ -249,13 +329,30 @@ class AwarenessPlugin:
                     print(f"AWARENESS fallback: {e}")
             
             def _map_level(self, lvl: int) -> int:
+                """
+                Map a Python logging level to the corresponding ROS `Log` level constant.
+                
+                Parameters:
+                    lvl (int): Python logging level value (e.g., `logging.DEBUG`, `logging.INFO`).
+                
+                Returns:
+                    int: The matching `rcl_interfaces.msg.Log` level constant (`Log.ERROR`, `Log.WARN`, `Log.INFO`, or `Log.DEBUG`).
+                """
                 if lvl >= logging.ERROR: return Log.ERROR
                 if lvl >= logging.WARNING: return Log.WARN
                 if lvl >= logging.INFO: return Log.INFO
                 return Log.DEBUG
             
             def _format_message(self, record) -> str:
-                """Format message with correlation ID if available."""
+                """
+                Format a log message and preserve an existing EEE correlation ID if present.
+                
+                Parameters:
+                    record (logging.LogRecord): The log record to format.
+                
+                Returns:
+                    str: The formatted message. If the message already contains an EEE correlation ID (contains "CID:"), it is returned unchanged.
+                """
                 msg = record.getMessage()
                 # Extract CID if present in EEE format
                 if "CID:" in msg:
@@ -265,7 +362,12 @@ class AwarenessPlugin:
         return ROSLogHandler()
     
     def shutdown(self):
-        """Remove handler from logging."""
+        """
+        Deregister the plugin's logging handler from the root logger.
+        
+        If the handler was previously added, remove it from the root logger and mark the plugin
+        as not having an active handler.
+        """
         if self._handler_added:
             logging.getLogger().removeHandler(self._handler)
             self._handler_added = False

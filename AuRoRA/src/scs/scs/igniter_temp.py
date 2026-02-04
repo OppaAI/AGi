@@ -36,15 +36,30 @@ class Igniter(Node):
     This is the ROS 2 Wrapper. It acts as a bridge between ROS and your TALLEEE system.
     """
     def __init__(self):
+        """
+        Create the Igniter ROS node and initialize its TallEEE logger.
+        
+        Initializes the ROS 2 node with the name 'igniter' and stores a TallEEE logger on `self.eee` using the namespace "SCS.IGNITER".
+        """
         super().__init__('igniter')
         self.eee = get_logger("SCS.IGNITER")
         
     def shutdown(self):
-        """Cleanup plugins."""
+        """
+        Shut down the EEEAggregator and release Igniter plugin resources.
+        
+        Invokes EEEAggregator.shutdown() to terminate the emergency/event aggregator and perform plugin cleanup.
+        """
         EEEAggregator.shutdown()
 
 # --- THE BOOTSTRAP (IGNITER) ---
 def main(args=None):
+    """
+    Start the Igniter bootstrap: initialize ROS, create and run the EEEROSBridge and Igniter nodes, and perform orderly shutdown on exit.
+    
+    Parameters:
+        args (list[str] | None): Optional command-line arguments forwarded to rclpy.init.
+    """
     rclpy.init(args=args)
     
     # 1. Instantiate both nodes

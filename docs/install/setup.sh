@@ -17,7 +17,7 @@ elif [ ! -d "$_colcon_prefix_chain_sh_COLCON_CURRENT_PREFIX" ]; then
 fi
 
 # function to source another script with conditional trace output
-# first argument: the path of the script
+# _colcon_prefix_chain_sh_source_script sources the script at the given path if it exists; when COLCON_TRACE is set it prints a trace line to stdout, and if the file is missing it writes an error message to stderr.
 _colcon_prefix_chain_sh_source_script() {
   if [ -f "$1" ]; then
     if [ -n "$COLCON_TRACE" ]; then

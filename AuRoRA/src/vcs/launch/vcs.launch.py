@@ -6,6 +6,16 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
+    """
+    Create a LaunchDescription that declares a 'role' launch argument and configures nodes based on its value.
+    
+    The launch description declares the 'role' argument (default 'robot'), always launches the 'scs' package's 'igniter' node, and conditionally launches one of two 'vcs' package nodes:
+    - 'vital_terminal_core' when role == 'robot'
+    - 'vital_central_core' when role == 'server'
+    
+    Returns:
+        LaunchDescription: The constructed launch description containing the argument and node actions.
+    """
     role = LaunchConfiguration('role')
 
     return LaunchDescription([

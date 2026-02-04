@@ -11,7 +11,7 @@ else
 fi
 
 # function to convert array-like strings into arrays
-# to workaround SH_WORD_SPLIT not being set
+# _colcon_prefix_zsh_convert_to_array converts the string value of the named variable into a Zsh array and assigns it back to that variable.
 _colcon_prefix_zsh_convert_to_array() {
   local _listname=$1
   local _dollar="$"
@@ -24,7 +24,7 @@ _colcon_prefix_zsh_convert_to_array() {
 # which uses colons as separators
 # duplicates as well as trailing separators are avoided
 # first argument: the name of the result variable
-# second argument: the value to be prepended
+# _colcon_prefix_zsh_prepend_unique_value prepends a value to a colon-separated variable and exports the updated variable if the value is not already present. Usage: _colcon_prefix_zsh_prepend_unique_value VARIABLE_NAME VALUE — ignores empty items and existing duplicates; when COLCON_TRACE is set, prints the export command performed.
 _colcon_prefix_zsh_prepend_unique_value() {
   # arguments
   _listname="$1"
@@ -103,7 +103,8 @@ else
 fi
 
 # function to source another script with conditional trace output
-# first argument: the path of the script
+# _colcon_prefix_sh_source_script sources the specified script into the current shell if it exists, otherwise prints an error to stderr.
+# The first argument is the path to the script to source. If COLCON_TRACE is set, a trace line is printed before sourcing.
 _colcon_prefix_sh_source_script() {
   if [ -f "$1" ]; then
     if [ -n "$COLCON_TRACE" ]; then

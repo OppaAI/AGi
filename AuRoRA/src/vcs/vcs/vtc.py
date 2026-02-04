@@ -54,6 +54,11 @@ class Regulator():
 
 class VitalTerminalCore(Node):
     def __init__(self):
+        """
+        Initialize the Vital Terminal Core node with ROS 2 communication infrastructure and operational timers.
+        
+        Sets up the node's state management, Pump compartment, QoS profile, publisher and subscriber channels for vital pulse messages, and periodic tasks for pump cycling, signal oscillation, and display updates.
+        """
         super().__init__(NODE_ID, namespace=ROBOT_ID + "/" + SYSTEM_ID)
 
         self.logger = get_logger(PROC_ID)
@@ -128,18 +133,9 @@ class VitalTerminalCore(Node):
 
     def run_pump_cycle(self):
         """
-        Collects glob from the lifestream based on the configured polling level and updates the vital_dump.
-
-        It performs a single pump cycle, gathering data from all flow channels
-        (HI, MID, LO) according to the current tier and mode settings. It updates 
-        the internal `vital_dump` manifest using the "update if worse/null/error" logic, 
-        ensuring the worst-case scenario is always preserved until the next enrichment tick.
-
-        Args:
-            None
-
-        Returns:
-            None
+        Perform a single pump cycle that harvests lifestream data and commits it to the pump section of the node's vital_dump.
+        
+        This updates the pump compartment with a fresh timestamped snapshot, advances the pump run counter used to schedule future harvests, and records the collected bin to the node logger.
         """
         # Initialize the bin and get the initial time before pumping happens
         bin = self.vital_dump["pump"]
@@ -277,13 +273,27 @@ class VitalTerminalCore(Node):
         return 60.0 / self.heartbeat_interval
 
     def blink_color(self, now):
-        """Color indicator based on linked status"""
+        """
+        Return the terminal color escape code that reflects the current link status.
+        
+        Parameters:
+            now: Current timestamp passed by caller (ignored by this function).
+        
+        Returns:
+            str: ANSI escape color code — `"\033[38;5;51m"` when linked (online), `"\033[38;5;30m"` when not linked (offline).
+        """
         # Blue for online, Dark Blue/Cyan for offline 
         return "\033[38;5;51m" if self.vc_linked else "\033[38;5;30m"
 
 def main(args=None):
    
     # Initialize ROS2 and Vital Terminal Core Node
+    """
+    Initialize ROS 2, create and run the VitalTerminalCore node with a MultiThreadedExecutor, handle keyboard interruption, and perform orderly shutdown and cleanup.
+    
+    Parameters:
+        args (list or None): Optional command-line arguments forwarded to rclpy.init().
+    """
     rclpy.init(args=args)
     node = VitalTerminalCore()
 

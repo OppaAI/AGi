@@ -14,7 +14,7 @@ fi
 # which uses colons as separators
 # duplicates as well as trailing separators are avoided
 # first argument: the name of the result variable
-# second argument: the value to be prepended
+# _colcon_prefix_bash_prepend_unique_value prepends a value to a colon-separated list stored in the named variable, avoids duplicates and empty entries, and exports the updated variable.
 _colcon_prefix_bash_prepend_unique_value() {
   # arguments
   _listname="$1"
@@ -90,7 +90,7 @@ else
 fi
 
 # function to source another script with conditional trace output
-# first argument: the path of the script
+# _colcon_prefix_sh_source_script sources the script at the given path; if COLCON_TRACE is set it echoes a trace line before sourcing, and if the file does not exist it writes "not found: \"<path>\"" to stderr.
 _colcon_prefix_sh_source_script() {
   if [ -f "$1" ]; then
     if [ -n "$COLCON_TRACE" ]; then

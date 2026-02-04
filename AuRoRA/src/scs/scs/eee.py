@@ -57,10 +57,12 @@ class TokenBucketThrottle:
     
     def allow(self) -> bool:
         """
-        Check if event is allowed (has tokens available).
+        Determine whether an event may proceed by refilling the token bucket and consuming one token if available.
+        
+        This method is thread-safe; it refills tokens based on elapsed time up to the configured burst capacity and, if at least one token is available, consumes one.
         
         Returns:
-            True if event should be processed, False if throttled
+            True if a token was consumed and the event is allowed, False otherwise.
         """
         with self._lock:
             now = time.monotonic()
@@ -78,7 +80,15 @@ class TokenBucketThrottle:
             return False
     
     def get_status(self) -> dict:
-        """Get current throttle status (for debugging)."""
+        """
+        Report the token bucket's current state for debugging.
+        
+        Returns:
+            status (dict): Mapping with keys:
+                - "tokens": Current token count rounded to two decimal places.
+                - "rate": Refill rate in tokens per second.
+                - "burst": Maximum token capacity (burst size).
+        """
         with self._lock:
             return {
                 "tokens": round(self.tokens, 2),
@@ -123,15 +133,15 @@ class EEEAggregator:
 
     def __init__(self, caller_id: str):
         """
-        This is where the logger is created and initialized.
-        It auto-initializes the logging system on first use, including root and subsystem loggers, and
-        dynamically registers the subsystem logger if not already done.
+        Initialize an EEEAggregator for the given caller and ensure the global logging subsystem and background worker are started.
         
-        Args:
-            caller_id: The system/node/module which is calling this logger (e.g. "VCS.VTC.Pump")
-                    The system name is derived from the caller_id by taking the first element of the split.
-                    eg. "VCS.VTC.Pump" -> "VCS"
-                    If no caller_id is provided, caller_id defaults to "SYSTEM.UNKNOWN".
+        Parameters:
+            caller_id (str): Dot-separated identifier for the caller (e.g., "VCS.VTC.Pump"). The leading element is treated as the system name.
+                If `caller_id` is missing or not a string, it defaults to "SYSTEM.UNKNOWN".
+        
+        Description:
+            Creates a logger instance named by `caller_id` (no local handlers; relies on propagation), performs one-time global initialization
+            of the logging/propagation infrastructure if needed, registers shutdown handlers, and ensures the asynchronous worker thread is running.
         """
         
         # Ensure caller_id is valid
@@ -159,7 +169,17 @@ class EEEAggregator:
 
     def _async_worker(self):
         """
-        This is the ONLY thread that touches the disk.
+        Background worker that consumes aggregated log events and persists them to durable stores.
+        
+        Runs in a dedicated thread and processes entries from the internal queue until shutdown:
+        - Applies deduplication (short time window) and per-proc_id rate throttling.
+        - Invokes registered plugins before any disk writes; plugins may prevent persistence for non-critical events.
+        - Persists events to the master plaintext log, a per-system plaintext log, a JSONL anomaly log for warnings/errors,
+          and an SQLite ledger table with structured metadata and a content hash.
+        - Produces an ISO 8601 timestamp and a short message preview for ledger entries.
+        - Handles and reports disk or plugin errors to the console but continues processing subsequent events.
+        
+        This is the only thread that performs disk I/O for the aggregator.
         """
         log_dir = Path(LOG_PATH)
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -391,7 +411,11 @@ class EEEAggregator:
 
     @classmethod
     def shutdown(cls):
-        """Gracefully shutdown the async worker and flush all pending events."""
+        """
+        Shuts down the background worker by waiting for any queued events to be written to disk.
+        
+        If the worker was started, blocks until the internal log queue is empty and prints brief status messages to stdout; no value is returned.
+        """
         if cls._worker_started:
             print("[EEE] Flushing pending log entries...")
             cls._log_queue.join()  # Wait for queue to empty
@@ -399,7 +423,11 @@ class EEEAggregator:
     
     @classmethod
     def _register_shutdown_handlers(cls):
-        """Register shutdown handlers for clean exit."""
+        """
+        Register process exit handlers once so the aggregator can shut down cleanly.
+        
+        This idempotent method attaches an atexit handler and installs SIGINT/SIGTERM handlers to invoke the class shutdown routine during normal exit or on interrupt/terminate signals; subsequent calls have no effect.
+        """
         if cls._shutdown_registered:
             return
         
@@ -408,6 +436,23 @@ class EEEAggregator:
         
         # Register signal handlers (Ctrl+C, kill)
         def signal_handler(signum, frame):
+            """
+            Handle incoming POSIX signals by initiating a graceful shutdown of the EEE aggregator and then delegating to normal process termination.
+            
+            Parameters:
+                signum (int): Numeric signal identifier received (e.g., SIGINT, SIGTERM).
+                frame (types.FrameType | None): Current stack frame at the time of signal delivery.
+            
+            Behavior:
+                Prints a shutdown notice and invokes the aggregator's shutdown routine. After shutdown:
+                - If the signal is SIGINT, raises KeyboardInterrupt to propagate an interrupt.
+                - If the signal is SIGTERM, calls sys.exit(0) to exit cleanly.
+                - For other signals, returns after performing shutdown.
+            
+            Raises:
+                KeyboardInterrupt: When `signum` is `signal.SIGINT`.
+                SystemExit: When `signum` is `signal.SIGTERM` (via `sys.exit(0)`).
+            """
             print(f"\n[EEE] Signal {signum} received. Initiating graceful shutdown...")
             cls.shutdown()
             # Re-raise to allow normal termination
@@ -431,7 +476,14 @@ class EEEAggregator:
     
     @classmethod
     def unregister_plugin(cls, name: str):
-        """Unregister a plugin."""
+        """
+        Unregisters a previously registered plugin by name.
+        
+        Removes the plugin entry from the class plugin registry if present; if no plugin with the given name exists the method is a no-op. Prints a confirmation message to stdout when a plugin is removed.
+        
+        Parameters:
+            name (str): Name of the plugin to remove.
+        """
         if name in cls._plugins:
             del cls._plugins[name]
             print(f"[EEE] Plugin unregistered: {name}")
@@ -454,6 +506,16 @@ class EEEAggregator:
             """
             def formatTime(self, record, datefmt=None):
                 # Convert record creation time to a local datetime object
+                """
+                Format a LogRecord timestamp as an ISO 8601 local datetime with millisecond precision and a colon-separated timezone offset.
+                
+                Parameters:
+                    record (logging.LogRecord): Log record whose `created` and `msecs` fields are used to build the timestamp.
+                    datefmt (str | None): Ignored by this formatter.
+                
+                Returns:
+                    str: Timestamp in the form `YYYY-MM-DDTHH:MM:SS.sss±HH:MM` using the system local timezone.
+                """
                 local_datetime = datetime.fromtimestamp(record.created).astimezone()
                 # %Y-%m-%dT%H:%M:%S -> Date and Time
                 # .%03d -> 3-digit milliseconds
@@ -473,13 +535,30 @@ class EEEAggregator:
             """
             def filter(self, record: logging.LogRecord) -> bool:
                 # Standardize the log header format by replacing dots with colons and uppercasing text.
+                """
+                Normalize the log record's name by replacing dots with double colons and uppercasing it.
+                
+                This mutates `record.name` in-place so downstream handlers see the standardized header format.
+                
+                Parameters:
+                    record (logging.LogRecord): The log record to modify.
+                
+                Returns:
+                    bool: `True` to allow the record to be processed.
+                """
                 record.name = record.name.replace('.', '::').upper()
                 return True
         
         @classmethod
         def pass_thru_EEE_filters(cls) -> logging.Formatter:
             """
-            This is the method to pass the log entry through the time formatter.
+            Return a logging.Formatter configured for EEE messages with standardized timestamp and header formatting.
+            
+            The returned formatter uses an ISO 8601 timestamp with milliseconds and timezone offset and the format:
+            "%(asctime)s | %(levelname)s | [%(name)s] | %(message)s".
+            
+            Returns:
+                logging.Formatter: Formatter instance configured with the EEE time formatter and standard layout.
             """
             # Standardized log format for all log entries
             # (e.g. 2025-01-15T12:34:56.789-08:00 | INFO | [SYSTEM::ROOT] | This is a log message)
@@ -490,11 +569,13 @@ class EEEAggregator:
         @classmethod
         def pass_filtrate_to_handler(cls, EEE_handler: logging.Handler):
             """
-            This is the method to pass the filtered entry format to the given handler.
-            It contains the standardized time formatter and header filter and applies them to the handler.
+            Apply the module's standard formatter and header filter to a logging.Handler.
             
-            Args:
-                handler: The logging handler to which the filter and formatter will be applied.
+            Parameters:
+                EEE_handler (logging.Handler): Handler to configure with the standard EEE formatter and header filter.
+            
+            Returns:
+                logging.Handler: The same handler instance after applying the formatter and filter.
             """
 
 
@@ -524,8 +605,9 @@ class EEEAggregator:
         @classmethod
         def engage_TALLE_to_propagate(cls) -> None:
             """
-            Sets up the Root Logger, The Master Logger, The Error Logger, and the Console. This is the orchestrator that
-            propagates the event entries to the appropriate loggers/handlers.
+            Configure system-wide logging propagation by initializing the root logger and a console handler.
+            
+            Sets the root logger level to DEBUG, clears any existing handlers to avoid duplication, and attaches a console StreamHandler set to INFO that is configured with the module's standard formatter and header filter for consistent timestamps and headers.
             """
             # Set up root logger for the entire system
             root = logging.getLogger()
@@ -559,29 +641,64 @@ class EEEAggregator:
         eee.critical("RED ALERT! My core is overheating!")
     """
     def info(self, msg: str, evidence: dict = None):
-        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        """
+        Enqueues an INFO-level event for processing by the aggregator.
+        
+        Parameters:
+        	msg (str): Human-readable message describing the event.
+        	evidence (dict, optional): Additional structured context or diagnostic data to attach to the event.
+        """
         self._dispatch(logging.INFO, msg, evidence)
     
     def warning(self, msg: str, evidence: dict = None):
-        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        """
+        Enqueue a WARNING-level event for asynchronous processing; returns immediately.
+        
+        Parameters:
+        	msg (str): Human-readable event message.
+        	evidence (dict, optional): Additional context to attach to the event (e.g., traceback, diagnostics). Omit or pass None when there is no extra context.
+        """
         self._dispatch(logging.WARNING, msg, evidence)
     
     def error(self, msg: str, evidence: dict = None):
-        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        """
+        Enqueues an ERROR-level event for handling, propagation, and durable recording.
+        
+        Parameters:
+        	msg (str): Human-readable event message.
+        	evidence (dict, optional): Additional structured context to attach to the event (for example traceback, context fields, or other metadata).
+        """
         self._dispatch(logging.ERROR, msg, evidence)
     
     def critical(self, msg: str, evidence: dict = None):
-        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        """
+        Enqueue a CRITICAL-level event for asynchronous handling.
+        
+        Parameters:
+        	msg (str): Human-readable message describing the event.
+        	evidence (dict, optional): Additional context or payload to include with the event (for example traceback or diagnostic metadata).
+        """
         self._dispatch(logging.CRITICAL, msg, evidence)
     
     def debug(self, msg: str, evidence: dict = None):
-        """ Pushes to queue and returns immediately. No waiting for disk I/O. """
+        """
+        Log a debug-level event for this logger and enqueue it for processing.
+        
+        Parameters:
+            msg (str): Human-readable message describing the event.
+            evidence (dict, optional): Additional contextual data to include with the event.
+        """
         self._dispatch(logging.DEBUG, msg, evidence)
 
     def exception(self, msg: str, evidence: dict = None):
         """
-        Captures the full stack trace AND any physical evidence 
-        provided by the sensors at the time of the crash.
+        Record the current exception traceback and dispatch an ERROR-level event with optional sensor evidence.
+        
+        If `evidence` is omitted, creates an empty dict, injects the current exception traceback into `evidence["traceback"]`, and enqueues the message and evidence for processing by the aggregator's background worker.
+        
+        Parameters:
+            msg (str): Human-readable message describing the context of the exception.
+            evidence (dict, optional): Additional context or sensor data to include with the event; will be mutated to include the traceback.
         """
         if evidence is None:
             evidence = {}
@@ -592,7 +709,14 @@ class EEEAggregator:
         # Dispatch to the background worker (Async)
         self._dispatch(logging.ERROR, msg, evidence)
     def _dispatch(self, level: int, msg: str, evidence: dict):
-        """ Package the event and drop it in the mail """
+        """
+        Enqueue an event for asynchronous processing and emit an immediate console log record.
+        
+        Parameters:
+        	level (int): Logging level (e.g., logging.INFO, logging.WARNING).
+        	msg (str): Human-readable message describing the event.
+        	evidence (dict): Optional structured context or payload to accompany the event.
+        """
         self._log_queue.put((time.time(), level, self.logger.name, msg, evidence))
 
         # Trigger the console output immediately
@@ -600,8 +724,13 @@ class EEEAggregator:
 
 def get_logger(caller_id: str = "SCS.EEE") -> EEEAggregator:
     """
-    This is the public API for the other modules to call logging methods.
-    It simply returns an instance of the EEEAggregator class.
+    Create or retrieve an EEEAggregator for the given caller identifier.
+    
+    Parameters:
+        caller_id (str): Dot-delimited identifier used as the logger's name (e.g., "SYSTEM.NODE.MODULE"). Defaults to "SCS.EEE".
+    
+    Returns:
+        EEEAggregator: An EEEAggregator instance configured for the provided caller_id.
     """
     return EEEAggregator(caller_id)
 

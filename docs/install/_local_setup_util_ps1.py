@@ -24,6 +24,17 @@ DSV_TYPE_SOURCE = 'source'
 
 
 def main(argv=sys.argv[1:]):  # noqa: D103
+    """
+    Print shell commands for discovered packages in topological order.
+    
+    Parameters:
+        argv (List[str]): Command-line arguments. Expected values:
+            - argv[0]: primary shell file extension (required).
+            - argv[1]: additional file extension (optional).
+            - '--merged-install' flag (optional) to treat all install prefixes as a single merged location.
+    
+    The function discovers packages from the script's install layout, computes a topological ordering based on package runtime dependencies, processes each package's DSV entries to generate shell commands, and writes those commands to standard output.
+    """
     parser = argparse.ArgumentParser(
         description='Output shell commands for the packages in topological '
                     'order')
@@ -61,15 +72,16 @@ def main(argv=sys.argv[1:]):  # noqa: D103
 
 def get_packages(prefix_path, merged_install):
     """
-    Find packages based on colcon-specific files created during installation.
-
-    :param Path prefix_path: The install prefix path of all packages
-    :param bool merged_install: The flag if the packages are all installed
-      directly in the prefix or if each package is installed in a subdirectory
-      named after the package
-    :returns: A mapping from the package name to the set of runtime
-      dependencies
-    :rtype: dict
+    Discover installed packages and their runtime dependencies from a Colcon install layout.
+    
+    Scans the install prefix for colcon package index files (share/colcon-core/packages) and builds a mapping from package name to the set of its runtime dependencies. Only dependencies that correspond to discovered packages are retained.
+    
+    Parameters:
+        prefix_path (Path): Install prefix containing package layouts.
+        merged_install (bool): If True, packages are installed directly under the prefix (use the shared index). If False, each package is installed in its own subdirectory named after the package.
+    
+    Returns:
+        dict: Mapping of package name to a set of its runtime dependency package names.
     """
     packages = {}
     # since importing colcon_core isn't feasible here the following constant
@@ -107,11 +119,11 @@ def get_packages(prefix_path, merged_install):
 
 def add_package_runtime_dependencies(path, packages):
     """
-    Check the path and if it exists extract the packages runtime dependencies.
-
-    :param Path path: The resource file containing the runtime dependencies
-    :param dict packages: A mapping from package names to the sets of runtime
-      dependencies to add to
+    Record runtime dependencies from a dependency file into the provided packages mapping using the file's name as the package key.
+    
+    Parameters:
+        path (Path): Path to a file whose contents are runtime dependencies separated by os.pathsep.
+        packages (dict): Mapping from package name to a set of runtime dependency names; this function sets packages[path.name] to the parsed dependency set.
     """
     content = path.read_text()
     dependencies = set(content.split(os.pathsep) if content else [])
@@ -120,12 +132,16 @@ def add_package_runtime_dependencies(path, packages):
 
 def order_packages(packages):
     """
-    Order packages topologically.
-
-    :param dict packages: A mapping from package name to the set of runtime
-      dependencies
-    :returns: The package names
-    :rtype: list
+    Produce a topological ordering of package names based on their runtime dependencies.
+    
+    Parameters:
+        packages (dict): Mapping from package name to a set of package names it depends on.
+    
+    Returns:
+        list: Package names ordered so that each package appears after any packages it depends on.
+    
+    Raises:
+        RuntimeError: If a circular dependency between packages is detected.
     """
     # select packages with no dependencies in alphabetical order
     to_be_ordered = list(packages.keys())
@@ -150,10 +166,15 @@ def order_packages(packages):
 
 def reduce_cycle_set(packages):
     """
-    Reduce the set of packages to the ones part of the circular dependency.
-
-    :param dict packages: A mapping from package name to the set of runtime
-      dependencies which is modified in place
+    Reduce the given package dependency mapping to the subset involved in a circular dependency.
+    
+    This function mutates the provided `packages` dict in place by removing any package that is not depended on by another remaining package until the set stabilizes or becomes empty.
+    
+    Parameters:
+        packages (dict): Mapping from package name to a set of runtime dependency names; this mapping is modified in place.
+    
+    Returns:
+        sequence or None: A sequence (view) of package names that remain and are part of the circular dependency when the reduction stabilizes, or `None` if no packages remain.
     """
     last_depended = None
     while len(packages) > 0:
@@ -176,10 +197,31 @@ def reduce_cycle_set(packages):
 def _include_comments():
     # skipping comment lines when COLCON_TRACE is not set speeds up the
     # processing especially on Windows
+    """
+    Determine whether generated output should include comment lines.
+    
+    Checks the environment for the COLCON_TRACE variable to decide if comment
+    lines (trace information) should be included.
+    
+    Returns:
+        True if the COLCON_TRACE environment variable is set, False otherwise.
+    """
     return bool(os.environ.get('COLCON_TRACE'))
 
 
 def get_commands(pkg_name, prefix, primary_extension, additional_extension):
+    """
+    Collect shell command lines for a package by processing its package.dsv file if present.
+    
+    Parameters:
+        pkg_name (str): Name of the package whose package.dsv will be looked up under <prefix>/share/<pkg_name>/package.dsv.
+        prefix (str): Root install prefix used to locate the package.dsv and to resolve relative source paths.
+        primary_extension (str or None): Primary file extension to prefer when emitting source-invoke commands (e.g., 'ps1').
+        additional_extension (str or None): Additional file extension to also consider when emitting source-invoke commands.
+    
+    Returns:
+        list[str]: Ordered list of command lines generated from the package.dsv file, or an empty list if no package.dsv exists.
+    """
     commands = []
     package_dsv_path = os.path.join(prefix, 'share', pkg_name, 'package.dsv')
     if os.path.exists(package_dsv_path):
@@ -191,6 +233,23 @@ def get_commands(pkg_name, prefix, primary_extension, additional_extension):
 def process_dsv_file(
     dsv_path, prefix, primary_extension=None, additional_extension=None
 ):
+    """
+    Parse a .dsv file and generate a list of shell command lines described by its entries.
+    
+    Processes each non-empty, non-comment line in the .dsv file at `dsv_path`. Non-`source` lines are delegated to handle_dsv_types_except_source which may produce commands; `source` lines are grouped by basename and filtered by the provided `primary_extension` and `additional_extension`. If a corresponding `.dsv` file exists for a basename it is processed recursively. For qualifying source entries, emits invoke-script commands using FORMAT_STR_INVOKE_SCRIPT. If COLCON_TRACE is set, a comment line for the processed file is prepended.
+    
+    Parameters:
+    	dsv_path (str): Path to the .dsv file to read.
+    	prefix (str): Base directory to resolve relative source paths.
+    	primary_extension (str|None): Primary source file extension to prefer (e.g., "ps1"); may be None.
+    	additional_extension (str|None): Alternate source file extension to consider; may be None.
+    
+    Returns:
+    	commands (list[str]): Ordered list of command lines generated from the .dsv file and any recursively processed .dsv files.
+    
+    Raises:
+    	RuntimeError: If a line in the file is missing the required semicolon separator, or if an error from handling a non-source line occurs (the error message is annotated with the line number and file path).
+    """
     commands = []
     if _include_comments():
         commands.append(FORMAT_STR_COMMENT_LINE.format_map({'comment': dsv_path}))
@@ -262,6 +321,26 @@ def process_dsv_file(
 
 
 def handle_dsv_types_except_source(type_, remainder, prefix):
+    """
+    Build command lines for DSV directives other than the `source` type.
+    
+    Processes `set`, `set_if_unset`, `append_non_duplicate`, `prepend_non_duplicate`, and
+    `prepend_non_duplicate_if_exists` directives described by `type_` and `remainder`,
+    resolving relative paths against `prefix` as needed.
+    
+    Parameters:
+        type_ (str): The DSV directive type token.
+        remainder (str): The portion of the DSV line after the initial type token and semicolon.
+        prefix (str): Base path used to resolve relative file system paths referenced in values.
+    
+    Returns:
+        list: A list of command lines (strings) representing environment mutations or
+        comment lines generated for the directive.
+    
+    Raises:
+        RuntimeError: If `remainder` is malformed (missing expected semicolon-separated fields)
+        or if `type_` is not a recognized non-`source` DSV type.
+    """
     commands = []
     if type_ in (DSV_TYPE_SET, DSV_TYPE_SET_IF_UNSET):
         try:
@@ -320,6 +399,22 @@ env_state = {}
 
 
 def _append_unique_value(name, value):
+    """
+    Append a path-like value to the module's tracked environment variable state and produce the shell command(s) to apply the change.
+    
+    Parameters:
+        name (str): The environment variable name to modify.
+        value (str): The value to append to the environment variable (treated as a path component).
+    
+    Returns:
+        list[str]: A list containing a single command string to set the environment variable.
+            If the value is already present in the tracked state and comment output is enabled,
+            returns a single commented command string. If the value is already present and comments
+            are disabled, returns an empty list.
+    
+    Side effects:
+        Updates the global env_state mapping to include `value` in env_state[name].
+    """
     global env_state
     if name not in env_state:
         if os.environ.get(name):
@@ -342,6 +437,18 @@ def _append_unique_value(name, value):
 
 
 def _prepend_unique_value(name, value):
+    """
+    Prepare a command string that prepends `value` to the environment variable `name` and update the internal `env_state`.
+    
+    If `name` is not already tracked, `env_state` is initialized from the current process environment (if present). The function records `value` in `env_state` and returns a list containing a single command string that prepends `value` to `name`. If `value` is already recorded for `name`, the function returns a commented command when comment output is enabled, or an empty list when it is disabled.
+    
+    Parameters:
+        name (str): The environment variable name to modify.
+        value (str): The value to prepend to the environment variable.
+    
+    Returns:
+        list[str]: A single-item list with the command string to prepend the value, a single-item list with the command commented out when a duplicate is detected and comments are enabled, or an empty list when a duplicate is detected and comments are disabled.
+    """
     global env_state
     if name not in env_state:
         if os.environ.get(name):
@@ -366,6 +473,14 @@ def _prepend_unique_value(name, value):
 # generate commands for removing prepended underscores
 def _remove_ending_separators():
     # do nothing if the shell extension does not implement the logic
+    """
+    Generate command lines to remove leading and trailing path separators from environment variables added by this script.
+    
+    The function returns commands for each environment variable tracked in the module state that did not already exist in the process environment; if the configured formatter for removing trailing separators is None, or no variables require modification, an empty list is returned.
+    
+    Returns:
+        list[str]: Shell command strings to remove leading and trailing separators, or an empty list.
+    """
     if FORMAT_STR_REMOVE_TRAILING_SEPARATOR is None:
         return []
 
@@ -382,6 +497,16 @@ def _remove_ending_separators():
 
 
 def _set(name, value):
+    """
+    Set the generated environment variable value and return the corresponding set command line.
+    
+    Parameters:
+        name (str): The environment variable name to set.
+        value (str): The value to assign to the environment variable; stored in module state.
+    
+    Returns:
+        list[str]: A single-item list containing the formatted command line that sets the environment variable.
+    """
     global env_state
     env_state[name] = value
     line = FORMAT_STR_SET_ENV_VAR.format_map(
@@ -390,6 +515,16 @@ def _set(name, value):
 
 
 def _set_if_unset(name, value):
+    """
+    Produce a command line to set an environment variable, or a commented command if the variable is already set.
+    
+    Parameters:
+        name (str): Environment variable name to set.
+        value (str): Value to assign to the environment variable.
+    
+    Returns:
+        list[str]: A single-item list containing the formatted set command, or a commented set command if the variable already exists in the current env_state or in os.environ.
+    """
     global env_state
     line = FORMAT_STR_SET_ENV_VAR.format_map(
         {'name': name, 'value': value})

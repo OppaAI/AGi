@@ -5,7 +5,7 @@
 # contained in this prefix path.
 
 # function to source another script with conditional trace output
-# first argument: the path of the script
+# _colcon_prefix_chain_bash_source_script sources the specified script if it exists, echoes a trace line when COLCON_TRACE is non-empty, and writes an error to stderr if the file is not found.
 _colcon_prefix_chain_bash_source_script() {
   if [ -f "$1" ]; then
     if [ -n "$COLCON_TRACE" ]; then

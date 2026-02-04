@@ -7,12 +7,14 @@ DB_PATH = "./logs/ledger.db"
 
 def query_anomalies(limit=20, level_filter=None, system_filter=None):
     """
-    Query the ledger database with optional filters.
+    Prints a formatted list of recent ledger events matching optional level and system filters.
+    
+    Results are ordered by timestamp (newest first) and limited to the specified number. Output is written to stdout (tabular rows plus a summary produced by print_summary). If the ledger file is missing or the events table/schema is absent, a user-friendly message is printed and the function returns.
     
     Args:
-        limit: Number of records to return
-        level_filter: Filter by level (e.g., "ERROR", "CRITICAL")
-        system_filter: Filter by system (e.g., "VCS", "SCS")
+        limit: Maximum number of event rows to display.
+        level_filter: If provided, only include events with this level (e.g., "ERROR", "CRITICAL").
+        system_filter: If provided, only include events for this system (e.g., "VCS", "SCS").
     """
     if not Path(DB_PATH).exists():
         print("No ledger found. The robot hasn't done anything yet!")
@@ -88,7 +90,14 @@ def query_anomalies(limit=20, level_filter=None, system_filter=None):
 
 
 def print_summary(cursor, level_filter=None, system_filter=None):
-    """Print summary statistics from the ledger."""
+    """
+    Print a summary of event counts by log level and a total, applying optional level and system filters.
+    
+    Parameters:
+        cursor (sqlite3.Cursor): Database cursor against the ledger `events` table.
+        level_filter (str, optional): If provided, restrict counts to rows whose `level` equals this value.
+        system_filter (str, optional): If provided, restrict counts to rows whose `system` equals this value.
+    """
     
     # Count by level
     query = "SELECT level, COUNT(*) FROM events"
@@ -126,7 +135,15 @@ def print_summary(cursor, level_filter=None, system_filter=None):
 
 
 def colorize_level(level):
-    """Add ANSI color codes to level for terminal output."""
+    """
+    Format a log level with ANSI color codes for terminal display.
+    
+    Parameters:
+        level (str): Log level name (case-insensitive); common values include CRITICAL, ERROR, WARNING, INFO, DEBUG.
+    
+    Returns:
+        str: The level text padded to 8 characters and wrapped with ANSI color codes if the level is recognized; otherwise the padded level text without color.
+    """
     colors = {
         "CRITICAL": "\033[1;31m",  # Bold Red
         "ERROR": "\033[31m",       # Red
@@ -186,7 +203,14 @@ def query_by_correlation(correlation_id):
 
 
 def check_duplicates(time_window=5):
-    """Find duplicate events within a time window (for debugging deduplication)."""
+    """
+    Report groups of events that share the same content_hash and appear more than once.
+    
+    Searches the ledger's events table for duplicate content_hash values and prints a summary for each duplicate group, including a truncated hash, occurrence count, message preview, first/last timestamps, levels, and associated correlation IDs.
+    
+    Parameters:
+        time_window (int): Time window in minutes (currently ignored); retained for compatibility.
+    """
     if not Path(DB_PATH).exists():
         print("No ledger found.")
         return
@@ -228,7 +252,12 @@ def check_duplicates(time_window=5):
 
 
 def show_recent_errors(minutes=60):
-    """Show errors from the last N minutes."""
+    """
+    List recent ERROR and CRITICAL events from the ledger within a given time window.
+    
+    Parameters:
+        minutes (int): Number of minutes to look back from now for errors (default: 60).
+    """
     if not Path(DB_PATH).exists():
         print("No ledger found.")
         return
