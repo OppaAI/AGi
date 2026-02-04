@@ -9,12 +9,16 @@ that they are addressed promptly and effectively, thus maintaining system stabil
 
 # System modules
 import atexit
+from collections import deque
 from datetime import datetime
+import gzip
 import hashlib
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import queue
+import shutil
 import signal
 import sqlite3
 import threading
@@ -27,6 +31,25 @@ LOG_PATH = "./logs"  # Location of log files
 LEDGER_DB_FILE = "ledger.db"  # Ledger database file name
 MASTER_LOG_FILE = "activity.log"  # Master log file name (40% of the logs)
 ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
+
+class GzipRotatingFileHandler(RotatingFileHandler):
+    """
+    RotatingFileHandler that gzips old backups on rotate.
+    """
+    def doRollover(self):
+        super().doRollover()
+        # Gzip the oldest backup (backupCount keeps N files)
+        if self.backupCount > 0:
+            # Find the oldest .1 file (or whichever is now the "extra" one)
+            log_path = Path(self.baseFilename)
+            for i in range(self.backupCount - 1, 0, -1):
+                old_file = log_path.parent / f"{log_path.name}.{i}"
+                if old_file.exists():
+                    with open(old_file, 'rb') as f_in:
+                        with gzip.open(f"{old_file}.gz", 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    old_file.unlink()  # Delete uncompressed
+                    break
 
 class TokenBucketThrottle:
     """
@@ -112,6 +135,11 @@ class EEEAggregator:
     _thread_lock = threading.Lock()
     _shutdown_registered = False
     _plugins: dict = {}  # plugin_name -> callback
+    _ledger_queue: deque = deque()  # Tuple: (args for execute)
+    _ledger_flush_timer: threading.Timer | None = None
+    _ledger_lock = threading.Lock()
+    BATCH_SIZE = 50
+    FLUSH_INTERVAL = 0.5  # seconds
 
     _throttles: dict = {}  # Per-proc_id throttles
     _throttle_config = {
@@ -164,6 +192,17 @@ class EEEAggregator:
         log_dir = Path(LOG_PATH)
         log_dir.mkdir(parents=True, exist_ok=True)
 
+        # ✅ Create handlers ONCE before the loop
+        master_handler = GzipRotatingFileHandler(
+            log_dir / MASTER_LOG_FILE, maxBytes=5*1024*1024, backupCount=5, encoding='utf-8'
+        )
+        master_handler.setFormatter(EEEAggregator.Filtrator.pass_thru_EEE_filters())
+        
+        anomaly_handler = GzipRotatingFileHandler(
+            log_dir / ERROR_LOG_FILE, maxBytes=2*1024*1024, backupCount=5, encoding='utf-8'
+        )
+        anomaly_handler.setFormatter(logging.Formatter('%(message)s'))
+
         # THE LEDGER: Initialize SQLite here
         db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
         db_conn.execute("""
@@ -189,6 +228,21 @@ class EEEAggregator:
         db_conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON events(content_hash)")
         db_conn.commit()
 
+        # Start periodic flush timer
+        def _start_ledger_flush():
+            with EEEAggregator._ledger_lock:
+                if EEEAggregator._ledger_flush_timer is None:
+                    def flush_loop():
+                        EEEAggregator._flush_ledger_batch()
+                        EEEAggregator._ledger_flush_timer = threading.Timer(
+                            EEEAggregator.FLUSH_INTERVAL, flush_loop
+                        )
+                        EEEAggregator._ledger_flush_timer.daemon = True
+                        EEEAggregator._ledger_flush_timer.start()
+                    flush_loop()
+
+        _start_ledger_flush()
+
         text_formatter = EEEAggregator.Filtrator.pass_thru_EEE_filters()
 
         # Deduplication cache: content_hash -> (timestamp, correlation_id)
@@ -197,6 +251,8 @@ class EEEAggregator:
         
          # Throttling stats (for monitoring)
         throttled_count = 0
+
+        system_handlers = {}  # proc_id -> handler (create on first use)
 
         while True:
             # Wait for a log entry
@@ -316,18 +372,23 @@ class EEEAggregator:
 
             try:
                 # 📦 ARCHIVE A: MASTER LOG (Post-mortem)
-                with open(log_dir / MASTER_LOG_FILE, "a", encoding="utf-8") as f:
-                    f.write(plain_text_line + "\n")
+                # Create rotating + gzip handlers (shared across events)
+                master_handler.emit(record)
 
                 # 🔧 ARCHIVE B: SYSTEM LOG (Subsystem isolation)
                 system_prefix = caller.split('.')[0].lower()
-                with open(log_dir / f"{system_prefix}.log", "a", encoding="utf-8") as f:
-                    f.write(plain_text_line + "\n")
+                if system_prefix not in system_handlers:
+                    system_handlers[system_prefix] = GzipRotatingFileHandler(
+                        log_dir / f"{system_prefix}.log", maxBytes=3*1024*1024, backupCount=3, encoding='utf-8'
+                    )
+                    system_handlers[system_prefix].setFormatter(text_formatter)
+                system_handlers[system_prefix].emit(record)  # Use same formatted record
 
                 # 🔍 ARCHIVE C: ANOMALY VAULT (JSONL for Cloud/ML)
                 # Severe warnings, Errors, and Fatals
                 if level >= logging.WARNING:
                     # We use a clean payload for JSONL, distinct from the text line
+                    # Write JSON line via anomaly_handler (set formatter to JSON)
                     payload = {
                         "correlation_id": correlation_id,
                         "timestamp": iso_timestamp,
@@ -341,15 +402,27 @@ class EEEAggregator:
                         "context": {k: v for k, v in evidence.items() if k != "traceback"} if evidence else None,
                         "routed_to": channels
                     }
-                    with open(log_dir / ERROR_LOG_FILE, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(payload) + "\n")
 
-                # 📊 THE LEDGER (SQLite Metadata)
-                db_conn.execute("""
-                    INSERT INTO events
-                    (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
+                    # JSON string as message
+                    payload_str = json.dumps(payload)
+
+                    # Dummy LogRecord for JSONL as message
+                    json_record = logging.LogRecord(
+                        name=proc_id,           # For consistency
+                        level=level,
+                        pathname="",            # Unused
+                        lineno=0,               # Unused
+                        msg=payload_str,        # This becomes the line
+                        args=None,
+                        exc_info=None
+                    )
+                    json_record.created = timestamp # For potential time use
+
+                    # Write JSON line via anomaly_handler (set formatter to JSON)
+                    anomaly_handler.emit(json_record)
+    
+                # 📊 THE LEDGER (SQLite Metadata) - Batched insert
+                ledger_args = (
                     correlation_id,
                     iso_timestamp,
                     lvl_name,
@@ -360,15 +433,44 @@ class EEEAggregator:
                     message_preview,
                     json.dumps(channels),
                     content_hash
-                ))
-                db_conn.commit()
+                )
+                with EEEAggregator._ledger_lock:
+                    EEEAggregator._ledger_queue.append(ledger_args)
+                    # Immediate flush if batch full (for low-volume bursts)
+                    if len(EEEAggregator._ledger_queue) >= EEEAggregator.BATCH_SIZE:
+                        EEEAggregator._flush_ledger_batch()
 
             except Exception as e:
                 # (TODO) If the disk fails, print to console for now
                 print(f"Failed to write to archive: {e}")
 
             EEEAggregator._log_queue.task_done()
+
+    @classmethod
+    def _flush_ledger_batch(cls):
+        with cls._ledger_lock:
+            if not cls._ledger_queue:
+                return
             
+            batch = list(cls._ledger_queue)
+            cls._ledger_queue.clear()
+            
+            try:
+                # Re-use db_conn from worker scope? Better: open briefly or pass conn
+                # For simplicity: re-open conn here (cheap, safe)
+                log_dir = Path(LOG_PATH)
+                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+                db_conn.executemany("""
+                    INSERT INTO events
+                    (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, batch)
+                db_conn.commit()
+                db_conn.close()
+            except Exception as e:
+                print(f"[EEE] Ledger batch flush failed: {e}")
+                # Re-queue on failure? Optional: cls._ledger_queue.extendleft(reversed(batch))
+                
     @classmethod
     def get_throttle_status(cls) -> dict:
         """
@@ -391,10 +493,12 @@ class EEEAggregator:
 
     @classmethod
     def shutdown(cls):
-        """Gracefully shutdown the async worker and flush all pending events."""
         if cls._worker_started:
             print("[EEE] Flushing pending log entries...")
-            cls._log_queue.join()  # Wait for queue to empty
+            cls._log_queue.join()
+            cls._flush_ledger_batch()  # Final Ledger flush
+            if cls._ledger_flush_timer:
+                cls._ledger_flush_timer.cancel()
             print(f"[EEE] All events written. Shutdown complete.")
     
     @classmethod

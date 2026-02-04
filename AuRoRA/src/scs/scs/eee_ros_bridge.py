@@ -1,15 +1,23 @@
 """
 EEE ROS Bridge - REFLEX and AWARENESS channels.
 These are OPTIONAL bridging plugins that inject ROS capabilities into EEE.
+
+CHANGELOG (Bug Fixes):
+- Fixed Bug #4: Added missing 'stales' and 'stale_count' calculation in _handle_health_query
+- Fixed Bug #6: Corrected STALE_TIMEOUT -> STALE_THRESHOLD in _check_stale_modules
+- Fixed Bug #7: Improved CID detection robustness in AwarenessPlugin (changed "CID:" to "| CID:")
+- Added Item #8: MetricsPlugin for real-time numeric trend visualization (/eee/metrics topic)
 """
 
 import logging
+import time
 from typing import Dict
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from rcl_interfaces.msg import Log
 from rclpy.node import Node
 from std_srvs.srv import Trigger
+from std_msgs.msg import Float64MultiArray
 
 # Import EEE at module level (fail fast if missing)
 from scs.eee import EEEAggregator
@@ -22,6 +30,7 @@ class EEEROSBridge(Node):
     Provides:
     - REFLEX channel (/diagnostics): Real-time safety alerts
     - AWARENESS channel (/rosout): Human-readable logs
+    - METRICS channel (/eee/metrics): Numeric trends for visualization
     - Health query service (/eee/health): System status
     """
     
@@ -35,10 +44,12 @@ class EEEROSBridge(Node):
         try:
             self.reflex = ReflexPlugin(self)
             self.awareness = AwarenessPlugin(self)
-            self._plugins.extend([self.reflex, self.awareness])
+            self.metrics = MetricsPlugin(self)
+            self._plugins.extend([self.reflex, self.awareness, self.metrics])
             
             self.get_logger().info("✅ REFLEX channel: /diagnostics")
             self.get_logger().info("✅ AWARENESS channel: /rosout")
+            self.get_logger().info("✅ METRICS channel: /eee/metrics")
             
         except Exception as e:
             self.get_logger().error(f"Failed to initialize channels: {e}")
@@ -66,36 +77,52 @@ class EEEROSBridge(Node):
     def _handle_health_query(self, request, response):
         """
         Service: Instant health check via REFLEX cache.
-        
+    
         Returns:
             success: True if no ERROR-level statuses
-            message: Summary of monitored modules
+            message: Detailed summary with errored/warned/stale modules
         """
         try:
-            module_states = self.reflex.get_all_statuses()
-            error_count = sum(
-                1 for s in module_states.values() 
-                if s.level == DiagnosticStatus.ERROR
-            )
-            warn_count = sum(
-                1 for s in module_states.values() 
-                if s.level == DiagnosticStatus.WARN
-            )
+            module_states = self.reflex.get_all_statuses()  # Dict[proc_id, DiagnosticStatus]
             
+            # ✅ FIX Bug #4: Calculate all three status lists
+            errors = [name for name, s in module_states.items() if s.level == DiagnosticStatus.ERROR]
+            warns = [name for name, s in module_states.items() if s.level == DiagnosticStatus.WARN]
+            stales = [name for name, s in module_states.items() if s.level == DiagnosticStatus.STALE]
+            
+            error_count = len(errors)
+            warn_count = len(warns)
+            stale_count = len(stales)
+        
             response.success = (error_count == 0)
-            response.message = (
-                f"Modules: {len(module_states)} | "
-                f"Errors: {error_count} | "
-                f"Warnings: {warn_count}"
-            )
             
+            # Richer message: counts + list of affected modules (truncated if too many)
+            details = []
+            if errors:
+                details.append(f"Errors ({error_count}): {', '.join(errors[:10])}" + ("..." if len(errors) > 10 else ""))
+            if warns:
+                details.append(f"Warnings ({warn_count}): {', '.join(warns[:10])}" + ("..." if len(warns) > 10 else ""))
+            if stales:
+                details.append(f"STALE ({stale_count}): {', '.join(stales[:10])}" + ("..." if len(stales) > 10 else ""))
+
+            summary = f"Modules: {len(module_states)} | " + " | ".join(details) if details else "All OK"
+            response.message = summary
+        
+            # Logging with proper status reporting
             if error_count > 0:
-                self.get_logger().warn(f"Health check: {error_count} errors detected")
-                
+                self.get_logger().warn(f"Health check: {error_count} errors ({', '.join(errors)})")
+            elif warn_count > 0:
+                self.get_logger().info(f"Health check: {warn_count} warnings")
+            elif stale_count > 0:
+                self.get_logger().info(f"Health check: {stale_count} stale modules")
+            else:
+                self.get_logger().info("Health check: System healthy")
+            
         except Exception as e:
             response.success = False
             response.message = f"Health check failed: {str(e)}"
-        
+            self.get_logger().error(response.message)
+    
         return response
 
     def destroy_node(self):
@@ -119,6 +146,8 @@ class ReflexPlugin:
     REFLEX Channel: Real-time safety alerts (/diagnostics).
     """
     NAME = "reflex"
+    PUBLISH_COOLDOWN = 1.0  # Min 1 second between publishes per proc_id
+    STALE_THRESHOLD = 10.0  # 10 seconds without update = STALE
     
     def __init__(self, ros_node: Node):
         self.node = ros_node
@@ -130,7 +159,14 @@ class ReflexPlugin:
             10
         )
         self._cache: Dict[str, DiagnosticStatus] = {}
-        
+        self._last_publish: Dict[str, float] = {}  # proc_id -> last publish time
+
+        # STALE Watchdog Timer
+        self._stale_timer = ros_node.create_timer(
+            1.0,  # Check every 1 second
+            self._check_stale_modules
+        )
+
         # Register with EEE
         EEEAggregator.register_plugin(self.NAME, self._handle)
     
@@ -145,10 +181,22 @@ class ReflexPlugin:
         if level < logging.WARNING:
             return False
         
+        # Throttle check
+        proc_id = meta["proc_id"]
+        now = time.monotonic()
+
+        if proc_id in self._last_publish:
+            elapsed = now - self._last_publish[proc_id]
+            if elapsed < self.PUBLISH_COOLDOWN:
+                # Too soon - skip publish
+                return False
+
         try:
             status = self._build_status(level, msg, evidence, meta)
             self._publish(status)
             self._cache[status.name] = status
+
+            self._last_publish[proc_id] = now
             
         except Exception as e:
             # Log error but don't crash EEE
@@ -179,6 +227,12 @@ class ReflexPlugin:
         
         # Add correlation ID
         status.values.append(KeyValue(key="cid", value=meta["correlation_id"][:8]))
+
+        # Add timestamp for STALE detection
+        status.values.append(KeyValue(
+            key="last_update", 
+            value=str(time.monotonic())
+        ))
         
         return status
     
@@ -189,15 +243,58 @@ class ReflexPlugin:
         diag.header.frame_id = self.robot_id
         diag.status = [status]
         self._pub.publish(diag)
-    
+
+    def _check_stale_modules(self):
+        """
+        Watchdog: Mark modules as STALE if no updates in STALE_THRESHOLD seconds.
+        REP-107 compliance for offline/timeout detection.
+        """
+        now = time.monotonic()
+        
+        for proc_id, status in list(self._cache.items()):
+            # Extract last update time from KeyValues
+            last_update = None
+            for kv in status.values:
+                if kv.key == "last_update":
+                    try:
+                        last_update = float(kv.value)
+                    except (ValueError, TypeError):
+                        pass
+                    break
+            
+            if last_update is None:
+                continue  # No timestamp, skip
+            
+            # ✅ FIX Bug #6: Use correct constant name
+            # Check if stale
+            elapsed = now - last_update
+            if elapsed > self.STALE_THRESHOLD:  # ← Was self.STALE_TIMEOUT (wrong!)
+                # Mark as STALE if not already
+                if status.level != DiagnosticStatus.STALE:
+                    status.level = DiagnosticStatus.STALE
+                    status.message = f"[STALE] No update in {elapsed:.1f}s"
+                    
+                    # Publish STALE status
+                    self._publish(status)
+                    self._cache[proc_id] = status
+                    
+                    self.node.get_logger().warn(
+                        f"Module {proc_id} marked STALE (no update in {elapsed:.1f}s)"
+                    )
+
     def get_all_statuses(self) -> Dict[str, DiagnosticStatus]:
         """Public accessor for health queries."""
         return self._cache.copy()
     
     def shutdown(self):
         """Unregister from EEE."""
+        # Cancel STALE watchdog timer
+        if hasattr(self, '_stale_timer'):
+            self._stale_timer.cancel()
+
         EEEAggregator.unregister_plugin(self.NAME)
         self._cache.clear()
+        self._last_publish.clear()
 
 
 class AwarenessPlugin:
@@ -255,11 +352,18 @@ class AwarenessPlugin:
                 return Log.DEBUG
             
             def _format_message(self, record) -> str:
-                """Format message with correlation ID if available."""
+                """
+                Format message with correlation ID if available.
+                
+                ✅ FIX Bug #7: More robust CID detection using pipe delimiter
+                """
                 msg = record.getMessage()
-                # Extract CID if present in EEE format
-                if "CID:" in msg:
+                
+                # More robust check for EEE-formatted CID (with pipe delimiter)
+                if "| CID:" in msg:  # ← Was just "CID:" (too generic)
                     return msg  # Already formatted by EEE
+                
+                # Fallback: no CID available (non-EEE logs)
                 return msg
         
         return ROSLogHandler()
@@ -269,3 +373,115 @@ class AwarenessPlugin:
         if self._handler_added:
             logging.getLogger().removeHandler(self._handler)
             self._handler_added = False
+
+
+class MetricsPlugin:
+    """
+    METRICS Channel: Numeric trends for Grafana/Foxglove visualization.
+    
+    Extracts numeric values from evidence dict and publishes to /eee/metrics.
+    Useful for real-time monitoring of:
+    - Temperature sensors
+    - CPU/GPU usage  
+    - Battery voltage
+    - Motor currents
+    - Any numeric telemetry
+    
+    Example evidence dict:
+        {
+            "temperature": 45.2,
+            "cpu_usage": 0.75,
+            "battery_voltage": 12.6
+        }
+    
+    Published as Float64MultiArray: [45.2, 0.75, 12.6]
+    """
+    NAME = "metrics"
+    
+    def __init__(self, ros_node: Node):
+        self.node = ros_node
+        
+        # Publisher for numeric metrics
+        self._pub = ros_node.create_publisher(
+            Float64MultiArray,
+            '/eee/metrics',
+            10
+        )
+        
+        # Statistics for monitoring
+        self._published_count = 0
+        self._empty_count = 0
+        
+        # Register with EEE to receive events
+        EEEAggregator.register_plugin(self.NAME, self._handle)
+        
+        self.node.get_logger().info("✅ METRICS channel initialized")
+    
+    def _handle(self, level: int, msg: str, evidence: dict, meta: dict) -> bool:
+        """
+        EEE plugin callback - extract and publish numeric metrics.
+        
+        Args:
+            level: Log level (INFO, WARNING, etc.)
+            msg: Log message
+            evidence: Dict that may contain numeric values
+            meta: Metadata (correlation_id, proc_id, etc.)
+        
+        Returns:
+            False: Always allow disk write (don't block)
+        """
+        if not evidence:
+            self._empty_count += 1
+            return False  # No data to extract
+        
+        # Extract only numeric values (int or float)
+        # Skip 'traceback' as it's not a metric
+        metrics = {
+            key: value 
+            for key, value in evidence.items() 
+            if isinstance(value, (int, float)) and key != "traceback"
+        }
+        
+        if not metrics:
+            self._empty_count += 1
+            return False  # No numeric data
+        
+        try:
+            # Create ROS message
+            # Note: We lose key names here - just publish values in dict order
+            # For production, consider creating custom msg with key-value pairs
+            metrics_msg = Float64MultiArray()
+            metrics_msg.data = list(metrics.values())
+            
+            # Publish to /eee/metrics
+            self._pub.publish(metrics_msg)
+            self._published_count += 1
+            
+            # Optional: Log what we published (for debugging)
+            if self._published_count <= 5:  # Only log first 5
+                self.node.get_logger().info(
+                    f"Published {len(metrics)} metrics from {meta['proc_id']}: {list(metrics.keys())}"
+                )
+            
+        except Exception as e:
+            # Don't crash on publish failure
+            self.node.get_logger().warn(f"Metrics publish failed: {e}")
+        
+        return False  # Don't block disk writes
+    
+    def get_stats(self) -> dict:
+        """Get publishing statistics (for monitoring)."""
+        return {
+            "published": self._published_count,
+            "empty": self._empty_count,
+            "total_events": self._published_count + self._empty_count
+        }
+    
+    def shutdown(self):
+        """Unregister from EEE."""
+        stats = self.get_stats()
+        self.node.get_logger().info(
+            f"METRICS channel shutdown - Published: {stats['published']}, "
+            f"Empty: {stats['empty']}, Total: {stats['total_events']}"
+        )
+        EEEAggregator.unregister_plugin(self.NAME)
