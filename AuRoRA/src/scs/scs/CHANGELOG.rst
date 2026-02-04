@@ -15,24 +15,23 @@ Future Implementation Roadmap
 
 Forthcoming
 -----------
-* Added smoke test in Pump init
-* Changed harvest to use frozen conduit map and prebounded collection points
-* Optimized conduit head location logic
-* Refactored the build conduit map algorithm to build the conduit junctions and get the flow rate from the robot spec YAML instead of hardcoded constants.
-* Removed unused lifestream flow rate and connection
-* Optimized conduit map building with threading
-* Refactored conduit map building to use parallel initialization with threading.
-* Enhanced the scout and locate functions for improved hardware interaction.
-* Added enter and exit to gracefully close the pump using with statement, thus getting rid of using close in finally every call.
-* Refactored Pump class to introduce PumpState enum.
-* Enhanced initialization logic.
-* Improved smoke test for conduit integrity.
-* Initialized broken_conduits as a list instead of a set for proper data handling in prune_broken_conduits method.
-* Refactored pump for thread safety and error handling.
-* Tightened thread lock and reduce checking floodgate to reduce latency.
-* Improved smoke test to prune out the broken conduits
-* Refactored pump to improve thread safety and error handling.
-* Updated floodgate checks and streamline conduit processing.
+* Added Igniter (Temporary) as a placeholder for the future robot ignition sequence (bootstrap)
+* Added EEEAggregator TALLE error logger to centralize logging of emergency and exception events:
+* - Injector: Collects log entries from various modules and ingests them into the logger
+* - Filtrator: Standardizes log entry format
+* - Propagator: Propagates log entries to multiple loggers/handlers based on severity level
+*     - TALLE uses 3 channels + 1 console output (for debugging) for logging and ledgering of emergency and exception events:
+*         - Master log: All logs (DEBUG and above)
+*         - Error log: Errors only (ERROR and above)
+*         - System log files: Separate log files for each system (DEBUG and above)
+*         - Console output: Info and above (INFO and above)
+* Added Deduplication mechanism to prevent log floods
+* Added TokenBucketThrottle class to rate limit logging
+* Added plugin system to EEEAggregator to allow for easy extension
+* Added EOS ROS Bridge plugin to bridge EEE to ROS 2 diagnostics and rosout
+* Added ReflexPlugin to bridge EEE to ROS 2 diagnostics
+* Added AwarenessPlugin to bridge EEE to ROS 2 rosout
+* Added Health query service to check the health of the robot
 
 0.1.3 (2026-01-26)
 ------------------

@@ -6,10 +6,41 @@ Changelog for package Vital Circulatory System
 
 **Description:** This system monitors and manages the vital signs of AGi robots, including their operational status, user interactions, and network connectivity. It provides real-time feedback and alerts for critical conditions, ensuring the smooth operation of the AGi ecosystem.
 
+Forthcoming
+-----------
+* Added smoke test in Pump init
+* Changed harvest to use frozen conduit map and prebounded collection points
+* Optimized conduit head location logic
+* Refactored the build conduit map algorithm to build the conduit junctions and get the flow rate from the robot spec YAML instead of hardcoded constants.
+* Removed unused lifestream flow rate and connection
+* Optimized conduit map building with threading
+* Refactored conduit map building to use parallel initialization with threading.
+* Enhanced the scout and locate functions for improved hardware interaction.
+* Added enter and exit to gracefully close the pump using with statement, thus getting rid of using close in finally every call.
+* Refactored Pump class to introduce PumpState enum.
+* Enhanced initialization logic.
+* Improved smoke test for conduit integrity.
+* Initialized broken_conduits as a list instead of a set for proper data handling in prune_broken_conduits method.
+* Refactored pump for thread safety and error handling.
+* Tightened thread lock and reduce checking floodgate to reduce latency.
+* Improved smoke test to prune out the broken conduits
+* Refactored pump to improve thread safety and error handling.
+* Updated floodgate checks and streamline conduit processing.
+
 0.1.3 (2026-01-26)
 ------------------
 * Added launch file to launch vtc and vcc nodes based on role parameter
 * Changed the threaded terminal print to use rclpy logger
+* Added QoS Profile to vital pulse signal and response
+* Established the framework to implement PRO2 architectural for VTC:
+* - Pump: Collects glob from different lifestream flow channels
+* Decoupled the Pump Module to its own module to have better modularity
+* Optimized lifestream collection using Triple Action Pump (TAP) technique to prioritize crucial glob while conserving memory footprints
+* Implemented impurity detection and removal to ensure clean glob is harvested
+* Transitioned the naming schema to a "Biological Hardware" schema with more evocative and memorable terminologies
+* Added a standalone validation block in the pump module for real-time verification of its integrity
+* Added Robot Spec YAML to define the robot's hardware and software specifications for better adaptability
+* Added dynamic conduit mapping to allow flexible and customizable data collection points
 
 0.1.2 (2026-01-01)
 ------------------

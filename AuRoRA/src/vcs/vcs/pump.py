@@ -1,17 +1,39 @@
 # System modules
 from ament_index_python.packages import get_package_share_directory
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from jtop import jtop
+import os, psutil
 from pathlib import Path
-from typing import Any, Dict, List, Literal
+from types import MappingProxyType
+from typing import Any, cast, Dict, List, Literal, NamedTuple, Tuple, Union
+import threading
+import time
 import yaml
+
+# AGi modules
+from scs.igniter_temp import StateOfModule
+from scs.eee import get_logger
+
+# Identifiers of this process
+PROC_ID = "VCS.VTC.Pump"
 
 # Define the flow channel type of the lifestream
 FlowChannel = Literal["LO", "MID", "HI"]
 
-# The robot spec file
-ConduitJunction = tuple[Any, ...]
-ConduitMap = tuple[str, ConduitJunction]
+# Architectural conduit type used to define each conduit component in the conduit map
+# Conduit junction types used to trace through the conduit path
+ConduitJunctionPoint = Union[str, int]                  # String for junction name, int for junction index
+ConduitJunctionList = tuple[ConduitJunctionPoint, ...]  # List of junction points in the conduit path
+
+# Frozen conduit junction type used to define the conduit path
+class ConduitType(NamedTuple):
+    conduit_id: str                    # ID of the conduit
+    collection_point: Any              # Pre-bound collection point (eg. self.jetson_reservoir.cpu)
+    junction_path: ConduitJunctionList # Path of junctions to trace through the conduit
+
+# Immutable conduit map type for conduit path
+ConduitMapBlueprint = MappingProxyType[FlowChannel, Tuple[ConduitType, ...]]    # Conduit map blueprint
 
 # TODO: to be moved to a global constants file
 ROBOT_SPEC_FILE: str = "robot_spec.yaml"
@@ -20,17 +42,17 @@ class Pump():
 
     """
     Pump Module:
-    - Harvests useful glob from the Jetson lifestream using Triple Action Pump (TAP) technique
+    - Harvests useful glob from the Jetson reservoir using Triple Action Pump (TAP) technique
     - Maintains a stream of consciousness (SOC) of the harvested glob
     - Exports the harvested glob to the vital terminal core for determining the health status
 
     Functions:
     - which_flow_rate_for_this_channel: Return the flow rate (CPS) for a given channel
     - what_pumping_rhythm_for_this_channel: Return the pumping rhythm (sec) for a given channel
-    - engage_tap_to_harvest_glob: Harvest glob from the Jetson lifestream and put into the bin using TAP technique
+    - engage_tap_to_harvest_glob: Harvest glob from the Jetson reservoir and put into the bin using TAP technique
     - harvest_glob_from_lifestream: Harvest glob from a specific flow channel
-    - dig_deep_thru_conduit: Navigate through the conduit to extract the glob
-    - close_valve: Gracefully stop the flow of the Jetson lifestream flow
+    - trace_thru_conduit: Trace through the conduit to extract the glob
+    - close_floodgate: Gracefully stop the flow of the Jetson reservoir flow
     """ 
 
     #TODO: to be moved to config file for settings, or to a robot spec YAML file
@@ -42,69 +64,92 @@ class Pump():
         }
 
     # The maximum capacity of stream stored in the bin
-    MAX_STREAM_CAPACITY: int = 10
+    MAX_STREAM_CAPACITY: int = 16
 
-    # The flow rate of lifestream
-    LIFESTREAM_FLOW_RATE: Dict[str, FlowChannel] = {
-        "p_unit": "HI",
-        "a_unit": "HI",
-        "temp": "HI",
-        "air_flow": "MID",
-        "stm": "MID",
-        "ltm": "LO",
-        "energy": "MID"
-    }    
-
+    # Sentinel value indicating collection point is not available
+    COLLECTION_POINT_NOT_AVAILABLE: int = -256
     
     def __init__(self):
         """
-        This is the initialization of the pump:
-        - Set the maximum flow rate of the Jetson lifestream and start the streamflow
+        Run the initialization of the pump module:
+        - Set up "INIT" state and lock
+        - Connect to the Jetson reservoir
+        - Build the explicit conduit map
+        - Verify the conduit map by performing a smoke test
+        - Transition to the "RUN" state if all checks pass
+
+        Returns:
+            None
         """
+
+        # Set up "INIT" state and lock
+        self.process = psutil.Process(os.getpid())
+        self.state: StateOfModule = StateOfModule.INIT
+        self._lock = threading.Lock()
+
+        self.logger = get_logger(PROC_ID)
+        self.logger.info("Pump Module Activation Sequence initiated...")
+
+        # Connect to the Jetson reservoir
+        #(TODO): to remove time logger
+        t0 = time.perf_counter()
+        p0 = self.process.memory_info().rss
+        if not self._connect_to_jetson_reservoir():
+            self.logger.error("Connection to Jetson Reservoir...[ABORT]")
+            self.state = StateOfModule.DEGRADED
+            return
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Connection to Jetson Reservoir...[CLEAR] - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
         
-        # Connect to the Jetson lifestream to initialize the streamflow and start the streamflow
-        self.jetson_lifestream = None
-        self.jetson_collection_points = None
-        try:
-            # Set the maximum flow rate of the Jetson lifestream
-            self.jetson_lifestream = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
-            # Start the streamflow
-            self.jetson_lifestream.start()
-
-        except Exception as e:
-            # In case of error, log the error and tell the pump that the Jetson lifestream is running empty
-            #TODO: Log the error in the log file
-            self.jetson_lifestream = None
-
         # Build the explicit conduit map
-        self._CONDUIT_MAP: Dict[FlowChannel, List[ConduitMap]] = self._build_conduit_map()
-    
-    def close_valve(self):
-        """Gracefully stop the flow of the Jetson lifestream"""
-        if self.jetson_lifestream and self.jetson_lifestream.ok():
-            self.jetson_lifestream.close()
+        t0 = time.perf_counter()
+        p0 = self.process.memory_info().rss
+        self._CONDUIT_MAP: ConduitMapBlueprint = self._build_conduit_map()
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Rebuilding of Conduit Map Blueprint...[CLEAR] - {sum(len(v) for v in self._CONDUIT_MAP.values())} conduits - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
+        
+        # Verify the conduit map by performing a smoke test
+        t0 = time.perf_counter()
+        p0 = self.process.memory_info().rss
+        if not self._smoke_test_floodgates():
+            self.logger.error("Validation with Smoke Test...[ABORT]")
+            self.state = StateOfModule.DEGRADED
+            return
+        dp = self.process.memory_info().rss - p0
+        dt = time.perf_counter() - t0
+        self.logger.info(f"Validation with Smoke Test...[CLEAR] - Elapsed: {dt:.6f} sec | Consumed: {dp / (1024*1024):.6f} MB")
+        
+        # Transition to the "RUN" state
+        self.state = StateOfModule.RUN
+        self.logger.info("Pump Module Activation Sequence completed...[SYSTEM ALL GREEN]")
 
-    def dig_deep_thru_conduit(self, data: Any, path: ConduitJunction) -> Any:
-        """Helper to navigate through the conduit to collect the glob."""
-        for key in path:
-            # Handle different types of conduit junctions
-            if isinstance(data, Dict) and key in data:
-                data = data[key]
-            elif isinstance(data, List) and isinstance(key, int):
-                if 0 <= key < len(data):
-                    data = data[key]
-                else:
-                    # Not a valid index, stop traversing
-                    return None
-            else:
-                # Not a valid conduit junction, stop traversing
+    def terminate(self):
+        """Terminate the pump module and close the floodgate."""
+        self.close_floodgate()
+        self.state = StateOfModule.OFF
+   
+    def close_floodgate(self):
+        """Gracefully stop the flow of the Jetson reservoir"""
+        if self.jetson_reservoir is not None:
+            self.jetson_reservoir.close()
+
+    def trace_thru_conduit(self, lifestream: Any, path: ConduitJunctionList) -> Any:
+        """Helper to trace through the conduit to collect the glob."""
+        for collection_point in path:
+            try:
+                # If the collection point is located
+                lifestream = lifestream[collection_point]
+            except (KeyError, IndexError, TypeError):
+                # If the conduit is blocked (invalid key/index), stop traversing.
                 return None
-        return data
+        return lifestream
   
     def engage_tap_to_harvest_glob(self, bin: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Collect glob from the Jetson lifestream and put into the bin using Triple Action Pump (TAP) technique:
-        - Connect the pump conduits to the collection points of the Jetson lifestream:
+        Collect glob from the Jetson reservoir and put into the bin using Triple Action Pump (TAP) technique:
+        - Connect the pump conduits to the collection points of the Jetson reservoir:
             - High flow channel: Collect crucial workload and energy vitals
             - Mid flow channel: Collect sensory vitals
             - Low flow channel: Collect memory vitals
@@ -120,19 +165,6 @@ class Pump():
         bin.setdefault("run", 0)
         bin.setdefault("glob", {})
         
-        # Connect the pump conduits to each collection point of the Jetson lifestream, if it is running and ready
-        if self.jetson_lifestream and self.jetson_lifestream.ok():
-            # Connect the conduits to the collection points of the Jetson lifestream
-            self.jetson_collection_points = {
-                "cpu": dict(self.jetson_lifestream.cpu),
-                "gpu": dict(self.jetson_lifestream.gpu),
-                "temperature": dict(self.jetson_lifestream.temperature),
-                "fan": dict(self.jetson_lifestream.fan),
-                "memory": dict(self.jetson_lifestream.memory),
-                "disk": dict(self.jetson_lifestream.disk),
-                "power": dict(self.jetson_lifestream.power)
-            }
-
         # Engage the Triple Action Pump (TAP) to harvest glob from the lifestream
         # Calculate how many runs for each pump cycle and midpoint of the cycle
         run_per_cycle = self.which_flow_rate_for_this_channel("HI") // self.which_flow_rate_for_this_channel("LO")
@@ -161,60 +193,173 @@ class Pump():
         Returns:
             dict[str, Any]: bin filled with useful glob from the given channel of lifestream
         """
-        # Follow the conduit map paths to locate the collection point and collect the glob
-        for key, (collection_point, path) in self._CONDUIT_MAP[channel]:
-            # Ensure deque exists in the bin
-            if key not in bin["glob"]:
-                bin["glob"][key] = deque(maxlen=self.MAX_STREAM_CAPACITY)
-
+        # Check the gate once here just to know if tracing is necessary.
+        floodgate_is_open = self.floodgate_is_open()
+        
+        # Load the frozen conduit map for the given channel
+        conduit_map: tuple[ConduitType, ...] = self._CONDUIT_MAP.get(channel, ())
+        
+        for conduit in conduit_map:
+            # Harvest the glob from the lifestream via the conduit path
             glob = None
+            if floodgate_is_open and conduit.collection_point is not None:
+                # Only trace the conduit if it's connection to the Jetson lifestream is established
+                glob = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
 
-            # Only dig into the conduit if it's connection to the Jetson lifestream is established
-            if self.jetson_collection_points:
-                try:
-                    # Dig deep into the conduit to collect the glob
-                    diverted_lifestream = self.jetson_collection_points.get(collection_point)
-
-                    # Only dig into the conduit if it's connection to the Jetson lifestream is established
-                    if diverted_lifestream is not None:
-                        glob = self.dig_deep_thru_conduit(diverted_lifestream, path)
-
-                    # Sift out the impurity or empty glob
-                    if glob == -256:
-                        glob = None
-                except Exception:
-                    # No glob to collect if conduit is not accessible
+                # Sift out the impurity or empty glob
+                if glob == self.COLLECTION_POINT_NOT_AVAILABLE:
                     glob = None
+                    
+                with self._lock:
+                    # Wrap the entire flow update in a lock to ensure thread safety
+                    # Ensure deque exists in the bin
+                    if conduit.conduit_id not in bin["glob"]:
+                        bin["glob"][conduit.conduit_id] = deque(maxlen=self.MAX_STREAM_CAPACITY)
 
-                # Append the glob to the deque in the bin, even if it is None
-                bin["glob"][key].append(glob)
-                
+                    # Append the glob to the deque in the bin, even if it is None
+                    bin["glob"][conduit.conduit_id].append(glob)               
         return bin
 
-    @classmethod
-    def _build_conduit_map(cls) -> Dict[FlowChannel, List[ConduitMap]]:
-        """Return the conduit map grouped by flow channel"""
+    def _build_conduit_map(self) -> ConduitMapBlueprint:
+        """Return the conduit map grouped by flow channel using parallel initialization"""
         # Read the conduit map blueprint from the robot spec file
-        conduit_map_blueprint: Dict[str, Any] = cls.retrieve_conduit_map_blueprint_from_hardware_spec()
-        if not conduit_map_blueprint:
+        blueprint = self.retrieve_conduit_map_blueprint_from_hardware_spec()
+        if not blueprint:
             raise ValueError("Conduit map blueprint not found.")
+    
+        # --- STEP 1: THE SCOUT (Find unique hardware modules) ---
+        # Read the conduit blueprint map to find out the names of the collection point
+        unique_modules = set()
+        def scout(data: Dict[str, Any]):
+            for val in data.values():
+                if type(val) is dict:
+                    scout(val)
+                elif type(val) is list:
+                    unique_modules.add(val[0]) # Always index 0 per your spec
+        scout(blueprint)
+    
+        # --- STEP 2: THE HAMMER (Parallel Hardware Handshake) ---
+        # Get ready to create a clone duplicate of the conduit map for reference
+        self.cloned_conduit_map: Dict[str, Any] = {}
+
+    
+        if not self.floodgate_is_open():
+            # (TODO) Logging here
+            print("Jetson reservoir is bone dry. Skipping hardware handshake.")
+        elif unique_modules:           
+            def fetch_hardware(name):
+                # This is where the 0.1s lag is neutralized by threading
+                return name, getattr(self.jetson_reservoir, name, None)
         
-        channels: Dict[FlowChannel, List[ConduitMap]] = {"LO": [], "MID": [], "HI": []}
+            # Spawn one thread per module to pay the hardware tax all at once
+            with ThreadPoolExecutor(max_workers=len(unique_modules)) as executor:
+                results = executor.map(fetch_hardware, unique_modules)
+                self.cloned_conduit_map = dict(results)
+    
+        # --- STEP 3: THE BUILDER (Create the actual ConduitType objects) ---
+        channels: Dict[FlowChannel, List[ConduitType]] = {"HI": [], "MID": [], "LO": []}
+    
+        self._locate_conduit_heads(blueprint, channels)
+        
+        # Freeze the conduit map for each flow channel
+        return MappingProxyType({ch: tuple(con) for ch, con in channels.items()})
+       
+    def _connect_to_jetson_reservoir(self)-> bool:
+        """
+        Connect to the Jetson reservoir to initialize the running of the lifestream
+        - Adjust the flow rate of the Jetson reservoir
+        - Start running the Jetson lifestream out of the reservoir
+        - Check if the floodgate is open
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
 
-        def locate_conduit_heads(conduit_map_blueprint: Dict[str, Any], junction: str = ""):
-            """Helper function to recursively locate conduit heads from the blueprint"""
-            for conduit_name, spec in conduit_map_blueprint.items():
-                conduit_junction = f"{junction}.{conduit_name}" if junction else conduit_name
-                if isinstance(spec, list):
-                    module_name: str = spec[0]
-                    junction_path: ConduitJunction = tuple(spec[1])
-                    flow_rate: FlowChannel = cls.LIFESTREAM_FLOW_RATE.get(module_name, "LO")
-                    channels[flow_rate].append((conduit_junction, (module_name, junction_path)))
-                elif isinstance(spec, dict):
-                    locate_conduit_heads(spec, conduit_junction)
+        self.jetson_reservoir = None
+        try:
+            self.logger.debug(f"Establishing connection to Jetson reservoir with interval={self.what_pumping_rhythm_for_this_channel('HI')}")
+            # Adjust the flow rate of the Jetson reservoir
+            self.jetson_reservoir = jtop(interval=self.what_pumping_rhythm_for_this_channel("HI"))
+            # Start running the Jetson lifestream out of the reservoir
+            self.jetson_reservoir.start()
 
-        locate_conduit_heads(conduit_map_blueprint)
-        return channels
+            # Wait for the floodgate to be open
+            if not self.floodgate_is_open():
+                self.logger.fatal("Opening Floodgate of Jetson Reservoir...[ABORT]")
+                raise RuntimeError("CRITICAL: Floodgate of Jetson Reservoir cannot open.")
+            
+            self.logger.info("Opening Floodgate of Jetson Reservoir...[CLEAR]")
+            return True
+
+        except Exception as e:
+            # In case of error, log the error and tell the pump that the Jetson reservoir is running empty
+            self.logger.exception(f"Error: Jetson reservoir failed to run: {e}")
+            self.jetson_reservoir = None
+            return False
+        
+    def _locate_conduit_heads(self, data: Dict[str, Any], channels: Dict[FlowChannel, List[ConduitType]], junction: str = ""):
+        for name, path in data.items():
+            conduit_junction = f"{junction}.{name}" if junction else name
+            
+            if type(path) is dict:
+                # Recursive case: traverse deeper into the conduit map
+                self._locate_conduit_heads(path, channels, conduit_junction)
+            elif type(path) is list:
+                # Destruct the junction path to identify each component
+                module_name, junction_path, *config = path
+                
+                # Pull the channel from robot spec YAML file, or default to LO if not available
+                flow_rate = cast(FlowChannel, config[0] if config else "LO")
+                
+                # Pre-bind the collection point to the conduit using the cloned conduit map
+                collection_point = self.cloned_conduit_map.get(module_name)
+                
+                # Create the conduit and add it to the channel
+                channels[flow_rate].append(ConduitType(conduit_junction, collection_point, tuple(junction_path)))
+
+    def _smoke_test_floodgates(self) -> bool:
+        """Prunes broken conduits and ensures at least some data is flowing."""
+        # Give lifestream floodgates up to half a second to warm up in order to fetch the first glob of data
+        time_limit = time.monotonic() + 0.5
+        broken_conduits: List[Tuple[FlowChannel, ConduitType]] = []
+        
+        while time.monotonic() < time_limit:
+            broken_conduits = []
+            
+            # Identify the 'dry' conduits
+            for channel, conduits in self._CONDUIT_MAP.items():
+                for conduit in conduits:
+                    # Conduct a DEEP trace to detect any anomaly in the conduit map blueprint
+                    test_bin = self.trace_thru_conduit(conduit.collection_point, conduit.junction_path)
+                    if test_bin is None:
+                        broken_conduits.append((channel, conduit))
+
+            # If everything is fine, we're golden
+            if not broken_conduits:
+                return True
+                
+            # If we found issues, we don't give up yet! 
+            # We wait a bit to see if the hardware wakes up.
+            time.sleep(0.1)
+
+        # Prune out the non-functional conduits
+        if broken_conduits:
+            # Rebuild the map without the broken conduits
+            pruned_conduit_map = {}
+            broken_conduit_ids = {conduit.conduit_id for _, conduit in broken_conduits}
+            for channel, conduit_list in self._CONDUIT_MAP.items():
+                functional_conduit = tuple(conduit for conduit in conduit_list if conduit.conduit_id not in broken_conduit_ids)
+                if functional_conduit: pruned_conduit_map[channel] = functional_conduit
+                    
+            # Re-freeze the map with functional conduits
+            self._CONDUIT_MAP = MappingProxyType(pruned_conduit_map)
+            print(f"Warning: Pruned {len(broken_conduit_ids)} broken conduits.")
+            
+        # Return True if we still have at least SOME conduits left
+        return len(self._CONDUIT_MAP) > 0
+    
+    def floodgate_is_open(self) -> bool:
+        """Check if the floodgate is open (i.e., Jetson reservoir is connected and OK)"""
+        return self.jetson_reservoir is not None and self.jetson_reservoir.ok()
 
     @classmethod
     def which_flow_rate_for_this_channel(cls, channel: FlowChannel) -> int:
@@ -227,7 +372,7 @@ class Pump():
         return 1.0 / cls.which_flow_rate_for_this_channel(channel)
     
     @staticmethod
-    def retrieve_conduit_map_blueprint_from_hardware_spec() -> Dict[str, Any]:
+    def retrieve_conduit_map_blueprint_from_hardware_spec() -> ConduitMapBlueprint:
         """Retrieve the conduit map blueprint from the robot hardware spec"""
         # Use the path set in ROS2 package to locate the robot hardware spec
         spec_potential_paths = []
@@ -258,59 +403,94 @@ class Pump():
         # Return an empty conduit map blueprint if no valid conduit map blueprint is found
         return {}
         
+    def __enter__(self):
+        """Prepare the pump for a high-speed heist."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Clean up the mess, even if we tripped the alarms."""
+        if exc_type:
+            # Maybe log that we're bailing out because of a meatbag error
+            print(f"Bailing out! Error detected: {exc_val}")
+        
+        self.terminate()
+        # Returning False (default) ensures the exception still propagates
+        return False
+    
 if __name__ == "__main__":
 
     # Run the diagnosis of the Pump Module to check if working as expected
+    from typing import List
     import time
-
-    def color_temp(temp):
-        """Color code the temperature based on the value."""
-        if temp is None:
-            return "\033[38;5;240m"  # Gray for unknown
-        return "\033[38;5;196m" if temp > 80 else "\033[38;5;46m"
     
+    def worst_case_aggregation(values: List[float]) -> float | None:
+        """Return the worst case scenario of the vitals, if any"""
+        return max(values) if values else None
+    
+    # Initialize the logger
+    logger = get_logger(PROC_ID)
+    logger.info("Initializing VTC Pump Module Diagnosis...")
+
     # Initialize the Pump Module
-    pump = Pump()
+    with Pump() as pump:
     
-    # Start the diagnosis
-    print("--- DIAGNOSING VTC PUMP MODULE ---")
-    glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
+        # Start the diagnosis
+        logger.info("Diagnosing VTC Pump Module...")
+        glob = {"timestamp": 0, "duration": 0.0, "run": 0, "glob": {}}
+    
+        # Initialize the vitals containers
+        cpu_loads = {}; cpu_temps = {}
+        gpu_loads = {}; gpu_temps = {}
+        disk_usages = {}
 
-    # Run the diagnosis for 30 pump cycles
-    try:
-        for i in range(30):
-            # Collect the glob from the lifestream
-            glob["run"] = i
-            glob["timestamp"] = time.strftime("%H:%M:%S")
-            glob = pump.engage_tap_to_harvest_glob(glob)
-            
-            # Get the worst case scenario of the vitals, if any
-            cpu_load_deque = glob.get("glob", {}).get("body_load.p_unit")
-            cpu_load = max([v for v in cpu_load_deque if v is not None], default=None) if cpu_load_deque else None
-            temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
-            temperature_cpu = max([v for v in temperature_cpu_deque if v is not None], default=None) if temperature_cpu_deque else None
-            gpu_load_deque = glob.get("glob", {}).get("body_load.a_unit")
-            gpu_load = max([v for v in gpu_load_deque if v is not None], default=None) if gpu_load_deque else None
-            temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
-            temperature_gpu = max([v for v in temperature_gpu_deque if v is not None], default=None) if temperature_gpu_deque else None
+        TEST_RUNS = 10
 
-            # Color code the temperature based on the value
-            cpu_color = color_temp(temperature_cpu)
-            gpu_color = color_temp(temperature_gpu)
-            cpu_load_str = f"{cpu_load:.2f}%" if cpu_load is not None else "N/A"
-            temperature_cpu_str = f"{temperature_cpu}°C" if temperature_cpu is not None else "N/A"
-            gpu_load_str = f"{gpu_load:.2f}%" if gpu_load is not None else "N/A"
-            temperature_gpu_str = f"{temperature_gpu}°C" if temperature_gpu is not None else "N/A"
-            print(f"Run #: {glob['run']+1} | Timestamp: [{glob['timestamp']}]")
-            print(f" CPU Load: {cpu_load_str} | CPU: {cpu_color}{temperature_cpu_str}\033[0m")
-            print(f" GPU Load: {gpu_load_str} | GPU: {gpu_color}{temperature_gpu_str}\033[0m")
-                        
-            time.sleep(0.1)
+        # Run the diagnosis for pump cycles defined in TEST_RUNS
+        try:
+            # Record the start time
+            time_start = time.perf_counter()
+
+            for i in range(TEST_RUNS):
+                # Collect the glob from the lifestream
+                glob["run"] = i
+                glob["timestamp"] = time.strftime("%H:%M:%S")
+                glob = pump.engage_tap_to_harvest_glob(glob)
+                
+                # Get the worst case scenario of the vitals, if any
+                cpu_user_load_deque = glob.get("glob", {}).get("p_unit.user")
+                cpu_sys_load_deque = glob.get("glob", {}).get("p_unit.system")
+                cpu_user = worst_case_aggregation(cpu_user_load_deque)
+                cpu_sys = worst_case_aggregation(cpu_sys_load_deque)
+                cpu_load = (cpu_user + cpu_sys) if (cpu_user is not None and cpu_sys is not None) else None
+
+                temperature_cpu_deque = glob.get("glob", {}).get("body_temp.p_unit")
+                temperature_cpu = worst_case_aggregation(temperature_cpu_deque)
+
+                gpu_load_deque = glob.get("glob", {}).get("a_unit.load")
+                gpu_load = worst_case_aggregation(gpu_load_deque)
+
+                temperature_gpu_deque = glob.get("glob", {}).get("body_temp.a_unit")
+                temperature_gpu = worst_case_aggregation(temperature_gpu_deque)
+
+                disk_usage_deque = glob.get("glob", {}).get("memory.ltm.used")
+                disk_usage = worst_case_aggregation(disk_usage_deque)
+    
+                cpu_loads[i] = cpu_load if cpu_load is not None else -1
+                cpu_temps[i] = temperature_cpu if temperature_cpu is not None else -1
+                gpu_loads[i] = gpu_load if gpu_load is not None else -1
+                gpu_temps[i] = temperature_gpu if temperature_gpu is not None else -1
+                disk_usages[i] = disk_usage if disk_usage is not None else -1
+
+                #time.sleep(0.1)
+
+            if max(cpu_loads.values()) > 80 or max(gpu_loads.values()) > 80:
+                logger.warn(f"CPU Load: {max(cpu_loads.values()):.2f}% | CPU Temp: {max(cpu_temps.values()):.2f}°C | GPU Load: {max(gpu_loads.values()):.2f}% | GPU Temp: {max(gpu_temps.values()):.2f}°C | Disk Usage: {max(disk_usages.values()):.2f}%")
+            else:
+                logger.info(f"CPU Load: {max(cpu_loads.values()):.2f}% | CPU Temp: {max(cpu_temps.values()):.2f}°C | GPU Load: {max(gpu_loads.values()):.2f}% | GPU Temp: {max(gpu_temps.values()):.2f}°C | Disk Usage: {max(disk_usages.values()):.2f}%")
+
+        except KeyboardInterrupt:
+            # Stop the diagnosis if user interrupts
+            logger.info("VTC Pump Module Diagnosis is interrupted by user.")
             
-    except KeyboardInterrupt:
-        # Stop the diagnosis if user interrupts
-        print("\nDiagnosis is stopped by user.")
-    finally:
-        # Close the Pump Module and end the diagnosis
-        pump.close_valve()
-        print("--- VTC PUMP MODULE DIAGNOSIS COMPLETE ---")
+    logger.info(f"VTC Pump Module Diagnosis successful. Time taken: Total {(time.perf_counter() - time_start):.6f} seconds; Average {((time.perf_counter() - time_start)/TEST_RUNS):.6f} seconds per run")
+    pump.terminate()

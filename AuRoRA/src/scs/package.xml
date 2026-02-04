@@ -3,9 +3,9 @@
 
 <package format="3">
   <!-- Basic package information -->
-  <name>vcs</name>
+  <name>scs</name>
   <version>0.1.3</version>
-  <description>Vital Circulatory System for AGi</description>
+  <description>Semantic Cognitive System for AGi</description>
   
   <!-- Maintainer and author information -->
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
