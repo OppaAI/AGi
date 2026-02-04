@@ -72,6 +72,58 @@ flowchart TD
 
 ````
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant VTC as VTC (VitalTerminalCore)
+    participant Pump as Pump (module)
+    participant Reg as Regulator (module)
+    participant Osc as Oscillator (module)
+    participant Orc as Orchestrator (module)
+    participant VCC as VCC (VitalPulseAnalyzer)
+    participant Monitor as Operator / Dashboard
+
+    Note over VTC,VCC: namespaces & nodes (from code)
+    Note over VTC: node="vital_terminal_core", namespace="ROBOT_ID/VCS"
+    Note over VCC: node="vital_pulse_analyzer", namespace="ROBOT_ID/VCS" or "AIVA/VCS"
+
+    loop periodic heartbeat (oscillation_timer)
+        VTC->>Pump: run_pump_cycle()  %% collect telemetry (body_temp etc.)
+        Pump-->>VTC: vital_dump["pump"].glob (temperature, telemetry, etc.)
+        VTC->>Reg: commit_vital_dump("pump", vital_dump)
+        Reg-->>VTC: normalized payload (filtered telemetry)
+        VTC->>Osc: oscillate_vital_pulse()  %% compute current_opm, timestamp
+        Osc-->>VTC: VitalPulse msg (VitalPulse)
+        Note right of VTC: VitalPulse fields: robot_id, user_id, timestamp (builtin_interfaces/Time), cpu_temp, gpu_temp, vital_pulse_opm
+        VTC->>VCC: publish VitalPulse on topic "vital_pulse_signal" (QoS: BEST_EFFORT, Liveliness/Deadline/Lifespan configured)
+        activate VCC
+        VCC->>VCC: pulse_callback(msg)
+        Note right of VCC: actions: record_identity(robot_id,user_id), record_remote_pulse(opm,timestamp)
+        VCC->>VCC: update VitalCentralCore state (connected robots, last pulse time)
+        VCC->>VCC: prepare feedback VitalPulse (robot_id=SERVER_ID, user_id=remote_robot_id, timestamp=now, vital_pulse_opm=pulse)
+        VCC-->>VTC: publish feedback on "vital_pulse_response" (same QoS)
+        deactivate VCC
+        VTC->>VTC: feedback_callback(msg)  %% compute RTT, update last_feedback_time, vc_linked True
+        alt RTT acceptable / vc_linked
+            VTC->>Orc: notify linked status / clear timeout counters
+        else timeout or missing feedback
+            VTC->>Orc: trigger safety_interlock() / vc_linked False
+            Orc-->>Monitor: alert / log (display update)
+        end
+        VTC->>Monitor: display_tick() updates terminal snapshot (heartbeat, opm, RTT)
+    end
+
+    Note over VTC,VCC: Topic examples (from docs)
+    Note over VTC: "/<robotID>/vcs/vtc/vp_generator/vital_pulse" and "/<robotID>/vcs/vtc/vp_generator/vital_feedback"
+    Note over VCC: "/AIVA/vcs/vcc/vp_analyzer/vital_pulse" (subscription) / publishes "vital_pulse_response"
+
+    rect rgba(200,255,200,0.15)
+    Note over VTC,VCC: QoS details (from code)
+    Note over VTC,VCC: QoSProfile: depth=1, reliability=BEST_EFFORT, history=KEEP_LAST, durability=VOLATILE,
+    Note over VTC,VCC: liveliness=AUTOMATIC, liveliness_lease_duration=VITAL_PULSE_TIMEOUT*1.5, lifespan=VITAL_PULSE_TIMEOUT, deadline~VITAL_PULSE_TIMEOUT*1.1
+    end
+````
+
 ---
 
 ## Naming Conventions
