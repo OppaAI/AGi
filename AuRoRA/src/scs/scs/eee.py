@@ -48,25 +48,29 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     backups it finds, ensuring nothing is left behind.
     """
     
-    # CLASS-LEVEL (shared across all handlers)
-    _compression_queue = queue.Queue(maxsize=100)
-    _worker_running = False
-    _worker_thread = None
-    _worker_lock = threading.Lock()
-    
+    # Deployment status of the compactor
+    _compactor_infeed_queue = queue.Queue(maxsize=100)  # Number of archives allowed in the infeed pending for compacting
+    _compactor_in_operation = False                     # Flip the switch to True when compactor is in operation
+    _compactor_thread = None                            # Compactor is currently dormant, waiting for archives to feed in for compact
+    _compactor_lock = threading.Lock()                  # Prevent duplicate compactor startup cycle
+    # Get the compactor ready to go
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.namer = self._talle_archive_namer
-        self._ensure_worker_started()
+        super().__init__(*args, **kwargs)                   # TALLE archive compactor has a specialized initiation sequence
+        self.namer = self._tag_talle_archive_with_coding    # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
+        self._ensure_worker_started()                       # Get the compactor to start operation when ready
     
-    def _talle_archive_namer(self, default_name):
+    def _talle_archive_coding(self, archive_name: str) -> str:
         """
-        Convert backup numbers to 3-digit format.
+        Tag the archive with standardized number coding (3-digit format).
+
+        Arg:
+        
+        Return:
         
         Example:
-            activity.log.1 → activity.log.001
+            activity.log.7 → activity.log.007
         """
-        parts = default_name.rsplit('.', 1)
+        parts = archive_name.rsplit('.', 1)
         if len(parts) == 2 and parts[-1].isdigit():
             return f"{parts[0]}.{int(parts[1]):03d}"
         return default_name
