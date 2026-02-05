@@ -484,7 +484,7 @@ class EEEAggregator:
             
             batch = list(cls._ledger_queue)
             cls._ledger_queue.clear()
-        
+            
             try:
                 # Re-use db_conn from worker scope? Better: open briefly or pass conn
                 # For simplicity: re-open conn here (cheap, safe)
