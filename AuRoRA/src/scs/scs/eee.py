@@ -484,7 +484,7 @@ class EEEAggregator:
             
             batch = list(cls._ledger_queue)
             cls._ledger_queue.clear()
-            
+
             try:
                 # Re-use db_conn from worker scope? Better: open briefly or pass conn
                 # For simplicity: re-open conn here (cheap, safe)
@@ -508,7 +508,7 @@ class EEEAggregator:
     def get_throttle_status(cls) -> dict:
         """
         Get current throttling status for all proc_ids.
-        Useful for debugging and monitoring.
+        Useful for debugging and monitoring
         
         Returns:
             Dictionary of proc_id -> throttle status
