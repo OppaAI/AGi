@@ -130,7 +130,8 @@ class EEEAggregator:
     
     # Class-level flags to ensure setup happens only once
     _initialized = False
-    _log_queue: queue.Queue = queue.Queue()
+    _log_queue: queue.Queue = queue.Queue(maxsize=10000)  # Bounded
+    _dropped_events: int = 0  # Counter
     _worker_started: bool = False
     _thread_lock = threading.Lock()
     _shutdown_registered = False
@@ -204,7 +205,10 @@ class EEEAggregator:
         anomaly_handler.setFormatter(logging.Formatter('%(message)s'))
 
         # THE LEDGER: Initialize SQLite here
-        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
+        db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
+        db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
+        db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
         db_conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,6 +246,29 @@ class EEEAggregator:
                     flush_loop()
 
         _start_ledger_flush()
+
+        def _start_ledger_backup():
+            def backup_loop():
+                log_dir = Path(LOG_PATH)
+                db_path = log_dir / LEDGER_DB_FILE
+                if db_path.exists() and db_path.stat().st_size > 50 * 1024 * 1024:  # 50MB threshold
+                    backup_path = db_path.with_suffix(f'.backup.{int(time.time())}.gz')
+                    try:
+                        with open(db_path, 'rb') as f_in:
+                            with gzip.open(backup_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        print(f"[EEE] Ledger backed up to {backup_path.name}")
+                        # Optional: VACUUM to compact (safe)
+                        temp_conn = sqlite3.connect(db_path)
+                        temp_conn.execute("VACUUM;")
+                        temp_conn.close()
+                    except Exception as e:
+                        print(f"[EEE] Ledger backup failed: {e}")
+                # Check hourly
+                threading.Timer(3600, backup_loop).start()
+            backup_loop()
+
+        _start_ledger_backup()
 
         text_formatter = EEEAggregator.Filtrator.pass_thru_EEE_filters()
 
@@ -363,7 +390,10 @@ class EEEAggregator:
                             skip_disk = True
                             break  # Exit plugin loop early
                 except Exception as e:
-                    print(f"[EEE] Plugin {plugin_name} error: {e}")
+                    self.logger.exception(f"Plugin {plugin_name} crashed")
+                    # Auto-disable broken plugin:
+                    del self._plugins[plugin_name]
+                    print(f"[EEE] Plugin {plugin_name} DISABLED")
 
             # Skip disk writes if plugin handled it
             if skip_disk:
@@ -459,7 +489,10 @@ class EEEAggregator:
                 # Re-use db_conn from worker scope? Better: open briefly or pass conn
                 # For simplicity: re-open conn here (cheap, safe)
                 log_dir = Path(LOG_PATH)
-                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
+                db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
+                db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
+                db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
                 db_conn.executemany("""
                     INSERT INTO events
                     (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
@@ -701,6 +734,13 @@ class EEEAggregator:
 
         # Trigger the console output immediately
         self.logger.log(level, f"{msg} | Data: {json.dumps(evidence)}")
+
+        try:
+            self._log_queue.put(item, timeout=0.1)  # Block 100ms max
+        except queue.Full:
+            EEEAggregator._dropped_events += 1
+            if EEEAggregator._dropped_events % 100 == 0:
+                print(f"[EEE] WARNING: Dropped {EEEAggregator._dropped_events} events (queue full!)")
 
 def get_logger(caller_id: str = "SCS.EEE") -> EEEAggregator:
     """
