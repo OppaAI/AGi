@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 from pathlib import Path
 import queue
 import shutil
@@ -34,22 +35,169 @@ ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
 class GzipRotatingFileHandler(RotatingFileHandler):
     """
-    RotatingFileHandler that gzips old backups on rotate.
+    RotatingFileHandler with deferred gzip compression.
+    
+    Features:
+    - 3-digit backup numbering (.001, .002, .003)
+    - Background compression (non-blocking)
+    - Sweep logic (compresses missed backups)
+    - Low-priority worker (idle CPU only)
+    
+    The compression worker acts as a "garbage collector" -
+    it sweeps the log directory and compresses any uncompressed
+    backups it finds, ensuring nothing is left behind.
     """
-    def doRollover(self):
-        super().doRollover()
-        # Gzip the oldest backup (backupCount keeps N files)
-        if self.backupCount > 0:
-            # Find the oldest .1 file (or whichever is now the "extra" one)
-            log_path = Path(self.baseFilename)
-            for i in range(self.backupCount - 1, 0, -1):
-                old_file = log_path.parent / f"{log_path.name}.{i}"
-                if old_file.exists():
-                    with open(old_file, 'rb') as f_in:
-                        with gzip.open(f"{old_file}.gz", 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    old_file.unlink()  # Delete uncompressed
+    
+    # CLASS-LEVEL (shared across all handlers)
+    _compression_queue = queue.Queue(maxsize=100)
+    _worker_running = False
+    _worker_thread = None
+    _worker_lock = threading.Lock()
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.namer = self._talle_archive_namer
+        self._ensure_worker_started()
+    
+    def _talle_archive_namer(self, default_name):
+        """
+        Convert backup numbers to 3-digit format.
+        
+        Example:
+            activity.log.1 → activity.log.001
+        """
+        parts = default_name.rsplit('.', 1)
+        if len(parts) == 2 and parts[-1].isdigit():
+            return f"{parts[0]}.{int(parts[1]):03d}"
+        return default_name
+    
+    @classmethod
+    def _ensure_worker_started(cls):
+        """Start background compression worker (once)"""
+        with cls._worker_lock:
+            if not cls._worker_running:
+                cls._worker_running = True
+                cls._worker_thread = threading.Thread(
+                    target=cls._worker_loop,
+                    daemon=True,
+                    name="TALLE-Compressor"
+                )
+                cls._worker_thread.start()
+    
+    @classmethod
+    def _worker_loop(cls):
+        """
+        Background compression worker.
+        
+        Runs at low priority and sweeps for uncompressed backups.
+        """
+        # Lower thread priority (Linux only)
+        try:
+            os.nice(10)
+        except:
+            pass
+        
+        while cls._worker_running:
+            try:
+                # Wait for queued file
+                target_path = cls._compression_queue.get(timeout=1.0)
+                
+                if target_path is None:  # Shutdown signal
                     break
+                
+                target = Path(target_path)
+                log_dir = target.parent
+                
+                # SWEEP LOGIC: Compress ALL uncompressed backups
+                # This ensures nothing is left uncompressed
+                for file in log_dir.glob("*.[0-9][0-9][0-9]"):
+                    cls._perform_compression(file)
+                
+                cls._compression_queue.task_done()
+                
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"[TALLE] Compression worker error: {e}")
+    
+    @staticmethod
+    def _perform_compression(file_path):
+        """
+        Compress a single file atomically.
+        
+        Uses temporary file to ensure atomic operation -
+        either compression succeeds completely or original
+        file remains intact.
+        """
+        file_path = Path(file_path)
+        
+        # Skip if already compressed or doesn't exist
+        if not file_path.exists() or file_path.suffix == '.gz':
+            return
+        
+        gz_path = file_path.with_suffix(file_path.suffix + '.gz')
+        tmp_gz = gz_path.with_suffix('.gz.tmp')
+        
+        try:
+            # Compress to temporary file
+            with open(file_path, 'rb') as f_in:
+                with gzip.open(tmp_gz, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            
+            # Atomic rename (compression succeeded)
+            tmp_gz.rename(gz_path)
+            
+            # Delete original (now safe)
+            file_path.unlink()
+            
+        except Exception as e:
+            print(f"[TALLE] Failed to compress {file_path}: {e}")
+            # Clean up temporary file
+            if tmp_gz.exists():
+                tmp_gz.unlink()
+            # Original file still intact
+            time.sleep(5)
+            cls._compression_queue.put(str(file_path))  # retry once   
+
+    def doRollover(self):
+        """
+        Fast rotation - defers compression to background worker.
+        """
+        super().doRollover()
+        
+        if self.backupCount > 0:
+            # Queue newest backup for compression
+            new_backup = self.rotation_filename(f"{self.baseFilename}.1")
+            
+            if os.path.exists(new_backup):
+                try:
+                    GzipRotatingFileHandler._compression_queue.put(new_backup, block=False)
+                except queue.Full:
+                    print(f"[TALLE] Compression queue full - dropping {new_backup}")
+    
+    @classmethod
+    def shutdown(cls):
+        """
+        Gracefully shutdown compression worker.
+        
+        Should be called during application shutdown to ensure
+        all queued files are compressed.
+        """
+        if cls._worker_running:
+            cls._worker_running = False
+            
+            # Send shutdown signal
+            try:
+                cls._compression_queue.put(None, block=False)
+            except queue.Full:
+                pass
+            
+            # Wait for queue to drain
+            cls._compression_queue.join()
+            
+            # Wait for worker thread
+            if cls._worker_thread:
+                cls._worker_thread.join(timeout=5.0)
 
 class TokenBucketThrottle:
     """
@@ -529,9 +677,14 @@ class EEEAggregator:
         if cls._worker_started:
             print("[EEE] Flushing pending log entries...")
             cls._log_queue.join()
-            cls._flush_ledger_batch()  # Final Ledger flush
+            cls._flush_ledger_batch()
+            
             if cls._ledger_flush_timer:
                 cls._ledger_flush_timer.cancel()
+            
+            # ✅ NEW: Shutdown compression worker
+            GzipRotatingFileHandler.shutdown()
+            
             print(f"[EEE] All events written. Shutdown complete.")
     
     @classmethod
