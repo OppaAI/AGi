@@ -35,76 +35,93 @@ ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
 class GzipRotatingFileHandler(RotatingFileHandler):
     """
-    RotatingFileHandler with deferred gzip compression.
+    Archive Compacting Vector (ACV)
+    Transform the existing generic GzipRotatingFileHandler into a specialized Archive Compacting Vector (ACV) 
+    that compacts obsolete archives into a more space-efficient storage unit.
     
     Features:
-    - 3-digit backup numbering (.001, .002, .003)
-    - Background compression (non-blocking)
-    - Sweep logic (compresses missed backups)
-    - Low-priority worker (idle CPU only)
-   
-    The compression worker acts as a "garbage collector" -
-    it sweeps the log directory and compresses any uncompressed
-    backups it finds, ensuring nothing is left behind.
-
+    - ACV works independently and automously that requires no external intervention
+    - Ingression of archives into a localized vicinity pending for compaction
+    - Utilize Sweep Logic to detect and compress all uncompressed archives in the vicinity 
+    - Apply 3-digit number coding archive tag (eg..001, .002, .003) to the archives
+    - Ejection of the compacted archives into the centralized storage unit
+    
     Workflow:
-    ---------------------    ---------------------    ---------------------
-    | Files dumped into | -> | Confirm the files | -> | Compact the files |
-    | Archive collector |    | have archive tag  |    |                   |
-    ---------------------    ---------------------    ---------------------
+    -----------    -------------    --------------    -------------
+    |         |    |           |    |            |    |           |
+    | Ingress | -> | Detection | -> | Engulfment | -> | Discharge |
+    |         |    |           |    |            |    |           |
+    -----------    -------------    --------------    -------------
     """
     
-    # Deployment status of the compactor
-    _compactor_buffer_queue = queue.Queue(maxsize=100)  # Number of buffers allowed to be loaded into the compactor
-    _compactor_is_activated = False                     # Flip the switch to True when compactor is activated
-    _compactor_thread = None                            # Compactor is currently dormant, waiting for archives to feed in for compact
-    _compactor_lock = threading.Lock()                  # Prevent duplicate compactor deployment
+    # Deployment status of the ACV
+    _ACV_buffer_queue = queue.Queue(maxsize=100)  # Number of buffers allowed to be loaded into the ACV
+    _ACV_is_activated = False                     # Flip the switch to True when ACV is activated
+    _ACV_thread = None                            # ACV is currently dormant, waiting for archives to feed in for compact
+    _ACV_lock = threading.Lock()                  # Prevent duplicate ACV deployment
     
-    # Startup the compactor ready
+    # Startup the ACV ready
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)               # Compactor has a specialized initiation sequence
-        self.namer = self._apply_archive_tag            # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
-        self._ensure_worker_started()                   # Get the compactor to start operation when ready
+        super().__init__(*args, **kwargs)         # Setup a specialized initiation sequence for the ACV
+        self.namer = self._apply_archive_tag      # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
+        self._confirm_ACV_started()               # Get the ACV to start operation when ready
+
+    def doRollover(self):
+        """
+        Override the default rollover behavior to queue the oldest obsolete archives for compression.
+        """
+        super().doRollover()                      # Take over the generic rollover behavior to queue the archives for compression
+        
+        if self.backupCount > 0:
+            # Queue newest backup for compression
+            new_backup = self.rotation_filename(f"{self.baseFilename}.1")
+            
+            if os.path.exists(new_backup):
+                try:
+                    GzipRotatingFileHandler._ACV_buffer_queue.put(new_backup, block=False)
+                except queue.Full:
+                    print(f"[TALLE] Compression queue full - dropping {new_backup}")    
     
     def _apply_archive_tag(self, archive_name: str) -> str:
         """
         Tag the archive with standardized number coding (3-digit format).
+        (eg. top.secret.7 → top.secret.007)
 
         Arg:
+            archive_name (str): Name of the archive to be tagged
         
         Return:
-        
-        Example:
-            top.secret.7 → top.secret.007
+            str: Name of the archive with the applied tag
         """
+        
         # (TODO) Add to GitHub issue: 
         # If archive_name already applied with the 3-digit tag, system still continue to apply tag forever
         archive_name_splits = archive_name.rsplit('.', 1)                        # Split the archive name into 2 parts searching the right side for the dot separator.
         if len(archive_name_splits) == 2 and archive_name_splits[-1].isdigit():  # If archive name has 2 parts and the last part of the code contains the coding tag,
             return f"{archive_name_splits[0]}.{int(archive_name_splits[1]):03d}" # Convery archive number with standardized 3-digit number coding
         return archive_name                                                      # Otherwise, do not apply archive tag
-    
+
     @classmethod
-    def _confirm_compactor_started(cls):
+    def _confirm_ACV_started(cls):
         """
-        Start running compactor in the background (once)
+        Start running ACV in the background (once)
         """
-        with cls._compactor_lock:
-            if not cls._compactor_is_activated:
-                cls._compactor_is_activated = True
-                cls._compactor_thread = threading.Thread(                            
-                    target=cls._compactor_cycle,
+        with cls._ACV_lock:
+            if not cls._ACV_is_activated:
+                cls._ACV_is_activated = True
+                cls._ACV_thread = threading.Thread(                            
+                    target=cls._ACV_cycle,
                     daemon=True,
-                    name="Archive.Compactor"
+                    name="Archive.Compacting.Vector"
                 )
-                cls._compactor_thread.start()
+                cls._ACV_thread.start()
     
     @classmethod
-    def _compactor_cycle(cls):
+    def _ACV_cycle(cls):
         """
-        Background compression worker.
+        Background compression worker (ACV)
         
-        Runs at low priority and sweeps for uncompressed backups.
+        Runs at low priority and sweeps for uncompressed archives.
         """
         # Lower thread priority (Linux only)
         try:
@@ -112,10 +129,10 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         except:
             pass
         
-        while cls._worker_running:
+        while cls._ACV_is_activated:
             try:
                 # Wait for queued file
-                target_path = cls._compression_queue.get(timeout=1.0)
+                target_path = cls._ACV_buffer_queue.get(timeout=1.0)
                 
                 if target_path is None:  # Shutdown signal
                     break
@@ -123,12 +140,12 @@ class GzipRotatingFileHandler(RotatingFileHandler):
                 target = Path(target_path)
                 log_dir = target.parent
                 
-                # SWEEP LOGIC: Compress ALL uncompressed backups
+                # SWEEP LOGIC: Compress ALL uncompressed archives
                 # This ensures nothing is left uncompressed
                 for file in log_dir.glob("*.[0-9][0-9][0-9]"):
                     cls._perform_compression(file)
                 
-                cls._compression_queue.task_done()
+                cls._ACV_buffer_queue.task_done()
                 
             except queue.Empty:
                 continue
@@ -172,23 +189,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
                 tmp_gz.unlink()
             # Original file still intact
             time.sleep(5)
-            cls._compression_queue.put(str(file_path))  # retry once   
-
-    def doRollover(self):
-        """
-        Fast rotation - defers compression to background worker.
-        """
-        super().doRollover()
-        
-        if self.backupCount > 0:
-            # Queue newest backup for compression
-            new_backup = self.rotation_filename(f"{self.baseFilename}.1")
-            
-            if os.path.exists(new_backup):
-                try:
-                    GzipRotatingFileHandler._compression_queue.put(new_backup, block=False)
-                except queue.Full:
-                    print(f"[TALLE] Compression queue full - dropping {new_backup}")
+            cls._ACV_buffer_queue.put(str(file_path))  # retry once   
     
     @classmethod
     def shutdown(cls):
@@ -697,7 +698,7 @@ class EEEAggregator:
             if cls._ledger_flush_timer:
                 cls._ledger_flush_timer.cancel()
             
-            # ✅ NEW: Shutdown compression worker
+            # ✅ NEW: Shutdown ACV
             GzipRotatingFileHandler.shutdown()
             
             print(f"[EEE] All events written. Shutdown complete.")
