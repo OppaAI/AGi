@@ -7,10 +7,10 @@ assignees: OppaAI
 
 ---
 
-###⚠️ Issue: [Insert Title Here]
+### ⚠️ Issue: [Insert Title Here]
 [Provide a concise overview of the technical failure or logic gap.]
 
-###🎯 Location:
+### 🎯 Location:
 ```robot/scs/example.py``` -> ```example_method()```
 
 ### 🦠 Symptoms:
@@ -18,10 +18,10 @@ assignees: OppaAI
 - **[Symptom 2]:** [Describe secondary impact, e.g., "10Hz loop drops to 2Hz"]
 - **[Symptom 3]:** [Describe edge case failures, e.g., "Crash during shutdown"]
 
-###🩺 Diagnosis:
+### 🩺 Diagnosis:
 [Provide the root cause analysis. Explain the underlying conflict, such as Lock Contention, Resource Exhaustion, or State Inconsistency.]
 
-###💡 Proposal:
+### 💡 Proposal:
 [Proposed Solution Name]
 
 Option A (Preferred): [Describe the high-performance or long-term fix.]
