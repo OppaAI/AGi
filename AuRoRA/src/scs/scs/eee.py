@@ -91,7 +91,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     
     def _apply_archive_tag(self, archive_name: str) -> str:
         """
-        Tag the archive with standardized number coding (3-digit format).
+        Tag the archive pending for compacting with standardized number coding (3-digit format).
         (eg. top.secret.7 → top.secret.007)
 
         Arg:
@@ -111,7 +111,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     @classmethod
     def _activate_ACV_compact_cycle(cls):
         """
-        Activate ACV to start running the archive compacting cycle without need of attention (once only)
+        Activate ACV to start running the archive compacting cycle without need of attention. (once only)
         """
         with cls._ACV_lock:
             if not cls._ACV_is_activated:                                       # Gatekeeping to ensure the compacting cycle only if ACV is not activated
@@ -126,38 +126,37 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     @classmethod
     def _ACV_compact_cycle(cls):
         """
-        Background compression worker (ACV)
-        
-        Runs at low priority and sweeps for uncompressed archives.
+        ACV starts running the archive compacting cycle without need of attention.      
+        Operates on its own with little attention and sweeps through the vincity for any archive tagged for compacting.
         """
-        # Lower thread priority (Linux only)
-        try:
-            os.nice(10)
-        except:
-            pass
+        # (TODO) Later on, add flag to give different priority and activity level between Active Mode and Idle Mode 
+        # Assign ACV to moderately low prority level to balance stability and performance
+        try:                                                                     # Assign ACV to operate with morately low prority level if running on Linux OS
+            os.nice(10)                                                          # My archive compact agent is moderatly nice, 
+        except:                                                                  # Do not change priority level if OS not supported
+            pass                                                                 # Go to the next step
         
-        while cls._ACV_is_activated:
-            try:
-                # Wait for queued file
-                target_path = cls._ACV_buffer_queue.get(timeout=1.0)
+        while cls._ACV_is_activated:                                             # Keep running the compact cycle as long as ACV is activated
+            try:                                                                 # Keep running the compact cycle as long as the ACV buffer contains queued archive
+                # Wait for the queued archive in the ACV buffer to arrive
+                loaded_archive = cls._ACV_buffer_queue.get(timeout=1.0)          # Load the archive from the ACV buffre to compactor and free up one queue spot
                 
-                if target_path is None:  # Shutdown signal
-                    break
+                if loaded_archive is None:                                       # Terminate the compact cycle if there is no more queued archive
+                    break                                                        # Terminate the compact cycle
                 
-                target = Path(target_path)
-                log_dir = target.parent
+                archive_location = Path(loaded_archive).parent                   # Retrieve the location of the queued archive
                 
-                # SWEEP LOGIC: Compress ALL uncompressed archives
-                # This ensures nothing is left uncompressed
-                for file in log_dir.glob("*.[0-9][0-9][0-9]"):
-                    cls._perform_compression(file)
+                # Execute SWEEP logic to compact all queued archives
+                for archive in archive_location.glob("*.[0-9][0-9][0-9]"):       # Sweep the location of the archive to locate any uncompacted ones
+                    cls._compact_archive(archive)                                # Compact the archive into smaller size packet and disintegrate the archive
                 
-                cls._ACV_buffer_queue.task_done()
+                cls._ACV_buffer_queue.task_done()                                # Indicate compact operation is completed , cross out one task in the todo list
                 
-            except queue.Empty:
-                continue
-            except Exception as e:
-                print(f"[TALLE] Compression worker error: {e}")
+            except queue.Empty:                                                  # If the ACV buffer is empty, move on
+                continue                                                         # Continue the cycle without doing anything
+            except Exception as e:                                               # If any other issue detected, identify with warning message
+                # (TODO) Switch to TALLE logic to report the warning
+                print(f"[TALLE] Compression worker error: {e}")                  # Alert the robot system/humans that something wrong during the compact cycle
     
     @staticmethod
     def _perform_compression(file_path):
