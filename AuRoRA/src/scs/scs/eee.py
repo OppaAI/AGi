@@ -72,16 +72,18 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         """
         super().doRollover()                      # Take over the generic rollover behavior to queue the archives for compression
         
-        if self.backupCount > 0:
+        if self.backupCount > 0:                  # Trigger the mechanism only if archive is setup
             # (TODO) Make a Github issue for the following:
             # Only trigger with .1 file, if .1 file not exist, only .2 to .999, this will not trigger.
-            oldest_archive = self.rotation_filename(f"{self.baseFilename}.1") # Queue oldest obsolete archive for compression
+            oldest_archive = self.rotation_filename(f"{self.baseFilename}.1") # Queue obsolete archive into the ACV buffer for compacting
             
-            if os.path.exists(oldest_archive):
-                try:
-                    GzipRotatingFileHandler._ACV_buffer_queue.put(oldest_archive, block=False)
-                except queue.Full:
-                    print(f"[TALLE] Compression queue full - dropping {oldest_archive}")    
+            if os.path.exists(oldest_archive):    # Trigger the mechanism only if archive exists
+                # (TODO) Currently, if queue is full, 
+                try:                              # Queue the ar
+                    GzipRotatingFileHandler._ACV_buffer_queue.put(oldest_archive, block=False) # Transfer the archive into the ACV buffer for compacting
+                except queue.Full:                # If ACV buffer is full, identify with warning message
+                    # (TODO) Switch to TALLE error reporting logic
+                    print(f"[TALLE] Compression queue full - dropping {oldest_archive}")   # Alert the robot system/humans the ACV buffer is full
     
     def _apply_archive_tag(self, archive_name: str) -> str:
         """
