@@ -27,12 +27,13 @@ import time
 import traceback
 import uuid
 
-#(TODO) Later make this configurable via config file or environment variable (e.g. /var/log/agisys)
+# (TODO) Later make this configurable via config file or environment variable (e.g. /var/log/agisys)
 LOG_PATH = "./logs"  # Location of log files
 LEDGER_DB_FILE = "ledger.db"  # Ledger database file name
 MASTER_LOG_FILE = "activity.log"  # Master log file name (40% of the logs)
 ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
+# (TODO) This whole ACV class can move to Igniter module since this is not limited for EEE functionality only
 class GzipRotatingFileHandler(RotatingFileHandler):
     """
     Archive Compacting Vector (ACV)
@@ -64,7 +65,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)         # Setup a specialized initiation sequence for the ACV
         self.namer = self._apply_archive_tag      # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
-        self._confirm_ACV_started()               # Get the ACV to start operation when ready
+        self._activate_ACV_compact_cycle()        # Get the ACV to start operation when ready
 
     def doRollover(self):
         """
@@ -78,11 +79,14 @@ class GzipRotatingFileHandler(RotatingFileHandler):
             oldest_archive = self.rotation_filename(f"{self.baseFilename}.1") # Queue obsolete archive into the ACV buffer for compacting
             
             if os.path.exists(oldest_archive):    # Trigger the mechanism only if archive exists
-                # (TODO) Currently, if queue is full, 
-                try:                              # Queue the ar
-                    GzipRotatingFileHandler._ACV_buffer_queue.put(oldest_archive, block=False) # Transfer the archive into the ACV buffer for compacting
+                # (TODO) Make a Github issue for the following:
+                # Currently, if queue is full, the mechanism does not do anything,
+                # The remaining files not in the queue will be orphaned until next boot.
+                # I think the best fix is to set bigger queue size + change the mechanism so it will detect any 3 digit number files and put in the queue when there is vacancy
+                try:                              # Queue the archive 
+                    GzipRotatingFileHandler._ACV_buffer_queue.put(oldest_archive, block=False) # Transfer the archive into the ACV buffer for compacting, without waiting for the queue to clear
                 except queue.Full:                # If ACV buffer is full, identify with warning message
-                    # (TODO) Switch to TALLE error reporting logic
+                    # (TODO) Switch to TALLE logic to report the warning
                     print(f"[TALLE] Compression queue full - dropping {oldest_archive}")   # Alert the robot system/humans the ACV buffer is full
     
     def _apply_archive_tag(self, archive_name: str) -> str:
@@ -105,22 +109,22 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         return archive_name                                                      # Otherwise, do not apply archive tag
 
     @classmethod
-    def _confirm_ACV_started(cls):
+    def _activate_ACV_compact_cycle(cls):
         """
-        Start running ACV in the background (once)
+        Activate ACV to start running the archive compacting cycle without need of attention (once only)
         """
         with cls._ACV_lock:
-            if not cls._ACV_is_activated:
-                cls._ACV_is_activated = True
-                cls._ACV_thread = threading.Thread(                            
-                    target=cls._ACV_cycle,
-                    daemon=True,
-                    name="Archive.Compacting.Vector"
+            if not cls._ACV_is_activated:                                       # Gatekeeping to ensure the compacting cycle only if ACV is not activated
+                cls._ACV_is_activated = True                                    # ACV is now activated
+                cls._ACV_thread = threading.Thread(                             # Set up the thread of ACV
+                    target=cls._ACV_cycle,                                      # Give instruction to run the archive compacting cycle 
+                    daemon=True,                                                # Set ACV to activate as long as the robot running, and stop when the robot is off
+                    name="Archive.Compacting.Vector"                            # Name this daemon ACV
                 )
-                cls._ACV_thread.start()
+                cls._ACV_thread.start()                                         # Start the thread of ACV to start compact cycle to run behind the scene
     
     @classmethod
-    def _ACV_cycle(cls):
+    def _ACV_compact_cycle(cls):
         """
         Background compression worker (ACV)
         
