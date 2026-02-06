@@ -73,8 +73,9 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         super().doRollover()                      # Take over the generic rollover behavior to queue the archives for compression
         
         if self.backupCount > 0:
-            # Queue oldest obsolete archive for compression
-            oldest_archive = self.rotation_filename(f"{self.baseFilename}.1")
+            # (TODO) Make a Github issue for the following:
+            # Only trigger with .1 file, if .1 file not exist, only .2 to .999, this will not trigger.
+            oldest_archive = self.rotation_filename(f"{self.baseFilename}.1") # Queue oldest obsolete archive for compression
             
             if os.path.exists(oldest_archive):
                 try:
