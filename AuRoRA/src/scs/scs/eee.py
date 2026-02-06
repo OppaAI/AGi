@@ -42,24 +42,31 @@ class GzipRotatingFileHandler(RotatingFileHandler):
     - Background compression (non-blocking)
     - Sweep logic (compresses missed backups)
     - Low-priority worker (idle CPU only)
-    
+   
     The compression worker acts as a "garbage collector" -
     it sweeps the log directory and compresses any uncompressed
     backups it finds, ensuring nothing is left behind.
+
+    Workflow:
+    ---------------------    ---------------------    ---------------------
+    | Files dumped into | -> | Confirm the files | -> | Compact the files |
+    | Archive collector |    | have archive tag  |    |                   |
+    ---------------------    ---------------------    ---------------------
     """
     
     # Deployment status of the compactor
-    _compactor_infeed_queue = queue.Queue(maxsize=100)  # Number of archives allowed in the infeed pending for compacting
-    _compactor_in_operation = False                     # Flip the switch to True when compactor is in operation
+    _compactor_buffer_queue = queue.Queue(maxsize=100)  # Number of buffers allowed to be loaded into the compactor
+    _compactor_is_activated = False                     # Flip the switch to True when compactor is activated
     _compactor_thread = None                            # Compactor is currently dormant, waiting for archives to feed in for compact
-    _compactor_lock = threading.Lock()                  # Prevent duplicate compactor startup cycle
-    # Get the compactor ready to go
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)                   # TALLE archive compactor has a specialized initiation sequence
-        self.namer = self._tag_talle_archive_with_coding    # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
-        self._ensure_worker_started()                       # Get the compactor to start operation when ready
+    _compactor_lock = threading.Lock()                  # Prevent duplicate compactor deployment
     
-    def _talle_archive_coding(self, archive_name: str) -> str:
+    # Startup the compactor ready
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)               # Compactor has a specialized initiation sequence
+        self.namer = self._apply_archive_tag            # Tag the archive with standardized number coding (eg. the .007 archive - License to kill (LTM))
+        self._ensure_worker_started()                   # Get the compactor to start operation when ready
+    
+    def _apply_archive_tag(self, archive_name: str) -> str:
         """
         Tag the archive with standardized number coding (3-digit format).
 
@@ -68,28 +75,32 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         Return:
         
         Example:
-            activity.log.7 → activity.log.007
+            top.secret.7 → top.secret.007
         """
-        parts = archive_name.rsplit('.', 1)
-        if len(parts) == 2 and parts[-1].isdigit():
-            return f"{parts[0]}.{int(parts[1]):03d}"
-        return default_name
+        # (TODO) Add to GitHub issue: 
+        # If archive_name already applied with the 3-digit tag, system still continue to apply tag forever
+        archive_name_splits = archive_name.rsplit('.', 1)                        # Split the archive name into 2 parts searching the right side for the dot separator.
+        if len(archive_name_splits) == 2 and archive_name_splits[-1].isdigit():  # If archive name has 2 parts and the last part of the code contains the coding tag,
+            return f"{archive_name_splits[0]}.{int(archive_name_splits[1]):03d}" # Convery archive number with standardized 3-digit number coding
+        return archive_name                                                      # Otherwise, do not apply archive tag
     
     @classmethod
-    def _ensure_worker_started(cls):
-        """Start background compression worker (once)"""
-        with cls._worker_lock:
-            if not cls._worker_running:
-                cls._worker_running = True
-                cls._worker_thread = threading.Thread(
-                    target=cls._worker_loop,
+    def _confirm_compactor_started(cls):
+        """
+        Start running compactor in the background (once)
+        """
+        with cls._compactor_lock:
+            if not cls._compactor_is_activated:
+                cls._compactor_is_activated = True
+                cls._compactor_thread = threading.Thread(                            
+                    target=cls._compactor_cycle,
                     daemon=True,
-                    name="TALLE-Compressor"
+                    name="Archive.Compactor"
                 )
-                cls._worker_thread.start()
+                cls._compactor_thread.start()
     
     @classmethod
-    def _worker_loop(cls):
+    def _compactor_cycle(cls):
         """
         Background compression worker.
         
