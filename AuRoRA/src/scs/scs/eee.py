@@ -73,14 +73,14 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         super().doRollover()                      # Take over the generic rollover behavior to queue the archives for compression
         
         if self.backupCount > 0:
-            # Queue newest backup for compression
-            new_backup = self.rotation_filename(f"{self.baseFilename}.1")
+            # Queue oldest obsolete archive for compression
+            oldest_archive = self.rotation_filename(f"{self.baseFilename}.1")
             
-            if os.path.exists(new_backup):
+            if os.path.exists(oldest_archive):
                 try:
-                    GzipRotatingFileHandler._ACV_buffer_queue.put(new_backup, block=False)
+                    GzipRotatingFileHandler._ACV_buffer_queue.put(oldest_archive, block=False)
                 except queue.Full:
-                    print(f"[TALLE] Compression queue full - dropping {new_backup}")    
+                    print(f"[TALLE] Compression queue full - dropping {oldest_archive}")    
     
     def _apply_archive_tag(self, archive_name: str) -> str:
         """
@@ -96,9 +96,9 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         
         # (TODO) Add to GitHub issue: 
         # If archive_name already applied with the 3-digit tag, system still continue to apply tag forever
-        archive_name_splits = archive_name.rsplit('.', 1)                        # Split the archive name into 2 parts searching the right side for the dot separator.
-        if len(archive_name_splits) == 2 and archive_name_splits[-1].isdigit():  # If archive name has 2 parts and the last part of the code contains the coding tag,
-            return f"{archive_name_splits[0]}.{int(archive_name_splits[1]):03d}" # Convery archive number with standardized 3-digit number coding
+        archive_name_splits = archive_name.rsplit('.', 1)                        # Analyze the archive name to look for the archive number
+        if len(archive_name_splits) == 2 and archive_name_splits[-1].isdigit():  # If archive number is found
+            return f"{archive_name_splits[0]}.{int(archive_name_splits[1]):03d}" # Convert archive number with standardized 3-digit archive tag
         return archive_name                                                      # Otherwise, do not apply archive tag
 
     @classmethod
