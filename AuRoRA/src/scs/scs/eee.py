@@ -147,7 +147,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
                 archive_location = Path(loaded_archive).parent                   # Retrieve the location of the queued archive
                 
                 # Execute SWEEP logic to compact all queued archives
-                for archive in archive_location.glob("*.[0-9][0-9][0-9]"):       # Sweep the location of the archive to locate any uncompacted ones
+                for archive in archive_location.glob("*.[0-9][0-9][0-9]"):       # Sweep the location of the archive to locate any tagged archive pending for compacting
                     cls._compact_archive(archive)                                # Compact the archive into smaller size packet and disintegrate the archive
                 
                 cls._ACV_buffer_queue.task_done()                                # Indicate compact operation is completed , cross out one task in the todo list
@@ -159,7 +159,7 @@ class GzipRotatingFileHandler(RotatingFileHandler):
                 print(f"[TALLE] Compression worker error: {e}")                  # Alert the robot system/humans that something wrong during the compact cycle
     
     @staticmethod
-    def _perform_compression(file_path):
+    def _compact_archive(loaded_archive: Union[str, Path]):
         """
         Compress a single file atomically.
         
@@ -167,26 +167,25 @@ class GzipRotatingFileHandler(RotatingFileHandler):
         either compression succeeds completely or original
         file remains intact.
         """
-        file_path = Path(file_path)
+        archive_location = Path(loaded_archive)                                        # Double insure the archive location is actually a location
         
-        # Skip if already compressed or doesn't exist
-        if not file_path.exists() or file_path.suffix == '.gz':
-            return
+        # Skip if archive is already compacted or does not exist
+        if not archive_location.suffix == ".gz" or archive_location.exists():          # No need to compact if archive is already compacted or magically vanished
+    return                                                                             # Next!
         
-        gz_path = file_path.with_suffix(file_path.suffix + '.gz')
-        tmp_gz = gz_path.with_suffix('.gz.tmp')
+        gz_path = archive_location.with_suffix(archive_location.suffix + '.gz')        # Set up the permanent storage of the compacted archive
+        tmp_gz = gz_path.with_suffix('.gz.tmp')                                        # Set up the temporary storage of the compacted archive for validation before moving over to permanent storage
         
         try:
-            # Compress to temporary file
-            with open(file_path, 'rb') as f_in:
+            # Compact archive to a temporary location
+            with open(archive_location, 'rb') as f_in:
                 with gzip.open(tmp_gz, 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
             
-            # Atomic rename (compression succeeded)
-            tmp_gz.rename(gz_path)
+            tmp_gz.rename(gz_path)                                                     # Move the compacted archive to the 
             
             # Delete original (now safe)
-            file_path.unlink()
+            archive_location.unlink()
             
         except Exception as e:
             print(f"[TALLE] Failed to compress {file_path}: {e}")
