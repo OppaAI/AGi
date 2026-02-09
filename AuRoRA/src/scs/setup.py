@@ -27,7 +27,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'igniter = scs.igniter_temp:main'
+            'igniter = scs.igniter_temp:main',
+            'scc = scs.scc:main'
         ],
     },
 )
