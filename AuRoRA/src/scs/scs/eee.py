@@ -15,7 +15,6 @@ import gzip
 import hashlib
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import queue
 import shutil
@@ -26,45 +25,29 @@ import time
 import traceback
 import uuid
 
-#(TODO) Later make this configurable via config file or environment variable (e.g. /var/log/agisys)
+# AGi modules
+from scs.sdv import GzipRotatingFileHandler
+
+# (TODO) Later make this configurable via config file or environment variable (e.g. /var/log/agisys)
 LOG_PATH = "./logs"  # Location of log files
 LEDGER_DB_FILE = "ledger.db"  # Ledger database file name
 MASTER_LOG_FILE = "activity.log"  # Master log file name (40% of the logs)
 ERROR_LOG_FILE = "anomaly.jsonl"   # Error log file name (10% of the logs)
 
-class GzipRotatingFileHandler(RotatingFileHandler):
+class RelayNodeLimiter:
     """
-    RotatingFileHandler that gzips old backups on rotate.
-    """
-    def doRollover(self):
-        super().doRollover()
-        # Gzip the oldest backup (backupCount keeps N files)
-        if self.backupCount > 0:
-            # Find the oldest .1 file (or whichever is now the "extra" one)
-            log_path = Path(self.baseFilename)
-            for i in range(self.backupCount - 1, 0, -1):
-                old_file = log_path.parent / f"{log_path.name}.{i}"
-                if old_file.exists():
-                    with open(old_file, 'rb') as f_in:
-                        with gzip.open(f"{old_file}.gz", 'wb') as f_out:
-                            shutil.copyfileobj(f_in, f_out)
-                    old_file.unlink()  # Delete uncompressed
-                    break
-
-class TokenBucketThrottle:
-    """
-    Token bucket algorithm for rate limiting per conduit.
-    Prevents log floods while allowing bursts of critical events.
+    Token bucket algorithm to limit the message flow rate relaying through the node.
+    Prevents message floods while allowing bursts of critical events.
     
     Example:
-        throttle = TokenBucketThrottle(rate=1.0, burst=3)
+        throttle = RelayNodeLimiter(rate=1.0, burst=3)
         if throttle.allow():
             # Process event
         else:
             # Drop event (throttled)
     """
     
-    def __init__(self, rate: float = 1.0, burst: int = 3):
+    def __init__(self, rate: float = 1.0, burst: int = 3) -> None:
         """
         Initialize token bucket.
         
@@ -72,11 +55,11 @@ class TokenBucketThrottle:
             rate: Tokens refilled per second (Hz)
             burst: Maximum token capacity (burst size)
         """
-        self.rate = rate          # Events per second
-        self.burst = burst        # Burst capacity
-        self.tokens = burst       # Start with full bucket
-        self.last_update = time.monotonic()
-        self._lock = threading.Lock()
+        self.rate: float = rate                         # The rate it allows the message to flow
+        self.burst: int = burst                         # The capacity it allows the message to burst out
+        self.tokens: float = burst                      # Start with full bucket
+        self.last_update: float = time.monotonic()
+        self._lock: threading.Lock = threading.Lock()
     
     def allow(self) -> bool:
         """
@@ -86,22 +69,24 @@ class TokenBucketThrottle:
             True if event should be processed, False if throttled
         """
         with self._lock:
-            now = time.monotonic()
-            elapsed = now - self.last_update
+            now: float = time.monotonic()
+            elapsed: float = now - self.last_update
             
             # Refill tokens based on elapsed time
-            self.tokens = min(self.burst, self.tokens + elapsed * self.rate)
-            self.last_update = now
+            self.tokens: float = min(self.burst, self.tokens + elapsed * self.rate)
+            self.last_update: float = now
             
             # Check if we have at least 1 token
             if self.tokens >= 1.0:
-                self.tokens -= 1.0
+                self.tokens: float = self.tokens - 1.0
                 return True
             
             return False
     
-    def get_status(self) -> dict:
-        """Get current throttle status (for debugging)."""
+    def self_check(self) -> dict:
+        """
+        Get current throttle status (for debugging).
+        """
         with self._lock:
             return {
                 "tokens": round(self.tokens, 2),
@@ -129,13 +114,14 @@ class EEEAggregator:
     """
     
     # Class-level flags to ensure setup happens only once
-    _initialized = False
-    _log_queue: queue.Queue = queue.Queue()
-    _worker_started: bool = False
-    _thread_lock = threading.Lock()
-    _shutdown_registered = False
-    _plugins: dict = {}  # plugin_name -> callback
-    _ledger_queue: deque = deque()  # Tuple: (args for execute)
+    _initialized: bool = False
+    _log_queue: queue.Queue = queue.Queue(maxsize=10000)  # Bounded queue
+    _dropped_events: int = 0  # Counter for dropped events
+    _worker_started: bool = False  # Worker thread started flag
+    _thread_lock: threading.Lock = threading.Lock()  # Thread lock
+    _shutdown_registered: bool = False  # Shutdown registered flag
+    _plugins: dict = {}  # Plugin dictionary
+    _ledger_queue: deque = deque()  # Ledger queue
     _ledger_flush_timer: threading.Timer | None = None
     _ledger_lock = threading.Lock()
     BATCH_SIZE = 50
@@ -204,7 +190,10 @@ class EEEAggregator:
         anomaly_handler.setFormatter(logging.Formatter('%(message)s'))
 
         # THE LEDGER: Initialize SQLite here
-        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
+        db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
+        db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
+        db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
         db_conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,6 +231,29 @@ class EEEAggregator:
                     flush_loop()
 
         _start_ledger_flush()
+
+        def _start_ledger_backup():
+            def backup_loop():
+                log_dir = Path(LOG_PATH)
+                db_path = log_dir / LEDGER_DB_FILE
+                if db_path.exists() and db_path.stat().st_size > 50 * 1024 * 1024:  # 50MB threshold
+                    backup_path = db_path.with_suffix(f'.backup.{int(time.time())}.gz')
+                    try:
+                        with open(db_path, 'rb') as f_in:
+                            with gzip.open(backup_path, 'wb') as f_out:
+                                shutil.copyfileobj(f_in, f_out)
+                        print(f"[EEE] Ledger backed up to {backup_path.name}")
+                        # Optional: VACUUM to compact (safe)
+                        temp_conn = sqlite3.connect(db_path)
+                        temp_conn.execute("VACUUM;")
+                        temp_conn.close()
+                    except Exception as e:
+                        print(f"[EEE] Ledger backup failed: {e}")
+                # Check hourly
+                threading.Timer(3600, backup_loop).start()
+            backup_loop()
+
+        _start_ledger_backup()
 
         text_formatter = EEEAggregator.Filtrator.pass_thru_EEE_filters()
 
@@ -363,7 +375,10 @@ class EEEAggregator:
                             skip_disk = True
                             break  # Exit plugin loop early
                 except Exception as e:
-                    print(f"[EEE] Plugin {plugin_name} error: {e}")
+                    self.logger.exception(f"Plugin {plugin_name} crashed")
+                    # Auto-disable broken plugin:
+                    del self._plugins[plugin_name]
+                    print(f"[EEE] Plugin {plugin_name} DISABLED")
 
             # Skip disk writes if plugin handled it
             if skip_disk:
@@ -447,19 +462,22 @@ class EEEAggregator:
             EEEAggregator._log_queue.task_done()
 
     @classmethod
-    def _flush_ledger_batch(cls):
+    def _flush_ledger_batch(cls) -> None:
         with cls._ledger_lock:
             if not cls._ledger_queue:
                 return
             
             batch = list(cls._ledger_queue)
             cls._ledger_queue.clear()
-            
+
             try:
                 # Re-use db_conn from worker scope? Better: open briefly or pass conn
                 # For simplicity: re-open conn here (cheap, safe)
                 log_dir = Path(LOG_PATH)
-                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE)
+                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
+                db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
+                db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
+                db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
                 db_conn.executemany("""
                     INSERT INTO events
                     (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
@@ -475,7 +493,7 @@ class EEEAggregator:
     def get_throttle_status(cls) -> dict:
         """
         Get current throttling status for all proc_ids.
-        Useful for debugging and monitoring.
+        Useful for debugging and monitoring
         
         Returns:
             Dictionary of proc_id -> throttle status
@@ -496,9 +514,14 @@ class EEEAggregator:
         if cls._worker_started:
             print("[EEE] Flushing pending log entries...")
             cls._log_queue.join()
-            cls._flush_ledger_batch()  # Final Ledger flush
+            cls._flush_ledger_batch()
+            
             if cls._ledger_flush_timer:
                 cls._ledger_flush_timer.cancel()
+            
+            # ✅ NEW: Shutdown ACV
+            GzipRotatingFileHandler.shutdown()
+            
             print(f"[EEE] All events written. Shutdown complete.")
     
     @classmethod
@@ -701,6 +724,13 @@ class EEEAggregator:
 
         # Trigger the console output immediately
         self.logger.log(level, f"{msg} | Data: {json.dumps(evidence)}")
+
+        try:
+            self._log_queue.put(item, timeout=0.1)  # Block 100ms max
+        except queue.Full:
+            EEEAggregator._dropped_events += 1
+            if EEEAggregator._dropped_events % 100 == 0:
+                print(f"[EEE] WARNING: Dropped {EEEAggregator._dropped_events} events (queue full!)")
 
 def get_logger(caller_id: str = "SCS.EEE") -> EEEAggregator:
     """

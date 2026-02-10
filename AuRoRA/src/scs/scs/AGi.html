@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Chat with Grace ✨</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #ffeef8 0%, #e8f4ff 50%, #fff5e6 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .star {
+            position: absolute;
+            color: #ffd700;
+            font-size: 20px;
+            animation: twinkle 3s infinite;
+            opacity: 0.6;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 600px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: 
+                0 10px 40px rgba(255, 182, 193, 0.3),
+                0 0 0 4px rgba(255, 255, 255, 0.5);
+            border: 3px solid #ffb6c1;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #ff6b9d;
+            font-size: 2.5em;
+            font-weight: 800;
+            text-shadow: 3px 3px 0px #ffe4e1;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #a8a8a8;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+        
+        /* Cute Robot Container */
+        .robot-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .robot {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+        }
+        
+        /* Robot Head */
+        .robot-head {
+            width: 140px;
+            height: 120px;
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            top: 20px;
+            left: 30px;
+            box-shadow: 
+                0 8px 20px rgba(255, 105, 180, 0.3),
+                inset -5px -5px 15px rgba(0,0,0,0.1),
+                inset 5px 5px 15px rgba(255,255,255,0.3);
+            z-index: 10;
+        }
+        
+        /* Robot Ears/Antennas */
+        .antenna-left, .antenna-right {
+            width: 12px;
+            height: 40px;
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
+            position: absolute;
+            top: -25px;
+            border-radius: 10px;
+        }
+        
+        .antenna-left {
+            left: 30px;
+            transform: rotate(-15deg);
+        }
+        
+        .antenna-right {
+            right: 30px;
+            transform: rotate(15deg);
+        }
+        
+        .antenna-ball {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle at 30% 30%, #fff, #ff69b4);
+            border-radius: 50%;
+            position: absolute;
+            top: -10px;
+            left: -4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: blink-ball 2s infinite;
+        }
+        
+        @keyframes blink-ball {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.9); }
+        }
+        
+        /* Face */
+        .face {
+            position: absolute;
+            top: 35px;
+            left: 20px;
+            width: 100px;
+            height: 60px;
+        }
+        
+        .eyes {
+            display: flex;
+            justify-content: space-between;
+            width: 80px;
+            margin: 0 auto;
+        }
+        
+        .eye {
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .eye::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(145deg, #4a4a4a, #2a2a2a);
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .eye::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+        
+        /* Eye expressions */
+        .eye.happy::after {
+            height: 10px;
+            border-radius: 0 0 15px 15px;
+            top: 10px;
+        }
+        
+        .eye.happy::before {
+            opacity: 0;
+        }
+        
+        .eye.blink {
+            animation: blink-anim 0.2s ease;
+        }
+        
+        @keyframes blink-anim {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+        
+        .eye.look-left::after, .eye.look-left::before {
+            transform: translateX(-3px);
+        }
+        
+        .eye.look-right::after, .eye.look-right::before {
+            transform: translateX(3px);
+        }
+        
+        .eye.look-up::after, .eye.look-up::before {
+            transform: translateY(-3px);
+        }
+        
+        .eye.surprised::after {
+            transform: scale(0.7);
+        }
+        
+        /* Cheeks */
+        .cheeks {
+            display: flex;
+            justify-content: space-between;
+            width: 100px;
+            margin-top: 5px;
+        }
+        
+        .cheek {
+            width: 20px;
+            height: 12px;
+            background: rgba(255, 105, 180, 0.4);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+        
+        /* Mouth */
+        .mouth {
+            width: 40px;
+            height: 20px;
+            border: 3px solid #4a4a4a;
+            border-top: none;
+            border-radius: 0 0 40px 40px;
+            margin: 8px auto 0;
+            position: relative;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+        
+        .mouth.smile {
+            height: 25px;
+            border-radius: 0 0 50px 50px;
+            background: #ff69b4;
+            border: none;
+        }
+        
+        .mouth.open {
+            height: 30px;
+            width: 35px;
+            border-radius: 50%;
+            background: #ff69b4;
+            border: 3px solid #4a4a4a;
+        }
+        
+        .mouth.o-shape {
+            width: 20px;
+            height: 25px;
+            border-radius: 50%;
+            background: #ff69b4;
+            border: 3px solid #4a4a4a;
+        }
+        
+        .mouth.line {
+            width: 30px;
+            height: 3px;
+            border: none;
+            background: #4a4a4a;
+            border-radius: 2px;
+            margin-top: 15px;
+        }
+        
+        /* Robot Body */
+        .robot-body {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(145deg, #e6f3ff, #b8d4f0);
+            border-radius: 40px 40px 30px 30px;
+            position: absolute;
+            bottom: 0;
+            left: 50px;
+            box-shadow: 
+                0 5px 15px rgba(0,0,0,0.1),
+                inset -3px -3px 10px rgba(0,0,0,0.05);
+            z-index: 5;
+        }
+        
+        /* Heart on chest */
+        .heart {
+            position: absolute;
+            top: 25px;
+            left: 35px;
+            width: 30px;
+            height: 27px;
+            background: #ff69b4;
+            transform: rotate(-45deg);
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+        
+        .heart::before,
+        .heart::after {
+            content: '';
+            width: 30px;
+            height: 27px;
+            position: absolute;
+            background: #ff69b4;
+            border-radius: 50%;
+        }
+        
+        .heart::before {
+            top: -15px;
+            left: 0;
+        }
+        
+        .heart::after {
+            left: 15px;
+            top: 0;
+        }
+        
+        @keyframes heartbeat {
+            0%, 100% { transform: rotate(-45deg) scale(1); }
+            50% { transform: rotate(-45deg) scale(1.1); }
+        }
+        
+        /* Arms */
+        .arm-left, .arm-right {
+            width: 30px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
+            position: absolute;
+            top: 80px;
+            border-radius: 15px;
+            z-index: 4;
+        }
+        
+        .arm-left {
+            left: 10px;
+            transform-origin: top center;
+            animation: wave-left 4s ease-in-out infinite;
+        }
+        
+        .arm-right {
+            right: 10px;
+            transform-origin: top center;
+            animation: wave-right 4s ease-in-out infinite;
+        }
+        
+        @keyframes wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(20deg); }
+        }
+        
+        @keyframes wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(-20deg); }
+        }
+        
+        /* Speech Bubble */
+        .speech-bubble {
+            position: absolute;
+            top: -60px;
+            right: -80px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-size: 0.9em;
+            color: #666;
+            max-width: 150px;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border: 3px solid #ffb6c1;
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-bottom: 3px solid #ffb6c1;
+            border-right: 3px solid #ffb6c1;
+            transform: rotate(45deg);
+        }
+        
+        .speech-bubble.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .speech-bubble.speaking {
+            animation: bounce 0.5s ease infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: scale(1) translateY(0); }
+            to { transform: scale(1.05) translateY(-5px); }
+        }
+        
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #ffe4e1;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 700;
+            color: #ff6b9d;
+            margin: 0 auto 20px;
+            display: block;
+            width: fit-content;
+            border: 2px solid #ffb6c1;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff6b9d;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #69db7c;
+            box-shadow: 0 0 10px #69db7c;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        
+        /* Input Area */
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        #userInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 3px solid #ffb6c1;
+            border-radius: 25px;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            transition: all 0.3s ease;
+            background: white;
+            color: #666;
+        }
+        
+        #userInput:focus {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 4px rgba(255, 105, 180, 0.2);
+        }
+        
+        #userInput::placeholder {
+            color: #ccc;
+        }
+        
+        .send-btn {
+            padding: 15px 30px;
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 20, 147, 0.3);
+            font-family: 'Nunito', sans-serif;
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 20, 147, 0.4);
+        }
+        
+        .send-btn:active {
+            transform: translateY(0);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Chat Area */
+        .chat-container {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 18px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: pop-in 0.3s ease;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        @keyframes pop-in {
+            0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        .message.user {
+            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+            color: #1976d2;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+            text-align: right;
+        }
+        
+        .message.grace {
+            background: linear-gradient(145deg, #fce4ec, #f8bbd9);
+            color: #c2185b;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+            min-height: 44px;
+        }
+        
+        .message-label {
+            font-size: 0.75em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            opacity: 0.7;
+        }
+        
+        /* Streaming cursor */
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #ff69b4;
+            margin-left: 2px;
+            animation: blink-cursor 0.8s infinite;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink-cursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        /* Scrollbar styling */
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #ffb6c1;
+            border-radius: 10px;
+        }
+        
+        /* Floating decorations */
+        .float-hearts {
+            position: fixed;
+            font-size: 24px;
+            animation: float-up 4s ease-in infinite;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        @keyframes float-up {
+            0% {
+                opacity: 0;
+                transform: translateY(100vh) rotate(0deg);
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) rotate(360deg);
+            }
+        }
+        
+        /* Speaking animation overlay */
+        .speaking-waves {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+        }
+        
+        .speaking-waves.active {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .wave {
+            width: 4px;
+            height: 20px;
+            background: #ff69b4;
+            border-radius: 2px;
+            animation: wave-anim 0.5s ease-in-out infinite;
+        }
+        
+        .wave:nth-child(2) { animation-delay: 0.1s; }
+        .wave:nth-child(3) { animation-delay: 0.2s; }
+        
+        @keyframes wave-anim {
+            0%, 100% { height: 10px; }
+            50% { height: 25px; }
+        }
+        
+        /* Loading indicator */
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 0;
+        }
+        
+        .typing-indicator.active {
+            display: flex;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff69b4;
+            border-radius: 50%;
+            animation: typing-bounce 1.4s ease-in-out infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing-bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Stars -->
+    <div class="stars" id="stars"></div>
+    
+    <div class="container">
+        <h1>✨ Chat with Grace ✨</h1>
+        <p class="subtitle">Your Cute AI Companion 💕</p>
+        
+        <!-- Status -->
+        <div class="status-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+        
+        <!-- Cute Robot -->
+        <div class="robot-container">
+            <div class="robot" id="robot">
+                <!-- Speech Bubble -->
+                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+                
+                <!-- Speaking Waves -->
+                <div class="speaking-waves" id="speakingWaves">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+                
+                <!-- Head -->
+                <div class="robot-head">
+                    <!-- Antennas -->
+                    <div class="antenna-left">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    <div class="antenna-right">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    
+                    <!-- Face -->
+                    <div class="face">
+                        <div class="eyes">
+                            <div class="eye" id="leftEye"></div>
+                            <div class="eye" id="rightEye"></div>
+                        </div>
+                        <div class="cheeks">
+                            <div class="cheek"></div>
+                            <div class="cheek"></div>
+                        </div>
+                        <div class="mouth" id="mouth"></div>
+                    </div>
+                </div>
+                
+                <!-- Body -->
+                <div class="robot-body">
+                    <div class="heart"></div>
+                </div>
+                
+                <!-- Arms -->
+                <div class="arm-left"></div>
+                <div class="arm-right"></div>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+
+    <script>
+        // Create background stars
+        const starsContainer = document.getElementById('stars');
+        for (let i = 0; i < 20; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.innerHTML = '✦';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.fontSize = (Math.random() * 15 + 10) + 'px';
+            starsContainer.appendChild(star);
+        }
+        
+        // Robot elements
+        const leftEye = document.getElementById('leftEye');
+        const rightEye = document.getElementById('rightEye');
+        const mouth = document.getElementById('mouth');
+        const speechBubble = document.getElementById('speechBubble');
+        const speakingWaves = document.getElementById('speakingWaves');
+        const chatContainer = document.getElementById('chatContainer');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        
+        // State variables
+        let isSpeaking = false;
+        let isStreaming = false;
+        let idleInterval;
+        let blinkInterval;
+        let currentStreamMessage = null;
+        let streamBuffer = '';
+        
+        // ROS Connection
+        const ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
+        
+        ros.on('connection', () => {
+            statusDot.classList.add('connected');
+            statusText.textContent = 'Connected! 💖';
+            speechBubble.textContent = 'Connected! 💕';
+            speechBubble.classList.add('show');
+            setTimeout(() => speechBubble.classList.remove('show'), 2000);
+            startIdleAnimations();
+        });
+        
+        ros.on('error', () => {
+            statusText.textContent = 'Error 😢';
+        });
+        
+        ros.on('close', () => {
+            statusDot.classList.remove('connected');
+            statusText.textContent = 'Disconnected 😢';
+            stopIdleAnimations();
+        });
+        
+        // ROS Topics
+        const cnsTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: '/cns/neural_input',
+            messageType: 'std_msgs/String'
+        });
+        
+        const gceResponseTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: '/gce/response',
+            messageType: 'std_msgs/String'
+        });
+        
+        // Subscribe to responses with streaming support - FIXED FOR DELTA STREAMING
+        gceResponseTopic.subscribe((msg) => {
+            try {
+                const data = JSON.parse(msg.data);
+                console.log("Received:", data.type, data.content);
+                
+                if (data.type === 'start') {
+                    // First chunk - start new stream
+                    startStreaming(data.content);
+                } else if (data.type === 'delta') {
+                    // Subsequent chunks - append to existing stream
+                    appendToStream(data.content);
+                } else if (data.type === 'done') {
+                    // Stream complete
+                    finishStreaming();
+                } else if (data.type === 'error') {
+                    // Error occurred
+                    if (currentStreamMessage) {
+                        finishStreaming();
+                    }
+                    createMessageElement('grace', data.content);
+                    speechBubble.textContent = 'Error! 😢';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                console.error("Failed to parse message:", msg.data, e);
+                // Fallback: treat as plain text for backward compatibility
+                if (!isStreaming) {
+                    startStreaming(msg.data);
+                } else {
+                    appendToStream(msg.data);
+                }
+            }
+        });
+        
+        // Start streaming with first chunk
+        function startStreaming(firstChunk) {
+            if (isStreaming) return;
+            
+            isStreaming = true;
+            isSpeaking = true;
+            streamBuffer = firstChunk;
+            
+            // Disable input during streaming
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            
+            // Show speech bubble immediately with thinking state
+            speechBubble.textContent = 'Thinking... 💭';
+            speechBubble.classList.add('show');
+            
+            // Create message element for streaming
+            currentStreamMessage = createMessageElement('grace', '');
+            const contentDiv = currentStreamMessage.querySelector('.message-content');
+            
+            // Add initial content
+            contentDiv.textContent = streamBuffer;
+            
+            // Add cursor
+            const cursor = document.createElement('span');
+            cursor.className = 'streaming-cursor';
+            contentDiv.appendChild(cursor);
+            
+            // Start speaking animation
+            startSpeakingAnimation();
+            
+            // Update speech bubble with preview if long enough
+            if (streamBuffer.length > 15) {
+                const preview = streamBuffer.substring(0, 20);
+                speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
+            }
+        }
+        
+        // Append delta to existing stream
+        function appendToStream(delta) {
+            if (!isStreaming || !currentStreamMessage) return;
+            
+            streamBuffer += delta;
+            
+            const contentDiv = currentStreamMessage.querySelector('.message-content');
+            const cursor = contentDiv.querySelector('.streaming-cursor');
+            
+            // Update content
+            contentDiv.textContent = streamBuffer;
+            
+            // Re-add cursor at the end
+            if (cursor) {
+                contentDiv.appendChild(cursor);
+            } else {
+                const newCursor = document.createElement('span');
+                newCursor.className = 'streaming-cursor';
+                contentDiv.appendChild(newCursor);
+            }
+            
+            // Update speech bubble occasionally
+            if (streamBuffer.length % 10 === 0 && streamBuffer.length > 15) {
+                const preview = streamBuffer.substring(0, 20);
+                speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
+            }
+            
+            // Random mouth movements during speech
+            if (streamBuffer.length % 5 === 0) {
+                randomizeMouth();
+            }
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function finishStreaming() {
+            isStreaming = false;
+            isSpeaking = false;
+            
+            // Remove cursor
+            if (currentStreamMessage) {
+                const cursor = currentStreamMessage.querySelector('.streaming-cursor');
+                if (cursor) cursor.remove();
+            }
+            
+            // Re-enable input
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+            
+            // Stop speaking animation
+            stopSpeakingAnimation();
+            
+            // Show final text in speech bubble briefly
+            speechBubble.textContent = 'Done! 💕';
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+            }, 1500);
+            
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // Reset current stream message
+            currentStreamMessage = null;
+            streamBuffer = '';
+        }
+        
+        function createMessageElement(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = sender === 'user' ? 'You 💙' : 'Grace 💕';
+            
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.textContent = text;
+            
+            msgDiv.appendChild(label);
+            msgDiv.appendChild(content);
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return msgDiv;
+        }
+        
+        function randomizeMouth() {
+            const mouths = ['open', 'o-shape', 'smile'];
+            const random = mouths[Math.floor(Math.random() * mouths.length)];
+            mouth.className = 'mouth ' + random;
+        }
+        
+        function startSpeakingAnimation() {
+            speechBubble.classList.add('show', 'speaking');
+            speakingWaves.classList.add('active');
+            mouth.className = 'mouth open';
+        }
+        
+        function stopSpeakingAnimation() {
+            speechBubble.classList.remove('show', 'speaking');
+            speakingWaves.classList.remove('active');
+            setExpression('happy');
+        }
+        
+        // Idle animations
+        function startIdleAnimations() {
+            idleInterval = setInterval(() => {
+                if (!isSpeaking && !isStreaming) {
+                    const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
+                    const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
+                    setExpression(randomExp);
+                }
+            }, 3000);
+            
+            blinkInterval = setInterval(() => {
+                if (!isSpeaking && !isStreaming) {
+                    blink();
+                }
+            }, 4000);
+        }
+        
+        function stopIdleAnimations() {
+            clearInterval(idleInterval);
+            clearInterval(blinkInterval);
+        }
+        
+        // Expression functions
+        function setExpression(type) {
+            leftEye.className = 'eye';
+            rightEye.className = 'eye';
+            mouth.className = 'mouth';
+            
+            switch(type) {
+                case 'happy':
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('smile');
+                    break;
+                case 'look-left':
+                    leftEye.classList.add('look-left');
+                    rightEye.classList.add('look-left');
+                    mouth.classList.add('line');
+                    break;
+                case 'look-right':
+                    leftEye.classList.add('look-right');
+                    rightEye.classList.add('look-right');
+                    mouth.classList.add('line');
+                    break;
+                case 'look-up':
+                    leftEye.classList.add('look-up');
+                    rightEye.classList.add('look-up');
+                    mouth.classList.add('o-shape');
+                    break;
+                case 'surprised':
+                    leftEye.classList.add('surprised');
+                    rightEye.classList.add('surprised');
+                    mouth.classList.add('o-shape');
+                    break;
+                default:
+                    mouth.classList.add('smile');
+            }
+        }
+        
+        function blink() {
+            leftEye.classList.add('blink');
+            rightEye.classList.add('blink');
+            setTimeout(() => {
+                leftEye.classList.remove('blink');
+                rightEye.classList.remove('blink');
+            }, 200);
+        }
+        
+        // Send message
+        function sendSignal() {
+            const val = userInput.value.trim();
+            
+            if (!val || isStreaming) return;
+            
+            // Publish to ROS
+            cnsTopic.publish(new ROSLIB.Message({ data: val }));
+            
+            // Add to chat
+            createMessageElement('user', val);
+            
+            // Robot reaction
+            setExpression('surprised');
+            setTimeout(() => setExpression('happy'), 500);
+            
+            // Create floating hearts
+            createFloatingHeart();
+            
+            // Clear input
+            userInput.value = '';
+        }
+        
+        function createFloatingHeart() {
+            const heart = document.createElement('div');
+            heart.className = 'float-hearts';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            heart.style.left = Math.random() * window.innerWidth + 'px';
+            heart.style.animationDuration = (3 + Math.random() * 2) + 's';
+            document.body.appendChild(heart);
+            
+            setTimeout(() => heart.remove(), 5000);
+        }
+        
+        // Enter key support
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendSignal();
+        });
+        
+        // Initial expression
+        setExpression('happy');
+        
+        // Test function for debugging (call from console: testStream())
+        window.testStream = function() {
+            // Simulate streaming
+            const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
+            const chunks = testText.split('');
+            
+            let i = 0;
+            function sendNextChunk() {
+                if (i === 0) {
+                    startStreaming(chunks[0]);
+                } else if (i < chunks.length) {
+                    appendToStream(chunks[i]);
+                } else {
+                    finishStreaming();
+                    return;
+                }
+                i++;
+                setTimeout(sendNextChunk, 50);
+            }
+            sendNextChunk();
+        };
+    </script>
+</body>
+</html>

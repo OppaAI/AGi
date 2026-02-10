@@ -61,7 +61,15 @@ class EEEROSBridge(Node):
             '/eee/health', 
             self._handle_health_query
         )
-        
+
+        # Throttle status service
+        self.throttle_srv = self.create_service(
+            Trigger,
+            '/eee/throttle_status',
+            self._handle_throttle_status
+        )
+        self.get_logger().info("✅ THROTTLE STATUS service: /eee/throttle_status")
+
         # Register shutdown hook
         self.create_subscription(
             Log,  # Dummy - actually use context.on_shutdown
@@ -74,6 +82,26 @@ class EEEROSBridge(Node):
         self.get_logger().info(f"   Robot: {self.get_name()}")
         self.get_logger().info(f"   Monitoring {len(self._plugins)} channels")
 
+    def _handle_throttle_status(self, request, response):
+        """
+        Service: Get current throttling status (all proc_ids).
+        
+        Returns:
+            success: Always True
+            message: JSON string of throttle status
+        """
+        try:
+            status = EEEAggregator.get_throttle_status()  # Your existing classmethod
+            response.success = True
+            response.message = json.dumps(status, indent=2)
+            self.get_logger().info("Throttle status queried")
+        except Exception as e:
+            response.success = False
+            response.message = f"Throttle status failed: {str(e)}"
+            self.get_logger().error(response.message)
+    
+        return response
+    
     def _handle_health_query(self, request, response):
         """
         Service: Instant health check via REFLEX cache.
@@ -143,8 +171,16 @@ class EEEROSBridge(Node):
 
 class ReflexPlugin:
     """
-    REFLEX Channel: Real-time safety alerts (/diagnostics).
+    REFLEX Channel Plugin: Real-time machine-readable safety alerts.
+    
+    Publishes structured DiagnosticStatus messages to /diagnostics on WARNING+ events.
+    - Maps EEE level → DiagnosticStatus level (WARN/ERROR)
+    - Includes PROC_ID as name, evidence as key-values, short CID
+    - Caches statuses for /eee/health query
+    - Enforces publish cooldown to prevent spam
+    - Supports STALE detection via watchdog timer
     """
+
     NAME = "reflex"
     PUBLISH_COOLDOWN = 1.0  # Min 1 second between publishes per proc_id
     STALE_THRESHOLD = 10.0  # 10 seconds without update = STALE
@@ -181,27 +217,21 @@ class ReflexPlugin:
         if level < logging.WARNING:
             return False
         
-        # Throttle check
+        now = time.time()
         proc_id = meta["proc_id"]
-        now = time.monotonic()
-
-        if proc_id in self._last_publish:
-            elapsed = now - self._last_publish[proc_id]
-            if elapsed < self.PUBLISH_COOLDOWN:
-                # Too soon - skip publish
-                return False
-
+        
+        # Cooldown check: min 1s between publishes per proc_id
+        if proc_id in self._last_publish and now - self._last_publish[proc_id] < self.PUBLISH_COOLDOWN:
+            return False  # Throttled — skip publish (disk still gets it)
+        
         try:
             status = self._build_status(level, msg, evidence, meta)
             self._publish(status)
             self._cache[status.name] = status
-
-            self._last_publish[proc_id] = now
-            
+            self._last_publish[proc_id] = now  # Update last publish time
         except Exception as e:
-            # Log error but don't crash EEE
             self.node.get_logger().error(f"REFLEX publish failed: {e}")
-            return False  # Allow disk fallback
+            return False
         
         # Block disk queue for non-critical (they're in cache)
         return level < logging.CRITICAL
@@ -299,7 +329,12 @@ class ReflexPlugin:
 
 class AwarenessPlugin:
     """
-    AWARENESS Channel: Human-readable logs (/rosout).
+    AWARENESS Channel Plugin: Human-readable live logs.
+    
+    Bridges EEE formatted plain text logs to /rosout for remote viewing.
+    - Publishes all levels (DEBUG+) with custom format (ISO8601 + PROC_ID + CID + data)
+    - Adds handler to root logger
+    - Fallback on ROS failure to prevent error spam
     """
     NAME = "awareness"
     
@@ -377,7 +412,11 @@ class AwarenessPlugin:
 
 class MetricsPlugin:
     """
-    METRICS Channel: Numeric trends for Grafana/Foxglove visualization.
+    METRICS Channel Plugin: Real-time numeric trend visualization.
+    
+    Publishes extracted numbers from evidence/context to /eee/metrics.
+    - Enables plots in Foxglove/Grafana (e.g., CPU temp, load trends)
+    - Optional extension for vital monitoring
     
     Extracts numeric values from evidence dict and publishes to /eee/metrics.
     Useful for real-time monitoring of:
