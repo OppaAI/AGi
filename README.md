@@ -1,6 +1,7 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
 [![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
+[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
 ![Status Experimental](https://img.shields.io/badge/status-experimental-orange.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
@@ -16,12 +17,15 @@
 ![Ollama 0.15.6](https://img.shields.io/badge/Model-Qwen3%204B-FF6B6B?logo=ollama)
 
 ![Started](https://img.shields.io/badge/Started-2026--01--01-darkcyan?&logo=github)
-![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan?&logo=github)
+![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan)
 ![Version](https://img.shields.io/badge/Version-0.1.3-darkcyan?&logo=github)
-![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan&logo=github)
+![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan)
 
 ![Owner](https://img.shields.io/badge/owner-OppaAI-salmon)
 ![Maintainer](https://img.shields.io/badge/maintainer-OppaAI-salmon)
+![Admin](https://img.shields.io/badge/admin-OppaAI-salmon)
+![Tech](https://img.shields.io/badge/tech-OppaAI-salmon)
+![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
 ![Admin](https://img.shields.io/badge/admin-OppaAI-salmon)
 ![Tech](https://img.shields.io/badge/tech-OppaAI-salmon)
 ![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
