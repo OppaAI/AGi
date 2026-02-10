@@ -16,7 +16,7 @@
 ![Ollama 0.15.6](https://img.shields.io/badge/Model-Qwen3%204B-FF6B6B?logo=ollama)
 
 ![Started](https://img.shields.io/badge/Started-2026--01--01-darkcyan?&logo=github)
-![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan&logo=github)
+![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan?&logo=github)
 ![Version](https://img.shields.io/badge/Version-0.1.3-darkcyan?&logo=github)
 ![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan&logo=github)
 
