@@ -115,6 +115,57 @@
                 inset -5px -5px 15px rgba(0,0,0,0.1),
                 inset 5px 5px 15px rgba(255,255,255,0.3);
             z-index: 10;
+            transition: all 0.5s ease;
+        }
+        
+        /* Emotion-based head colors */
+        .robot-head.happy {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+        }
+        
+        .robot-head.sad {
+            background: linear-gradient(145deg, #a8c0ff, #6b8cff);
+            animation: float-slow 4s ease-in-out infinite;
+        }
+        
+        .robot-head.angry {
+            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+            animation: shake 0.5s ease-in-out infinite;
+        }
+        
+        .robot-head.surprised {
+            background: linear-gradient(145deg, #ffd93d, #ff9f43);
+            animation: bounce-quick 0.8s ease-in-out infinite;
+        }
+        
+        .robot-head.thinking {
+            background: linear-gradient(145deg, #c8b6ff, #9d8ec4);
+        }
+        
+        .robot-head.loving {
+            background: linear-gradient(145deg, #ff99cc, #ff66b2);
+            animation: pulse-heart 1s ease-in-out infinite;
+        }
+        
+        @keyframes float-slow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px) rotate(-1deg); }
+            75% { transform: translateX(3px) rotate(1deg); }
+        }
+        
+        @keyframes bounce-quick {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+        
+        @keyframes pulse-heart {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
         }
         
         /* Robot Ears/Antennas */
@@ -125,6 +176,7 @@
             position: absolute;
             top: -25px;
             border-radius: 10px;
+            transition: all 0.3s ease;
         }
         
         .antenna-left {
@@ -135,6 +187,27 @@
         .antenna-right {
             right: 30px;
             transform: rotate(15deg);
+        }
+        
+        /* Emotion-based antenna colors */
+        .robot-head.sad .antenna-left,
+        .robot-head.sad .antenna-right {
+            background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
+            transform: rotate(-25deg) translateY(5px);
+        }
+        
+        .robot-head.sad .antenna-right {
+            transform: rotate(25deg) translateY(5px);
+        }
+        
+        .robot-head.angry .antenna-left,
+        .robot-head.angry .antenna-right {
+            background: linear-gradient(to bottom, #ee5a5a, #ff6b6b);
+            transform: rotate(-35deg);
+        }
+        
+        .robot-head.angry .antenna-right {
+            transform: rotate(35deg);
         }
         
         .antenna-ball {
@@ -178,6 +251,7 @@
             position: relative;
             box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
             overflow: hidden;
+            transition: all 0.3s ease;
         }
         
         .eye::after {
@@ -216,6 +290,32 @@
             opacity: 0;
         }
         
+        .eye.sad::after {
+            transform: translateY(3px);
+        }
+        
+        .eye.sad::before {
+            transform: translateY(3px);
+        }
+        
+        .eye.angry::after {
+            transform: translateY(-2px) scale(0.9);
+        }
+        
+        .eye.angry::before {
+            opacity: 0;
+        }
+        
+        .eye.surprised::after {
+            transform: scale(0.5);
+        }
+        
+        .eye.love::after {
+            transform: scale(0.8) translateY(-2px);
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+        
         .eye.blink {
             animation: blink-anim 0.2s ease;
         }
@@ -237,10 +337,6 @@
             transform: translateY(-3px);
         }
         
-        .eye.surprised::after {
-            transform: scale(0.7);
-        }
-        
         /* Cheeks */
         .cheeks {
             display: flex;
@@ -255,6 +351,28 @@
             background: rgba(255, 105, 180, 0.4);
             border-radius: 50%;
             opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        .robot-head.sad .cheek {
+            background: rgba(107, 140, 255, 0.4);
+            opacity: 0.3;
+        }
+        
+        .robot-head.angry .cheek {
+            background: rgba(255, 107, 107, 0.6);
+            opacity: 0.8;
+        }
+        
+        .robot-head.loving .cheek {
+            background: rgba(255, 105, 180, 0.8);
+            opacity: 1;
+            animation: blush 2s ease-in-out infinite;
+        }
+        
+        @keyframes blush {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
         }
         
         /* Mouth */
@@ -302,6 +420,35 @@
             margin-top: 15px;
         }
         
+        .mouth.sad {
+            width: 30px;
+            height: 15px;
+            border-radius: 50% 50% 0 0;
+            border: 3px solid #4a4a4a;
+            border-bottom: none;
+            background: transparent;
+            margin-top: 12px;
+        }
+        
+        .mouth.angry {
+            width: 35px;
+            height: 8px;
+            border-radius: 0;
+            background: #4a4a4a;
+            transform: rotate(-5deg);
+            margin-top: 18px;
+        }
+        
+        .mouth.love {
+            width: 25px;
+            height: 20px;
+            background: #ff69b4;
+            border: none;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform: rotate(-45deg);
+            margin-top: 10px;
+        }
+        
         /* Robot Body */
         .robot-body {
             width: 100px;
@@ -315,6 +462,19 @@
                 0 5px 15px rgba(0,0,0,0.1),
                 inset -3px -3px 10px rgba(0,0,0,0.05);
             z-index: 5;
+            transition: all 0.5s ease;
+        }
+        
+        .robot-head.sad ~ .robot-body {
+            background: linear-gradient(145deg, #d4e0ff, #a8c0ff);
+        }
+        
+        .robot-head.angry ~ .robot-body {
+            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+        }
+        
+        .robot-head.thinking ~ .robot-body {
+            background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
         }
         
         /* Heart on chest */
@@ -327,6 +487,7 @@
             background: #ff69b4;
             transform: rotate(-45deg);
             animation: heartbeat 1.5s ease-in-out infinite;
+            transition: all 0.3s ease;
         }
         
         .heart::before,
@@ -354,6 +515,36 @@
             50% { transform: rotate(-45deg) scale(1.1); }
         }
         
+        .robot-head.sad .heart {
+            background: #6b8cff;
+            animation: heartbeat-slow 2s ease-in-out infinite;
+        }
+        
+        .robot-head.sad .heart::before,
+        .robot-head.sad .heart::after {
+            background: #6b8cff;
+        }
+        
+        @keyframes heartbeat-slow {
+            0%, 100% { transform: rotate(-45deg) scale(0.9); }
+            50% { transform: rotate(-45deg) scale(1); }
+        }
+        
+        .robot-head.loving .heart {
+            background: #ff1493;
+            animation: heartbeat-fast 0.8s ease-in-out infinite;
+        }
+        
+        .robot-head.loving .heart::before,
+        .robot-head.loving .heart::after {
+            background: #ff1493;
+        }
+        
+        @keyframes heartbeat-fast {
+            0%, 100% { transform: rotate(-45deg) scale(1.2); }
+            50% { transform: rotate(-45deg) scale(1.4); }
+        }
+        
         /* Arms */
         .arm-left, .arm-right {
             width: 30px;
@@ -363,6 +554,7 @@
             top: 80px;
             border-radius: 15px;
             z-index: 4;
+            transition: all 0.3s ease;
         }
         
         .arm-left {
@@ -375,6 +567,55 @@
             right: 10px;
             transform-origin: top center;
             animation: wave-right 4s ease-in-out infinite;
+        }
+        
+        .robot-head.sad .arm-left,
+        .robot-head.sad .arm-right {
+            background: linear-gradient(to bottom, #a8c0ff, #6b8cff);
+            animation: none;
+            transform: rotate(20deg) translateY(10px);
+        }
+        
+        .robot-head.sad .arm-right {
+            transform: rotate(-20deg) translateY(10px);
+        }
+        
+        .robot-head.angry .arm-left,
+        .robot-head.angry .arm-right {
+            background: linear-gradient(to bottom, #ff6b6b, #ee5a5a);
+            animation: shake-fists 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-30deg); }
+        }
+        
+        .robot-head.angry .arm-right {
+            animation: shake-fists-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(30deg); }
+        }
+        
+        .robot-head.loving .arm-left {
+            animation: reach-out-left 2s ease-in-out infinite;
+        }
+        
+        .robot-head.loving .arm-right {
+            animation: reach-out-right 2s ease-in-out infinite;
+        }
+        
+        @keyframes reach-out-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg) translateX(-5px); }
+        }
+        
+        @keyframes reach-out-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg) translateX(5px); }
         }
         
         @keyframes wave-left {
@@ -688,6 +929,30 @@
             0%, 60%, 100% { transform: translateY(0); }
             30% { transform: translateY(-10px); }
         }
+        
+        /* Emotion indicator */
+        .emotion-indicator {
+            position: absolute;
+            top: -90px;
+            right: -60px;
+            font-size: 2em;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+        }
+        
+        .emotion-indicator.show {
+            opacity: 1;
+            transform: scale(1);
+            animation: emotion-pop 0.5s ease;
+        }
+        
+        @keyframes emotion-pop {
+            0% { transform: scale(0) rotate(-180deg); }
+            50% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
     </style>
 </head>
 <body>
@@ -707,6 +972,9 @@
         <!-- Cute Robot -->
         <div class="robot-container">
             <div class="robot" id="robot">
+                <!-- Emotion Indicator -->
+                <div class="emotion-indicator" id="emotionIndicator">😊</div>
+                
                 <!-- Speech Bubble -->
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
@@ -718,7 +986,7 @@
                 </div>
                 
                 <!-- Head -->
-                <div class="robot-head">
+                <div class="robot-head" id="robotHead">
                     <!-- Antennas -->
                     <div class="antenna-left">
                         <div class="antenna-ball"></div>
@@ -777,11 +1045,13 @@
         }
         
         // Robot elements
+        const robotHead = document.getElementById('robotHead');
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
         const mouth = document.getElementById('mouth');
         const speechBubble = document.getElementById('speechBubble');
         const speakingWaves = document.getElementById('speakingWaves');
+        const emotionIndicator = document.getElementById('emotionIndicator');
         const chatContainer = document.getElementById('chatContainer');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -795,6 +1065,36 @@
         let blinkInterval;
         let currentStreamMessage = null;
         let streamBuffer = '';
+        let currentEmotion = 'happy';
+        
+        // Emotion mapping from emoji to robot expression
+        const emotionMap = {
+            // Happy/Joy
+            '😊': 'happy', '😄': 'happy', '😃': 'happy', '😁': 'happy', '😆': 'happy',
+            '🥰': 'loving', '😍': 'loving', '🥳': 'happy', '✨': 'happy', '💖': 'loving',
+            '💕': 'loving', '💗': 'loving', '💝': 'loving', '💘': 'loving',
+            
+            // Sad
+            '😢': 'sad', '😭': 'sad', '😔': 'sad', '😟': 'sad', '😞': 'sad',
+            '😥': 'sad', '💔': 'sad', '😿': 'sad',
+            
+            // Angry
+            '😠': 'angry', '😡': 'angry', '😤': 'angry', '👿': 'angry', '💢': 'angry',
+            
+            // Surprised/Shocked
+            '😮': 'surprised', '😲': 'surprised', '😯': 'surprised', '😱': 'surprised',
+            '😳': 'surprised', '🤯': 'surprised', '✨': 'surprised',
+            
+            // Thinking/Confused
+            '🤔': 'thinking', '😕': 'thinking', '🧐': 'thinking', '🤨': 'thinking',
+            '❓': 'thinking', '❔': 'thinking',
+            
+            // Love
+            '❤️': 'loving', '💓': 'loving', '💞': 'loving', '💟': 'loving',
+            
+            // Default
+            'default': 'happy'
+        };
         
         // ROS Connection
         const ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
@@ -831,41 +1131,123 @@
             messageType: 'std_msgs/String'
         });
         
-        // Subscribe to responses with streaming support - FIXED FOR DELTA STREAMING
+        // Subscribe to responses with streaming support
         gceResponseTopic.subscribe((msg) => {
             try {
                 const data = JSON.parse(msg.data);
                 console.log("Received:", data.type, data.content);
                 
                 if (data.type === 'start') {
-                    // First chunk - start new stream
+                    // Detect emotion from first chunk (usually contains emoji)
+                    detectAndSetEmotion(data.content);
                     startStreaming(data.content);
                 } else if (data.type === 'delta') {
-                    // Subsequent chunks - append to existing stream
                     appendToStream(data.content);
                 } else if (data.type === 'done') {
-                    // Stream complete
                     finishStreaming();
                 } else if (data.type === 'error') {
-                    // Error occurred
                     if (currentStreamMessage) {
                         finishStreaming();
                     }
+                    setEmotion('sad');
                     createMessageElement('grace', data.content);
                     speechBubble.textContent = 'Error! 😢';
                     speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                    setTimeout(() => {
+                        speechBubble.classList.remove('show');
+                        setEmotion('happy');
+                    }, 2000);
                 }
             } catch (e) {
                 console.error("Failed to parse message:", msg.data, e);
-                // Fallback: treat as plain text for backward compatibility
                 if (!isStreaming) {
+                    detectAndSetEmotion(msg.data);
                     startStreaming(msg.data);
                 } else {
                     appendToStream(msg.data);
                 }
             }
         });
+        
+        // Detect emotion from text and set robot expression
+        function detectAndSetEmotion(text) {
+            // Extract first emoji from text
+            const emojiRegex = /(\p{Emoji})/u;
+            const match = text.match(emojiRegex);
+            
+            if (match) {
+                const emoji = match[1];
+                const emotion = emotionMap[emoji] || 'happy';
+                setEmotion(emotion, emoji);
+            } else {
+                setEmotion('happy');
+            }
+        }
+        
+        // Set robot emotion/expression
+        function setEmotion(emotion, emoji = null) {
+            currentEmotion = emotion;
+            
+            // Remove all emotion classes
+            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving');
+            leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
+            rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
+            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love');
+            
+            // Add new emotion class to head
+            robotHead.classList.add(emotion);
+            
+            // Show emotion indicator
+            if (emoji) {
+                emotionIndicator.textContent = emoji;
+                emotionIndicator.classList.add('show');
+                setTimeout(() => emotionIndicator.classList.remove('show'), 2000);
+            }
+            
+            // Set facial features based on emotion
+            switch(emotion) {
+                case 'happy':
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('smile');
+                    break;
+                    
+                case 'sad':
+                    leftEye.classList.add('sad');
+                    rightEye.classList.add('sad');
+                    mouth.classList.add('sad');
+                    break;
+                    
+                case 'angry':
+                    leftEye.classList.add('angry');
+                    rightEye.classList.add('angry');
+                    mouth.classList.add('angry');
+                    break;
+                    
+                case 'surprised':
+                    leftEye.classList.add('surprised');
+                    rightEye.classList.add('surprised');
+                    mouth.classList.add('o-shape');
+                    break;
+                    
+                case 'thinking':
+                    leftEye.classList.add('look-up');
+                    rightEye.classList.add('look-up');
+                    mouth.classList.add('line');
+                    break;
+                    
+                case 'loving':
+                    leftEye.classList.add('love');
+                    rightEye.classList.add('love');
+                    mouth.classList.add('love');
+                    break;
+                    
+                default:
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('smile');
+            }
+        }
         
         // Start streaming with first chunk
         function startStreaming(firstChunk) {
@@ -879,11 +1261,11 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
             
-            // Show speech bubble immediately with thinking state
+            // Show speech bubble
             speechBubble.textContent = 'Thinking... 💭';
             speechBubble.classList.add('show');
             
-            // Create message element for streaming
+            // Create message element
             currentStreamMessage = createMessageElement('grace', '');
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             
@@ -898,7 +1280,7 @@
             // Start speaking animation
             startSpeakingAnimation();
             
-            // Update speech bubble with preview if long enough
+            // Update preview
             if (streamBuffer.length > 15) {
                 const preview = streamBuffer.substring(0, 20);
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
@@ -914,10 +1296,8 @@
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             const cursor = contentDiv.querySelector('.streaming-cursor');
             
-            // Update content
             contentDiv.textContent = streamBuffer;
             
-            // Re-add cursor at the end
             if (cursor) {
                 contentDiv.appendChild(cursor);
             } else {
@@ -932,12 +1312,11 @@
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
             }
             
-            // Random mouth movements during speech
+            // Random mouth movements
             if (streamBuffer.length % 5 === 0) {
                 randomizeMouth();
             }
             
-            // Scroll to bottom
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
@@ -945,7 +1324,6 @@
             isStreaming = false;
             isSpeaking = false;
             
-            // Remove cursor
             if (currentStreamMessage) {
                 const cursor = currentStreamMessage.querySelector('.streaming-cursor');
                 if (cursor) cursor.remove();
@@ -959,16 +1337,13 @@
             // Stop speaking animation
             stopSpeakingAnimation();
             
-            // Show final text in speech bubble briefly
+            // Show done message
             speechBubble.textContent = 'Done! 💕';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
             }, 1500);
             
-            // Scroll to bottom
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Reset current stream message
             currentStreamMessage = null;
             streamBuffer = '';
         }
@@ -1002,13 +1377,13 @@
         function startSpeakingAnimation() {
             speechBubble.classList.add('show', 'speaking');
             speakingWaves.classList.add('active');
-            mouth.className = 'mouth open';
         }
         
         function stopSpeakingAnimation() {
             speechBubble.classList.remove('show', 'speaking');
             speakingWaves.classList.remove('active');
-            setExpression('happy');
+            // Restore current emotion mouth
+            setEmotion(currentEmotion);
         }
         
         // Idle animations
@@ -1017,7 +1392,14 @@
                 if (!isSpeaking && !isStreaming) {
                     const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
                     const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
-                    setExpression(randomExp);
+                    if (randomExp !== 'normal') {
+                        leftEye.classList.add(randomExp);
+                        rightEye.classList.add(randomExp);
+                    }
+                    setTimeout(() => {
+                        leftEye.classList.remove('look-left', 'look-right', 'look-up');
+                        rightEye.classList.remove('look-left', 'look-right', 'look-up');
+                    }, 1000);
                 }
             }, 3000);
             
@@ -1031,43 +1413,6 @@
         function stopIdleAnimations() {
             clearInterval(idleInterval);
             clearInterval(blinkInterval);
-        }
-        
-        // Expression functions
-        function setExpression(type) {
-            leftEye.className = 'eye';
-            rightEye.className = 'eye';
-            mouth.className = 'mouth';
-            
-            switch(type) {
-                case 'happy':
-                    leftEye.classList.add('happy');
-                    rightEye.classList.add('happy');
-                    mouth.classList.add('smile');
-                    break;
-                case 'look-left':
-                    leftEye.classList.add('look-left');
-                    rightEye.classList.add('look-left');
-                    mouth.classList.add('line');
-                    break;
-                case 'look-right':
-                    leftEye.classList.add('look-right');
-                    rightEye.classList.add('look-right');
-                    mouth.classList.add('line');
-                    break;
-                case 'look-up':
-                    leftEye.classList.add('look-up');
-                    rightEye.classList.add('look-up');
-                    mouth.classList.add('o-shape');
-                    break;
-                case 'surprised':
-                    leftEye.classList.add('surprised');
-                    rightEye.classList.add('surprised');
-                    mouth.classList.add('o-shape');
-                    break;
-                default:
-                    mouth.classList.add('smile');
-            }
         }
         
         function blink() {
@@ -1092,8 +1437,8 @@
             createMessageElement('user', val);
             
             // Robot reaction
-            setExpression('surprised');
-            setTimeout(() => setExpression('happy'), 500);
+            setEmotion('surprised', '✨');
+            setTimeout(() => setEmotion('happy'), 500);
             
             // Create floating hearts
             createFloatingHeart();
@@ -1118,18 +1463,30 @@
             if (e.key === 'Enter') sendSignal();
         });
         
-        // Initial expression
-        setExpression('happy');
+        // Initial state
+        setEmotion('happy');
         
-        // Test function for debugging (call from console: testStream())
+        // Test function
+        window.testEmotion = function(emotion) {
+            const testEmojis = {
+                'happy': '😊',
+                'sad': '😢',
+                'angry': '😠',
+                'surprised': '😮',
+                'thinking': '🤔',
+                'loving': '❤️'
+            };
+            setEmotion(emotion, testEmojis[emotion]);
+        };
+        
         window.testStream = function() {
-            // Simulate streaming
             const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
             const chunks = testText.split('');
             
             let i = 0;
             function sendNextChunk() {
                 if (i === 0) {
+                    detectAndSetEmotion(testText);
                     startStreaming(chunks[0]);
                 } else if (i < chunks.length) {
                     appendToStream(chunks[i]);
