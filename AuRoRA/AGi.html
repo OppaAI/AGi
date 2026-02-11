@@ -1772,8 +1772,9 @@
 =======
 >>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function initROS() {
+            const robotIP = window.location.hostname;
             try {
-                ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
+                ros = new ROSLIB.Ros({ url: 'ws://' + robotIP + ':9090' });
                 
                 ros.on('connection', () => {
                     isROSConnected = true;
