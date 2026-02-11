@@ -2259,36 +2259,10 @@
             handlePet(fakeEvent);
         };
         
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         window.testPet = function() {
+            // Simulate petting
             const fakeEvent = { clientX: null, clientY: null };
             handlePet(fakeEvent);
-=======
-        // Initial expression
-        setExpression('happy');
-        
-        // Test function for debugging (call from console: testStream())
-        window.testStream = function() {
-            // Simulate streaming
-            const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
-            const chunks = testText.split('');
-            
-            let i = 0;
-            function sendNextChunk() {
-                if (i === 0) {
-                    startStreaming(chunks[0]);
-                } else if (i < chunks.length) {
-                    appendToStream(chunks[i]);
-                } else {
-                    finishStreaming();
-                    return;
-                }
-                i++;
-                setTimeout(sendNextChunk, 50);
-            }
-            sendNextChunk();
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         };
     </script>
 </body>
