@@ -60,9 +60,13 @@
         }
         
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
 =======
         /* Matrix rain canvas */
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+        /* Matrix rain canvas - ENHANCED VISIBILITY */
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         #matrixCanvas {
             position: absolute;
             top: 0;
@@ -70,12 +74,17 @@
             width: 100%;
             height: 100%;
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
             opacity: 0.4;
             z-index: 1;
         }
         
 =======
             opacity: 0.15;
+=======
+            opacity: 0.4;
+            z-index: 1;
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         }
         
         /* Circuit nodes */
@@ -1453,10 +1462,14 @@
 
     <script>
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Matrix Rain (same as before)
 =======
         // Initialize Matrix Rain
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+        // ENHANCED MATRIX RAIN
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1464,312 +1477,223 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
             initDrops();
 =======
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-        }
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        
-        // Matrix characters (mix of alphabets, numbers, and symbols)
-        const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcedfghijklmnopqrstuvwxyz@#$%^&*';
-        const charArray = chars.split('');
-        
-        const fontSize = 14;
-        const columns = canvas.width / fontSize;
-        
-        const drops = [];
-        for (let i = 0; i < columns; i++) {
-            drops[i] = Math.random() * -100; // Start at random heights above screen
-        }
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#00ff88';
-            ctx.font = fontSize + 'px monospace';
-            ctx.shadowBlur = 5;
-            ctx.shadowColor = '#00ff88';
-            
-            for (let i = 0; i < drops.length; i++) {
-                const text = charArray[Math.floor(Math.random() * charArray.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                
-                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        setInterval(drawMatrix, 50);
-        
-        // Create circuit elements
-        function createCircuitElements() {
-            const bg = document.getElementById('cyberBg');
-            
-            // Create circuit nodes
-            for (let i = 0; i < 20; i++) {
-                const node = document.createElement('div');
-                node.className = 'circuit-node';
-                node.style.left = Math.random() * 100 + '%';
-                node.style.top = Math.random() * 100 + '%';
-                node.style.animationDelay = Math.random() * 2 + 's';
-                bg.appendChild(node);
-            }
-            
-            // Create data flow lines
-            for (let i = 0; i < 10; i++) {
-                const line = document.createElement('div');
-                line.className = 'data-line';
-                line.style.top = Math.random() * 100 + '%';
-                line.style.width = (100 + Math.random() * 200) + 'px';
-                line.style.animationDelay = Math.random() * 3 + 's';
-                line.style.animationDuration = (2 + Math.random() * 2) + 's';
-                bg.appendChild(line);
-            }
-            
-            // Create floating circuit symbols
-            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
-            for (let i = 0; i < 15; i++) {
-                const symbol = document.createElement('div');
-                symbol.className = 'circuit-symbol';
-                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                symbol.style.left = Math.random() * 100 + '%';
-                symbol.style.top = Math.random() * 100 + '%';
-                symbol.style.animationDelay = Math.random() * 10 + 's';
-                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
-                bg.appendChild(symbol);
-            }
-        }
-        createCircuitElements();
-        
-        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
-        const charArray = chars.split('');
-        
-        const fontSize = 16;
-        let columns = 0;
-        let drops = [];
-        
-        function initDrops() {
-            columns = Math.floor(canvas.width / fontSize);
-            drops = [];
-            for (let i = 0; i < columns; i++) {
-                drops[i] = Math.random() * -50;
-            }
-        }
-        
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#00ff88';
-            ctx.font = fontSize + 'px monospace';
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#00ff88';
-            
-            for (let i = 0; i < drops.length; i++) {
-                const text = charArray[Math.floor(Math.random() * charArray.length)];
-                const x = i * fontSize;
-                const y = drops[i] * fontSize;
-                
-                ctx.fillText(text, x, y);
-                
-                if (y > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        function drawMatrixHeads() {
-            for (let i = 0; i < drops.length; i++) {
-                if (Math.random() > 0.98) {
-                    const text = charArray[Math.floor(Math.random() * charArray.length)];
-                    const x = i * fontSize;
-                    const y = (drops[i] - 1) * fontSize;
-                    
-                    ctx.fillStyle = '#ccffcc';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#00ff88';
-                    ctx.fillText(text, x, y);
-                }
-            }
-            ctx.shadowBlur = 0;
-        }
-        
-        setInterval(() => {
-            drawMatrix();
-            drawMatrixHeads();
-        }, 33);
-        
-        // Circuit elements
-        function createCircuitElements() {
-            const bg = document.getElementById('cyberBg');
-            
-            for (let i = 0; i < 20; i++) {
-                const node = document.createElement('div');
-                node.className = 'circuit-node';
-                node.style.left = Math.random() * 100 + '%';
-                node.style.top = Math.random() * 100 + '%';
-                node.style.animationDelay = Math.random() * 2 + 's';
-                bg.appendChild(node);
-            }
-            
-            for (let i = 0; i < 10; i++) {
-                const line = document.createElement('div');
-                line.className = 'data-line';
-                line.style.top = Math.random() * 100 + '%';
-                line.style.width = (100 + Math.random() * 200) + 'px';
-                line.style.animationDelay = Math.random() * 3 + 's';
-                line.style.animationDuration = (2 + Math.random() * 2) + 's';
-                bg.appendChild(line);
-            }
-            
-            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
-            for (let i = 0; i < 15; i++) {
-                const symbol = document.createElement('div');
-                symbol.className = 'circuit-symbol';
-                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                symbol.style.left = Math.random() * 100 + '%';
-                symbol.style.top = Math.random() * 100 + '%';
-                symbol.style.animationDelay = Math.random() * 10 + 's';
-                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
-                bg.appendChild(symbol);
-            }
-        }
-        createCircuitElements();
-        
-        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
-        const charArray = chars.split('');
-        
-        const fontSize = 16;
-        let columns = 0;
-        let drops = [];
-        
-        function initDrops() {
-            columns = Math.floor(canvas.width / fontSize);
-            drops = [];
-            for (let i = 0; i < columns; i++) {
-                drops[i] = Math.random() * -50;
-            }
-        }
-        
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#00ff88';
-            ctx.font = fontSize + 'px monospace';
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#00ff88';
-            
-            for (let i = 0; i < drops.length; i++) {
-                const text = charArray[Math.floor(Math.random() * charArray.length)];
-                const x = i * fontSize;
-                const y = drops[i] * fontSize;
-                
-                ctx.fillText(text, x, y);
-                
-                if (y > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        function drawMatrixHeads() {
-            for (let i = 0; i < drops.length; i++) {
-                if (Math.random() > 0.98) {
-                    const text = charArray[Math.floor(Math.random() * charArray.length)];
-                    const x = i * fontSize;
-                    const y = (drops[i] - 1) * fontSize;
-                    
-                    ctx.fillStyle = '#ccffcc';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#00ff88';
-                    ctx.fillText(text, x, y);
-                }
-            }
-            ctx.shadowBlur = 0;
-        }
-        
-        setInterval(() => {
-            drawMatrix();
-            drawMatrixHeads();
-        }, 33);
-        
-        // Circuit elements
-        function createCircuitElements() {
-            const bg = document.getElementById('cyberBg');
-            
-            for (let i = 0; i < 20; i++) {
-                const node = document.createElement('div');
-                node.className = 'circuit-node';
-                node.style.left = Math.random() * 100 + '%';
-                node.style.top = Math.random() * 100 + '%';
-                node.style.animationDelay = Math.random() * 2 + 's';
-                bg.appendChild(node);
-            }
-            
-            for (let i = 0; i < 10; i++) {
-                const line = document.createElement('div');
-                line.className = 'data-line';
-                line.style.top = Math.random() * 100 + '%';
-                line.style.width = (100 + Math.random() * 200) + 'px';
-                line.style.animationDelay = Math.random() * 3 + 's';
-                line.style.animationDuration = (2 + Math.random() * 2) + 's';
-                bg.appendChild(line);
-            }
-            
-            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
-            for (let i = 0; i < 15; i++) {
-                const symbol = document.createElement('div');
-                symbol.className = 'circuit-symbol';
-                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                symbol.style.left = Math.random() * 100 + '%';
-                symbol.style.top = Math.random() * 100 + '%';
-                symbol.style.animationDelay = Math.random() * 10 + 's';
-                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
-                bg.appendChild(symbol);
-            }
-        }
-        createCircuitElements();
-        
 =======
-        // Create background stars
-        const starsContainer = document.getElementById('stars');
-        for (let i = 0; i < 20; i++) {
-            const star = document.createElement('div');
-            star.className = 'star';
-            star.innerHTML = '✦';
-            star.style.left = Math.random() * 100 + '%';
-            star.style.top = Math.random() * 100 + '%';
-            star.style.animationDelay = Math.random() * 3 + 's';
-            star.style.fontSize = (Math.random() * 15 + 10) + 'px';
-            starsContainer.appendChild(star);
+            initDrops();
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         }
         
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
+        const charArray = chars.split('');
+        
+        const fontSize = 16;
+        let columns = 0;
+        let drops = [];
+        
+        function initDrops() {
+            columns = Math.floor(canvas.width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -50;
+            }
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff88';
+            ctx.font = fontSize + 'px monospace';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#00ff88';
+            
+            for (let i = 0; i < drops.length; i++) {
+                const text = charArray[Math.floor(Math.random() * charArray.length)];
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+                
+                ctx.fillText(text, x, y);
+                
+                if (y > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        function drawMatrixHeads() {
+            for (let i = 0; i < drops.length; i++) {
+                if (Math.random() > 0.98) {
+                    const text = charArray[Math.floor(Math.random() * charArray.length)];
+                    const x = i * fontSize;
+                    const y = (drops[i] - 1) * fontSize;
+                    
+                    ctx.fillStyle = '#ccffcc';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00ff88';
+                    ctx.fillText(text, x, y);
+                }
+            }
+            ctx.shadowBlur = 0;
+        }
+        
+        setInterval(() => {
+            drawMatrix();
+            drawMatrixHeads();
+        }, 33);
+        
+        // Circuit elements
+        function createCircuitElements() {
+            const bg = document.getElementById('cyberBg');
+            
+            for (let i = 0; i < 20; i++) {
+                const node = document.createElement('div');
+                node.className = 'circuit-node';
+                node.style.left = Math.random() * 100 + '%';
+                node.style.top = Math.random() * 100 + '%';
+                node.style.animationDelay = Math.random() * 2 + 's';
+                bg.appendChild(node);
+            }
+            
+            for (let i = 0; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'data-line';
+                line.style.top = Math.random() * 100 + '%';
+                line.style.width = (100 + Math.random() * 200) + 'px';
+                line.style.animationDelay = Math.random() * 3 + 's';
+                line.style.animationDuration = (2 + Math.random() * 2) + 's';
+                bg.appendChild(line);
+            }
+            
+            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
+            for (let i = 0; i < 15; i++) {
+                const symbol = document.createElement('div');
+                symbol.className = 'circuit-symbol';
+                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                symbol.style.left = Math.random() * 100 + '%';
+                symbol.style.top = Math.random() * 100 + '%';
+                symbol.style.animationDelay = Math.random() * 10 + 's';
+                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
+                bg.appendChild(symbol);
+            }
+        }
+        createCircuitElements();
+        
+        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
+        const charArray = chars.split('');
+        
+        const fontSize = 16;
+        let columns = 0;
+        let drops = [];
+        
+        function initDrops() {
+            columns = Math.floor(canvas.width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -50;
+            }
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff88';
+            ctx.font = fontSize + 'px monospace';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#00ff88';
+            
+            for (let i = 0; i < drops.length; i++) {
+                const text = charArray[Math.floor(Math.random() * charArray.length)];
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+                
+                ctx.fillText(text, x, y);
+                
+                if (y > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        function drawMatrixHeads() {
+            for (let i = 0; i < drops.length; i++) {
+                if (Math.random() > 0.98) {
+                    const text = charArray[Math.floor(Math.random() * charArray.length)];
+                    const x = i * fontSize;
+                    const y = (drops[i] - 1) * fontSize;
+                    
+                    ctx.fillStyle = '#ccffcc';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00ff88';
+                    ctx.fillText(text, x, y);
+                }
+            }
+            ctx.shadowBlur = 0;
+        }
+        
+        setInterval(() => {
+            drawMatrix();
+            drawMatrixHeads();
+        }, 33);
+        
+        // Circuit elements
+        function createCircuitElements() {
+            const bg = document.getElementById('cyberBg');
+            
+            for (let i = 0; i < 20; i++) {
+                const node = document.createElement('div');
+                node.className = 'circuit-node';
+                node.style.left = Math.random() * 100 + '%';
+                node.style.top = Math.random() * 100 + '%';
+                node.style.animationDelay = Math.random() * 2 + 's';
+                bg.appendChild(node);
+            }
+            
+            for (let i = 0; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'data-line';
+                line.style.top = Math.random() * 100 + '%';
+                line.style.width = (100 + Math.random() * 200) + 'px';
+                line.style.animationDelay = Math.random() * 3 + 's';
+                line.style.animationDuration = (2 + Math.random() * 2) + 's';
+                bg.appendChild(line);
+            }
+            
+            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
+            for (let i = 0; i < 15; i++) {
+                const symbol = document.createElement('div');
+                symbol.className = 'circuit-symbol';
+                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                symbol.style.left = Math.random() * 100 + '%';
+                symbol.style.top = Math.random() * 100 + '%';
+                symbol.style.animationDelay = Math.random() * 10 + 's';
+                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
+                bg.appendChild(symbol);
+            }
+        }
+        createCircuitElements();
+        
         // Robot elements
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
@@ -1790,7 +1714,6 @@
         let currentImage = null;
         let imageInputTopic = null;
         
-        // State variables
         let isSpeaking = false;
         let isStreaming = false;
         let idleInterval;
@@ -1816,9 +1739,12 @@
         ];
         
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
 =======
         // Emotion mapping
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         const emotionMap = {
             '😊': 'happy', '😄': 'happy', '😃': 'happy', '😁': 'happy', '😆': 'happy',
             '🥰': 'loving', '😍': 'loving', '🥳': 'happy', '✨': 'happy', '💖': 'loving',
@@ -1835,6 +1761,7 @@
         };
         
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Plus menu toggle
         function togglePlusMenu() {
             plusMenu.classList.toggle('show');
@@ -1846,6 +1773,8 @@
                 plusMenu.classList.remove('show');
 =======
         // Initialize ROS (but petting works without it)
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function initROS() {
             try {
                 ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
@@ -1853,15 +1782,15 @@
                 ros.on('connection', () => {
                     isROSConnected = true;
                     statusDot.classList.add('connected');
-                    statusText.textContent = 'Neural Link Active';
+                    statusText.textContent = 'Connected! 💖';
                     speechBubble.textContent = 'Connected! 💕';
                     speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
                     startIdleAnimations();
                 });
                 
                 ros.on('error', () => {
-                    statusText.textContent = 'Neural Link Offline';
+                    statusText.textContent = 'Offline Mode';
                     speechBubble.textContent = 'Hello! 💕';
                     speechBubble.classList.add('show');
                     setTimeout(() => speechBubble.classList.remove('show'), 3000);
@@ -1871,11 +1800,10 @@
                 ros.on('close', () => {
                     isROSConnected = false;
                     statusDot.classList.remove('connected');
-                    statusText.textContent = 'Neural Link Offline';
+                    statusText.textContent = 'Offline Mode';
                     stopIdleAnimations();
                 });
                 
-                // ROS Topics
                 const cnsTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/neural_input',
@@ -1913,7 +1841,6 @@
                     }
                 });
                 
-                // Make topics global
                 window.cnsTopic = cnsTopic;
             } catch (e) {
                 console.log('ROS not available, running in offline mode');
@@ -2053,12 +1980,15 @@
         
         initROS();
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Petting
 =======
         initROS();
         
         // Petting interaction - WORKS OFFLINE
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -2137,7 +2067,10 @@
             setTimeout(() => heart.remove(), 1500);
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Emotion detection
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function detectAndSetEmotion(text) {
             const emojiRegex = /(\p{Emoji})/u;
             const match = text.match(emojiRegex);
@@ -2151,7 +2084,10 @@
             }
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Set emotion
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function setEmotion(emotion, emoji = null) {
             if (isBeingPetted && emotion !== 'petted') return;
             
@@ -2213,7 +2149,10 @@
             }
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Streaming
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -2225,7 +2164,7 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
             
-            speechBubble.textContent = 'Processing...';
+            speechBubble.textContent = 'Thinking... 💭';
             speechBubble.classList.add('show');
             
             // Create message element for streaming
@@ -2304,7 +2243,7 @@
             // Stop speaking animation
             stopSpeakingAnimation();
             
-            speechBubble.textContent = 'Complete';
+            speechBubble.textContent = 'Done! 💕';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
             }, 1500);
@@ -2323,7 +2262,7 @@
             
             const label = document.createElement('div');
             label.className = 'message-label';
-            label.textContent = sender === 'user' ? 'You >' : 'Grace >';
+            label.textContent = sender === 'user' ? 'You 💙' : 'Grace 💕';
             
             const content = document.createElement('div');
             content.className = 'message-content';
@@ -2355,8 +2294,6 @@
             setExpression('happy');
         }
         
-        // Idle animations
-        // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
                 if (!isSpeaking && !isStreaming) {
@@ -2424,12 +2361,17 @@
             }, 200);
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Send message (fixed - no duplicate, with image support)
+=======
+        // FIXED: Removed duplicate user message printing
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function sendSignal() {
             const val = userInput.value.trim();
             
             if (isStreaming) return;
             
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
             // Check if image is attached
             if (currentImage) {
@@ -2485,19 +2427,22 @@
                 createFloatingHeart();
             }
 =======
+=======
+            // Print user message ONCE (moved outside the if-else)
+            createMessageElement('user', val);
+            
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
             if (isROSConnected && window.cnsTopic) {
+                // Online mode - send to ROS
                 window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
             } else {
-                // Offline mode - echo back
-                createMessageElement('user', val);
+                // Offline mode - generate response only (no duplicate user message)
                 setTimeout(() => {
-                    const offlineResponse = "💖: I'm running in offline mode. 💕";
+                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
                     detectAndSetEmotion(offlineResponse);
                     createMessageElement('grace', offlineResponse);
                 }, 500);
             }
-            
-            createMessageElement('user', val);
             
             setEmotion('surprised', '✨');
             setTimeout(() => setEmotion('happy'), 500);
@@ -2519,19 +2464,20 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
-        // Event listeners
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         imagePrompt.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
         // Initial state
+=======
+>>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         setEmotion('happy');
         
-        // Test functions
         window.testEmotion = function(emotion) {
             const testEmojis = {
                 'happy': '😊',
@@ -2561,4 +2507,3 @@
     </script>
 </body>
 </html>
-
