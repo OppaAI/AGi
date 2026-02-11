@@ -38,7 +38,6 @@
             overflow: hidden;
         }
         
-        /* Circuit grid */
         .circuit-grid {
             position: absolute;
             width: 200%;
@@ -57,7 +56,6 @@
             100% { transform: translate(50px, 50px) rotate(0deg); }
         }
         
-        /* Matrix rain canvas - ENHANCED VISIBILITY */
         #matrixCanvas {
             position: absolute;
             top: 0;
@@ -68,7 +66,6 @@
             z-index: 1;
         }
         
-        /* Circuit nodes */
         .circuit-node {
             position: absolute;
             width: 4px;
@@ -84,7 +81,6 @@
             50% { opacity: 1; transform: scale(1.5); }
         }
         
-        /* Data flow lines */
         .data-line {
             position: absolute;
             background: linear-gradient(90deg, transparent, #00ff88, transparent);
@@ -99,7 +95,6 @@
             100% { transform: translateX(100vw); opacity: 0; }
         }
         
-        /* Floating circuit symbols */
         .circuit-symbol {
             position: absolute;
             color: #00ff88;
@@ -115,7 +110,6 @@
             50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
         }
         
-        /* Pink accent glow */
         .pink-glow {
             position: absolute;
             width: 600px;
@@ -133,7 +127,6 @@
             50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
         }
         
-        /* Main container */
         .container {
             position: relative;
             z-index: 10;
@@ -171,7 +164,6 @@
             text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
         }
         
-        /* Cute Robot Container */
         .robot-container {
             display: flex;
             justify-content: center;
@@ -193,7 +185,6 @@
             animation: wiggle 0.5s ease-in-out infinite;
         }
         
-        /* Hand cursor zone around head */
         .pet-zone {
             position: absolute;
             top: 10px;
@@ -219,7 +210,6 @@
             50% { transform: rotate(3deg) scale(1.05); }
         }
         
-        /* Petting hearts */
         .pet-heart {
             position: absolute;
             font-size: 24px;
@@ -239,7 +229,6 @@
             }
         }
         
-        /* Click ripple effect */
         .ripple {
             position: absolute;
             border-radius: 50%;
@@ -257,7 +246,6 @@
             }
         }
         
-        /* Robot Head */
         .robot-head {
             width: 140px;
             height: 120px;
@@ -275,7 +263,6 @@
             transition: all 0.5s ease;
         }
         
-        /* Emotion-based head colors */
         .robot-head.happy {
             background: linear-gradient(145deg, #ffb6c1, #ff69b4);
         }
@@ -347,7 +334,6 @@
             50% { transform: scale(1.08); }
         }
         
-        /* Robot Ears/Antennas */
         .antenna-left, .antenna-right {
             width: 12px;
             height: 40px;
@@ -368,7 +354,6 @@
             transform: rotate(15deg);
         }
         
-        /* Emotion-based antenna colors */
         .robot-head.sad .antenna-left,
         .robot-head.sad .antenna-right {
             background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
@@ -425,7 +410,6 @@
             50% { opacity: 0.7; transform: scale(0.9); }
         }
         
-        /* Face */
         .face {
             position: absolute;
             top: 35px;
@@ -477,7 +461,6 @@
             transition: all 0.3s ease;
         }
         
-        /* Eye expressions */
         .eye.happy::after {
             height: 10px;
             border-radius: 0 0 15px 15px;
@@ -535,7 +518,6 @@
             transform: translateY(-3px);
         }
         
-        /* Cheeks */
         .cheeks {
             display: flex;
             justify-content: space-between;
@@ -574,7 +556,6 @@
             50% { transform: scale(1.3); opacity: 1; }
         }
         
-        /* Mouth */
         .mouth {
             width: 40px;
             height: 20px;
@@ -662,7 +643,6 @@
             50% { transform: scaleX(1.2); }
         }
         
-        /* Robot Body */
         .robot-body {
             width: 100px;
             height: 80px;
@@ -700,7 +680,6 @@
             50% { transform: rotate(1deg); }
         }
         
-        /* Heart on chest */
         .heart {
             position: absolute;
             top: 25px;
@@ -771,7 +750,6 @@
             50% { transform: rotate(-45deg) scale(1.5); }
         }
         
-        /* Arms */
         .arm-left, .arm-right {
             width: 30px;
             height: 60px;
@@ -872,7 +850,6 @@
             50% { transform: rotate(-20deg); }
         }
         
-        /* Speech Bubble */
         .speech-bubble {
             position: absolute;
             top: -60px;
@@ -920,7 +897,6 @@
             to { transform: scale(1.05) translateY(-5px); }
         }
         
-        /* Status Badge */
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -956,7 +932,78 @@
             50% { opacity: 0.5; transform: scale(0.8); }
         }
         
-        /* Input Area */
+        /* IMAGE PREVIEW AREA (NEW) */
+        .image-preview {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            position: relative;
+            display: none;
+            animation: slide-in 0.3s ease;
+        }
+        
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .image-preview.show {
+            display: block;
+        }
+        
+        .image-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto 10px;
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.2);
+        }
+        
+        .image-preview input {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 15px;
+            color: #00ff88;
+            outline: none;
+            font-family: 'Nunito', sans-serif;
+            font-size: 0.95em;
+        }
+        
+        .image-preview input:focus {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+        
+        .image-preview input::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+        
+        .remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 107, 107, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            color: white;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        
+        .remove-btn:hover {
+            background: rgba(255, 107, 107, 1);
+            transform: scale(1.1) rotate(90deg);
+        }
+        
         .input-area {
             display: flex;
             gap: 10px;
@@ -986,6 +1033,32 @@
         
         #userInput::placeholder {
             color: rgba(0, 255, 136, 0.4);
+        }
+        
+        /* IMAGE UPLOAD BUTTONS (NEW) */
+        .image-btn, .camera-btn {
+            padding: 15px 20px;
+            background: linear-gradient(145deg, #00ff88, #00cc6a);
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+            border: none;
+            min-width: 55px;
+        }
+        
+        .image-btn:hover, .camera-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+        }
+        
+        .image-btn:active, .camera-btn:active {
+            transform: translateY(0);
         }
         
         .send-btn {
@@ -1022,7 +1095,6 @@
             transform: none;
         }
         
-        /* Chat Area */
         .chat-container {
             max-height: 300px;
             overflow-y: auto;
@@ -1076,7 +1148,6 @@
             opacity: 0.7;
         }
         
-        /* Streaming cursor */
         .streaming-cursor {
             display: inline-block;
             width: 2px;
@@ -1092,7 +1163,6 @@
             50% { opacity: 0; }
         }
         
-        /* Scrollbar styling */
         .chat-container::-webkit-scrollbar {
             width: 8px;
         }
@@ -1107,7 +1177,6 @@
             border-radius: 10px;
         }
         
-        /* Floating decorations */
         .float-hearts {
             position: fixed;
             font-size: 24px;
@@ -1133,7 +1202,6 @@
             }
         }
         
-        /* Speaking animation overlay */
         .speaking-waves {
             position: absolute;
             top: -30px;
@@ -1164,7 +1232,6 @@
             50% { height: 25px; }
         }
         
-        /* Loading indicator */
         .typing-indicator {
             display: none;
             align-items: center;
@@ -1193,7 +1260,6 @@
             30% { transform: translateY(-10px); }
         }
         
-        /* Emotion indicator */
         .emotion-indicator {
             position: absolute;
             top: -90px;
@@ -1218,7 +1284,6 @@
             100% { transform: scale(1) rotate(0deg); }
         }
         
-        /* Pet counter */
         .pet-counter {
             position: absolute;
             top: -30px;
@@ -1243,7 +1308,6 @@
     </style>
 </head>
 <body>
-    <!-- Cyberpunk Background -->
     <div class="cyber-bg" id="cyberBg">
         <div class="circuit-grid"></div>
         <canvas id="matrixCanvas"></canvas>
@@ -1254,37 +1318,25 @@
         <h1>✨ Chat with Grace ✨</h1>
         <p class="subtitle">Your Cute AI Companion 💕</p>
         
-        <!-- Status -->
         <div class="status-badge">
             <span class="status-dot" id="statusDot"></span>
             <span id="statusText">Connecting...</span>
         </div>
         
-        <!-- Cute Robot -->
         <div class="robot-container">
             <div class="robot" id="robot">
-                <!-- Pet Zone (for hand cursor) -->
                 <div class="pet-zone" id="petZone"></div>
-                
-                <!-- Pet Counter -->
                 <div class="pet-counter" id="petCounter">Pets: 0</div>
-                
-                <!-- Emotion Indicator -->
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
-                
-                <!-- Speech Bubble -->
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
-                <!-- Speaking Waves -->
                 <div class="speaking-waves" id="speakingWaves">
                     <div class="wave"></div>
                     <div class="wave"></div>
                     <div class="wave"></div>
                 </div>
                 
-                <!-- Head -->
                 <div class="robot-head" id="robotHead">
-                    <!-- Antennas -->
                     <div class="antenna-left">
                         <div class="antenna-ball"></div>
                     </div>
@@ -1292,7 +1344,6 @@
                         <div class="antenna-ball"></div>
                     </div>
                     
-                    <!-- Face -->
                     <div class="face">
                         <div class="eyes">
                             <div class="eye" id="leftEye"></div>
@@ -1306,29 +1357,46 @@
                     </div>
                 </div>
                 
-                <!-- Body -->
                 <div class="robot-body">
                     <div class="heart"></div>
                 </div>
                 
-                <!-- Arms -->
                 <div class="arm-left"></div>
                 <div class="arm-right"></div>
             </div>
         </div>
         
-        <!-- Input Area -->
+        <!-- IMAGE PREVIEW (NEW) -->
+        <div class="image-preview" id="imagePreview">
+            <button class="remove-btn" onclick="removeImage()">✕</button>
+            <img id="previewImg" alt="Preview">
+            <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
+        </div>
+        
+        <!-- INPUT AREA (UPDATED WITH IMAGE BUTTONS) -->
         <div class="input-area">
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+            
+            <!-- NEW: Image upload button -->
+            <label for="imageInput" class="image-btn" title="Upload image">
+                📷
+            </label>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            
+            <!-- NEW: Camera button (mobile) -->
+            <label for="cameraInput" class="camera-btn" title="Take photo">
+                📸
+            </label>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+            
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
         </div>
         
-        <!-- Chat Area -->
         <div class="chat-container" id="chatContainer"></div>
     </div>
 
     <script>
-        // ENHANCED MATRIX RAIN
+        // Matrix Rain
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1405,7 +1473,7 @@
             drawMatrixHeads();
         }, 33);
         
-        // Create circuit elements
+        // Circuit elements
         function createCircuitElements() {
             const bg = document.getElementById('cyberBg');
             
@@ -1459,6 +1527,14 @@
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         
+        // NEW: Image handling elements
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const imagePromptInput = document.getElementById('imagePrompt');
+        let currentImage = null;
+        let imageInputTopic = null;
+        
+        // State variables
         let isSpeaking = false;
         let isStreaming = false;
         let idleInterval;
@@ -1498,10 +1574,67 @@
             'default': 'happy'
         };
         
+        // NEW: Image handling functions
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageInput = document.getElementById('imageInput');
+            const cameraInput = document.getElementById('cameraInput');
+            
+            if (imageInput) {
+                imageInput.addEventListener('change', handleImageSelect);
+            }
+            
+            if (cameraInput) {
+                cameraInput.addEventListener('change', handleImageSelect);
+            }
+            
+            if (imagePromptInput) {
+                imagePromptInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') sendSignal();
+                });
+            }
+        });
+        
+        function handleImageSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+            
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image too large! Please select an image under 5MB');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                currentImage = event.target.result;
+                previewImg.src = currentImage;
+                imagePreview.classList.add('show');
+                imagePromptInput.focus();
+            };
+            
+            reader.onerror = function() {
+                alert('Error reading image file');
+            };
+            
+            reader.readAsDataURL(file);
+        }
+        
+        function removeImage() {
+            currentImage = null;
+            imagePreview.classList.remove('show');
+            document.getElementById('imageInput').value = '';
+            document.getElementById('cameraInput').value = '';
+            imagePromptInput.value = '';
+        }
+        
+        // ROS Initialization
         function initROS() {
-            const robotIP = window.location.hostname;
             try {
-                ros = new ROSLIB.Ros({ url: 'ws://' + robotIP + ':9090' });
+                ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
                 
                 ros.on('connection', () => {
                     isROSConnected = true;
@@ -1528,12 +1661,21 @@
                     stopIdleAnimations();
                 });
                 
+                // Text input topic
                 const cnsTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/neural_input',
                     messageType: 'std_msgs/String'
                 });
                 
+                // NEW: Image input topic
+                imageInputTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/image_input',
+                    messageType: 'std_msgs/String'
+                });
+                
+                // Response topic
                 const gceResponseTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/gce/response',
@@ -1566,6 +1708,7 @@
                 });
                 
                 window.cnsTopic = cnsTopic;
+                window.imageInputTopic = imageInputTopic;
             } catch (e) {
                 console.log('ROS not available, running in offline mode');
                 statusText.textContent = 'Offline Mode';
@@ -1575,6 +1718,7 @@
         
         initROS();
         
+        // Petting
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -1653,6 +1797,7 @@
             setTimeout(() => heart.remove(), 1500);
         }
         
+        // Emotion detection
         function detectAndSetEmotion(text) {
             const emojiRegex = /(\p{Emoji})/u;
             const match = text.match(emojiRegex);
@@ -1666,6 +1811,7 @@
             }
         }
         
+        // Set emotion
         function setEmotion(emotion, emoji = null) {
             if (isBeingPetted && emotion !== 'petted') return;
             
@@ -1727,6 +1873,7 @@
             }
         }
         
+        // Streaming
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -1849,6 +1996,7 @@
             setEmotion(currentEmotion);
         }
         
+        // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
                 if (!isSpeaking && !isStreaming && !isBeingPetted) {
@@ -1886,33 +2034,65 @@
             }, 200);
         }
         
-        // FIXED: Removed duplicate user message printing
+        // FIXED: Send message (no duplicate, with image support)
         function sendSignal() {
             const val = userInput.value.trim();
             
-            if (!val || isStreaming) return;
+            if (isStreaming) return;
             
-            // Print user message ONCE (moved outside the if-else)
-            createMessageElement('user', val);
-            
-            if (isROSConnected && window.cnsTopic) {
-                // Online mode - send to ROS
-                window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
-            } else {
-                // Offline mode - generate response only (no duplicate user message)
-                setTimeout(() => {
-                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
-                    detectAndSetEmotion(offlineResponse);
-                    createMessageElement('grace', offlineResponse);
-                }, 500);
+            // Check if image is attached (NEW)
+            if (currentImage) {
+                const imagePrompt = imagePromptInput.value.trim() || "What's in this image?";
+                
+                // Display in chat
+                createMessageElement('user', `📷 ${imagePrompt}`);
+                
+                if (isROSConnected && window.imageInputTopic) {
+                    // Send to CNS Bridge
+                    const imageData = {
+                        prompt: imagePrompt,
+                        image: currentImage
+                    };
+                    
+                    window.imageInputTopic.publish(new ROSLIB.Message({ 
+                        data: JSON.stringify(imageData) 
+                    }));
+                    
+                    setEmotion('thinking', '🤔');
+                } else {
+                    // Offline mode
+                    setTimeout(() => {
+                        const offlineResponse = "😔: I can't process images in offline mode, but nice picture! 📸";
+                        detectAndSetEmotion(offlineResponse);
+                        createMessageElement('grace', offlineResponse);
+                    }, 500);
+                }
+                
+                // Clear image
+                removeImage();
+                createFloatingHeart();
+                
+            } else if (val) {
+                // Normal text message
+                createMessageElement('user', val);  // SINGLE MESSAGE (FIXED)
+                
+                if (isROSConnected && window.cnsTopic) {
+                    window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
+                } else {
+                    // Offline mode
+                    setTimeout(() => {
+                        const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
+                        detectAndSetEmotion(offlineResponse);
+                        createMessageElement('grace', offlineResponse);
+                    }, 500);
+                }
+                
+                setEmotion('surprised', '✨');
+                setTimeout(() => setEmotion('happy'), 500);
+                
+                userInput.value = '';
+                createFloatingHeart();
             }
-            
-            setEmotion('surprised', '✨');
-            setTimeout(() => setEmotion('happy'), 500);
-            
-            createFloatingHeart();
-            
-            userInput.value = '';
         }
         
         function createFloatingHeart() {
@@ -1926,12 +2106,15 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
+        // Event listeners
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
+        // Initial state
         setEmotion('happy');
         
+        // Test functions
         window.testEmotion = function(emotion) {
             const testEmojis = {
                 'happy': '😊',
