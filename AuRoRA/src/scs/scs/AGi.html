@@ -16,69 +16,158 @@
         
         body {
             font-family: 'Nunito', sans-serif;
-            background: linear-gradient(135deg, #ffeef8 0%, #e8f4ff 50%, #fff5e6 100%);
+            background: #000;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
             overflow-x: hidden;
+            position: relative;
         }
         
-        .stars {
+        /* Cyberpunk Circuit Background */
+        .cyber-bg {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
             z-index: 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a1a 100%);
+            overflow: hidden;
         }
         
-        .star {
+        /* Circuit grid */
+        .circuit-grid {
             position: absolute;
-            color: #ffd700;
-            font-size: 20px;
-            animation: twinkle 3s infinite;
-            opacity: 0.6;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: grid-move 20s linear infinite;
         }
         
-        @keyframes twinkle {
+        @keyframes grid-move {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(50px, 50px) rotate(0deg); }
+        }
+        
+        /* Matrix rain canvas */
+        #matrixCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.15;
+        }
+        
+        /* Circuit nodes */
+        .circuit-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+            animation: node-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes node-pulse {
             0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
+            50% { opacity: 1; transform: scale(1.5); }
         }
         
+        /* Data flow lines */
+        .data-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            height: 1px;
+            opacity: 0.4;
+            animation: data-flow 3s linear infinite;
+        }
+        
+        @keyframes data-flow {
+            0% { transform: translateX(-100%); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateX(100vw); opacity: 0; }
+        }
+        
+        /* Floating circuit symbols */
+        .circuit-symbol {
+            position: absolute;
+            color: #00ff88;
+            font-family: monospace;
+            font-size: 14px;
+            opacity: 0.2;
+            animation: symbol-float 10s ease-in-out infinite;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        @keyframes symbol-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.1; }
+            50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
+        }
+        
+        /* Pink accent glow */
+        .pink-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 105, 180, 0.15) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: glow-pulse 4s ease-in-out infinite;
+        }
+        
+        @keyframes glow-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+        
+        /* Main container */
         .container {
             position: relative;
             z-index: 1;
             max-width: 600px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(10, 10, 20, 0.85);
             backdrop-filter: blur(10px);
             border-radius: 30px;
             padding: 30px;
             box-shadow: 
-                0 10px 40px rgba(255, 182, 193, 0.3),
-                0 0 0 4px rgba(255, 255, 255, 0.5);
-            border: 3px solid #ffb6c1;
+                0 10px 40px rgba(255, 105, 180, 0.2),
+                0 0 0 1px rgba(0, 255, 136, 0.3),
+                inset 0 0 30px rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
         }
         
         h1 {
             text-align: center;
-            color: #ff6b9d;
+            color: #ff69b4;
             font-size: 2.5em;
             font-weight: 800;
-            text-shadow: 3px 3px 0px #ffe4e1;
+            text-shadow: 
+                0 0 10px rgba(255, 105, 180, 0.5),
+                0 0 20px rgba(255, 105, 180, 0.3);
             margin-bottom: 10px;
             letter-spacing: 2px;
         }
         
         .subtitle {
             text-align: center;
-            color: #a8a8a8;
+            color: #00ff88;
             font-size: 1.1em;
             margin-bottom: 25px;
             font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
         }
         
         /* Cute Robot Container */
@@ -94,17 +183,29 @@
             height: 200px;
             position: relative;
             animation: float 3s ease-in-out infinite;
-            cursor: pointer;
+            cursor: default;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
         
-        .robot:hover {
-            transform: scale(1.02);
-        }
-        
         .robot.petting {
             animation: wiggle 0.5s ease-in-out infinite;
+        }
+        
+        /* Hand cursor zone around head */
+        .pet-zone {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            width: 160px;
+            height: 140px;
+            cursor: grab;
+            z-index: 15;
+            border-radius: 50%;
+        }
+        
+        .pet-zone:active {
+            cursor: grabbing;
         }
         
         @keyframes float {
@@ -166,6 +267,7 @@
             left: 30px;
             box-shadow: 
                 0 8px 20px rgba(255, 105, 180, 0.3),
+                0 0 30px rgba(255, 105, 180, 0.2),
                 inset -5px -5px 15px rgba(0,0,0,0.1),
                 inset 5px 5px 15px rgba(255,255,255,0.3);
             z-index: 10;
@@ -774,17 +876,20 @@
             position: absolute;
             top: -60px;
             right: -80px;
-            background: white;
+            background: rgba(10, 10, 20, 0.95);
             padding: 15px 20px;
             border-radius: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 
+                0 5px 15px rgba(0,0,0,0.3),
+                0 0 20px rgba(0, 255, 136, 0.2);
             font-size: 0.9em;
-            color: #666;
+            color: #00ff88;
             max-width: 150px;
             opacity: 0;
             transform: scale(0);
             transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            border: 3px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
         }
         
         .speech-bubble::after {
@@ -794,9 +899,9 @@
             left: 20px;
             width: 20px;
             height: 20px;
-            background: white;
-            border-bottom: 3px solid #ffb6c1;
-            border-right: 3px solid #ffb6c1;
+            background: rgba(10, 10, 20, 0.95);
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            border-right: 1px solid rgba(0, 255, 136, 0.3);
             transform: rotate(45deg);
         }
         
@@ -820,15 +925,16 @@
             align-items: center;
             gap: 8px;
             padding: 8px 16px;
-            background: #ffe4e1;
+            background: rgba(255, 105, 180, 0.1);
             border-radius: 20px;
             font-size: 0.9em;
             font-weight: 700;
-            color: #ff6b9d;
+            color: #00ff88;
             margin: 0 auto 20px;
             display: block;
             width: fit-content;
-            border: 2px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         .status-dot {
@@ -840,8 +946,8 @@
         }
         
         .status-dot.connected {
-            background: #69db7c;
-            box-shadow: 0 0 10px #69db7c;
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
         }
         
         @keyframes pulse {
@@ -859,23 +965,26 @@
         #userInput {
             flex: 1;
             padding: 15px 20px;
-            border: 3px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
             border-radius: 25px;
             font-size: 1em;
             font-family: 'Nunito', sans-serif;
             outline: none;
             transition: all 0.3s ease;
-            background: white;
-            color: #666;
+            background: rgba(10, 10, 20, 0.8);
+            color: #00ff88;
+            box-shadow: inset 0 0 10px rgba(0, 255, 136, 0.05);
         }
         
         #userInput:focus {
             border-color: #ff69b4;
-            box-shadow: 0 0 0 4px rgba(255, 105, 180, 0.2);
+            box-shadow: 
+                0 0 0 4px rgba(255, 105, 180, 0.2),
+                inset 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         #userInput::placeholder {
-            color: #ccc;
+            color: rgba(0, 255, 136, 0.4);
         }
         
         .send-btn {
@@ -888,13 +997,18 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(255, 20, 147, 0.3);
+            box-shadow: 
+                0 4px 15px rgba(255, 20, 147, 0.3),
+                0 0 10px rgba(255, 105, 180, 0.2);
             font-family: 'Nunito', sans-serif;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
         }
         
         .send-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 20, 147, 0.4);
+            box-shadow: 
+                0 6px 20px rgba(255, 20, 147, 0.4),
+                0 0 20px rgba(255, 105, 180, 0.3);
         }
         
         .send-btn:active {
@@ -912,9 +1026,10 @@
             max-height: 300px;
             overflow-y: auto;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.6);
+            background: rgba(10, 10, 20, 0.6);
             border-radius: 20px;
-            border: 2px solid #e0e0e0;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
         }
         
         .message {
@@ -934,19 +1049,23 @@
         }
         
         .message.user {
-            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
-            color: #1976d2;
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
             margin-left: auto;
             border-bottom-right-radius: 5px;
             text-align: right;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         .message.grace {
-            background: linear-gradient(145deg, #fce4ec, #f8bbd9);
-            color: #c2185b;
+            background: rgba(255, 105, 180, 0.1);
+            color: #ff69b4;
             margin-right: auto;
             border-bottom-left-radius: 5px;
             min-height: 44px;
+            border: 1px solid rgba(255, 105, 180, 0.2);
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.1);
         }
         
         .message-label {
@@ -978,12 +1097,12 @@
         }
         
         .chat-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
+            background: rgba(0, 255, 136, 0.05);
             border-radius: 10px;
         }
         
         .chat-container::-webkit-scrollbar-thumb {
-            background: #ffb6c1;
+            background: rgba(0, 255, 136, 0.3);
             border-radius: 10px;
         }
         
@@ -1030,9 +1149,10 @@
         .wave {
             width: 4px;
             height: 20px;
-            background: #ff69b4;
+            background: #00ff88;
             border-radius: 2px;
             animation: wave-anim 0.5s ease-in-out infinite;
+            box-shadow: 0 0 10px #00ff88;
         }
         
         .wave:nth-child(2) { animation-delay: 0.1s; }
@@ -1058,9 +1178,10 @@
         .typing-dot {
             width: 8px;
             height: 8px;
-            background: #ff69b4;
+            background: #00ff88;
             border-radius: 50%;
             animation: typing-bounce 1.4s ease-in-out infinite;
+            box-shadow: 0 0 5px #00ff88;
         }
         
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -1081,6 +1202,7 @@
             transform: scale(0);
             transition: all 0.3s ease;
             z-index: 20;
+            text-shadow: 0 0 20px rgba(255, 105, 180, 0.5);
         }
         
         .emotion-indicator.show {
@@ -1110,6 +1232,7 @@
             transform: scale(0);
             transition: all 0.3s ease;
             z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
         }
         
         .pet-counter.show {
@@ -1119,12 +1242,16 @@
     </style>
 </head>
 <body>
-    <!-- Background Stars -->
-    <div class="stars" id="stars"></div>
+    <!-- Cyberpunk Background -->
+    <div class="cyber-bg" id="cyberBg">
+        <div class="circuit-grid"></div>
+        <canvas id="matrixCanvas"></canvas>
+        <div class="pink-glow"></div>
+    </div>
     
     <div class="container">
         <h1>✨ Chat with Grace ✨</h1>
-        <p class="subtitle">Your Cute AI Companion 💕</p>
+        <p class="subtitle">Neural Link Established // System Online</p>
         
         <!-- Status -->
         <div class="status-badge">
@@ -1135,6 +1262,9 @@
         <!-- Cute Robot -->
         <div class="robot-container">
             <div class="robot" id="robot">
+                <!-- Pet Zone (for hand cursor) -->
+                <div class="pet-zone" id="petZone"></div>
+                
                 <!-- Pet Counter -->
                 <div class="pet-counter" id="petCounter">Pets: 0</div>
                 
@@ -1188,8 +1318,8 @@
         
         <!-- Input Area -->
         <div class="input-area">
-            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+            <input type="text" id="userInput" placeholder="Initialize neural handshake..." maxlength="200">
+            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Transmit 💌</button>
         </div>
         
         <!-- Chat Area -->
@@ -1197,21 +1327,96 @@
     </div>
 
     <script>
-        // Create background stars
-        const starsContainer = document.getElementById('stars');
-        for (let i = 0; i < 20; i++) {
-            const star = document.createElement('div');
-            star.className = 'star';
-            star.innerHTML = '✦';
-            star.style.left = Math.random() * 100 + '%';
-            star.style.top = Math.random() * 100 + '%';
-            star.style.animationDelay = Math.random() * 3 + 's';
-            star.style.fontSize = (Math.random() * 15 + 10) + 'px';
-            starsContainer.appendChild(star);
+        // Initialize Matrix Rain
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Matrix characters (mix of katakana, numbers, and symbols)
+        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%^&*';
+        const charArray = chars.split('');
+        
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        
+        const drops = [];
+        for (let i = 0; i < columns; i++) {
+            drops[i] = Math.random() * -100; // Start at random heights above screen
+        }
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff88';
+            ctx.font = fontSize + 'px monospace';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = '#00ff88';
+            
+            for (let i = 0; i < drops.length; i++) {
+                const text = charArray[Math.floor(Math.random() * charArray.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        setInterval(drawMatrix, 50);
+        
+        // Create circuit elements
+        function createCircuitElements() {
+            const bg = document.getElementById('cyberBg');
+            
+            // Create circuit nodes
+            for (let i = 0; i < 20; i++) {
+                const node = document.createElement('div');
+                node.className = 'circuit-node';
+                node.style.left = Math.random() * 100 + '%';
+                node.style.top = Math.random() * 100 + '%';
+                node.style.animationDelay = Math.random() * 2 + 's';
+                bg.appendChild(node);
+            }
+            
+            // Create data flow lines
+            for (let i = 0; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'data-line';
+                line.style.top = Math.random() * 100 + '%';
+                line.style.width = (100 + Math.random() * 200) + 'px';
+                line.style.animationDelay = Math.random() * 3 + 's';
+                line.style.animationDuration = (2 + Math.random() * 2) + 's';
+                bg.appendChild(line);
+            }
+            
+            // Create floating circuit symbols
+            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
+            for (let i = 0; i < 15; i++) {
+                const symbol = document.createElement('div');
+                symbol.className = 'circuit-symbol';
+                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                symbol.style.left = Math.random() * 100 + '%';
+                symbol.style.top = Math.random() * 100 + '%';
+                symbol.style.animationDelay = Math.random() * 10 + 's';
+                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
+                bg.appendChild(symbol);
+            }
+        }
+        createCircuitElements();
         
         // Robot elements
         const robot = document.getElementById('robot');
+        const petZone = document.getElementById('petZone');
         const robotHead = document.getElementById('robotHead');
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
@@ -1237,6 +1442,8 @@
         let petCount = 0;
         let isBeingPetted = false;
         let petTimeout;
+        let ros = null;
+        let isROSConnected = false;
         
         // Petting responses
         const petResponses = [
@@ -1250,157 +1457,138 @@
             "🥺: *blushes*"
         ];
         
-        // Emotion mapping from emoji to robot expression
+        // Emotion mapping
         const emotionMap = {
-            // Happy/Joy
             '😊': 'happy', '😄': 'happy', '😃': 'happy', '😁': 'happy', '😆': 'happy',
             '🥰': 'loving', '😍': 'loving', '🥳': 'happy', '✨': 'happy', '💖': 'loving',
             '💕': 'loving', '💗': 'loving', '💝': 'loving', '💘': 'loving',
-            
-            // Sad
             '😢': 'sad', '😭': 'sad', '😔': 'sad', '😟': 'sad', '😞': 'sad',
             '😥': 'sad', '💔': 'sad', '😿': 'sad',
-            
-            // Angry
             '😠': 'angry', '😡': 'angry', '😤': 'angry', '👿': 'angry', '💢': 'angry',
-            
-            // Surprised/Shocked
             '😮': 'surprised', '😲': 'surprised', '😯': 'surprised', '😱': 'surprised',
             '😳': 'surprised', '🤯': 'surprised',
-            
-            // Thinking/Confused
             '🤔': 'thinking', '😕': 'thinking', '🧐': 'thinking', '🤨': 'thinking',
             '❓': 'thinking', '❔': 'thinking',
-            
-            // Love
             '❤️': 'loving', '💓': 'loving', '💞': 'loving', '💟': 'loving',
-            
-            // Default
             'default': 'happy'
         };
         
-        // ROS Connection
-        const ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
-        
-        ros.on('connection', () => {
-            statusDot.classList.add('connected');
-            statusText.textContent = 'Connected! 💖';
-            speechBubble.textContent = 'Click to pet me! 💕';
-            speechBubble.classList.add('show');
-            setTimeout(() => speechBubble.classList.remove('show'), 3000);
-            startIdleAnimations();
-        });
-        
-        ros.on('error', () => {
-            statusText.textContent = 'Error 😢';
-            speechBubble.textContent = 'Connection error 😢';
-            speechBubble.classList.add('show');
-        });
-        
-        ros.on('close', () => {
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Disconnected 😢';
-            stopIdleAnimations();
-        });
-        
-        // ROS Topics
-        const cnsTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/cns/neural_input',
-            messageType: 'std_msgs/String'
-        });
-        
-        const gceResponseTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/gce/response',
-            messageType: 'std_msgs/String'
-        });
-        
-        // Subscribe to responses
-        gceResponseTopic.subscribe((msg) => {
+        // Initialize ROS (but petting works without it)
+        function initROS() {
             try {
-                const data = JSON.parse(msg.data);
-                console.log("Received:", data.type, data.content);
+                ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
                 
-                if (data.type === 'start') {
-                    detectAndSetEmotion(data.content);
-                    startStreaming(data.content);
-                } else if (data.type === 'delta') {
-                    appendToStream(data.content);
-                } else if (data.type === 'done') {
-                    finishStreaming();
-                } else if (data.type === 'error') {
-                    if (currentStreamMessage) {
-                        finishStreaming();
-                    }
-                    setEmotion('sad');
-                    createMessageElement('grace', data.content);
-                    speechBubble.textContent = 'Error! 😢';
+                ros.on('connection', () => {
+                    isROSConnected = true;
+                    statusDot.classList.add('connected');
+                    statusText.textContent = 'Neural Link Active';
+                    speechBubble.textContent = 'Click to pet me! 💕';
                     speechBubble.classList.add('show');
-                    setTimeout(() => {
-                        speechBubble.classList.remove('show');
-                        setEmotion('happy');
-                    }, 2000);
-                }
+                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    startIdleAnimations();
+                });
+                
+                ros.on('error', () => {
+                    statusText.textContent = 'Offline Mode';
+                    speechBubble.textContent = 'Offline - Petting still works! 💕';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    startIdleAnimations();
+                });
+                
+                ros.on('close', () => {
+                    isROSConnected = false;
+                    statusDot.classList.remove('connected');
+                    statusText.textContent = 'Offline Mode';
+                    stopIdleAnimations();
+                });
+                
+                // ROS Topics
+                const cnsTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/neural_input',
+                    messageType: 'std_msgs/String'
+                });
+                
+                const gceResponseTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/gce/response',
+                    messageType: 'std_msgs/String'
+                });
+                
+                gceResponseTopic.subscribe((msg) => {
+                    try {
+                        const data = JSON.parse(msg.data);
+                        if (data.type === 'start') {
+                            detectAndSetEmotion(data.content);
+                            startStreaming(data.content);
+                        } else if (data.type === 'delta') {
+                            appendToStream(data.content);
+                        } else if (data.type === 'done') {
+                            finishStreaming();
+                        } else if (data.type === 'error') {
+                            if (currentStreamMessage) finishStreaming();
+                            setEmotion('sad');
+                            createMessageElement('grace', data.content);
+                        }
+                    } catch (e) {
+                        if (!isStreaming) {
+                            detectAndSetEmotion(msg.data);
+                            startStreaming(msg.data);
+                        } else {
+                            appendToStream(msg.data);
+                        }
+                    }
+                });
+                
+                // Make topics global
+                window.cnsTopic = cnsTopic;
             } catch (e) {
-                console.error("Failed to parse message:", msg.data, e);
-                if (!isStreaming) {
-                    detectAndSetEmotion(msg.data);
-                    startStreaming(msg.data);
-                } else {
-                    appendToStream(msg.data);
-                }
+                console.log('ROS not available, running in offline mode');
+                statusText.textContent = 'Offline Mode';
+                startIdleAnimations();
             }
-        });
+        }
         
-        // Petting interaction
-        robot.addEventListener('click', handlePet);
-        robot.addEventListener('touchstart', (e) => {
+        initROS();
+        
+        // Petting interaction - WORKS OFFLINE
+        petZone.addEventListener('click', handlePet);
+        petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handlePet(e);
         });
         
         function handlePet(e) {
-            if (isStreaming) return; // Don't pet while streaming
+            if (isStreaming) return;
             
             petCount++;
             isBeingPetted = true;
-            
-            // Clear previous timeout
             clearTimeout(petTimeout);
             
-            // Create ripple effect
             createRipple(e);
             
-            // Create floating hearts
             for (let i = 0; i < 3; i++) {
                 setTimeout(() => createPetHeart(e, i), i * 100);
             }
             
-            // Update pet counter
             petCounter.textContent = `Pets: ${petCount}`;
             petCounter.classList.add('show');
             
-            // Set petted emotion
             setEmotion('petted', '💖');
             
-            // Show random response occasionally (every 3 pets)
             if (petCount % 3 === 0) {
                 const response = petResponses[Math.floor(Math.random() * petResponses.length)];
                 speechBubble.textContent = response;
                 speechBubble.classList.add('show');
-                
-                // Add to chat
                 createMessageElement('grace', response);
             } else {
                 speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
                 speechBubble.classList.add('show');
             }
             
-            // Add petting class for animation
             robot.classList.add('petting');
             
-            // Reset after delay
             petTimeout = setTimeout(() => {
                 isBeingPetted = false;
                 robot.classList.remove('petting');
@@ -1432,7 +1620,6 @@
             heart.className = 'pet-heart';
             heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
             
-            // Random position around click or center
             const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
             const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
             
@@ -1460,27 +1647,23 @@
         
         // Set robot emotion
         function setEmotion(emotion, emoji = null) {
-            if (isBeingPetted && emotion !== 'petted') return; // Don't override petting
+            if (isBeingPetted && emotion !== 'petted') return;
             
             currentEmotion = emotion;
             
-            // Remove all emotion classes
             robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving', 'petted');
             leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
             rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
             mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love', 'petted');
             
-            // Add new emotion
             robotHead.classList.add(emotion);
             
-            // Show emotion indicator
             if (emoji) {
                 emotionIndicator.textContent = emoji;
                 emotionIndicator.classList.add('show');
                 setTimeout(() => emotionIndicator.classList.remove('show'), 2000);
             }
             
-            // Set facial features
             switch(emotion) {
                 case 'happy':
                     leftEye.classList.add('happy');
@@ -1535,7 +1718,7 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
             
-            speechBubble.textContent = 'Thinking... 💭';
+            speechBubble.textContent = 'Processing...';
             speechBubble.classList.add('show');
             
             currentStreamMessage = createMessageElement('grace', '');
@@ -1600,7 +1783,7 @@
             
             stopSpeakingAnimation();
             
-            speechBubble.textContent = 'Done! 💕';
+            speechBubble.textContent = 'Complete';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
             }, 1500);
@@ -1616,7 +1799,7 @@
             
             const label = document.createElement('div');
             label.className = 'message-label';
-            label.textContent = sender === 'user' ? 'You 💙' : 'Grace 💕';
+            label.textContent = sender === 'user' ? 'You >' : 'Grace >';
             
             const content = document.createElement('div');
             content.className = 'message-content';
@@ -1691,7 +1874,17 @@
             
             if (!val || isStreaming) return;
             
-            cnsTopic.publish(new ROSLIB.Message({ data: val }));
+            if (isROSConnected && window.cnsTopic) {
+                window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
+            } else {
+                // Offline mode - echo back
+                createMessageElement('user', val);
+                setTimeout(() => {
+                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
+                    detectAndSetEmotion(offlineResponse);
+                    createMessageElement('grace', offlineResponse);
+                }, 500);
+            }
             
             createMessageElement('user', val);
             
@@ -1736,29 +1929,7 @@
             setEmotion(emotion, testEmojis[emotion]);
         };
         
-        window.testStream = function() {
-            const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
-            const chunks = testText.split('');
-            
-            let i = 0;
-            function sendNextChunk() {
-                if (i === 0) {
-                    detectAndSetEmotion(testText);
-                    startStreaming(chunks[0]);
-                } else if (i < chunks.length) {
-                    appendToStream(chunks[i]);
-                } else {
-                    finishStreaming();
-                    return;
-                }
-                i++;
-                setTimeout(sendNextChunk, 50);
-            }
-            sendNextChunk();
-        };
-        
         window.testPet = function() {
-            // Simulate petting
             const fakeEvent = { clientX: null, clientY: null };
             handlePet(fakeEvent);
         };
