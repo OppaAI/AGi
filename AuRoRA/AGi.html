@@ -37,10 +37,6 @@
             overflow: hidden;
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Circuit grid */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .circuit-grid {
             position: absolute;
             width: 200%;
@@ -59,14 +55,6 @@
             100% { transform: translate(50px, 50px) rotate(0deg); }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Matrix rain canvas */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        /* Matrix rain canvas - ENHANCED VISIBILITY */
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         #matrixCanvas {
             position: absolute;
             top: 0;
@@ -79,16 +67,6 @@
             z-index: 1;
         }
         
-=======
-            opacity: 0.15;
-=======
-            opacity: 0.4;
-            z-index: 1;
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-        }
-        
-        /* Circuit nodes */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .circuit-node {
             position: absolute;
             width: 4px;
@@ -153,65 +131,6 @@
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         }
         
-        /* Data flow lines */
-        .data-line {
-            position: absolute;
-            background: linear-gradient(90deg, transparent, #00ff88, transparent);
-            height: 1px;
-            opacity: 0.4;
-            animation: data-flow 3s linear infinite;
-        }
-        
-        @keyframes data-flow {
-            0% { transform: translateX(-100%); opacity: 0; }
-            50% { opacity: 0.6; }
-            100% { transform: translateX(100vw); opacity: 0; }
-        }
-        
-        /* Floating circuit symbols */
-        .circuit-symbol {
-            position: absolute;
-            color: #00ff88;
-            font-family: monospace;
-            font-size: 14px;
-            opacity: 0.2;
-            animation: symbol-float 10s ease-in-out infinite;
-            text-shadow: 0 0 10px #00ff88;
-        }
-        
-        @keyframes symbol-float {
-            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.1; }
-            50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
-        }
-        
-        /* Pink accent glow */
-        .pink-glow {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(255, 105, 180, 0.15) 0%, transparent 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-            pointer-events: none;
-            z-index: 0;
-        }
-        
-        .star {
-            position: absolute;
-            color: #ffd700;
-            font-size: 20px;
-            animation: twinkle 3s infinite;
-            opacity: 0.6;
-        }
-        
-        @keyframes twinkle {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
-        }
-        
         .container {
             position: relative;
             z-index: 1;
@@ -267,10 +186,6 @@
             animation: wiggle 0.5s ease-in-out infinite;
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Hand cursor zone around head */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .pet-zone {
             position: absolute;
             top: 10px;
@@ -335,9 +250,6 @@
             }
         }
         
-=======
-        /* Robot Head */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .robot-head {
             width: 140px;
             height: 120px;
@@ -447,7 +359,6 @@
             transform: rotate(15deg);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         .robot-head.sad .antenna-left,
         .robot-head.sad .antenna-right {
             background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
@@ -587,14 +498,6 @@
             transform: translateY(-3px);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        .eye.surprised::after {
-            transform: scale(0.7);
-        }
-        
-        /* Cheeks */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .cheeks {
             display: flex;
             justify-content: space-between;
@@ -608,6 +511,29 @@
             background: rgba(255, 105, 180, 0.4);
             border-radius: 50%;
             opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        .robot-head.sad .cheek {
+            background: rgba(107, 140, 255, 0.4);
+            opacity: 0.3;
+        }
+        
+        .robot-head.angry .cheek {
+            background: rgba(255, 107, 107, 0.6);
+            opacity: 0.8;
+        }
+        
+        .robot-head.loving .cheek,
+        .robot-head.petted .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 1;
+            animation: blush 1s ease-in-out infinite;
+        }
+        
+        @keyframes blush {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
         }
         
         .mouth {
@@ -698,9 +624,6 @@
             50% { transform: scaleX(1.2); }
         }
         
-=======
-        /* Robot Body */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .robot-body {
             width: 100px;
             height: 80px;
@@ -713,6 +636,29 @@
                 0 5px 15px rgba(0,0,0,0.1),
                 inset -3px -3px 10px rgba(0,0,0,0.05);
             z-index: 5;
+            transition: all 0.5s ease;
+        }
+        
+        .robot-head.sad ~ .robot-body {
+            background: linear-gradient(145deg, #d4e0ff, #a8c0ff);
+        }
+        
+        .robot-head.angry ~ .robot-body {
+            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+        }
+        
+        .robot-head.thinking ~ .robot-body {
+            background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
+        }
+        
+        .robot-head.petted ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            animation: body-wiggle 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes body-wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
         }
         
         .heart {
@@ -785,9 +731,6 @@
             50% { transform: rotate(-45deg) scale(1.5); }
         }
         
-=======
-        /* Arms */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .arm-left, .arm-right {
             width: 30px;
             height: 60px;
@@ -898,8 +841,8 @@
             50% { opacity: 0.5; transform: scale(0.8); }
         }
         
-        /* IMAGE PREVIEW AREA */
-        .image-preview-area {
+        /* IMAGE PREVIEW AREA (NEW) */
+        .image-preview {
             margin-bottom: 15px;
             padding: 15px;
             background: rgba(10, 10, 20, 0.8);
@@ -915,11 +858,11 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
-        .image-preview-area.show {
+        .image-preview.show {
             display: block;
         }
         
-        .image-preview-area img {
+        .image-preview img {
             max-width: 100%;
             max-height: 200px;
             border-radius: 10px;
@@ -928,7 +871,7 @@
             box-shadow: 0 5px 15px rgba(0, 255, 136, 0.2);
         }
         
-        .image-preview-area input {
+        .image-preview input {
             width: 100%;
             padding: 12px 15px;
             background: rgba(0, 0, 0, 0.5);
@@ -940,12 +883,12 @@
             font-size: 0.95em;
         }
         
-        .image-preview-area input:focus {
+        .image-preview input:focus {
             border-color: #ff69b4;
             box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
         }
         
-        .image-preview-area input::placeholder {
+        .image-preview input::placeholder {
             color: rgba(0, 255, 136, 0.4);
         }
         
@@ -997,11 +940,10 @@
         #userInput::placeholder {
 <<<<<<< HEAD:AuRoRA/AGi.html
             color: rgba(0, 255, 136, 0.4);
-<<<<<<< HEAD:AuRoRA/AGi.html
         }
         
-        /* SINGLE + BUTTON FOR IMAGE/CAMERA */
-        .plus-btn {
+        /* IMAGE UPLOAD BUTTONS (NEW) */
+        .image-btn, .camera-btn {
             padding: 15px 20px;
             background: linear-gradient(145deg, #00ff88, #00cc6a);
             color: white;
@@ -1015,65 +957,15 @@
             box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
             border: none;
             min-width: 55px;
-            position: relative;
         }
         
-        .plus-btn:hover {
+        .image-btn:hover, .camera-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
         }
         
-        .plus-btn:active {
+        .image-btn:active, .camera-btn:active {
             transform: translateY(0);
-        }
-        
-        /* Dropdown menu for + button */
-        .plus-menu {
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) scale(0);
-            background: rgba(10, 10, 20, 0.95);
-            border-radius: 15px;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid rgba(0, 255, 136, 0.3);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            opacity: 0;
-            transition: all 0.3s ease;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-        
-        .plus-menu.show {
-            transform: translateX(-50%) scale(1);
-            opacity: 1;
-            pointer-events: auto;
-        }
-        
-        .plus-menu-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 15px;
-            color: #00ff88;
-            cursor: pointer;
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
-        
-        .plus-menu-item:hover {
-            background: rgba(0, 255, 136, 0.1);
-            color: #ff69b4;
-        }
-        
-        .plus-menu-item span {
-            font-size: 1.3em;
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-            color: #ccc;
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         }
         
         .send-btn {
@@ -1312,10 +1204,6 @@
     </style>
 </head>
 <body>
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-    <!-- Cyberpunk Background -->
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
     <div class="cyber-bg" id="cyberBg">
         <div class="circuit-grid"></div>
         <canvas id="matrixCanvas"></canvas>
@@ -1340,41 +1228,18 @@
         
         <div class="robot-container">
             <div class="robot" id="robot">
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="pet-zone" id="petZone"></div>
-=======
-                <!-- Pet Zone (for hand cursor) -->
-                <div class="pet-zone" id="petZone"></div>
-                
-                <!-- Pet Counter -->
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
                 <div class="pet-counter" id="petCounter">Pets: 0</div>
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-                <!-- Speech Bubble -->
-                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
-                
-                <!-- Speaking Waves -->
->>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
                 <div class="speaking-waves" id="speakingWaves">
                     <div class="wave"></div>
                     <div class="wave"></div>
                     <div class="wave"></div>
                 </div>
                 
-<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="robot-head" id="robotHead">
-=======
-                <!-- Head -->
-                <div class="robot-head">
-                    <!-- Antennas -->
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
                     <div class="antenna-left">
                         <div class="antenna-ball"></div>
                     </div>
@@ -1404,47 +1269,29 @@
             </div>
         </div>
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-        <!-- IMAGE PREVIEW AREA -->
-        <div class="image-preview-area" id="imagePreviewArea">
+        <!-- IMAGE PREVIEW (NEW) -->
+        <div class="image-preview" id="imagePreview">
             <button class="remove-btn" onclick="removeImage()">✕</button>
             <img id="previewImg" alt="Preview">
             <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
         </div>
         
-        <!-- INPUT AREA WITH SINGLE + BUTTON -->
-        <div class="input-area">
-<<<<<<< HEAD:AuRoRA/AGi.html
-            <!-- SINGLE + BUTTON WITH DROPDOWN -->
-            <div style="position: relative;">
-                <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">
-                    +
-                </button>
-                <div class="plus-menu" id="plusMenu">
-                    <label class="plus-menu-item">
-                        <span>📁</span>
-                        <span>Upload Image</span>
-                        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
-                    </label>
-                    <label class="plus-menu-item">
-                        <span>📷</span>
-                        <span>Take Photo</span>
-                        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
-                    </label>
-                </div>
-            </div>
-            
-            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
-            
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
-=======
-            <input type="text" id="userInput" placeholder="Initialize neural handshake..." maxlength="200">
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Transmit 💌</button>
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        <!-- Input Area -->
+        <!-- INPUT AREA (UPDATED WITH IMAGE BUTTONS) -->
         <div class="input-area">
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+            
+            <!-- NEW: Image upload button -->
+            <label for="imageInput" class="image-btn" title="Upload image">
+                📷
+            </label>
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            
+            <!-- NEW: Camera button (mobile) -->
+            <label for="cameraInput" class="camera-btn" title="Take photo">
+                📸
+            </label>
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+            
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
 >>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
         </div>
@@ -1453,16 +1300,7 @@
     </div>
 
     <script>
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Matrix Rain (same as before)
-=======
-        // Initialize Matrix Rain
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        // ENHANCED MATRIX RAIN
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
+        // Matrix Rain
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1546,7 +1384,7 @@
             drawMatrixHeads();
         }, 33);
         
-        // Create circuit elements
+        // Circuit elements
         function createCircuitElements() {
             const bg = document.getElementById('cyberBg');
             
@@ -1713,12 +1551,11 @@
         const statusText = document.getElementById('statusText');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
-        const plusMenu = document.getElementById('plusMenu');
         
-        // Image elements
-        const imagePreviewArea = document.getElementById('imagePreviewArea');
+        // NEW: Image handling elements
+        const imagePreview = document.getElementById('imagePreview');
         const previewImg = document.getElementById('previewImg');
-        const imagePrompt = document.getElementById('imagePrompt');
+        const imagePromptInput = document.getElementById('imagePrompt');
         let currentImage = null;
         let imageInputTopic = null;
         
@@ -1756,101 +1593,28 @@
             'default': 'happy'
         };
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Plus menu toggle
-        function togglePlusMenu() {
-            plusMenu.classList.toggle('show');
-        }
-        
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.plus-btn') && !e.target.closest('.plus-menu')) {
-                plusMenu.classList.remove('show');
-=======
-        // Initialize ROS (but petting works without it)
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-        function initROS() {
-            const robotIP = window.location.hostname;
-            try {
-                ros = new ROSLIB.Ros({ url: 'ws://' + robotIP + ':9090' });
-                
-                ros.on('connection', () => {
-                    isROSConnected = true;
-                    statusDot.classList.add('connected');
-                    statusText.textContent = 'Connected! 💖';
-                    speechBubble.textContent = 'Connected! 💕';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
-                    startIdleAnimations();
-                });
-                
-                ros.on('error', () => {
-                    statusText.textContent = 'Offline Mode';
-                    speechBubble.textContent = 'Hello! 💕';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
-                    startIdleAnimations();
-                });
-                
-                ros.on('close', () => {
-                    isROSConnected = false;
-                    statusDot.classList.remove('connected');
-                    statusText.textContent = 'Offline Mode';
-                    stopIdleAnimations();
-                });
-                
-                const cnsTopic = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/cns/neural_input',
-                    messageType: 'std_msgs/String'
-                });
-                
-                const gceResponseTopic = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/gce/response',
-                    messageType: 'std_msgs/String'
-                });
-                
-                gceResponseTopic.subscribe((msg) => {
-                    try {
-                        const data = JSON.parse(msg.data);
-                        if (data.type === 'start') {
-                            detectAndSetEmotion(data.content);
-                            startStreaming(data.content);
-                        } else if (data.type === 'delta') {
-                            appendToStream(data.content);
-                        } else if (data.type === 'done') {
-                            finishStreaming();
-                        } else if (data.type === 'error') {
-                            if (currentStreamMessage) finishStreaming();
-                            setEmotion('sad');
-                            createMessageElement('grace', data.content);
-                        }
-                    } catch (e) {
-                        if (!isStreaming) {
-                            detectAndSetEmotion(msg.data);
-                            startStreaming(msg.data);
-                        } else {
-                            appendToStream(msg.data);
-                        }
-                    }
-                });
-                
-                window.cnsTopic = cnsTopic;
-            } catch (e) {
-                console.log('ROS not available, running in offline mode');
-                statusText.textContent = 'Offline Mode';
-                startIdleAnimations();
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+        // NEW: Image handling functions
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageInput = document.getElementById('imageInput');
+            const cameraInput = document.getElementById('cameraInput');
+            
+            if (imageInput) {
+                imageInput.addEventListener('change', handleImageSelect);
             }
-        }
+            
+            if (cameraInput) {
+                cameraInput.addEventListener('change', handleImageSelect);
+            }
+            
+            if (imagePromptInput) {
+                imagePromptInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') sendSignal();
+                });
+            }
+        });
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Image handling
-        function handleImageSelect(input) {
-            const file = input.files[0];
+        function handleImageSelect(e) {
+            const file = e.target.files[0];
             if (!file) return;
             
             if (!file.type.startsWith('image/')) {
@@ -1867,12 +1631,8 @@
             reader.onload = function(event) {
                 currentImage = event.target.result;
                 previewImg.src = currentImage;
-                imagePreviewArea.classList.add('show');
-                imagePrompt.focus();
-                plusMenu.classList.remove('show');
-                
-                // Auto-focus the image prompt input
-                setTimeout(() => imagePrompt.focus(), 100);
+                imagePreview.classList.add('show');
+                imagePromptInput.focus();
             };
             
             reader.onerror = function() {
@@ -1884,10 +1644,10 @@
         
         function removeImage() {
             currentImage = null;
-            imagePreviewArea.classList.remove('show');
+            imagePreview.classList.remove('show');
             document.getElementById('imageInput').value = '';
             document.getElementById('cameraInput').value = '';
-            imagePrompt.value = '';
+            imagePromptInput.value = '';
         }
         
         // ROS Initialization
@@ -1927,7 +1687,7 @@
                     messageType: 'std_msgs/String'
                 });
                 
-                // Image input topic
+                // NEW: Image input topic
                 imageInputTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/image_input',
@@ -1977,52 +1737,86 @@
         
         initROS();
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Petting
-=======
-        initROS();
-        
-        // Petting interaction - WORKS OFFLINE
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handlePet(e);
-=======
-        ros.on('connection', () => {
-            statusDot.classList.add('connected');
-            statusText.textContent = 'Connected! 💖';
-            speechBubble.textContent = 'Connected! 💕';
-            speechBubble.classList.add('show');
-            setTimeout(() => speechBubble.classList.remove('show'), 2000);
-            startIdleAnimations();
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         });
         
-        ros.on('error', () => {
-            statusText.textContent = 'Error 😢';
-        });
+        function handlePet(e) {
+            if (isStreaming) return;
+            
+            petCount++;
+            isBeingPetted = true;
+            clearTimeout(petTimeout);
+            
+            createRipple(e);
+            
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => createPetHeart(e, i), i * 100);
+            }
+            
+            petCounter.textContent = `Pets: ${petCount}`;
+            petCounter.classList.add('show');
+            
+            setEmotion('petted', '💖');
+            
+            if (petCount % 3 === 0) {
+                const response = petResponses[Math.floor(Math.random() * petResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
+                speechBubble.classList.add('show');
+            }
+            
+            robot.classList.add('petting');
+            
+            petTimeout = setTimeout(() => {
+                isBeingPetted = false;
+                robot.classList.remove('petting');
+                speechBubble.classList.remove('show');
+                petCounter.classList.remove('show');
+                setEmotion('happy');
+            }, 2000);
+        }
         
-        ros.on('close', () => {
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Disconnected 😢';
-            stopIdleAnimations();
-        });
+        function createRipple(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.width = '20px';
+            ripple.style.height = '20px';
+            ripple.style.left = (x - 10) + 'px';
+            ripple.style.top = (y - 10) + 'px';
+            
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
         
-        // ROS Topics
-        const cnsTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/cns/neural_input',
-            messageType: 'std_msgs/String'
-        });
+        function createPetHeart(e, index) {
+            const rect = robot.getBoundingClientRect();
+            const heart = document.createElement('div');
+            heart.className = 'pet-heart';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            
+            const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
+            const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
+            
+            heart.style.left = (offsetX + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.top = (offsetY + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.animationDelay = (index * 0.1) + 's';
+            
+            robot.appendChild(heart);
+            setTimeout(() => heart.remove(), 1500);
+        }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Emotion detection
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function detectAndSetEmotion(text) {
             const emojiRegex = /(\p{Emoji})/u;
             const match = text.match(emojiRegex);
@@ -2036,10 +1830,7 @@
             }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Set emotion
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function setEmotion(emotion, emoji = null) {
             if (isBeingPetted && emotion !== 'petted') return;
             
@@ -2101,55 +1892,7 @@
             }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Streaming
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-=======
-        const gceResponseTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/gce/response',
-            messageType: 'std_msgs/String'
-        });
-        
-        // Subscribe to responses with streaming support - FIXED FOR DELTA STREAMING
-        gceResponseTopic.subscribe((msg) => {
-            try {
-                const data = JSON.parse(msg.data);
-                console.log("Received:", data.type, data.content);
-                
-                if (data.type === 'start') {
-                    // First chunk - start new stream
-                    startStreaming(data.content);
-                } else if (data.type === 'delta') {
-                    // Subsequent chunks - append to existing stream
-                    appendToStream(data.content);
-                } else if (data.type === 'done') {
-                    // Stream complete
-                    finishStreaming();
-                } else if (data.type === 'error') {
-                    // Error occurred
-                    if (currentStreamMessage) {
-                        finishStreaming();
-                    }
-                    createMessageElement('grace', data.content);
-                    speechBubble.textContent = 'Error! 😢';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
-                }
-            } catch (e) {
-                console.error("Failed to parse message:", msg.data, e);
-                // Fallback: treat as plain text for backward compatibility
-                if (!isStreaming) {
-                    startStreaming(msg.data);
-                } else {
-                    appendToStream(msg.data);
-                }
-            }
-        });
-        
-        // Start streaming with first chunk
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -2294,6 +2037,7 @@
         }
         
         // Idle animations
+        // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
                 if (!isSpeaking && !isStreaming) {
@@ -2361,34 +2105,23 @@
             }, 200);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Send message (fixed - no duplicate, with image support)
-=======
-        // FIXED: Removed duplicate user message printing
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-=======
-        // Send message
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+        // FIXED: Send message (no duplicate, with image support)
         function sendSignal() {
             const val = userInput.value.trim();
             
             if (isStreaming) return;
             
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-            // Check if image is attached
+            // Check if image is attached (NEW)
             if (currentImage) {
-                const promptText = imagePrompt.value.trim() || "What's in this image?";
+                const imagePrompt = imagePromptInput.value.trim() || "What's in this image?";
                 
                 // Display in chat
-                createMessageElement('user', `📷 ${promptText}`);
+                createMessageElement('user', `📷 ${imagePrompt}`);
                 
                 if (isROSConnected && window.imageInputTopic) {
                     // Send to CNS Bridge
                     const imageData = {
-                        prompt: promptText,
+                        prompt: imagePrompt,
                         image: currentImage
                     };
                     
@@ -2412,7 +2145,7 @@
                 
             } else if (val) {
                 // Normal text message
-                createMessageElement('user', val);
+                createMessageElement('user', val);  // SINGLE MESSAGE (FIXED)
                 
                 if (isROSConnected && window.cnsTopic) {
                     window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
@@ -2431,44 +2164,6 @@
                 userInput.value = '';
                 createFloatingHeart();
             }
-=======
-=======
-            // Print user message ONCE (moved outside the if-else)
-            createMessageElement('user', val);
-            
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-            if (isROSConnected && window.cnsTopic) {
-                // Online mode - send to ROS
-                window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
-            } else {
-                // Offline mode - generate response only (no duplicate user message)
-                setTimeout(() => {
-                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
-                    detectAndSetEmotion(offlineResponse);
-                    createMessageElement('grace', offlineResponse);
-                }, 500);
-            }
-            
-            setEmotion('surprised', '✨');
-            setTimeout(() => setEmotion('happy'), 500);
-=======
-            // Publish to ROS
-            cnsTopic.publish(new ROSLIB.Message({ data: val }));
-            
-            // Add to chat
-            createMessageElement('user', val);
-            
-            // Robot reaction
-            setExpression('surprised');
-            setTimeout(() => setExpression('happy'), 500);
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-            
-            // Create floating hearts
-            createFloatingHeart();
-            
-            // Clear input
-            userInput.value = '';
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         }
         
         function createFloatingHeart() {
@@ -2482,22 +2177,15 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
-        // Enter key support
+        // Event listeners
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-        imagePrompt.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendSignal();
-        });
-        
         // Initial state
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         setEmotion('happy');
         
+        // Test functions
         window.testEmotion = function(emotion) {
             const testEmojis = {
                 'happy': '😊',
