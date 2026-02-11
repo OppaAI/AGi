@@ -1339,7 +1339,7 @@
     
     <div class="container">
         <h1>✨ Chat with Grace ✨</h1>
-        <p class="subtitle">Neural Link Established // System Online</p>
+        <p class="subtitle">Your Cute AI Companion 💕</p>
         
         <div class="status-badge">
             <span class="status-dot" id="statusDot"></span>
@@ -1360,6 +1360,13 @@
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
+<<<<<<< HEAD:AuRoRA/AGi.html
+=======
+                <!-- Speech Bubble -->
+                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+                
+                <!-- Speaking Waves -->
+>>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
                 <div class="speaking-waves" id="speakingWaves">
                     <div class="wave"></div>
                     <div class="wave"></div>
@@ -1396,6 +1403,7 @@
             </div>
         </div>
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         <!-- IMAGE PREVIEW AREA -->
         <div class="image-preview-area" id="imagePreviewArea">
             <button class="remove-btn" onclick="removeImage()">✕</button>
@@ -1432,6 +1440,12 @@
             <input type="text" id="userInput" placeholder="Initialize neural handshake..." maxlength="200">
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Transmit 💌</button>
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+        <!-- Input Area -->
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+>>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
         </div>
         
         <div class="chat-container" id="chatContainer"></div>
@@ -1457,8 +1471,8 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
         
-        // Matrix characters (mix of katakana, numbers, and symbols)
-        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%^&*';
+        // Matrix characters (mix of alphabets, numbers, and symbols)
+        const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcedfghijklmnopqrstuvwxyz@#$%^&*';
         const charArray = chars.split('');
         
         const fontSize = 14;
@@ -1840,15 +1854,15 @@
                     isROSConnected = true;
                     statusDot.classList.add('connected');
                     statusText.textContent = 'Neural Link Active';
-                    speechBubble.textContent = 'Click to pet me! 💕';
+                    speechBubble.textContent = 'Connected! 💕';
                     speechBubble.classList.add('show');
                     setTimeout(() => speechBubble.classList.remove('show'), 3000);
                     startIdleAnimations();
                 });
                 
                 ros.on('error', () => {
-                    statusText.textContent = 'Offline Mode';
-                    speechBubble.textContent = 'Offline - Petting still works! 💕';
+                    statusText.textContent = 'Neural Link Offline';
+                    speechBubble.textContent = 'Hello! 💕';
                     speechBubble.classList.add('show');
                     setTimeout(() => speechBubble.classList.remove('show'), 3000);
                     startIdleAnimations();
@@ -1857,7 +1871,7 @@
                 ros.on('close', () => {
                     isROSConnected = false;
                     statusDot.classList.remove('connected');
-                    statusText.textContent = 'Offline Mode';
+                    statusText.textContent = 'Neural Link Offline';
                     stopIdleAnimations();
                 });
                 
@@ -2477,7 +2491,7 @@
                 // Offline mode - echo back
                 createMessageElement('user', val);
                 setTimeout(() => {
-                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
+                    const offlineResponse = "💖: I'm running in offline mode. 💕";
                     detectAndSetEmotion(offlineResponse);
                     createMessageElement('grace', offlineResponse);
                 }, 500);
@@ -2547,3 +2561,4 @@
     </script>
 </body>
 </html>
+
