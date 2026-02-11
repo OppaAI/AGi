@@ -841,8 +841,8 @@
             50% { opacity: 0.5; transform: scale(0.8); }
         }
         
-        /* IMAGE PREVIEW AREA (NEW) */
-        .image-preview {
+        /* IMAGE PREVIEW AREA */
+        .image-preview-area {
             margin-bottom: 15px;
             padding: 15px;
             background: rgba(10, 10, 20, 0.8);
@@ -858,11 +858,11 @@
             to { opacity: 1; transform: translateY(0); }
         }
         
-        .image-preview.show {
+        .image-preview-area.show {
             display: block;
         }
         
-        .image-preview img {
+        .image-preview-area img {
             max-width: 100%;
             max-height: 200px;
             border-radius: 10px;
@@ -871,7 +871,7 @@
             box-shadow: 0 5px 15px rgba(0, 255, 136, 0.2);
         }
         
-        .image-preview input {
+        .image-preview-area input {
             width: 100%;
             padding: 12px 15px;
             background: rgba(0, 0, 0, 0.5);
@@ -883,12 +883,12 @@
             font-size: 0.95em;
         }
         
-        .image-preview input:focus {
+        .image-preview-area input:focus {
             border-color: #ff69b4;
             box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
         }
         
-        .image-preview input::placeholder {
+        .image-preview-area input::placeholder {
             color: rgba(0, 255, 136, 0.4);
         }
         
@@ -942,8 +942,8 @@
             color: rgba(0, 255, 136, 0.4);
         }
         
-        /* IMAGE UPLOAD BUTTONS (NEW) */
-        .image-btn, .camera-btn {
+        /* SINGLE + BUTTON FOR IMAGE/CAMERA */
+        .plus-btn {
             padding: 15px 20px;
             background: linear-gradient(145deg, #00ff88, #00cc6a);
             color: white;
@@ -957,15 +957,60 @@
             box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
             border: none;
             min-width: 55px;
+            position: relative;
         }
         
-        .image-btn:hover, .camera-btn:hover {
+        .plus-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
         }
         
-        .image-btn:active, .camera-btn:active {
+        .plus-btn:active {
             transform: translateY(0);
+        }
+        
+        /* Dropdown menu for + button */
+        .plus-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        
+        .plus-menu.show {
+            transform: translateX(-50%) scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .plus-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            color: #00ff88;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+        
+        .plus-menu-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+            color: #ff69b4;
+        }
+        
+        .plus-menu-item span {
+            font-size: 1.3em;
         }
         
         .send-btn {
@@ -1269,28 +1314,35 @@
             </div>
         </div>
         
-        <!-- IMAGE PREVIEW (NEW) -->
-        <div class="image-preview" id="imagePreview">
+        <!-- IMAGE PREVIEW AREA -->
+        <div class="image-preview-area" id="imagePreviewArea">
             <button class="remove-btn" onclick="removeImage()">✕</button>
             <img id="previewImg" alt="Preview">
             <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
         </div>
         
-        <!-- INPUT AREA (UPDATED WITH IMAGE BUTTONS) -->
+        <!-- INPUT AREA WITH SINGLE + BUTTON -->
         <div class="input-area">
+            <!-- SINGLE + BUTTON WITH DROPDOWN -->
+            <div style="position: relative;">
+                <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">
+                    +
+                </button>
+                <div class="plus-menu" id="plusMenu">
+                    <label class="plus-menu-item">
+                        <span>📁</span>
+                        <span>Upload Image</span>
+                        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
+                    </label>
+                    <label class="plus-menu-item">
+                        <span>📷</span>
+                        <span>Take Photo</span>
+                        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
+                    </label>
+                </div>
+            </div>
+            
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
-            
-            <!-- NEW: Image upload button -->
-            <label for="imageInput" class="image-btn" title="Upload image">
-                📷
-            </label>
-            <input type="file" id="imageInput" accept="image/*" style="display: none;">
-            
-            <!-- NEW: Camera button (mobile) -->
-            <label for="cameraInput" class="camera-btn" title="Take photo">
-                📸
-            </label>
-            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
             
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
 >>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
@@ -1300,7 +1352,7 @@
     </div>
 
     <script>
-        // Matrix Rain
+        // Matrix Rain (same as before)
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1551,11 +1603,12 @@
         const statusText = document.getElementById('statusText');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
+        const plusMenu = document.getElementById('plusMenu');
         
-        // NEW: Image handling elements
-        const imagePreview = document.getElementById('imagePreview');
+        // Image elements
+        const imagePreviewArea = document.getElementById('imagePreviewArea');
         const previewImg = document.getElementById('previewImg');
-        const imagePromptInput = document.getElementById('imagePrompt');
+        const imagePrompt = document.getElementById('imagePrompt');
         let currentImage = null;
         let imageInputTopic = null;
         
@@ -1593,28 +1646,21 @@
             'default': 'happy'
         };
         
-        // NEW: Image handling functions
-        document.addEventListener('DOMContentLoaded', function() {
-            const imageInput = document.getElementById('imageInput');
-            const cameraInput = document.getElementById('cameraInput');
-            
-            if (imageInput) {
-                imageInput.addEventListener('change', handleImageSelect);
-            }
-            
-            if (cameraInput) {
-                cameraInput.addEventListener('change', handleImageSelect);
-            }
-            
-            if (imagePromptInput) {
-                imagePromptInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') sendSignal();
-                });
+        // Plus menu toggle
+        function togglePlusMenu() {
+            plusMenu.classList.toggle('show');
+        }
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.plus-btn') && !e.target.closest('.plus-menu')) {
+                plusMenu.classList.remove('show');
             }
         });
         
-        function handleImageSelect(e) {
-            const file = e.target.files[0];
+        // Image handling
+        function handleImageSelect(input) {
+            const file = input.files[0];
             if (!file) return;
             
             if (!file.type.startsWith('image/')) {
@@ -1631,8 +1677,12 @@
             reader.onload = function(event) {
                 currentImage = event.target.result;
                 previewImg.src = currentImage;
-                imagePreview.classList.add('show');
-                imagePromptInput.focus();
+                imagePreviewArea.classList.add('show');
+                imagePrompt.focus();
+                plusMenu.classList.remove('show');
+                
+                // Auto-focus the image prompt input
+                setTimeout(() => imagePrompt.focus(), 100);
             };
             
             reader.onerror = function() {
@@ -1644,10 +1694,10 @@
         
         function removeImage() {
             currentImage = null;
-            imagePreview.classList.remove('show');
+            imagePreviewArea.classList.remove('show');
             document.getElementById('imageInput').value = '';
             document.getElementById('cameraInput').value = '';
-            imagePromptInput.value = '';
+            imagePrompt.value = '';
         }
         
         // ROS Initialization
@@ -1687,7 +1737,7 @@
                     messageType: 'std_msgs/String'
                 });
                 
-                // NEW: Image input topic
+                // Image input topic
                 imageInputTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/image_input',
@@ -2105,23 +2155,23 @@
             }, 200);
         }
         
-        // FIXED: Send message (no duplicate, with image support)
+        // Send message (fixed - no duplicate, with image support)
         function sendSignal() {
             const val = userInput.value.trim();
             
             if (isStreaming) return;
             
-            // Check if image is attached (NEW)
+            // Check if image is attached
             if (currentImage) {
-                const imagePrompt = imagePromptInput.value.trim() || "What's in this image?";
+                const promptText = imagePrompt.value.trim() || "What's in this image?";
                 
                 // Display in chat
-                createMessageElement('user', `📷 ${imagePrompt}`);
+                createMessageElement('user', `📷 ${promptText}`);
                 
                 if (isROSConnected && window.imageInputTopic) {
                     // Send to CNS Bridge
                     const imageData = {
-                        prompt: imagePrompt,
+                        prompt: promptText,
                         image: currentImage
                     };
                     
@@ -2145,7 +2195,7 @@
                 
             } else if (val) {
                 // Normal text message
-                createMessageElement('user', val);  // SINGLE MESSAGE (FIXED)
+                createMessageElement('user', val);
                 
                 if (isROSConnected && window.cnsTopic) {
                     window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
@@ -2179,6 +2229,10 @@
         
         // Event listeners
         userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendSignal();
+        });
+        
+        imagePrompt.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
