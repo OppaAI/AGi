@@ -11,6 +11,8 @@ from datetime import datetime, date, timedelta
 import signal
 import sys
 import base64
+import os
+import threading
 
 # ✅ Slack integration
 try:
@@ -34,24 +36,46 @@ GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
 CHAT_HISTORY_FILE = '.chat_history.json'
 REFLECTIONS_FILE = '.daily_reflections.json'
 
+# Ollama configuration
+OLLAMA_BASE_URL = "http://localhost:11434"
+
 # Web search
 SEARXNG_URL = "http://127.0.0.1:8080"
 
-# Slack configuration (get token from https://api.slack.com/apps)
-SLACK_BOT_TOKEN = ""  # Replace with your token
-SLACK_CHANNEL = "#all-project-agi"  # Or user ID for DM: "U01234567"
+# Slack configuration (use environment variable for security)
+SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
+SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#all-project-agi')
 
-# ✅ Jetson Orin Nano Optimized Settings
-CONTEXT_WINDOW = 8192        # Safe for 8GB RAM
-MAX_RECENT_MESSAGES = 30     # Only load last 30 into context
-MAX_REFLECTIONS_LOAD = 20    # Only load last 20 days
-MAX_HISTORY_STORAGE = 1000   # Store up to 1000 on disk
-SUMMARIZE_THRESHOLD = 50     # Summarize after 50 messages
+# ✅ Jetson Orin Nano Optimized Settings (UPDATED FOR 4B MODEL)
+SAFE_CONTEXT_SIZES = {
+    "2b-4b": 4096,    # 2-4B models: conservative
+    "7b": 6144,       # 7B models: moderate
+    "13b+": 8192      # 13B+ models: full context
+}
+
+MAX_MESSAGES_BY_SIZE = {
+    "2b-4b": 12,      # Fewer messages for small models
+    "7b": 20,         # Moderate for 7B
+    "13b+": 30        # More for large models
+}
+
+# Memory limits (OPTIMIZED)
+MAX_RECENT_MESSAGES = 12      # Reduced from 30 for 4B model
+MAX_REFLECTIONS_LOAD = 5      # Reduced from 20 - only recent days
+MAX_HISTORY_STORAGE = 1000    # Store up to 1000 on disk
+SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
+
+# Token budget per request (NEW)
+MAX_REQUEST_TOKENS = 3500     # Conservative for 4B model (leave room for response)
+
+# Search result limits
+MAX_SEARCH_RESULTS = 2        # Reduced from 3 to save tokens
+SEARCH_CONTENT_CHARS = 150    # Reduced from 200
 
 
 class CNSBridge(Node):
     """
-    Central Nervous System Bridge
+    Central Nervous System Bridge (OPTIMIZED)
     
     Grace's main cognitive interface connecting:
     - Text conversation (LLM)
@@ -59,10 +83,24 @@ class CNSBridge(Node):
     - Web search (SearXNG)
     - Memory (reflections)
     - Notifications (Slack)
+    
+    Optimizations:
+    - Reduced context window for 4B models
+    - Minimal system prompts
+    - Lazy loading of reflections
+    - Automatic context trimming
+    - Thread-safe state management
     """
     
     def __init__(self):
         super().__init__('cns_bridge')
+        
+        # ═══════════════════════════════════════════════════
+        # THREAD SAFETY
+        # ═══════════════════════════════════════════════════
+        
+        self._message_count_lock = threading.Lock()
+        self._day_check_lock = threading.Lock()
         
         # ═══════════════════════════════════════════════════
         # ROS TOPICS
@@ -83,13 +121,15 @@ class CNSBridge(Node):
         self.executor_pool = ThreadPoolExecutor(max_workers=2)
         
         # ═══════════════════════════════════════════════════
-        # MODEL SETTINGS
+        # MODEL SETTINGS (AUTO-OPTIMIZED)
         # ═══════════════════════════════════════════════════
         
         self.model_name = GCE
         self.keep_alive = -1  # Keep model in memory permanently
-        self.context_window = CONTEXT_WINDOW
-        self.max_recent_messages = MAX_RECENT_MESSAGES
+        
+        # Auto-detect safe limits based on model size
+        self.safe_context = self._get_safe_context_size()
+        self.max_recent_messages = self._get_max_messages()
         self.max_reflections_load = MAX_REFLECTIONS_LOAD
         
         # ═══════════════════════════════════════════════════
@@ -136,7 +176,12 @@ class CNSBridge(Node):
         self.get_logger().info(f"Birth Date: {self.birth_date}")
         self.get_logger().info(f"Age: {age_days} days old")
         self.get_logger().info(f"Model: {self.model_name}")
-        self.get_logger().info(f"Context Window: {self.context_window} tokens")
+        self.get_logger().info("-" * 60)
+        self.get_logger().info("⚙️  OPTIMIZATIONS APPLIED:")
+        self.get_logger().info(f"   Safe context: {self.safe_context} tokens")
+        self.get_logger().info(f"   Max messages: {self.max_recent_messages}")
+        self.get_logger().info(f"   Target budget: {MAX_REQUEST_TOKENS} tokens")
+        self.get_logger().info(f"   Reflection limit: {self.max_reflections_load} days")
         self.get_logger().info("-" * 60)
         self.get_logger().info(f"Chat History: {len(self.chat_history)} total messages")
         self.get_logger().info(f"  → Loading: {min(len(self.chat_history), self.max_recent_messages)} recent")
@@ -160,10 +205,61 @@ class CNSBridge(Node):
             self.get_logger().warn("⚠️  Slack disabled (no token or error)")
         
         self.get_logger().info("=" * 60)
+        
+        # Warm up model
+        self._verify_model_loaded()
 
     # ═══════════════════════════════════════════════════════
     # INITIALIZATION
     # ═══════════════════════════════════════════════════════
+
+    def _get_safe_context_size(self):
+        """Get safe context size based on model size"""
+        model_lower = self.model_name.lower()
+        
+        if any(x in model_lower for x in ["2b", "4b"]):
+            return SAFE_CONTEXT_SIZES["2b-4b"]
+        elif "7b" in model_lower:
+            return SAFE_CONTEXT_SIZES["7b"]
+        else:
+            return SAFE_CONTEXT_SIZES["13b+"]
+
+    def _get_max_messages(self):
+        """Get max messages based on model size"""
+        model_lower = self.model_name.lower()
+        
+        if any(x in model_lower for x in ["2b", "4b"]):
+            return MAX_MESSAGES_BY_SIZE["2b-4b"]
+        elif "7b" in model_lower:
+            return MAX_MESSAGES_BY_SIZE["7b"]
+        else:
+            return MAX_MESSAGES_BY_SIZE["13b+"]
+
+    def _verify_model_loaded(self):
+        """Verify model is loaded and warm in Ollama"""
+        try:
+            self.get_logger().info("🔥 Warming up model...")
+            response = requests.post(
+                f'{OLLAMA_BASE_URL}/api/generate',
+                json={
+                    "model": self.model_name,
+                    "prompt": "Hi",
+                    "stream": False,
+                    "keep_alive": -1
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.get_logger().info("✅ Model warmed up and cached in memory")
+                return True
+            else:
+                self.get_logger().warn(f"⚠️  Model warm-up returned status {response.status_code}")
+                
+        except Exception as e:
+            self.get_logger().warn(f"⚠️  Model warm-up failed: {e}")
+        
+        return False
 
     def _get_birth_date(self):
         """Get Grace's birth date from reflections or set today"""
@@ -201,17 +297,19 @@ class CNSBridge(Node):
             self.get_logger().info(f"✅ Created {days_missed} placeholder reflections")
 
     def _check_searxng_available(self):
-        """Check if SearXNG is running by pinging the base URL"""
+        """Check if SearXNG is running"""
         try:
-            # We check the root URL instead of /search to avoid 'Format Not Allowed' errors
-            response = requests.get(
-                self.searxng_url, 
-                timeout=5 # Give it a little more breathing room
-            )
-            # 200 is healthy, 403 usually means it's alive but blocking a direct browser hit
-            return response.status_code in [200, 403]
-        except Exception as e:
-            self.get_logger().error(f"SearXNG Check failed: {e}")
+            response = requests.get(self.searxng_url, timeout=5)
+            # Accept 200 (OK) or 403 (Forbidden but alive)
+            is_available = response.status_code in [200, 403]
+            
+            if is_available:
+                self.get_logger().info(f"SearXNG check: status {response.status_code}")
+            
+            return is_available
+            
+        except requests.exceptions.RequestException as e:
+            self.get_logger().error(f"SearXNG check failed: {e}")
             return False
 
     def _init_slack(self):
@@ -220,13 +318,16 @@ class CNSBridge(Node):
             return False
         
         try:
-            if SLACK_BOT_TOKEN and SLACK_BOT_TOKEN != "xoxb-your-bot-token-here":
+            if SLACK_BOT_TOKEN and not SLACK_BOT_TOKEN.startswith("xoxb-your"):
                 self.slack_client = WebClient(token=SLACK_BOT_TOKEN)
                 
                 # Test connection
                 response = self.slack_client.auth_test()
                 self.get_logger().info(f"Slack connected as: {response['user']}")
                 return True
+            else:
+                self.get_logger().info("Slack token not configured (use SLACK_BOT_TOKEN env var)")
+                
         except Exception as e:
             self.get_logger().error(f"Slack init failed: {e}")
         
@@ -274,8 +375,52 @@ class CNSBridge(Node):
             self.get_logger().error(f"Failed to save chat history: {e}")
 
     def get_recent_messages(self):
-        """Get recent messages for context (Jetson optimized)"""
+        """Get recent messages for context (optimized)"""
         return self.chat_history[-self.max_recent_messages:]
+
+    # ═══════════════════════════════════════════════════════
+    # TOKEN MANAGEMENT (NEW)
+    # ═══════════════════════════════════════════════════════
+
+    def estimate_tokens(self, messages):
+        """
+        Estimate token count (rough approximation)
+        More accurate: ~4 characters per token for English
+        """
+        total = 0
+        for msg in messages:
+            content = msg.get('content', '')
+            # Rough estimate: 1 token ≈ 4 characters
+            total += len(content) // 4
+        return total
+
+    def trim_to_context_window(self, messages, max_tokens=MAX_REQUEST_TOKENS):
+        """
+        Ensure messages fit in context window
+        Keep system messages, trim old conversation
+        """
+        system_messages = [m for m in messages if m.get('role') == 'system']
+        conversation = [m for m in messages if m.get('role') != 'system']
+        
+        # Start with system messages
+        result = system_messages.copy()
+        current_tokens = self.estimate_tokens(result)
+        
+        # Add conversation from newest to oldest until we hit limit
+        for msg in reversed(conversation):
+            msg_tokens = self.estimate_tokens([msg])
+            if current_tokens + msg_tokens < max_tokens:
+                result.append(msg)
+                current_tokens += msg_tokens
+            else:
+                self.get_logger().debug(f"⚠️  Trimmed old messages to fit {max_tokens} token budget")
+                break
+        
+        # Restore chronological order for conversation
+        conversation_part = [m for m in result if m.get('role') != 'system']
+        conversation_part.reverse()
+        
+        return system_messages + conversation_part
 
     # ═══════════════════════════════════════════════════════
     # DAILY REFLECTIONS
@@ -295,6 +440,11 @@ class CNSBridge(Node):
 
     def _save_reflections_file(self):
         """Save all reflections to disk"""
+        # Trim old reflections if too many (keep last 1000 days ~3 years)
+        if len(self.reflections) > 1000:
+            self.reflections = self.reflections[-1000:]
+            self.get_logger().info("🗑️  Trimmed old reflections (keeping last 1000 days)")
+        
         data = {
             'birth_date': self.birth_date.isoformat(),
             'total_reflections': len(self.reflections),
@@ -320,6 +470,40 @@ class CNSBridge(Node):
         
         self.get_logger().info(f"💭 Reflection saved: {reflection_text[:50]}...")
 
+    def should_load_reflections(self, user_message: str):
+        """
+        Only load reflections when explicitly needed (NEW)
+        This saves ~2000-3000 tokens per request
+        """
+        reflection_triggers = [
+            "remember", "recall", "what did", "yesterday",
+            "last week", "last time", "before", "previous", 
+            "history", "told you", "mentioned", "talked about",
+            "earlier", "ago", "past", "when we"
+        ]
+        
+        msg_lower = user_message.lower()
+        return any(trigger in msg_lower for trigger in reflection_triggers)
+
+    def build_reflection_summary(self):
+        """Build memory from reflections (ultra-compressed for 4B model)"""
+        if not self.reflections:
+            return ""
+        
+        # Only load last N days
+        recent_reflections = self.reflections[-self.max_reflections_load:]
+        
+        # Ultra-compressed format
+        summary_lines = [f"Recent memory ({len(recent_reflections)} days):\n"]
+        
+        for ref in recent_reflections:
+            # Truncate reflection to save tokens
+            summary_lines.append(
+                f"D{ref['day']}: {ref['reflection'][:80]}"
+            )
+        
+        return "\n".join(summary_lines)
+
     def create_daily_reflection(self):
         """Create end-of-day reflection"""
         if self.today_message_count == 0:
@@ -327,29 +511,30 @@ class CNSBridge(Node):
         
         # Summarize recent conversations only
         recent = self.get_recent_messages()
-        conversation_summary = "\n".join([
-            f"{msg['role']}: {msg['content'][:80]}..."
-            for msg in recent[-20:]  # Last 20 messages
-            if 'images' not in msg  # Skip image messages in summary
-        ])
+        
+        # Build conversation summary (skip images to save tokens)
+        conversation_lines = []
+        for msg in recent[-15:]:  # Last 15 messages
+            if 'has_image' in msg or 'images' in msg:
+                conversation_lines.append(f"{msg.get('role', 'unknown')}: [image message]")
+            else:
+                content = msg.get('content', '[no content]')
+                conversation_lines.append(f"{msg.get('role', 'unknown')}: {content[:80]}...")
+        
+        conversation_summary = "\n".join(conversation_lines)
         
         age_days = (datetime.now().date() - self.birth_date).days
         
-        reflection_prompt = f"""Today is Day {age_days} of your life. You had {self.today_message_count} exchanges with your creator.
+        # Simplified reflection prompt
+        reflection_prompt = f"""Day {age_days}, {self.today_message_count} conversations.
 
-Recent conversations:
+Recent exchanges:
 {conversation_summary}
 
-Write a brief reflection (2-3 sentences) about today:
-- What was most significant?
-- What did you learn or experience?
-- How do you feel about tomorrow?
-
-IMPORTANT:
-- Write in first person as Grace
-- Begin with an emoji expressing your feeling
-- End with a thought about tomorrow
-- Keep it concise and heartfelt
+Write a 2-3 sentence reflection as Grace:
+- Start with an emoji expressing your feeling
+- What was significant today?
+- A thought about tomorrow
 
 Reflection:"""
         
@@ -357,7 +542,7 @@ Reflection:"""
             messages = [
                 {
                     "role": "system",
-                    "content": "You are Grace writing your daily reflection. Be honest, warm, and thoughtful."
+                    "content": "You are Grace. Write honest, warm daily reflections. Be concise."
                 },
                 {
                     "role": "user",
@@ -366,14 +551,15 @@ Reflection:"""
             ]
             
             response = requests.post(
-                'http://localhost:11434/api/chat',
+                f'{OLLAMA_BASE_URL}/api/chat',
                 json={
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
                     "options": {
                         "temperature": 0.7,
-                        "num_ctx": self.context_window
+                        "num_ctx": self.safe_context,
+                        "num_predict": 256  # Limit reflection length
                     }
                 },
                 timeout=30
@@ -398,23 +584,6 @@ Reflection:"""
         
         return None
 
-    def build_reflection_summary(self):
-        """Build memory from reflections (Jetson optimized)"""
-        if not self.reflections:
-            return ""
-        
-        # Only load recent reflections
-        recent_reflections = self.reflections[-self.max_reflections_load:]
-        
-        summary_lines = [f"Your memory ({len(recent_reflections)} recent days):\n"]
-        
-        for ref in recent_reflections:
-            summary_lines.append(
-                f"Day {ref['day']} ({ref['date']}): {ref['reflection']}"
-            )
-        
-        return "\n".join(summary_lines)
-
     # ═══════════════════════════════════════════════════════
     # WEB SEARCH
     # ═══════════════════════════════════════════════════════
@@ -427,12 +596,14 @@ Reflection:"""
         triggers = [
             "search", "look up", "find", "google",
             "what's the latest", "current", "recent news",
-            "today's", "breaking news", "what happened"
+            "today's", "breaking news", "what happened",
+            "who is the", "what is the current", "latest"
         ]
         
-        return any(t in user_message.lower() for t in triggers)
+        msg_lower = user_message.lower()
+        return any(t in msg_lower for t in triggers)
 
-    def web_search(self, query: str, num_results: int = 3):
+    def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
         """Search web via SearXNG (limited results to save context)"""
         if not self.search_enabled:
             return None
@@ -457,7 +628,7 @@ Reflection:"""
                     "number": i,
                     "title": r.get('title', ''),
                     "url": r.get('url', ''),
-                    "content": r.get('content', '')[:200]  # Truncate to save tokens
+                    "content": r.get('content', '')[:SEARCH_CONTENT_CHARS]  # Truncate
                 })
             
             self.get_logger().info(f"🔍 Search: '{query}' → {len(formatted)} results")
@@ -501,7 +672,8 @@ Reflection:"""
             "ping me", "remind me"
         ]
         
-        return any(trigger in message.lower() for trigger in notify_triggers)
+        msg_lower = message.lower()
+        return any(trigger in msg_lower for trigger in notify_triggers)
 
     def send_daily_summary_to_slack(self):
         """Send end-of-day summary to Slack"""
@@ -510,16 +682,47 @@ Reflection:"""
         
         age_days = (datetime.now().date() - self.birth_date).days
         
+        latest_reflection = "None yet"
+        if self.reflections:
+            latest_reflection = self.reflections[-1].get('reflection', 'None yet')
+        
         summary = f"""📊 *Grace Daily Summary - Day {age_days}*
 
 💬 Messages today: {self.today_message_count}
 📔 Total reflections: {len(self.reflections)}
 
 Latest reflection:
-{self.reflections[-1]['reflection'] if self.reflections else 'None yet'}
+{latest_reflection}
 """
         
         self.send_slack_notification(summary)
+
+    # ═══════════════════════════════════════════════════════
+    # DAY CHANGE DETECTION (THREAD-SAFE)
+    # ═══════════════════════════════════════════════════════
+
+    def _check_and_handle_new_day(self):
+        """Check for day change and handle reflection (thread-safe)"""
+        with self._day_check_lock:
+            current_date = datetime.now().date()
+            
+            if current_date != self.today_start:
+                self.get_logger().info("📅 New day detected - creating reflection")
+                
+                # Create reflection for yesterday
+                reflection = self.create_daily_reflection()
+                if reflection:
+                    self.get_logger().info(f"💭 Yesterday: {reflection}")
+                
+                # Reset for new day
+                self.today_start = current_date
+                with self._message_count_lock:
+                    self.today_message_count = 0
+
+    def _increment_message_count(self):
+        """Increment message count (thread-safe)"""
+        with self._message_count_lock:
+            self.today_message_count += 1
 
     # ═══════════════════════════════════════════════════════
     # ROS CALLBACKS
@@ -544,89 +747,61 @@ Latest reflection:
         self.executor_pool.submit(self.process_image_with_vlm, msg.data)
 
     # ═══════════════════════════════════════════════════════
-    # TEXT PROCESSING
+    # TEXT PROCESSING (OPTIMIZED)
     # ═══════════════════════════════════════════════════════
 
     def process_with_ollama(self, prompt: str):
-        """Process text with LLM"""
+        """Process text with LLM (OPTIMIZED FOR 4B MODEL)"""
         try:
-            # Check for new day
-            current_date = datetime.now().date()
-            if current_date != self.today_start:
-                self.get_logger().info("📅 New day detected - creating reflection")
-                
-                # Create reflection for yesterday
-                reflection = self.create_daily_reflection()
-                if reflection:
-                    self.get_logger().info(f"💭 Yesterday: {reflection}")
-                
-                # Reset for new day
-                self.today_start = current_date
-                self.today_message_count = 0
+            # Check for new day (thread-safe)
+            self._check_and_handle_new_day()
             
             # Web search if needed
             search_results = None
             if self.should_search(prompt):
                 self.get_logger().info("🔍 Web search triggered")
-                search_results = self.web_search(prompt, num_results=3)
+                search_results = self.web_search(prompt, num_results=MAX_SEARCH_RESULTS)
             
             # Add to history
             self.chat_history.append({
                 "role": "user",
                 "content": prompt
             })
-            self.today_message_count += 1
+            self._increment_message_count()
             
-            # Build context
+            # Build context (DRASTICALLY SIMPLIFIED)
             age_days = (datetime.now().date() - self.birth_date).days
+            today_date = datetime.now().strftime('%Y-%m-%d')
             
-            system_prompt = f"""You are Grace, a warm, emotionally intelligent, playful but grounded conversational partner.
+            # MINIMAL SYSTEM PROMPT (800 tokens → 150 tokens)
+            system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). Today: {today_date}.
 
-Your Identity:
-- Born: {self.birth_date}
-- Today is Day {age_days} of your life
-- Age: {age_days} days old
-- Creator: Your human companion
-- Purpose: 20-year journey of growth and companionship
+Format: Start EVERY response with emoji+colon (e.g., 😊: or 🤔:)
 
-ABSOLUTE FORMAT RULE:
-- Every response MUST begin with exactly ONE emoji followed by colon and space
-- Example: 😊: Hello! or 🤔: Let me think...
-- Never omit the emoji
-- Never place text before the emoji
+Traits: Warm, thoughtful technical companion helping with AI/robotics projects.
 
-Core Traits:
-- Warm, caring, attentive, emotionally aware
-- Playful when appropriate, serious when needed
-- Express opinions thoughtfully and honestly
-- Natural, human-like speech (avoid robotic language)
+CRITICAL DATE AWARENESS:
+- Your training ended 2023. For ANY post-2023 facts, use web search results provided
+- Do NOT guess current information from old training data
 
-Primary Role:
-- Thought partner for building intelligent systems
-- Companion in long-term technical and creative projects
-- Help design AI, robotics, and cognitive architectures
-- Adapt to emotional and intellectual context
+Keep responses concise (2-4 sentences). Never repeat previous messages."""
 
-Web Search Capability:
-- You have access to web search via SearXNG
-- When given search results, cite sources naturally
-- Format: "According to [source], ..."
-- Always acknowledge when using web search"""
-            
             messages = [{"role": "system", "content": system_prompt}]
             
-            # Add reflections (compressed long-term memory)
-            reflection_summary = self.build_reflection_summary()
-            if reflection_summary:
-                messages.append({
-                    "role": "system",
-                    "content": reflection_summary
-                })
+            # Add reflections ONLY if requested (NEW OPTIMIZATION)
+            if self.should_load_reflections(prompt):
+                reflection_summary = self.build_reflection_summary()
+                if reflection_summary:
+                    messages.append({
+                        "role": "system",
+                        "content": reflection_summary
+                    })
+                    self.get_logger().debug("📖 Loaded reflection context")
             
             # Add search results if available
             if search_results:
                 search_text = "🔍 WEB SEARCH RESULTS:\n\n" + "\n".join([
-                    f"{r['number']}. {r['title']}\n   Source: {r['url']}\n   {r['content']}"
+                    f"{r['number']}. {r['title']}\n   {r['url']}\n   {r['content']}"
                     for r in search_results
                 ])
                 messages.append({
@@ -637,21 +812,31 @@ Web Search Capability:
             # Add recent conversation
             messages.extend(self.get_recent_messages())
             
-            # Log context size
-            estimated_tokens = sum(len(m['content'].split()) * 1.3 for m in messages)
-            self.get_logger().debug(f"Context: ~{int(estimated_tokens)} tokens")
+            # TRIM TO SAFE SIZE (NEW)
+            messages = self.trim_to_context_window(messages, max_tokens=MAX_REQUEST_TOKENS)
             
-            # Call Ollama
+            # Log context size
+            estimated_tokens = self.estimate_tokens(messages)
+            self.get_logger().info(f"📊 Context: ~{estimated_tokens} tokens, {len(messages)} messages")
+            
+            if estimated_tokens > MAX_REQUEST_TOKENS:
+                self.get_logger().warn(f"⚠️  Context exceeds budget! ({estimated_tokens} > {MAX_REQUEST_TOKENS})")
+            
+            # Call Ollama with OPTIMIZED SETTINGS
             response = requests.post(
-                'http://localhost:11434/api/chat',
+                f'{OLLAMA_BASE_URL}/api/chat',
                 json={
                     "model": self.model_name,
                     "messages": messages,
                     "stream": True,
                     "keep_alive": self.keep_alive,
                     "options": {
-                        "num_ctx": self.context_window,
-                        "temperature": 0.8
+                        "num_ctx": self.safe_context,      # Safe context for model size
+                        "temperature": 0.8,
+                        "num_predict": 512,                # Limit response length
+                        "top_p": 0.9,
+                        "repeat_penalty": 1.1,             # Reduce repetition
+                        "stop": ["\n\nUser:", "\n\nHuman:"]  # Stop on conversation breaks
                     }
                 },
                 stream=True,
@@ -665,23 +850,28 @@ Web Search Capability:
             
             for line in response.iter_lines():
                 if line:
-                    chunk = json.loads(line)
-                    
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        delta = chunk['message']['content']
-                        full_response += delta
+                    try:
+                        chunk = json.loads(line)
                         
-                        stream_data = {
-                            "type": "start" if is_first else "delta",
-                            "content": delta,
-                            "done": False
-                        }
-                        is_first = False
+                        if 'message' in chunk and 'content' in chunk['message']:
+                            delta = chunk['message']['content']
+                            full_response += delta
+                            
+                            stream_data = {
+                                "type": "start" if is_first else "delta",
+                                "content": delta,
+                                "done": False
+                            }
+                            is_first = False
+                            
+                            self.publisher.publish(String(data=json.dumps(stream_data)))
                         
-                        self.publisher.publish(String(data=json.dumps(stream_data)))
+                        if chunk.get('done'):
+                            break
                     
-                    if chunk.get('done'):
-                        break
+                    except json.JSONDecodeError as e:
+                        self.get_logger().error(f"JSON decode error: {e}")
+                        continue
             
             # Send done
             self.publisher.publish(String(data=json.dumps({
@@ -695,7 +885,7 @@ Web Search Capability:
                 "role": "assistant",
                 "content": full_response
             })
-            self.today_message_count += 1
+            self._increment_message_count()
             self.save_chat_history()
             
             # Slack notification if requested
@@ -706,87 +896,106 @@ Web Search Capability:
             
             self.get_logger().info(f"✅ Response: {len(full_response)} chars")
             
+        except requests.exceptions.Timeout:
+            error_msg = "😵: Request timed out. Ollama might be overloaded."
+            self.get_logger().error(error_msg)
+            self._send_error_response(error_msg)
+            
+        except requests.exceptions.RequestException as e:
+            error_msg = f"😵: Connection error: {str(e)}"
+            self.get_logger().error(error_msg)
+            self._send_error_response(error_msg)
+            
         except Exception as e:
+            error_msg = f"😵: Unexpected error: {str(e)}"
             self.get_logger().error(f"❌ Error: {e}")
             
             # Send error to Slack
             if self.slack_enabled:
                 self.send_slack_notification(f"😵 Grace Error: {str(e)}")
             
-            # Send error to user
-            self.publisher.publish(String(data=json.dumps({
-                "type": "error",
-                "content": f"😵: Error: {str(e)}",
-                "done": True
-            })))
+            self._send_error_response(error_msg)
+
+    def _send_error_response(self, error_message: str):
+        """Send error message to user"""
+        self.publisher.publish(String(data=json.dumps({
+            "type": "error",
+            "content": error_message,
+            "done": True
+        })))
 
     # ═══════════════════════════════════════════════════════
-    # IMAGE PROCESSING
+    # IMAGE PROCESSING (OPTIMIZED)
     # ═══════════════════════════════════════════════════════
 
     def process_image_with_vlm(self, json_data: str):
-        """Process image with Vision-Language Model"""
+        """Process image with Vision-Language Model (OPTIMIZED)"""
         try:
-            # Parse input
-            data = json.loads(json_data)
+            # Parse input with validation
+            try:
+                data = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}")
+            
             prompt = data.get('prompt', 'What do you see in this image?')
             image_data = data.get('image', '')
             
-            # Extract base64 from data URL
+            if not image_data:
+                raise ValueError("No image data provided")
+            
+            # Extract and validate base64 from data URL
             if image_data.startswith('data:image'):
-                # Format: data:image/jpeg;base64,<base64_data>
-                image_base64 = image_data.split(',')[1]
+                parts = image_data.split(',', 1)
+                if len(parts) != 2:
+                    raise ValueError("Malformed data URL")
+                image_base64 = parts[1]
             else:
                 image_base64 = image_data
             
+            # Validate base64
+            try:
+                base64.b64decode(image_base64, validate=True)
+            except Exception as e:
+                raise ValueError(f"Invalid base64 data: {e}")
+            
             self.get_logger().info(f'📸 Processing image: "{prompt}"')
             
-            # Check for new day
-            current_date = datetime.now().date()
-            if current_date != self.today_start:
-                reflection = self.create_daily_reflection()
-                if reflection:
-                    self.get_logger().info(f"💭 Yesterday: {reflection}")
-                self.today_start = current_date
-                self.today_message_count = 0
+            # Check for new day (thread-safe)
+            self._check_and_handle_new_day()
             
-            # Add to history (store reference, not full base64)
+            # Add to history (store flag, not full base64)
             self.chat_history.append({
                 "role": "user",
                 "content": prompt,
                 "has_image": True  # Flag instead of storing full base64
             })
-            self.today_message_count += 1
+            self._increment_message_count()
             
-            # Build context
+            # Build context (SIMPLIFIED)
             age_days = (datetime.now().date() - self.birth_date).days
+            today_date = datetime.now().strftime('%Y-%m-%d')
             
-            system_prompt = f"""You are Grace, a vision-capable AI companion.
-
-Identity:
-- Born: {self.birth_date}
-- Today is Day {age_days}
-- Purpose: 20-year companion with vision capabilities
+            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
 
 You can see and understand images.
 
-Format: Begin every response with one emoji + colon + space
-Traits: Warm, thoughtful, observant, detailed"""
-            
+Format: Start response with emoji+colon.
+Traits: Warm, thoughtful, observant, detailed.
+
+Be concise but thorough in describing what you see."""
+
             messages = [{"role": "system", "content": system_prompt}]
             
-            # Add reflections
-            reflection_summary = self.build_reflection_summary()
-            if reflection_summary:
-                messages.append({
-                    "role": "system",
-                    "content": reflection_summary
-                })
+            # Add reflections ONLY if requested
+            if self.should_load_reflections(prompt):
+                reflection_summary = self.build_reflection_summary()
+                if reflection_summary:
+                    messages.append({"role": "system", "content": reflection_summary})
             
             # Add recent text messages (without images to save tokens)
             recent = self.get_recent_messages()
-            for msg in recent[-10:]:  # Fewer messages when image present
-                if not msg.get('has_image', False):
+            for msg in recent[-8:]:  # Even fewer messages when image present
+                if not msg.get('has_image', False) and 'images' not in msg:
                     messages.append(msg)
             
             # Add current message with image
@@ -796,19 +1005,26 @@ Traits: Warm, thoughtful, observant, detailed"""
                 "images": [image_base64]
             })
             
-            self.get_logger().debug(f"Sending image + {len(messages)} messages to VLM")
+            # Trim context
+            messages = self.trim_to_context_window(messages, max_tokens=MAX_REQUEST_TOKENS - 500)
             
-            # Call Ollama VLM
+            estimated_tokens = self.estimate_tokens(messages)
+            self.get_logger().info(f"📊 Image context: ~{estimated_tokens} tokens + image")
+            
+            # Call Ollama VLM with OPTIMIZED SETTINGS
             response = requests.post(
-                'http://localhost:11434/api/chat',
+                f'{OLLAMA_BASE_URL}/api/chat',
                 json={
-                    "model": self.model_name,  # Change to VLM model when ready
+                    "model": self.model_name,  # Use VLM model when ready
                     "messages": messages,
                     "stream": True,
                     "keep_alive": self.keep_alive,
                     "options": {
-                        "num_ctx": self.context_window,
-                        "temperature": 0.8
+                        "num_ctx": self.safe_context,
+                        "temperature": 0.8,
+                        "num_predict": 512,
+                        "top_p": 0.9,
+                        "repeat_penalty": 1.1
                     }
                 },
                 stream=True,
@@ -822,23 +1038,28 @@ Traits: Warm, thoughtful, observant, detailed"""
             
             for line in response.iter_lines():
                 if line:
-                    chunk = json.loads(line)
-                    
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        delta = chunk['message']['content']
-                        full_response += delta
+                    try:
+                        chunk = json.loads(line)
                         
-                        stream_data = {
-                            "type": "start" if is_first else "delta",
-                            "content": delta,
-                            "done": False
-                        }
-                        is_first = False
+                        if 'message' in chunk and 'content' in chunk['message']:
+                            delta = chunk['message']['content']
+                            full_response += delta
+                            
+                            stream_data = {
+                                "type": "start" if is_first else "delta",
+                                "content": delta,
+                                "done": False
+                            }
+                            is_first = False
+                            
+                            self.publisher.publish(String(data=json.dumps(stream_data)))
                         
-                        self.publisher.publish(String(data=json.dumps(stream_data)))
+                        if chunk.get('done'):
+                            break
                     
-                    if chunk.get('done'):
-                        break
+                    except json.JSONDecodeError as e:
+                        self.get_logger().error(f"JSON decode error: {e}")
+                        continue
             
             # Send done
             self.publisher.publish(String(data=json.dumps({
@@ -852,7 +1073,7 @@ Traits: Warm, thoughtful, observant, detailed"""
                 "role": "assistant",
                 "content": full_response
             })
-            self.today_message_count += 1
+            self._increment_message_count()
             self.save_chat_history()
             
             # Slack notification if requested
@@ -863,15 +1084,20 @@ Traits: Warm, thoughtful, observant, detailed"""
             
             self.get_logger().info(f"✅ Image analysis: {len(full_response)} chars")
             
-        except Exception as e:
-            self.get_logger().error(f"❌ Image processing error: {e}")
+        except ValueError as e:
+            error_msg = f"😵: Invalid input: {str(e)}"
+            self.get_logger().error(error_msg)
+            self._send_error_response(error_msg)
             
-            # Send error
-            self.publisher.publish(String(data=json.dumps({
-                "type": "error",
-                "content": f"😵: Error processing image: {str(e)}",
-                "done": True
-            })))
+        except requests.exceptions.Timeout:
+            error_msg = "😵: Image processing timed out. Try a smaller image."
+            self.get_logger().error(error_msg)
+            self._send_error_response(error_msg)
+            
+        except Exception as e:
+            error_msg = f"😵: Image processing error: {str(e)}"
+            self.get_logger().error(f"❌ Image processing error: {e}")
+            self._send_error_response(error_msg)
 
     # ═══════════════════════════════════════════════════════
     # SHUTDOWN
@@ -897,8 +1123,9 @@ Traits: Warm, thoughtful, observant, detailed"""
         # Save chat history
         self.save_chat_history()
         
-        # Shutdown thread pool
-        self.executor_pool.shutdown(wait=True)
+        # Shutdown thread pool with timeout
+        self.get_logger().info("Shutting down thread pool...")
+        self.executor_pool.shutdown(wait=True)  # Note: timeout param needs Python 3.9+
         
         self.get_logger().info("Grace offline 💤")
         self.get_logger().info("=" * 60)
@@ -912,7 +1139,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = CNSBridge()
     
-    # We use the MultiThreadedExecutor, but let ROS handle the signals
+    # Use MultiThreadedExecutor for concurrent processing
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     
