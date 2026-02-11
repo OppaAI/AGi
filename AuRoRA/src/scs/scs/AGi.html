@@ -94,11 +94,65 @@
             height: 200px;
             position: relative;
             animation: float 3s ease-in-out infinite;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .robot:hover {
+            transform: scale(1.02);
+        }
+        
+        .robot.petting {
+            animation: wiggle 0.5s ease-in-out infinite;
         }
         
         @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
             50% { transform: translateY(-15px) rotate(2deg); }
+        }
+        
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg) scale(1.05); }
+            50% { transform: rotate(3deg) scale(1.05); }
+        }
+        
+        /* Petting hearts */
+        .pet-heart {
+            position: absolute;
+            font-size: 24px;
+            pointer-events: none;
+            animation: pet-heart-float 1.5s ease-out forwards;
+            z-index: 100;
+        }
+        
+        @keyframes pet-heart-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(0.5) rotate(0deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(1.5) rotate(360deg);
+            }
+        }
+        
+        /* Click ripple effect */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 105, 180, 0.4);
+            transform: scale(0);
+            animation: ripple-effect 0.6s ease-out;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        @keyframes ripple-effect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
         }
         
         /* Robot Head */
@@ -145,6 +199,28 @@
         .robot-head.loving {
             background: linear-gradient(145deg, #ff99cc, #ff66b2);
             animation: pulse-heart 1s ease-in-out infinite;
+        }
+        
+        .robot-head.petted {
+            background: linear-gradient(145deg, #ffb6c1, #ff1493);
+            animation: petted-glow 1s ease-in-out infinite;
+        }
+        
+        @keyframes petted-glow {
+            0%, 100% { 
+                box-shadow: 
+                    0 8px 20px rgba(255, 105, 180, 0.3),
+                    0 0 30px rgba(255, 20, 147, 0.4),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
+            50% { 
+                box-shadow: 
+                    0 8px 20px rgba(255, 105, 180, 0.5),
+                    0 0 50px rgba(255, 20, 147, 0.6),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
         }
         
         @keyframes float-slow {
@@ -208,6 +284,25 @@
         
         .robot-head.angry .antenna-right {
             transform: rotate(35deg);
+        }
+        
+        .robot-head.petted .antenna-left,
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-wiggle {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
+        }
+        
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-wiggle-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
         }
         
         .antenna-ball {
@@ -364,15 +459,16 @@
             opacity: 0.8;
         }
         
-        .robot-head.loving .cheek {
-            background: rgba(255, 105, 180, 0.8);
+        .robot-head.loving .cheek,
+        .robot-head.petted .cheek {
+            background: rgba(255, 20, 147, 0.6);
             opacity: 1;
-            animation: blush 2s ease-in-out infinite;
+            animation: blush 1s ease-in-out infinite;
         }
         
         @keyframes blush {
             0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.2); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 1; }
         }
         
         /* Mouth */
@@ -449,6 +545,20 @@
             margin-top: 10px;
         }
         
+        .mouth.petted {
+            width: 35px;
+            height: 20px;
+            border-radius: 0 0 50px 50px;
+            background: #ff1493;
+            border: none;
+            animation: mouth-happy 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes mouth-happy {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.2); }
+        }
+        
         /* Robot Body */
         .robot-body {
             width: 100px;
@@ -475,6 +585,16 @@
         
         .robot-head.thinking ~ .robot-body {
             background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
+        }
+        
+        .robot-head.petted ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            animation: body-wiggle 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes body-wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
         }
         
         /* Heart on chest */
@@ -530,19 +650,22 @@
             50% { transform: rotate(-45deg) scale(1); }
         }
         
-        .robot-head.loving .heart {
+        .robot-head.loving .heart,
+        .robot-head.petted .heart {
             background: #ff1493;
-            animation: heartbeat-fast 0.8s ease-in-out infinite;
+            animation: heartbeat-fast 0.6s ease-in-out infinite;
         }
         
         .robot-head.loving .heart::before,
-        .robot-head.loving .heart::after {
+        .robot-head.loving .heart::after,
+        .robot-head.petted .heart::before,
+        .robot-head.petted .heart::after {
             background: #ff1493;
         }
         
         @keyframes heartbeat-fast {
             0%, 100% { transform: rotate(-45deg) scale(1.2); }
-            50% { transform: rotate(-45deg) scale(1.4); }
+            50% { transform: rotate(-45deg) scale(1.5); }
         }
         
         /* Arms */
@@ -606,6 +729,24 @@
         
         .robot-head.loving .arm-right {
             animation: reach-out-right 2s ease-in-out infinite;
+        }
+        
+        .robot-head.petted .arm-left {
+            animation: happy-wave-left 0.5s ease-in-out infinite;
+        }
+        
+        .robot-head.petted .arm-right {
+            animation: happy-wave-right 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes happy-wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg); }
+        }
+        
+        @keyframes happy-wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg); }
         }
         
         @keyframes reach-out-left {
@@ -953,6 +1094,28 @@
             50% { transform: scale(1.3) rotate(10deg); }
             100% { transform: scale(1) rotate(0deg); }
         }
+        
+        /* Pet counter */
+        .pet-counter {
+            position: absolute;
+            top: -30px;
+            left: -60px;
+            background: rgba(255, 105, 180, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+        }
+        
+        .pet-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
     </style>
 </head>
 <body>
@@ -972,11 +1135,14 @@
         <!-- Cute Robot -->
         <div class="robot-container">
             <div class="robot" id="robot">
+                <!-- Pet Counter -->
+                <div class="pet-counter" id="petCounter">Pets: 0</div>
+                
                 <!-- Emotion Indicator -->
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 
                 <!-- Speech Bubble -->
-                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+                <div class="speech-bubble" id="speechBubble">Click to pet me! 💕</div>
                 
                 <!-- Speaking Waves -->
                 <div class="speaking-waves" id="speakingWaves">
@@ -1045,6 +1211,7 @@
         }
         
         // Robot elements
+        const robot = document.getElementById('robot');
         const robotHead = document.getElementById('robotHead');
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
@@ -1052,6 +1219,7 @@
         const speechBubble = document.getElementById('speechBubble');
         const speakingWaves = document.getElementById('speakingWaves');
         const emotionIndicator = document.getElementById('emotionIndicator');
+        const petCounter = document.getElementById('petCounter');
         const chatContainer = document.getElementById('chatContainer');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -1066,6 +1234,21 @@
         let currentStreamMessage = null;
         let streamBuffer = '';
         let currentEmotion = 'happy';
+        let petCount = 0;
+        let isBeingPetted = false;
+        let petTimeout;
+        
+        // Petting responses
+        const petResponses = [
+            "💖: Aww, that feels nice!",
+            "🥰: I love it when you pet me!",
+            "💕: You're so sweet!",
+            "✨: *happy robot noises*",
+            "💗: More please!",
+            "🤗: That tickles!",
+            "💝: You're the best!",
+            "🥺: *blushes*"
+        ];
         
         // Emotion mapping from emoji to robot expression
         const emotionMap = {
@@ -1083,7 +1266,7 @@
             
             // Surprised/Shocked
             '😮': 'surprised', '😲': 'surprised', '😯': 'surprised', '😱': 'surprised',
-            '😳': 'surprised', '🤯': 'surprised', '✨': 'surprised',
+            '😳': 'surprised', '🤯': 'surprised',
             
             // Thinking/Confused
             '🤔': 'thinking', '😕': 'thinking', '🧐': 'thinking', '🤨': 'thinking',
@@ -1102,14 +1285,16 @@
         ros.on('connection', () => {
             statusDot.classList.add('connected');
             statusText.textContent = 'Connected! 💖';
-            speechBubble.textContent = 'Connected! 💕';
+            speechBubble.textContent = 'Click to pet me! 💕';
             speechBubble.classList.add('show');
-            setTimeout(() => speechBubble.classList.remove('show'), 2000);
+            setTimeout(() => speechBubble.classList.remove('show'), 3000);
             startIdleAnimations();
         });
         
         ros.on('error', () => {
             statusText.textContent = 'Error 😢';
+            speechBubble.textContent = 'Connection error 😢';
+            speechBubble.classList.add('show');
         });
         
         ros.on('close', () => {
@@ -1131,14 +1316,13 @@
             messageType: 'std_msgs/String'
         });
         
-        // Subscribe to responses with streaming support
+        // Subscribe to responses
         gceResponseTopic.subscribe((msg) => {
             try {
                 const data = JSON.parse(msg.data);
                 console.log("Received:", data.type, data.content);
                 
                 if (data.type === 'start') {
-                    // Detect emotion from first chunk (usually contains emoji)
                     detectAndSetEmotion(data.content);
                     startStreaming(data.content);
                 } else if (data.type === 'delta') {
@@ -1169,9 +1353,99 @@
             }
         });
         
-        // Detect emotion from text and set robot expression
+        // Petting interaction
+        robot.addEventListener('click', handlePet);
+        robot.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handlePet(e);
+        });
+        
+        function handlePet(e) {
+            if (isStreaming) return; // Don't pet while streaming
+            
+            petCount++;
+            isBeingPetted = true;
+            
+            // Clear previous timeout
+            clearTimeout(petTimeout);
+            
+            // Create ripple effect
+            createRipple(e);
+            
+            // Create floating hearts
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => createPetHeart(e, i), i * 100);
+            }
+            
+            // Update pet counter
+            petCounter.textContent = `Pets: ${petCount}`;
+            petCounter.classList.add('show');
+            
+            // Set petted emotion
+            setEmotion('petted', '💖');
+            
+            // Show random response occasionally (every 3 pets)
+            if (petCount % 3 === 0) {
+                const response = petResponses[Math.floor(Math.random() * petResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                
+                // Add to chat
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
+                speechBubble.classList.add('show');
+            }
+            
+            // Add petting class for animation
+            robot.classList.add('petting');
+            
+            // Reset after delay
+            petTimeout = setTimeout(() => {
+                isBeingPetted = false;
+                robot.classList.remove('petting');
+                speechBubble.classList.remove('show');
+                petCounter.classList.remove('show');
+                setEmotion('happy');
+            }, 2000);
+        }
+        
+        function createRipple(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.width = '20px';
+            ripple.style.height = '20px';
+            ripple.style.left = (x - 10) + 'px';
+            ripple.style.top = (y - 10) + 'px';
+            
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
+        
+        function createPetHeart(e, index) {
+            const rect = robot.getBoundingClientRect();
+            const heart = document.createElement('div');
+            heart.className = 'pet-heart';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            
+            // Random position around click or center
+            const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
+            const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
+            
+            heart.style.left = (offsetX + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.top = (offsetY + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.animationDelay = (index * 0.1) + 's';
+            
+            robot.appendChild(heart);
+            setTimeout(() => heart.remove(), 1500);
+        }
+        
+        // Detect emotion from text
         function detectAndSetEmotion(text) {
-            // Extract first emoji from text
             const emojiRegex = /(\p{Emoji})/u;
             const match = text.match(emojiRegex);
             
@@ -1184,17 +1458,19 @@
             }
         }
         
-        // Set robot emotion/expression
+        // Set robot emotion
         function setEmotion(emotion, emoji = null) {
+            if (isBeingPetted && emotion !== 'petted') return; // Don't override petting
+            
             currentEmotion = emotion;
             
             // Remove all emotion classes
-            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving');
+            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving', 'petted');
             leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
             rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
-            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love');
+            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love', 'petted');
             
-            // Add new emotion class to head
+            // Add new emotion
             robotHead.classList.add(emotion);
             
             // Show emotion indicator
@@ -1204,44 +1480,43 @@
                 setTimeout(() => emotionIndicator.classList.remove('show'), 2000);
             }
             
-            // Set facial features based on emotion
+            // Set facial features
             switch(emotion) {
                 case 'happy':
                     leftEye.classList.add('happy');
                     rightEye.classList.add('happy');
                     mouth.classList.add('smile');
                     break;
-                    
                 case 'sad':
                     leftEye.classList.add('sad');
                     rightEye.classList.add('sad');
                     mouth.classList.add('sad');
                     break;
-                    
                 case 'angry':
                     leftEye.classList.add('angry');
                     rightEye.classList.add('angry');
                     mouth.classList.add('angry');
                     break;
-                    
                 case 'surprised':
                     leftEye.classList.add('surprised');
                     rightEye.classList.add('surprised');
                     mouth.classList.add('o-shape');
                     break;
-                    
                 case 'thinking':
                     leftEye.classList.add('look-up');
                     rightEye.classList.add('look-up');
                     mouth.classList.add('line');
                     break;
-                    
                 case 'loving':
                     leftEye.classList.add('love');
                     rightEye.classList.add('love');
                     mouth.classList.add('love');
                     break;
-                    
+                case 'petted':
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('petted');
+                    break;
                 default:
                     leftEye.classList.add('happy');
                     rightEye.classList.add('happy');
@@ -1249,7 +1524,7 @@
             }
         }
         
-        // Start streaming with first chunk
+        // Streaming functions
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -1257,37 +1532,29 @@
             isSpeaking = true;
             streamBuffer = firstChunk;
             
-            // Disable input during streaming
             userInput.disabled = true;
             sendBtn.disabled = true;
             
-            // Show speech bubble
             speechBubble.textContent = 'Thinking... 💭';
             speechBubble.classList.add('show');
             
-            // Create message element
             currentStreamMessage = createMessageElement('grace', '');
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             
-            // Add initial content
             contentDiv.textContent = streamBuffer;
             
-            // Add cursor
             const cursor = document.createElement('span');
             cursor.className = 'streaming-cursor';
             contentDiv.appendChild(cursor);
             
-            // Start speaking animation
             startSpeakingAnimation();
             
-            // Update preview
             if (streamBuffer.length > 15) {
                 const preview = streamBuffer.substring(0, 20);
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
             }
         }
         
-        // Append delta to existing stream
         function appendToStream(delta) {
             if (!isStreaming || !currentStreamMessage) return;
             
@@ -1306,13 +1573,11 @@
                 contentDiv.appendChild(newCursor);
             }
             
-            // Update speech bubble occasionally
             if (streamBuffer.length % 10 === 0 && streamBuffer.length > 15) {
                 const preview = streamBuffer.substring(0, 20);
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
             }
             
-            // Random mouth movements
             if (streamBuffer.length % 5 === 0) {
                 randomizeMouth();
             }
@@ -1329,15 +1594,12 @@
                 if (cursor) cursor.remove();
             }
             
-            // Re-enable input
             userInput.disabled = false;
             sendBtn.disabled = false;
             userInput.focus();
             
-            // Stop speaking animation
             stopSpeakingAnimation();
             
-            // Show done message
             speechBubble.textContent = 'Done! 💕';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
@@ -1382,14 +1644,13 @@
         function stopSpeakingAnimation() {
             speechBubble.classList.remove('show', 'speaking');
             speakingWaves.classList.remove('active');
-            // Restore current emotion mouth
             setEmotion(currentEmotion);
         }
         
         // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted) {
                     const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
                     const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
                     if (randomExp !== 'normal') {
@@ -1404,7 +1665,7 @@
             }, 3000);
             
             blinkInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted) {
                     blink();
                 }
             }, 4000);
@@ -1430,20 +1691,15 @@
             
             if (!val || isStreaming) return;
             
-            // Publish to ROS
             cnsTopic.publish(new ROSLIB.Message({ data: val }));
             
-            // Add to chat
             createMessageElement('user', val);
             
-            // Robot reaction
             setEmotion('surprised', '✨');
             setTimeout(() => setEmotion('happy'), 500);
             
-            // Create floating hearts
             createFloatingHeart();
             
-            // Clear input
             userInput.value = '';
         }
         
@@ -1458,7 +1714,7 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
-        // Enter key support
+        // Event listeners
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
@@ -1466,7 +1722,7 @@
         // Initial state
         setEmotion('happy');
         
-        // Test function
+        // Test functions
         window.testEmotion = function(emotion) {
             const testEmojis = {
                 'happy': '😊',
@@ -1474,7 +1730,8 @@
                 'angry': '😠',
                 'surprised': '😮',
                 'thinking': '🤔',
-                'loving': '❤️'
+                'loving': '❤️',
+                'petted': '💖'
             };
             setEmotion(emotion, testEmojis[emotion]);
         };
@@ -1498,6 +1755,12 @@
                 setTimeout(sendNextChunk, 50);
             }
             sendNextChunk();
+        };
+        
+        window.testPet = function() {
+            // Simulate petting
+            const fakeEvent = { clientX: null, clientY: null };
+            handlePet(fakeEvent);
         };
     </script>
 </body>
