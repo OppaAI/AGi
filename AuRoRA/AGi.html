@@ -194,16 +194,25 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+=======
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
             pointer-events: none;
-            animation: glow-pulse 4s ease-in-out infinite;
+            z-index: 0;
         }
         
-        @keyframes glow-pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        .star {
+            position: absolute;
+            color: #ffd700;
+            font-size: 20px;
+            animation: twinkle 3s infinite;
+            opacity: 0.6;
         }
         
-        /* Main container */
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
         .container {
             position: relative;
             z-index: 1;
@@ -327,6 +336,9 @@
             }
         }
         
+=======
+        /* Robot Head */
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .robot-head {
             width: 140px;
             height: 120px;
@@ -436,6 +448,7 @@
             transform: rotate(15deg);
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
         .robot-head.sad .antenna-left,
         .robot-head.sad .antenna-right {
             background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
@@ -575,6 +588,14 @@
             transform: translateY(-3px);
         }
         
+<<<<<<< HEAD:AuRoRA/AGi.html
+=======
+        .eye.surprised::after {
+            transform: scale(0.7);
+        }
+        
+        /* Cheeks */
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .cheeks {
             display: flex;
             justify-content: space-between;
@@ -588,29 +609,6 @@
             background: rgba(255, 105, 180, 0.4);
             border-radius: 50%;
             opacity: 0.6;
-            transition: all 0.3s ease;
-        }
-        
-        .robot-head.sad .cheek {
-            background: rgba(107, 140, 255, 0.4);
-            opacity: 0.3;
-        }
-        
-        .robot-head.angry .cheek {
-            background: rgba(255, 107, 107, 0.6);
-            opacity: 0.8;
-        }
-        
-        .robot-head.loving .cheek,
-        .robot-head.petted .cheek {
-            background: rgba(255, 20, 147, 0.6);
-            opacity: 1;
-            animation: blush 1s ease-in-out infinite;
-        }
-        
-        @keyframes blush {
-            0%, 100% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 1; }
         }
         
         .mouth {
@@ -701,6 +699,9 @@
             50% { transform: scaleX(1.2); }
         }
         
+=======
+        /* Robot Body */
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .robot-body {
             width: 100px;
             height: 80px;
@@ -713,29 +714,6 @@
                 0 5px 15px rgba(0,0,0,0.1),
                 inset -3px -3px 10px rgba(0,0,0,0.05);
             z-index: 5;
-            transition: all 0.5s ease;
-        }
-        
-        .robot-head.sad ~ .robot-body {
-            background: linear-gradient(145deg, #d4e0ff, #a8c0ff);
-        }
-        
-        .robot-head.angry ~ .robot-body {
-            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
-        }
-        
-        .robot-head.thinking ~ .robot-body {
-            background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
-        }
-        
-        .robot-head.petted ~ .robot-body {
-            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
-            animation: body-wiggle 0.5s ease-in-out infinite;
-        }
-        
-        @keyframes body-wiggle {
-            0%, 100% { transform: rotate(-1deg); }
-            50% { transform: rotate(1deg); }
         }
         
         .heart {
@@ -808,6 +786,9 @@
             50% { transform: rotate(-45deg) scale(1.5); }
         }
         
+=======
+        /* Arms */
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .arm-left, .arm-right {
             width: 30px;
             height: 60px;
@@ -1091,6 +1072,9 @@
             font-size: 1.3em;
 =======
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
+=======
+            color: #ccc;
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         }
         
         .send-btn {
@@ -1358,6 +1342,7 @@
         <div class="robot-container">
             <div class="robot" id="robot">
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="pet-zone" id="petZone"></div>
 =======
                 <!-- Pet Zone (for hand cursor) -->
@@ -1371,6 +1356,8 @@
                 
 <<<<<<< HEAD:AuRoRA/AGi.html
 =======
+=======
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
                 <!-- Speech Bubble -->
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
@@ -1382,7 +1369,13 @@
                     <div class="wave"></div>
                 </div>
                 
+<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="robot-head" id="robotHead">
+=======
+                <!-- Head -->
+                <div class="robot-head">
+                    <!-- Antennas -->
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
                     <div class="antenna-left">
                         <div class="antenna-ball"></div>
                     </div>
@@ -1461,6 +1454,7 @@
     </div>
 
     <script>
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
         // Matrix Rain (same as before)
@@ -1694,6 +1688,21 @@
         }
         createCircuitElements();
         
+=======
+        // Create background stars
+        const starsContainer = document.getElementById('stars');
+        for (let i = 0; i < 20; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.innerHTML = '✦';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.fontSize = (Math.random() * 15 + 10) + 'px';
+            starsContainer.appendChild(star);
+        }
+        
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         // Robot elements
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
@@ -1714,30 +1723,18 @@
         let currentImage = null;
         let imageInputTopic = null;
         
+        // State variables
         let isSpeaking = false;
         let isStreaming = false;
         let idleInterval;
         let blinkInterval;
         let currentStreamMessage = null;
         let streamBuffer = '';
-        let currentEmotion = 'happy';
-        let petCount = 0;
-        let isBeingPetted = false;
-        let petTimeout;
-        let ros = null;
-        let isROSConnected = false;
         
-        const petResponses = [
-            "💖: Aww, that feels nice!",
-            "🥰: I love it when you pet me!",
-            "💕: You're so sweet!",
-            "✨: *happy robot noises*",
-            "💗: More please!",
-            "🤗: That tickles!",
-            "💝: You're the best!",
-            "🥺: *blushes*"
-        ];
+        // ROS Connection
+        const ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
         
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
 =======
@@ -1993,80 +1990,35 @@
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handlePet(e);
+=======
+        ros.on('connection', () => {
+            statusDot.classList.add('connected');
+            statusText.textContent = 'Connected! 💖';
+            speechBubble.textContent = 'Connected! 💕';
+            speechBubble.classList.add('show');
+            setTimeout(() => speechBubble.classList.remove('show'), 2000);
+            startIdleAnimations();
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         });
         
-        function handlePet(e) {
-            if (isStreaming) return;
-            
-            petCount++;
-            isBeingPetted = true;
-            clearTimeout(petTimeout);
-            
-            createRipple(e);
-            
-            for (let i = 0; i < 3; i++) {
-                setTimeout(() => createPetHeart(e, i), i * 100);
-            }
-            
-            petCounter.textContent = `Pets: ${petCount}`;
-            petCounter.classList.add('show');
-            
-            setEmotion('petted', '💖');
-            
-            if (petCount % 3 === 0) {
-                const response = petResponses[Math.floor(Math.random() * petResponses.length)];
-                speechBubble.textContent = response;
-                speechBubble.classList.add('show');
-                createMessageElement('grace', response);
-            } else {
-                speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
-                speechBubble.classList.add('show');
-            }
-            
-            robot.classList.add('petting');
-            
-            petTimeout = setTimeout(() => {
-                isBeingPetted = false;
-                robot.classList.remove('petting');
-                speechBubble.classList.remove('show');
-                petCounter.classList.remove('show');
-                setEmotion('happy');
-            }, 2000);
-        }
+        ros.on('error', () => {
+            statusText.textContent = 'Error 😢';
+        });
         
-        function createRipple(e) {
-            const rect = robot.getBoundingClientRect();
-            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
-            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
-            
-            const ripple = document.createElement('div');
-            ripple.className = 'ripple';
-            ripple.style.width = '20px';
-            ripple.style.height = '20px';
-            ripple.style.left = (x - 10) + 'px';
-            ripple.style.top = (y - 10) + 'px';
-            
-            robot.appendChild(ripple);
-            setTimeout(() => ripple.remove(), 600);
-        }
+        ros.on('close', () => {
+            statusDot.classList.remove('connected');
+            statusText.textContent = 'Disconnected 😢';
+            stopIdleAnimations();
+        });
         
-        function createPetHeart(e, index) {
-            const rect = robot.getBoundingClientRect();
-            const heart = document.createElement('div');
-            heart.className = 'pet-heart';
-            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
-            
-            const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
-            const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
-            
-            heart.style.left = (offsetX + (Math.random() - 0.5) * 40) + 'px';
-            heart.style.top = (offsetY + (Math.random() - 0.5) * 40) + 'px';
-            heart.style.animationDelay = (index * 0.1) + 's';
-            
-            robot.appendChild(heart);
-            setTimeout(() => heart.remove(), 1500);
-        }
+        // ROS Topics
+        const cnsTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: '/cns/neural_input',
+            messageType: 'std_msgs/String'
+        });
         
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
         // Emotion detection
 =======
@@ -2153,6 +2105,51 @@
         // Streaming
 =======
 >>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
+=======
+        const gceResponseTopic = new ROSLIB.Topic({
+            ros: ros,
+            name: '/gce/response',
+            messageType: 'std_msgs/String'
+        });
+        
+        // Subscribe to responses with streaming support - FIXED FOR DELTA STREAMING
+        gceResponseTopic.subscribe((msg) => {
+            try {
+                const data = JSON.parse(msg.data);
+                console.log("Received:", data.type, data.content);
+                
+                if (data.type === 'start') {
+                    // First chunk - start new stream
+                    startStreaming(data.content);
+                } else if (data.type === 'delta') {
+                    // Subsequent chunks - append to existing stream
+                    appendToStream(data.content);
+                } else if (data.type === 'done') {
+                    // Stream complete
+                    finishStreaming();
+                } else if (data.type === 'error') {
+                    // Error occurred
+                    if (currentStreamMessage) {
+                        finishStreaming();
+                    }
+                    createMessageElement('grace', data.content);
+                    speechBubble.textContent = 'Error! 😢';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                console.error("Failed to parse message:", msg.data, e);
+                // Fallback: treat as plain text for backward compatibility
+                if (!isStreaming) {
+                    startStreaming(msg.data);
+                } else {
+                    appendToStream(msg.data);
+                }
+            }
+        });
+        
+        // Start streaming with first chunk
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -2164,6 +2161,7 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
             
+            // Show speech bubble immediately with thinking state
             speechBubble.textContent = 'Thinking... 💭';
             speechBubble.classList.add('show');
             
@@ -2243,6 +2241,7 @@
             // Stop speaking animation
             stopSpeakingAnimation();
             
+            // Show final text in speech bubble briefly
             speechBubble.textContent = 'Done! 💕';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
@@ -2294,6 +2293,7 @@
             setExpression('happy');
         }
         
+        // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
                 if (!isSpeaking && !isStreaming) {
@@ -2362,15 +2362,20 @@
         }
         
 <<<<<<< HEAD:AuRoRA/AGi.html
+<<<<<<< HEAD:AuRoRA/AGi.html
         // Send message (fixed - no duplicate, with image support)
 =======
         // FIXED: Removed duplicate user message printing
 >>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
+=======
+        // Send message
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         function sendSignal() {
             const val = userInput.value.trim();
             
             if (isStreaming) return;
             
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
             // Check if image is attached
@@ -2446,9 +2451,22 @@
             
             setEmotion('surprised', '✨');
             setTimeout(() => setEmotion('happy'), 500);
+=======
+            // Publish to ROS
+            cnsTopic.publish(new ROSLIB.Message({ data: val }));
             
+            // Add to chat
+            createMessageElement('user', val);
+            
+            // Robot reaction
+            setExpression('surprised');
+            setTimeout(() => setExpression('happy'), 500);
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+            
+            // Create floating hearts
             createFloatingHeart();
             
+            // Clear input
             userInput.value = '';
 >>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         }
@@ -2464,10 +2482,12 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
+        // Enter key support
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
+<<<<<<< HEAD:AuRoRA/AGi.html
 <<<<<<< HEAD:AuRoRA/AGi.html
         imagePrompt.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
@@ -2503,6 +2523,31 @@
         window.testPet = function() {
             const fakeEvent = { clientX: null, clientY: null };
             handlePet(fakeEvent);
+=======
+        // Initial expression
+        setExpression('happy');
+        
+        // Test function for debugging (call from console: testStream())
+        window.testStream = function() {
+            // Simulate streaming
+            const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
+            const chunks = testText.split('');
+            
+            let i = 0;
+            function sendNextChunk() {
+                if (i === 0) {
+                    startStreaming(chunks[0]);
+                } else if (i < chunks.length) {
+                    appendToStream(chunks[i]);
+                } else {
+                    finishStreaming();
+                    return;
+                }
+                i++;
+                setTimeout(sendNextChunk, 50);
+            }
+            sendNextChunk();
+>>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         };
     </script>
 </body>
