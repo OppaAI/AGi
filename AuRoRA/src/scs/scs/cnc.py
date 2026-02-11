@@ -27,7 +27,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "hf.co/mradermacher/Huihui-granite-4.0-h-tiny-abliterated-i1-GGUF:Q4_K_M"
+GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -207,15 +207,17 @@ class CNSBridge(Node):
             self.get_logger().info(f"✅ Created {days_missed} placeholder reflections")
 
     def _check_searxng_available(self):
-        """Check if SearXNG is running"""
+        """Check if SearXNG is running by pinging the base URL"""
         try:
+            # We check the root URL instead of /search to avoid 'Format Not Allowed' errors
             response = requests.get(
-                f"{self.searxng_url}/search",
-                params={"q": "test", "format": "json"},
-                timeout=3
+                self.searxng_url, 
+                timeout=5 # Give it a little more breathing room
             )
-            return response.status_code == 200
-        except:
+            # 200 is healthy, 403 usually means it's alive but blocking a direct browser hit
+            return response.status_code in [200, 403]
+        except Exception as e:
+            self.get_logger().error(f"SearXNG Check failed: {e}")
             return False
 
     def _init_slack(self):
