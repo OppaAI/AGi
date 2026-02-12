@@ -8,7 +8,7 @@ for accessing the chat UI through a web browser.
 Usage:
     python3 flask_server.py
 
-Then open: http://localhost:5000 or http://<your-ip>:5000
+Then open: http://localhost:9413 or http://<your-ip>:9413
 """
 
 from flask import Flask, send_file, send_from_directory
@@ -78,11 +78,11 @@ if __name__ == '__main__':
     print("-" * 60)
     print("📡 Server Configuration:")
     print(f"   Host: 0.0.0.0 (accessible from any device on your network)")
-    print(f"   Port: 5000")
+    print(f"   Port: 9413")
     print("-" * 60)
     print("🌐 Access Grace at:")
-    print(f"   Local:   http://localhost:5000")
-    print(f"   Network: http://<your-ip>:5000")
+    print(f"   Local:   http://localhost:9413")
+    print(f"   Network: http://<your-ip>:9413")
     print()
     print("💡 To find your IP address:")
     print("   Linux/Mac: ifconfig | grep 'inet '")
