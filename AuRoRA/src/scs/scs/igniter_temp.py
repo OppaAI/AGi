@@ -33,8 +33,8 @@ class Igniter(Node):
     """
     This is the ROS 2 Wrapper. It acts as a bridge between ROS and your TALLEEE system.
     """
-    def init(self):
-        super().init('igniter')
+    def __init__(self):
+        super().__init__('igniter')
         self.eee = get_logger("SCS.IGNITER")
         
     def shutdown(self):
