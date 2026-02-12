@@ -24,3 +24,6 @@ Thumbs.db
 
 # ROS 2 Catkin build system
 CATKIN_IGNORE
+
+# Secret files
+.env

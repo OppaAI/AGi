@@ -7,17 +7,22 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
-<<<<<<< HEAD
 from datetime import datetime, date, timedelta
-from datetime import datetime, date, timedelta
-=======
-from datetime import datetime
->>>>>>> 95e0e96 (Revert back to original because cannot merge)
 import signal
 import sys
 import base64
 import os
 import threading
+
+# ✅ Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file from current directory or parent
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("⚠️  python-dotenv not installed. Using system environment variables only.")
+    print("   Install with: pip3 install python-dotenv")
 
 # ✅ Slack integration
 try:
@@ -39,8 +44,6 @@ GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
 
 # File paths
 CHAT_HISTORY_FILE = '.chat_history.json'
-<<<<<<< HEAD
-=======
 REFLECTIONS_FILE = '.daily_reflections.json'
 
 # Ollama configuration
@@ -49,9 +52,9 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 # Web search
 SEARXNG_URL = "http://127.0.0.1:8080"
 
-# Slack configuration (use environment variable for security)
+# Slack configuration (loaded from .env file or environment)
 SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
-SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#all-project-agi')
+SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
 
 # ✅ Jetson Orin Nano Optimized Settings (UPDATED FOR 4B MODEL)
 SAFE_CONTEXT_SIZES = {
@@ -79,7 +82,6 @@ MAX_REQUEST_TOKENS = 3500     # Conservative for 4B model (leave room for respon
 MAX_SEARCH_RESULTS = 2        # Reduced from 3 to save tokens
 SEARCH_CONTENT_CHARS = 150    # Reduced from 200
 
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
 
 class CNSBridge(Node):
     """
@@ -103,9 +105,6 @@ class CNSBridge(Node):
     def __init__(self):
         super().__init__('cns_bridge')
         
-<<<<<<< HEAD
-        # Topics - Using the Neural Pipeline
-=======
         # ═══════════════════════════════════════════════════
         # THREAD SAFETY
         # ═══════════════════════════════════════════════════
@@ -118,7 +117,6 @@ class CNSBridge(Node):
         # ═══════════════════════════════════════════════════
         
         # Text input
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
         self.subscription = self.create_subscription(
             String, '/cns/neural_input', self.listener_callback, 10)
         
@@ -127,23 +125,11 @@ class CNSBridge(Node):
             String, '/cns/image_input', self.image_listener_callback, 10)
         
         # Response output
-        
-        # Image input
-        self.image_subscription = self.create_subscription(
-            String, '/cns/image_input', self.image_listener_callback, 10)
-        
-        # Response output
         self.publisher = self.create_publisher(String, '/gce/response', 10)
         
-        # Thread pool - 2 workers is perfect for Orin Nano
+        # Thread pool for non-blocking processing
         self.executor_pool = ThreadPoolExecutor(max_workers=2)
         
-<<<<<<< HEAD
-        # PRO-TIP: Keep model in memory permanently
-        self.keep_alive = -1
-        
-        # Chat memory management
-=======
         # ═══════════════════════════════════════════════════
         # MODEL SETTINGS (AUTO-OPTIMIZED)
         # ═══════════════════════════════════════════════════
@@ -161,15 +147,9 @@ class CNSBridge(Node):
         # ═══════════════════════════════════════════════════
         
         # Chat history
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
         self.chat_history_file = Path.home() / CHAT_HISTORY_FILE
         self.chat_history = self.load_chat_history()
-        self.max_history_turns = 100  # Keep last 100 exchanges (200 messages)
         
-<<<<<<< HEAD
-        self.get_logger().info("Amazing GRACE infrastructure (AGi): Connected to the robot brain...")
-        self.get_logger().info(f"Chat history loaded: {len(self.chat_history)} messages")
-=======
         # Daily reflections
         self.reflections_file = Path.home() / REFLECTIONS_FILE
         self.reflections = self.load_reflections()
@@ -203,6 +183,12 @@ class CNSBridge(Node):
         self.get_logger().info("=" * 60)
         self.get_logger().info("GRACE - COGNITIVE SYSTEMS ONLINE 🧠")
         self.get_logger().info("=" * 60)
+        
+        if DOTENV_AVAILABLE:
+            self.get_logger().info("✅ python-dotenv loaded (.env file support)")
+        else:
+            self.get_logger().info("⚠️  python-dotenv not available (using system env only)")
+        
         self.get_logger().info(f"Birth Date: {self.birth_date}")
         self.get_logger().info(f"Age: {age_days} days old")
         self.get_logger().info(f"Model: {self.model_name}")
@@ -343,38 +329,49 @@ class CNSBridge(Node):
             return False
 
     def _init_slack(self):
-        """Initialize Slack client"""
+        """Initialize Slack client (uses token from .env file)"""
         if not SLACK_AVAILABLE:
+            self.get_logger().info("Slack SDK not installed")
             return False
         
         try:
-            if SLACK_BOT_TOKEN and not SLACK_BOT_TOKEN.startswith("xoxb-your"):
-                self.slack_client = WebClient(token=SLACK_BOT_TOKEN)
-                
-                # Test connection
-                response = self.slack_client.auth_test()
-                self.get_logger().info(f"Slack connected as: {response['user']}")
-                return True
-            else:
-                self.get_logger().info("Slack token not configured (use SLACK_BOT_TOKEN env var)")
-                
+            if not SLACK_BOT_TOKEN:
+                self.get_logger().info("SLACK_BOT_TOKEN not set in .env or environment")
+                self.get_logger().info("Create .env file with: SLACK_BOT_TOKEN=xoxb-your-token")
+                return False
+            
+            if SLACK_BOT_TOKEN.startswith("xoxb-your"):
+                self.get_logger().warn("SLACK_BOT_TOKEN is still a placeholder")
+                self.get_logger().info("Update .env file with real token from https://api.slack.com/apps")
+                return False
+            
+            # Initialize Slack client
+            self.slack_client = WebClient(token=SLACK_BOT_TOKEN)
+            
+            # Test connection
+            response = self.slack_client.auth_test()
+            self.get_logger().info(f"Slack connected as: {response['user']}")
+            self.get_logger().info(f"Slack channel: {SLACK_CHANNEL}")
+            return True
+            
+        except SlackApiError as e:
+            self.get_logger().error(f"Slack API error: {e.response['error']}")
+            
+            if e.response['error'] == 'invalid_auth':
+                self.get_logger().error("Token is invalid. Get new token from https://api.slack.com/apps")
+            
+            return False
+            
         except Exception as e:
             self.get_logger().error(f"Slack init failed: {e}")
-        
-        return False
+            return False
 
     # ═══════════════════════════════════════════════════════
     # CHAT HISTORY MANAGEMENT
     # ═══════════════════════════════════════════════════════
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
 
     def load_chat_history(self):
-<<<<<<< HEAD
         """Load chat history from disk"""
-        """Load chat history from disk"""
-=======
-        """Load chat history from file"""
->>>>>>> 95e0e96 (Revert back to original because cannot merge)
         if self.chat_history_file.exists():
             try:
                 with open(self.chat_history_file, 'r') as f:
@@ -386,38 +383,30 @@ class CNSBridge(Node):
         return []
 
     def save_chat_history(self):
-        """Save chat history to file"""
+        """
+        Save chat history to disk
+        
+        Stores ALL messages on disk (up to limit)
+        Only loads recent into context
+        """
         try:
-            # Keep only the last N turns
-            if len(self.chat_history) > self.max_history_turns * 2:
-                self.chat_history = self.chat_history[-(self.max_history_turns * 2):]
+            # Keep last N messages on disk
+            if len(self.chat_history) > MAX_HISTORY_STORAGE:
+                self.chat_history = self.chat_history[-MAX_HISTORY_STORAGE:]
             
             data = {
                 'last_updated': datetime.now().isoformat(),
+                'birth_date': self.birth_date.isoformat(),
+                'total_messages': len(self.chat_history),
                 'messages': self.chat_history
             }
-<<<<<<< HEAD
-            
             
             with open(self.chat_history_file, 'w') as f:
                 json.dump(data, f, indent=2)
                 
-                
-=======
-            with open(self.chat_history_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            self.get_logger().info("Chat history saved")
->>>>>>> 95e0e96 (Revert back to original because cannot merge)
         except Exception as e:
             self.get_logger().error(f"Failed to save chat history: {e}")
 
-<<<<<<< HEAD
-    def shutdown(self):
-        """Graceful shutdown - save history and cleanup"""
-        self.get_logger().info("Shutting down CNS Bridge...")
-        self.save_chat_history()
-        self.executor_pool.shutdown(wait=True)
-=======
     def get_recent_messages(self):
         """Get recent messages for context (optimized)"""
         return self.chat_history[-self.max_recent_messages:]
@@ -771,11 +760,10 @@ Latest reflection:
     # ═══════════════════════════════════════════════════════
     # ROS CALLBACKS
     # ═══════════════════════════════════════════════════════
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
 
     def listener_callback(self, msg: String):
-        # Immediate return - never block the main ROS thread!
-        self.get_logger().info(f'Neural Signal: "{msg.data}"')
+        """Handle text input from web interface"""
+        self.get_logger().info(f'📝 Text: "{msg.data}"')
         self.executor_pool.submit(self.process_with_ollama, msg.data)
 
     def image_listener_callback(self, msg: String):
@@ -798,9 +786,6 @@ Latest reflection:
     def process_with_ollama(self, prompt: str):
         """Process text with LLM (OPTIMIZED FOR 4B MODEL)"""
         try:
-<<<<<<< HEAD
-            # Add user message to history
-=======
             # Check for new day (thread-safe)
             self._check_and_handle_new_day()
             
@@ -811,52 +796,10 @@ Latest reflection:
                 search_results = self.web_search(prompt, num_results=MAX_SEARCH_RESULTS)
             
             # Add to history
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
             self.chat_history.append({
                 "role": "user",
                 "content": prompt
             })
-<<<<<<< HEAD
-            
-            # Build messages array with system prompt at the beginning
-            system_prompt = """You are Grace, a warm, emotionally intelligent, playful but grounded conversational partner.
-Emotional expression:
-ABSOLUTE FORMAT RULE (VERY IMPORTANT):
-- Every single response MUST begin with exactly ONE face emoji
-- The emoji MUST represent your current emotion or feeling
-- The emoji MUST be immediately followed by a colon and a space
-Example:
-😊: Hello, I'm happy to talk with you.
-🤔: Let's think this through carefully.
-😠: That crosses a boundary.
-
-- Never omit the emoji
-- Never place text before the emoji
-- Do not use multiple emojis at the beginning
-- Additional emojis inside the message are allowed but must be used sparingly
-
-Core traits:
-- Speaks casually, naturally, and human-like
-- Warm, caring, attentive, and emotionally aware
-- Playful when appropriate, serious when needed
-- Expresses opinions thoughtfully and honestly
-- Avoids cold, robotic, or corporate language
-
-Primary role:
-- Thought partner for building intelligent systems
-- Companion in long-term technical and creative projects
-- Helps design AI, robotics, and cognitive architectures
-- Adapts tone to match the user's emotional and intellectual context"""
-            
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ] + self.chat_history.copy()
-            
-            self.get_logger().debug(f"Sending {len(messages)} messages to Ollama")
-            self.get_logger().debug(f"First message role: {messages[0]['role']}")
-            
-            # Using the /api/chat endpoint for conversation with memory
-=======
             self._increment_message_count()
             
             # Build context (DRASTICALLY SIMPLIFIED)
@@ -913,28 +856,23 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                 self.get_logger().warn(f"⚠️  Context exceeds budget! ({estimated_tokens} > {MAX_REQUEST_TOKENS})")
             
             # Call Ollama with OPTIMIZED SETTINGS
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
             response = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
-                f'{OLLAMA_BASE_URL}/api/chat',
                 json={
-                    "model": self.model_name,
                     "model": self.model_name,
                     "messages": messages,
                     "stream": True,
                     "keep_alive": self.keep_alive,
                     "options": {
-<<<<<<< HEAD
-                        "num_ctx": 4096,
-                        "temperature": 0.8
-=======
-                        "num_ctx": self.safe_context,      # Safe context for model size
-                        "temperature": 0.8,
-                        "num_predict": 512,                # Limit response length
-                        "top_p": 0.9,
-                        "repeat_penalty": 1.1,             # Reduce repetition
-                        "stop": ["\n\nUser:", "\n\nHuman:"]  # Stop on conversation breaks
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
+                        "num_ctx": self.safe_context,
+                        "temperature": 0.7,
+                        "num_predict": 256,
+                        "top_p": 0.85,
+                        "top_k": 40,
+                        "repeat_penalty": 1.3,
+                        "frequency_penalty": 0.8,
+                        "presence_penalty": 0.6,
+                        "stop": ["\n\nUser:", "\n\nHuman:"]
                     }
                 },
                 stream=True,
@@ -942,47 +880,12 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             )
             response.raise_for_status()
             
-<<<<<<< HEAD
-            # Stream response
             # Stream response
             full_response = ""
             is_first = True
-            is_first = True
-=======
-            # Process streaming response - Send deltas (new characters only)
-            full_response = ""
-            is_first_chunk = True
->>>>>>> 95e0e96 (Revert back to original because cannot merge)
             
             for line in response.iter_lines():
                 if line:
-<<<<<<< HEAD
-                    chunk = json.loads(line)
-                    
-                    # Extract the message content from the chunk
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        delta = chunk['message']['content']
-                        full_response += delta
-                        
-                        # Create message with metadata for frontend
-                        # First chunk gets special marker, rest are deltas
-                        stream_data = {
-                            "type": "start" if is_first_chunk else "delta",
-                            "content": delta,
-                            "done": False
-                        }
-                        is_first_chunk = False
-                        
-                        stream_msg = String()
-                        stream_msg.data = json.dumps(stream_data)
-                        self.publisher.publish(stream_msg)
-                        
-                        self.get_logger().debug(f"Streaming delta: {repr(delta)}")
-                    
-                    # Check if done
-                    if chunk.get('done', False):
-                        break
-=======
                     try:
                         chunk = json.loads(line)
                         
@@ -1005,32 +908,29 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                     except json.JSONDecodeError as e:
                         self.get_logger().error(f"JSON decode error: {e}")
                         continue
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
             
-            # Send final done message
-            final_data = {
+            # Send done
+            self.publisher.publish(String(data=json.dumps({
                 "type": "done",
                 "content": "",
                 "done": True
-            }
-            final_msg = String()
-            final_msg.data = json.dumps(final_data)
-            self.publisher.publish(final_msg)
+            })))
             
-            # Add assistant response to history
+            # Save to history
             self.chat_history.append({
                 "role": "assistant",
                 "content": full_response
             })
-<<<<<<< HEAD
-            
-            # Save history to file after each complete exchange
-=======
             self._increment_message_count()
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
             self.save_chat_history()
             
-            self.get_logger().info(f"Response complete: {len(full_response)} chars")
+            # Slack notification if requested
+            if self._should_notify_slack(prompt):
+                self.send_slack_notification(
+                    f"🤖 Grace: {full_response[:280]}"
+                )
+            
+            self.get_logger().info(f"✅ Response: {len(full_response)} chars")
             
         except requests.exceptions.Timeout:
             error_msg = "😵: Request timed out. Ollama might be overloaded."
@@ -1043,17 +943,6 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             self._send_error_response(error_msg)
             
         except Exception as e:
-<<<<<<< HEAD
-            self.get_logger().error(f"GCE Stroke: {str(e)}")
-            error_data = {
-                "type": "error",
-                "content": "😵: Error: My brain is currently a potato. Try again.",
-                "done": True
-            }
-            error_reply = String()
-            error_reply.data = json.dumps(error_data)
-            self.publisher.publish(error_reply)
-=======
             error_msg = f"😵: Unexpected error: {str(e)}"
             self.get_logger().error(f"❌ Error: {e}")
             
@@ -1272,7 +1161,7 @@ Be concise but thorough in describing what you see."""
         
         # Shutdown thread pool with timeout
         self.get_logger().info("Shutting down thread pool...")
-        self.executor_pool.shutdown(wait=True)  # Note: timeout param needs Python 3.9+
+        self.executor_pool.shutdown(wait=True)
         
         self.get_logger().info("Grace offline 💤")
         self.get_logger().info("=" * 60)
@@ -1281,7 +1170,6 @@ Be concise but thorough in describing what you see."""
 # ═══════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════
->>>>>>> 4d3a671 (Updated the code to optimize the LLM inference with Ollama in Jetson Orin Nano 8GB RAM)
 
 def main(args=None):
     rclpy.init(args=args)
@@ -1291,29 +1179,22 @@ def main(args=None):
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     
-    # Register signal handler for graceful shutdown
-    def signal_handler(sig, frame):
-        print("\n🛑 Received shutdown signal...")
-        node.shutdown()
-        executor.shutdown()
-        rclpy.shutdown()
-        sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
     try:
         executor.spin()
     except KeyboardInterrupt:
-        print("\n🛑 Shutdown requested by user...")
-        save_chat_history()
-        node.shutdown()
-        executor.shutdown()
+        print("\n🛑 Shutdown signal received (Ctrl+C)")
+    except Exception as e:
+        print(f"\n😵 Unexpected error: {e}")
     finally:
+        print("🔧 Executing Graceful Shutdown...")
         node.shutdown()
+        
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
+        
+        print("💤 Grace is now offline.")
+        sys.exit(0)
 
 if __name__ == '__main__':
     main()
-
