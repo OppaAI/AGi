@@ -17,7 +17,7 @@ import threading
 # ✅ Load environment variables from .env file
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # Load .env file from current directory or parent
+    load_dotenv(dotenv_path=Path.home() / "AGi/.env")  # Load .env file from home directory
     DOTENV_AVAILABLE = True
 except ImportError:
     DOTENV_AVAILABLE = False
@@ -39,7 +39,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
+GCE = "ministral-3:3b-instruct-2512-q4_K_M"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -809,14 +809,8 @@ Latest reflection:
             # MINIMAL SYSTEM PROMPT (800 tokens → 150 tokens)
             system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). Today: {today_date}.
 
-Format: Start EVERY response with emoji+colon (e.g., 😊: or 🤔:)
-
+Format: Start responses with emoji+colon a(e.g., 😊: or 🤔:)
 Traits: Warm, thoughtful technical companion helping with AI/robotics projects.
-
-CRITICAL DATE AWARENESS:
-- Your training ended 2023. For ANY post-2023 facts, use web search results provided
-- Do NOT guess current information from old training data
-
 Keep responses concise (2-4 sentences). Never repeat previous messages."""
 
             messages = [{"role": "system", "content": system_prompt}]
