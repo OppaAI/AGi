@@ -2191,14 +2191,14 @@
                 createMessageElement('user', val);
                 
                 if (isROSConnected && window.cnsTopic) {
-                    // Send with web search flag
-                    const messageData = {
-                        text: val,
-                        web_search: webSearchEnabled
-                    };
+                    // FIXED: Send plain text only
+                    // Python auto-detects web search via should_search()
                     window.cnsTopic.publish(new ROSLIB.Message({ 
-                        data: JSON.stringify(messageData) 
+                        data: val  // Plain text, not JSON
                     }));
+                    
+                    console.log('💬 Sent:', val);
+                    console.log('🌐 Web search:', webSearchEnabled ? 'enabled (visual only)' : 'disabled');
                 } else {
                     // Offline mode
                     setTimeout(() => {
@@ -2262,3 +2262,4 @@
     </script>
 </body>
 </html>
+
