@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>✨ Chat with Grace ✨</title>
-    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js "></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400 ;600;700;800&display=swap');
         
         * {
             margin: 0;
@@ -1106,6 +1106,40 @@
             font-size: 1.3em;
         }
         
+        /* GLOBE BUTTON FOR WEB SEARCH */
+        .globe-btn {
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1.3em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 55px;
+        }
+        
+        .globe-btn:hover {
+            transform: scale(1.1);
+            border-color: #ff69b4;
+        }
+        
+        .globe-btn.active {
+            color: #00ff88;
+            text-shadow: 0 0 15px #00ff88, 0 0 30px #00ff88;
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            animation: globe-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes globe-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
+        }
+        
         .send-btn {
             padding: 15px 30px;
             background: linear-gradient(145deg, #ff69b4, #ff1493);
@@ -1351,6 +1385,7 @@
             transform: scale(1);
         }
     </style>
+<base target="_blank">
 </head>
 <body>
     <div class="cyber-bg" id="cyberBg">
@@ -1418,7 +1453,7 @@
             <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
         </div>
         
-        <!-- INPUT AREA WITH SINGLE + BUTTON -->
+        <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
         <div class="input-area">
             <!-- SINGLE + BUTTON WITH DROPDOWN -->
             <div style="position: relative;">
@@ -1438,6 +1473,11 @@
                     </label>
                 </div>
             </div>
+            
+            <!-- GLOBE BUTTON FOR WEB SEARCH -->
+            <button class="globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">
+                🌐
+            </button>
             
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
             
@@ -1579,6 +1619,7 @@
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const plusMenu = document.getElementById('plusMenu');
+        const globeBtn = document.getElementById('globeBtn');
         
         // Image elements
         const imagePreviewArea = document.getElementById('imagePreviewArea');
@@ -1600,6 +1641,7 @@
         let petTimeout;
         let ros = null;
         let isROSConnected = false;
+        let webSearchEnabled = false;
         
         const petResponses = [
             "💖: Aww, that feels nice!",
@@ -1630,6 +1672,27 @@
         // Plus menu toggle
         function togglePlusMenu() {
             plusMenu.classList.toggle('show');
+        }
+        
+        // Globe toggle for web search
+        function toggleWebSearch() {
+            webSearchEnabled = !webSearchEnabled;
+            
+            if (webSearchEnabled) {
+                globeBtn.classList.add('active');
+                speechBubble.textContent = '🌐 Web search enabled!';
+                setEmotion('thinking', '🌐');
+            } else {
+                globeBtn.classList.remove('active');
+                speechBubble.textContent = 'Web search disabled';
+                setEmotion('happy', '💕');
+            }
+            
+            speechBubble.classList.add('show');
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+                if (!isBeingPetted) setEmotion('happy');
+            }, 2000);
         }
         
         // Close menu when clicking outside
@@ -2084,7 +2147,7 @@
             }, 200);
         }
         
-        // Send message (fixed - no duplicate, with image support)
+        // Send message (with web search support)
         function sendSignal() {
             const val = userInput.value.trim();
             
@@ -2101,7 +2164,8 @@
                     // Send to CNS Bridge
                     const imageData = {
                         prompt: promptText,
-                        image: currentImage
+                        image: currentImage,
+                        web_search: webSearchEnabled
                     };
                     
                     window.imageInputTopic.publish(new ROSLIB.Message({ 
@@ -2127,7 +2191,14 @@
                 createMessageElement('user', val);
                 
                 if (isROSConnected && window.cnsTopic) {
-                    window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
+                    // Send with web search flag
+                    const messageData = {
+                        text: val,
+                        web_search: webSearchEnabled
+                    };
+                    window.cnsTopic.publish(new ROSLIB.Message({ 
+                        data: JSON.stringify(messageData) 
+                    }));
                 } else {
                     // Offline mode
                     setTimeout(() => {
@@ -2186,6 +2257,8 @@
             const fakeEvent = { clientX: null, clientY: null };
             handlePet(fakeEvent);
         };
+        
+        window.toggleWebSearch = toggleWebSearch;
     </script>
 </body>
 </html>
