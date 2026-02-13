@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>✨ Chat with Grace ✨</title>
-    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js "></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400 ;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
         
         * {
             margin: 0;
@@ -244,6 +244,72 @@
                 transform: scale(4);
                 opacity: 0;
             }
+        }
+        
+        /* NEGATIVE REWARD BUTTON (RED X) */
+        .negative-reward-btn {
+            position: absolute;
+            top: 50%;
+            right: -70px;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid rgba(255, 107, 107, 0.5);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            color: #ff6b6b;
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.2);
+        }
+        
+        .negative-reward-btn:hover {
+            background: rgba(255, 107, 107, 0.4);
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+            border-color: #ff6b6b;
+        }
+        
+        .negative-reward-btn:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+        
+        .negative-reward-btn.active {
+            animation: negative-pulse 0.5s ease;
+        }
+        
+        @keyframes negative-pulse {
+            0%, 100% { transform: translateY(-50%) scale(1); }
+            50% { transform: translateY(-50%) scale(1.2); box-shadow: 0 0 30px rgba(255, 107, 107, 0.6); }
+        }
+        
+        .negative-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ff6b6b;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 0.7em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+        }
+        
+        .negative-count.show {
+            opacity: 1;
+            transform: scale(1);
         }
         
         .robot-head {
@@ -1007,7 +1073,30 @@
         .input-area {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+        
+        /* RL FEEDBACK TEXT */
+        .rl-feedback-text {
+            text-align: center;
+            color: rgba(0, 255, 136, 0.7);
+            font-size: 0.85em;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .rl-feedback-text .thumb-up {
+            color: #ff69b4;
+        }
+        
+        .rl-feedback-text .thumb-down {
+            color: #ff6b6b;
         }
         
         #userInput {
@@ -1384,6 +1473,54 @@
             opacity: 1;
             transform: scale(1);
         }
+        
+        /* RL REWARD VISUAL FEEDBACK */
+        .reward-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            text-shadow: 0 0 30px currentColor;
+        }
+        
+        .reward-feedback.show {
+            animation: reward-pop 1s ease-out forwards;
+        }
+        
+        .reward-feedback.positive {
+            color: #ff69b4;
+        }
+        
+        .reward-feedback.negative {
+            color: #ff6b6b;
+        }
+        
+        @keyframes reward-pop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3) rotate(10deg);
+            }
+            40% {
+                transform: translate(-50%, -50%) scale(1.1) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8) translateY(-100px);
+            }
+        }
     </style>
 <base target="_blank">
 </head>
@@ -1393,6 +1530,9 @@
         <canvas id="matrixCanvas"></canvas>
         <div class="pink-glow"></div>
     </div>
+    
+    <!-- RL Reward Feedback Overlay -->
+    <div class="reward-feedback" id="rewardFeedback"></div>
     
     <div class="container">
         <h1>✨ Chat with Grace ✨</h1>
@@ -1444,6 +1584,12 @@
                 <div class="arm-left"></div>
                 <div class="arm-right"></div>
             </div>
+            
+            <!-- NEGATIVE REWARD BUTTON -->
+            <button class="negative-reward-btn" id="negativeBtn" onclick="handleNegativeReward()" title="Bad response">
+                ✕
+                <span class="negative-count" id="negativeCount">0</span>
+            </button>
         </div>
         
         <!-- IMAGE PREVIEW AREA -->
@@ -1482,6 +1628,13 @@
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
             
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+        </div>
+        
+        <!-- RL FEEDBACK INSTRUCTION TEXT -->
+        <div class="rl-feedback-text">
+            <span class="thumb-up">👍</span> Pet robot for good response
+            <span style="color: rgba(0,255,136,0.4);">|</span>
+            <span class="thumb-down">👎</span> Press ✕ for bad response
         </div>
         
         <div class="chat-container" id="chatContainer"></div>
@@ -1620,6 +1773,9 @@
         const sendBtn = document.getElementById('sendBtn');
         const plusMenu = document.getElementById('plusMenu');
         const globeBtn = document.getElementById('globeBtn');
+        const negativeBtn = document.getElementById('negativeBtn');
+        const negativeCount = document.getElementById('negativeCount');
+        const rewardFeedback = document.getElementById('rewardFeedback');
         
         // Image elements
         const imagePreviewArea = document.getElementById('imagePreviewArea');
@@ -1642,6 +1798,12 @@
         let ros = null;
         let isROSConnected = false;
         let webSearchEnabled = false;
+        
+        // RL Reward System
+        let latestResponseId = null;
+        let positiveRewardCount = 0;
+        let negativeRewardCount = 0;
+        let rlRewardTopic = null;
         
         const petResponses = [
             "💖: Aww, that feels nice!",
@@ -1693,6 +1855,83 @@
                 speechBubble.classList.remove('show');
                 if (!isBeingPetted) setEmotion('happy');
             }, 2000);
+        }
+        
+        // RL Reward Functions
+        function generateResponseId() {
+            return 'resp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function showRewardFeedback(type, intensity) {
+            rewardFeedback.className = 'reward-feedback ' + (type > 0 ? 'positive' : 'negative');
+            rewardFeedback.textContent = type > 0 ? '👍 +' + intensity : '👎 ' + intensity;
+            rewardFeedback.classList.add('show');
+            
+            setTimeout(() => {
+                rewardFeedback.classList.remove('show');
+            }, 1000);
+        }
+        
+        function sendRLReward(rewardType, intensity, responseId) {
+            if (!isROSConnected || !rlRewardTopic) {
+                console.log('RL Reward (offline):', { type: rewardType, intensity, responseId });
+                return;
+            }
+            
+            const rewardData = {
+                response_id: responseId,
+                reward_type: rewardType, // 'positive' or 'negative'
+                intensity: intensity,    // 1, 2, 3... based on click count
+                timestamp: Date.now()
+            };
+            
+            rlRewardTopic.publish(new ROSLIB.Message({
+                data: JSON.stringify(rewardData)
+            }));
+            
+            console.log('RL Reward sent:', rewardData);
+        }
+        
+        function handleNegativeReward() {
+            if (!latestResponseId) {
+                speechBubble.textContent = 'No response to rate yet! 💭';
+                speechBubble.classList.add('show');
+                setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                return;
+            }
+            
+            negativeRewardCount++;
+            const intensity = Math.min(negativeRewardCount, 5); // Cap at 5
+            
+            // Visual feedback
+            showRewardFeedback(-1, intensity);
+            
+            // Update counter badge
+            negativeCount.textContent = negativeRewardCount;
+            negativeCount.classList.add('show');
+            
+            // Button animation
+            negativeBtn.classList.add('active');
+            setTimeout(() => negativeBtn.classList.remove('active'), 500);
+            
+            // Send to ROS
+            sendRLReward('negative', intensity, latestResponseId);
+            
+            // Grace reaction
+            setEmotion('sad', '😢');
+            speechBubble.textContent = ['😢', '😭', '💔', '😞'][Math.min(intensity - 1, 3)] + ' I\'ll try better!';
+            speechBubble.classList.add('show');
+            
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+                if (!isBeingPetted) setEmotion('happy');
+            }, 2000);
+            
+            // Reset after delay for next response
+            setTimeout(() => {
+                negativeRewardCount = 0;
+                negativeCount.classList.remove('show');
+            }, 5000);
         }
         
         // Close menu when clicking outside
@@ -1788,6 +2027,13 @@
                     messageType: 'std_msgs/String'
                 });
                 
+                // RL Reward topic
+                rlRewardTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/rl_reward',
+                    messageType: 'std_msgs/String'
+                });
+                
                 // Response topic
                 const gceResponseTopic = new ROSLIB.Topic({
                     ros: ros,
@@ -1805,6 +2051,12 @@
                             appendToStream(data.content);
                         } else if (data.type === 'done') {
                             finishStreaming();
+                            // Generate new response ID for RL tracking
+                            latestResponseId = generateResponseId();
+                            positiveRewardCount = 0;
+                            negativeRewardCount = 0;
+                            negativeCount.classList.remove('show');
+                            console.log('New response ID:', latestResponseId);
                         } else if (data.type === 'error') {
                             if (currentStreamMessage) finishStreaming();
                             setEmotion('sad');
@@ -1822,6 +2074,7 @@
                 
                 window.cnsTopic = cnsTopic;
                 window.imageInputTopic = imageInputTopic;
+                window.rlRewardTopic = rlRewardTopic;
             } catch (e) {
                 console.log('ROS not available, running in offline mode');
                 statusText.textContent = 'Offline Mode';
@@ -1831,7 +2084,7 @@
         
         initROS();
         
-        // Petting
+        // Petting (now with RL reward)
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
@@ -1840,6 +2093,14 @@
         
         function handlePet(e) {
             if (isStreaming) return;
+            
+            // RL Reward logic
+            if (latestResponseId) {
+                positiveRewardCount++;
+                const intensity = Math.min(positiveRewardCount, 5);
+                showRewardFeedback(1, intensity);
+                sendRLReward('positive', intensity, latestResponseId);
+            }
             
             petCount++;
             isBeingPetted = true;
@@ -2153,6 +2414,12 @@
             
             if (isStreaming) return;
             
+            // Reset RL tracking for new user message
+            latestResponseId = null;
+            positiveRewardCount = 0;
+            negativeRewardCount = 0;
+            negativeCount.classList.remove('show');
+            
             // Check if image is attached
             if (currentImage) {
                 const promptText = imagePrompt.value.trim() || "What's in this image?";
@@ -2259,7 +2526,7 @@
         };
         
         window.toggleWebSearch = toggleWebSearch;
+        window.handleNegativeReward = handleNegativeReward;
     </script>
 </body>
 </html>
-
