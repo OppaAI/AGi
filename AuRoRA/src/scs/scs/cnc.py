@@ -34,6 +34,16 @@ except ImportError:
     print("⚠️  slack-sdk not installed. Slack features disabled.")
     print("   Install with: pip3 install slack-sdk")
 
+# ✅ Slack Bolt for event listening (NEW - TWO-WAY COMMUNICATION)
+try:
+    from slack_bolt import App
+    from slack_bolt.adapter.socket_mode import SocketModeHandler
+    SLACK_BOLT_AVAILABLE = True
+except ImportError:
+    SLACK_BOLT_AVAILABLE = False
+    print("⚠️  slack-bolt not installed. Two-way Slack disabled.")
+    print("   Install with: pip3 install slack-bolt")
+
 # ═══════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════
@@ -54,6 +64,7 @@ SEARXNG_URL = "http://127.0.0.1:8080"
 
 # Slack configuration (loaded from .env file or environment)
 SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
+SLACK_APP_TOKEN = os.getenv('SLACK_APP_TOKEN', '')  # NEW: For Socket Mode (two-way)
 SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
 
 # ✅ Jetson Orin Nano Optimized Settings (UPDATED FOR 4B MODEL)
@@ -85,14 +96,14 @@ SEARCH_CONTENT_CHARS = 150    # Reduced from 200
 
 class CNSBridge(Node):
     """
-    Central Nervous System Bridge (OPTIMIZED)
+    Central Nervous System Bridge (OPTIMIZED + TWO-WAY SLACK)
     
     Grace's main cognitive interface connecting:
     - Text conversation (LLM)
     - Vision processing (VLM)
     - Web search (SearXNG)
     - Memory (reflections)
-    - Notifications (Slack)
+    - Notifications (Slack - NOW WITH TWO-WAY COMMUNICATION!)
     
     Optimizations:
     - Reduced context window for 4B models
@@ -100,6 +111,11 @@ class CNSBridge(Node):
     - Lazy loading of reflections
     - Automatic context trimming
     - Thread-safe state management
+    
+    NEW:
+    - Two-way Slack communication via Socket Mode
+    - Slack messages → ROS topic → Ollama → Slack response
+    - Support for @mentions and direct messages
     """
     
     def __init__(self):
@@ -170,9 +186,13 @@ class CNSBridge(Node):
         self.searxng_url = SEARXNG_URL
         self.search_enabled = self._check_searxng_available()
         
-        # Slack
+        # Slack (one-way notifications)
         self.slack_client = None
         self.slack_enabled = self._init_slack()
+        
+        # Slack (two-way listener) - NEW!
+        self.slack_app = None
+        self.slack_listener_enabled = self._init_slack_listener()
         
         # ═══════════════════════════════════════════════════
         # STARTUP LOGGING
@@ -216,9 +236,15 @@ class CNSBridge(Node):
             self.get_logger().warn("⚠️  Web search disabled (SearXNG unavailable)")
         
         if self.slack_enabled:
-            self.get_logger().info("✅ Slack notifications enabled")
+            self.get_logger().info(f"✅ Slack notifications enabled → {SLACK_CHANNEL}")
         else:
             self.get_logger().warn("⚠️  Slack disabled (no token or error)")
+        
+        if self.slack_listener_enabled:
+            self.get_logger().info("✅ Slack listener enabled (TWO-WAY) 📱↔️🤖")
+            self.get_logger().info("   → Listening for @mentions and DMs")
+        else:
+            self.get_logger().warn("⚠️  Slack listener disabled (one-way only)")
         
         self.get_logger().info("=" * 60)
         
@@ -364,6 +390,98 @@ class CNSBridge(Node):
             
         except Exception as e:
             self.get_logger().error(f"Slack init failed: {e}")
+            return False
+
+    def _init_slack_listener(self):
+        """Initialize Slack event listener for two-way communication (NEW)"""
+        if not self.slack_enabled or not SLACK_AVAILABLE or not SLACK_BOLT_AVAILABLE:
+            return False
+        
+        if not SLACK_APP_TOKEN:
+            self.get_logger().warn("⚠️  SLACK_APP_TOKEN not set. Two-way Slack disabled.")
+            self.get_logger().warn("   Add SLACK_APP_TOKEN to your ~/.AGi/.env file")
+            self.get_logger().warn("   Get it from: https://api.slack.com/apps → Socket Mode")
+            return False
+        
+        if SLACK_APP_TOKEN.startswith("xapp-your"):
+            self.get_logger().warn("SLACK_APP_TOKEN is still a placeholder")
+            return False
+        
+        try:
+            # Create Slack Bolt app
+            self.slack_app = App(token=SLACK_BOT_TOKEN)
+            
+            # Store reference to self for use in handlers
+            node_ref = self
+            
+            # Listen for app mentions (@Grace ...)
+            @self.slack_app.event("app_mention")
+            def handle_mention(event, say):
+                try:
+                    text = event.get('text', '')
+                    channel = event.get('channel', '')
+                    user = event.get('user', '')
+                    ts = event.get('ts', '')
+                    
+                    # Remove bot mention from text (e.g., "<@U12345> hello" -> "hello")
+                    user_message = text.split('>', 1)[1].strip() if '>' in text else text
+                    
+                    node_ref.get_logger().info(f"📱 Slack @mention from user in {channel}: {user_message}")
+                    
+                    # Process through normal pipeline with Slack callback
+                    node_ref.executor_pool.submit(
+                        node_ref.process_with_ollama, 
+                        user_message, 
+                        slack_callback=say,
+                        slack_thread_ts=ts
+                    )
+                    
+                except Exception as e:
+                    node_ref.get_logger().error(f"❌ Slack mention handler error: {e}")
+                    try:
+                        say(f"😵: Error processing your message: {str(e)}")
+                    except:
+                        pass
+            
+            # Listen for direct messages to bot
+            @self.slack_app.event("message")
+            def handle_message(event, say):
+                try:
+                    # Ignore bot's own messages
+                    if event.get('bot_id') or event.get('subtype') == 'bot_message':
+                        return
+                    
+                    # Only process DMs (channel type is 'im')
+                    channel_type = event.get('channel_type', '')
+                    if channel_type != 'im':
+                        return
+                    
+                    text = event.get('text', '')
+                    user = event.get('user', '')
+                    ts = event.get('ts', '')
+                    
+                    node_ref.get_logger().info(f"📱 Slack DM from user: {text}")
+                    
+                    # Process through normal pipeline
+                    node_ref.executor_pool.submit(
+                        node_ref.process_with_ollama, 
+                        text, 
+                        slack_callback=say,
+                        slack_thread_ts=ts
+                    )
+                    
+                except Exception as e:
+                    node_ref.get_logger().error(f"❌ Slack message handler error: {e}")
+            
+            # Start Socket Mode handler in background thread
+            handler = SocketModeHandler(self.slack_app, SLACK_APP_TOKEN)
+            threading.Thread(target=handler.start, daemon=True).start()
+            
+            self.get_logger().info("✅ Slack Socket Mode listener started")
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f"❌ Slack listener initialization failed: {e}")
             return False
 
     # ═══════════════════════════════════════════════════════
@@ -780,11 +898,18 @@ Latest reflection:
         self.executor_pool.submit(self.process_image_with_vlm, msg.data)
 
     # ═══════════════════════════════════════════════════════
-    # TEXT PROCESSING (OPTIMIZED)
+    # TEXT PROCESSING (OPTIMIZED + SLACK CALLBACK)
     # ═══════════════════════════════════════════════════════
 
-    def process_with_ollama(self, prompt: str):
-        """Process text with LLM (OPTIMIZED FOR 4B MODEL)"""
+    def process_with_ollama(self, prompt: str, slack_callback=None, slack_thread_ts=None):
+        """
+        Process text with LLM (OPTIMIZED FOR 4B MODEL + SLACK SUPPORT)
+        
+        Args:
+            prompt: User's message
+            slack_callback: Optional Slack say() function for replying
+            slack_thread_ts: Optional thread timestamp for threading responses
+        """
         try:
             # Check for new day (thread-safe)
             self._check_and_handle_new_day()
@@ -809,7 +934,7 @@ Latest reflection:
             # MINIMAL SYSTEM PROMPT (800 tokens → 150 tokens)
             system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). Today: {today_date}.
 
-Format: Start responses with emoji+colon a(e.g., 😊: or 🤔:)
+Format: Start responses with emoji+colon (e.g., 😊: or 🤔:)
 Traits: Warm, thoughtful technical companion helping with AI/robotics projects.
 Keep responses concise (2-4 sentences). Never repeat previous messages."""
 
@@ -887,6 +1012,7 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                             delta = chunk['message']['content']
                             full_response += delta
                             
+                            # Publish to ROS topic (for web interface)
                             stream_data = {
                                 "type": "start" if is_first else "delta",
                                 "content": delta,
@@ -903,12 +1029,20 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                         self.get_logger().error(f"JSON decode error: {e}")
                         continue
             
-            # Send done
+            # Send done signal to ROS
             self.publisher.publish(String(data=json.dumps({
                 "type": "done",
                 "content": "",
                 "done": True
             })))
+            
+            # Send response to Slack if callback provided (NEW)
+            if slack_callback:
+                try:
+                    slack_callback(full_response, thread_ts=slack_thread_ts)
+                    self.get_logger().info("✅ Response sent to Slack")
+                except Exception as e:
+                    self.get_logger().error(f"❌ Failed to send Slack response: {e}")
             
             # Save to history
             self.chat_history.append({
@@ -918,8 +1052,8 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             self._increment_message_count()
             self.save_chat_history()
             
-            # Slack notification if requested
-            if self._should_notify_slack(prompt):
+            # Slack notification if requested (and not already sent via callback)
+            if self._should_notify_slack(prompt) and not slack_callback:
                 self.send_slack_notification(
                     f"🤖 Grace: {full_response[:280]}"
                 )
@@ -930,11 +1064,21 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             error_msg = "😵: Request timed out. Ollama might be overloaded."
             self.get_logger().error(error_msg)
             self._send_error_response(error_msg)
+            if slack_callback:
+                try:
+                    slack_callback(error_msg)
+                except:
+                    pass
             
         except requests.exceptions.RequestException as e:
             error_msg = f"😵: Connection error: {str(e)}"
             self.get_logger().error(error_msg)
             self._send_error_response(error_msg)
+            if slack_callback:
+                try:
+                    slack_callback(error_msg)
+                except:
+                    pass
             
         except Exception as e:
             error_msg = f"😵: Unexpected error: {str(e)}"
@@ -945,6 +1089,11 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                 self.send_slack_notification(f"😵 Grace Error: {str(e)}")
             
             self._send_error_response(error_msg)
+            if slack_callback:
+                try:
+                    slack_callback(error_msg)
+                except:
+                    pass
 
     def _send_error_response(self, error_message: str):
         """Send error message to user"""
