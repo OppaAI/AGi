@@ -26,9 +26,6 @@
 ![Admin](https://img.shields.io/badge/admin-OppaAI-salmon)
 ![Tech](https://img.shields.io/badge/tech-OppaAI-salmon)
 ![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
-![Admin](https://img.shields.io/badge/admin-OppaAI-salmon)
-![Tech](https://img.shields.io/badge/tech-OppaAI-salmon)
-![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
 ![CS Credentials](https://img.shields.io/badge/Credentials-None-lightgrey)
 
 
