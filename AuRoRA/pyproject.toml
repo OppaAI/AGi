@@ -5,8 +5,8 @@ description = "Autonomous Rover Robotic Assistant"
 readme = "README.md"
 requires-python = "==3.10.12"
 dependencies = [
-    "jetson-stats>=4.3.2",
-    "ollama>=0.6.1",
-    "psutil>=7.2.2",
-    "pyyaml>=6.0.3",
+    "flask>=3.1.2",
+    "python-dotenv>=1.2.1",
+    "slack-bolt>=1.27.0",
+    "slack-sdk>=3.40.0",
 ]

@@ -46,7 +46,7 @@ except ImportError:
 
 # ✅ RLHF System (NEW - REINFORCEMENT LEARNING FROM HUMAN FEEDBACK)
 try:
-    from grace_rlhf import get_rlhf
+    from rlhf_llm import get_rlhf
     RLHF_AVAILABLE = True
 except ImportError:
     RLHF_AVAILABLE = False
@@ -58,7 +58,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "ministral-3:3b-instruct-2512-q4_K_M"
+GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -99,7 +99,7 @@ SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
 MAX_REQUEST_TOKENS = 3500     # Conservative for 4B model (leave room for response)
 
 # Search result limits
-MAX_SEARCH_RESULTS = 2        # Reduced from 3 to save tokens
+MAX_SEARCH_RESULTS = 16       # Increased to 34 to improve search quality
 SEARCH_CONTENT_CHARS = 150    # Reduced from 200
 
 
@@ -465,7 +465,7 @@ class CNSBridge(Node):
                     text = event.get('text', '')
                     channel = event.get('channel', '')
                     user = event.get('user', '')
-                    ts = event.get('ts', '')
+                    #ts = event.get('ts', '')
                     
                     # Remove bot mention from text (e.g., "<@U12345> hello" -> "hello")
                     user_message = text.split('>', 1)[1].strip() if '>' in text else text
@@ -477,7 +477,7 @@ class CNSBridge(Node):
                         node_ref.process_with_ollama, 
                         user_message, 
                         slack_callback=say,
-                        slack_thread_ts=ts
+                        slack_thread_ts=None
                     )
                     
                 except Exception as e:
@@ -502,7 +502,7 @@ class CNSBridge(Node):
                     
                     text = event.get('text', '')
                     user = event.get('user', '')
-                    ts = event.get('ts', '')
+                    #ts = event.get('ts', '')
                     
                     node_ref.get_logger().info(f"📱 Slack DM from user: {text}")
                     
@@ -511,7 +511,7 @@ class CNSBridge(Node):
                         node_ref.process_with_ollama, 
                         text, 
                         slack_callback=say,
-                        slack_thread_ts=ts
+                        slack_thread_ts=None
                     )
                     
                 except Exception as e:

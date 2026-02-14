@@ -21,7 +21,7 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).parent.absolute()
 
 # Path to the web interface HTML file
-WEB_INTERFACE_FILE = BASE_DIR / "AGi.html"
+WEB_INTERFACE_FILE = BASE_DIR / "index.html"
 
 @app.route('/')
 def index():
