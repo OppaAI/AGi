@@ -1416,31 +1416,515 @@ Be concise but thorough in describing what you see."""
         # ═══════════════════════════════════════════════════
         # RLHF: Print session stats and export training data (NEW)
         # ═══════════════════════════════════════════════════
-        if self.rlhf_enabled:
-            self.get_logger().info("-" * 60)
-            self.get_logger().info("RLHF Session Summary:")
-            self.rlhf.print_stats()
-            
-            # Export training data if ready
-            if self.rlhf.should_retrain(threshold=50):
-                try:
-                    output_file = self.rlhf.export_for_unsloth()
-                    self.get_logger().info(f"📦 Training data exported: {output_file}")
-                    self.get_logger().info("   Ready to train! Run: python3 grace_train.py")
-                except Exception as e:
-                    self.get_logger().error(f"Failed to export training data: {e}")
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
+from std_msgs.msg import String
+
+import requests
+from concurrent.futures import ThreadPoolExecutor
+import json
+from pathlib import Path
+from datetime import datetime, date, timedelta
+import signal
+import sys
+import base64
+import os
+import threading
+
+# ✅ Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path.home() / "AGi/.env")  # Load .env file from home directory
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("⚠️  python-dotenv not installed. Using system environment variables only.")
+    print("   Install with: pip3 install python-dotenv")
+
+# ✅ Slack integration
+try:
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
+    SLACK_AVAILABLE = True
+except ImportError:
+    SLACK_AVAILABLE = False
+    print("⚠️  slack-sdk not installed. Slack features disabled.")
+    print("   Install with: pip3 install slack-sdk")
+
+# ✅ Slack Bolt for event listening (NEW - TWO-WAY COMMUNICATION)
+try:
+    from slack_bolt import App
+    from slack_bolt.adapter.socket_mode import SocketModeHandler
+    SLACK_BOLT_AVAILABLE = True
+except ImportError:
+    SLACK_BOLT_AVAILABLE = False
+    print("⚠️  slack-bolt not installed. Two-way Slack disabled.")
+    print("   Install with: pip3 install slack-bolt")
+
+# ✅ RLHF System (NEW - REINFORCEMENT LEARNING FROM HUMAN FEEDBACK)
+try:
+    from rlhf_llm import get_rlhf
+    RLHF_AVAILABLE = True
+except ImportError:
+    RLHF_AVAILABLE = False
+    print("⚠️  grace_rlhf.py not found. RLHF disabled.")
+    print("   Place grace_rlhf.py in the same directory as cnc.py")
+
+# ✅ Telegram integration (NEW - TWO-WAY COMMUNICATION)
+try:
+    from telegram import Update
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    print("⚠️  python-telegram-bot not installed. Telegram features disabled.")
+    print("   Install with: pip3 install python-telegram-bot")
+
+# ═══════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════
+
+# Model configuration
+GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
+# VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
+
+# File paths
+CHAT_HISTORY_FILE = '.chat_history.json'
+REFLECTIONS_FILE = '.daily_reflections.json'
+
+# Ollama configuration
+OLLAMA_BASE_URL = "http://localhost:11434"
+
+# Web search
+SEARXNG_URL = "http://127.0.0.1:8080"
+
+# Slack configuration (loaded from .env file or environment)
+SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
+SLACK_APP_TOKEN = os.getenv('SLACK_APP_TOKEN', '')  # NEW: For Socket Mode (two-way)
+SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
+
+# Telegram configuration (loaded from .env file or environment)
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')  # Optional: For notifications
+
+# ✅ Jetson Orin Nano Optimized Settings (UPDATED FOR 4B MODEL)
+SAFE_CONTEXT_SIZES = {
+    "2b-4b": 4096,    # 2-4B models: conservative
+    "7b": 6144,       # 7B models: moderate
+    "13b+": 8192      # 13B+ models: full context
+}
+
+MAX_MESSAGES_BY_SIZE = {
+    "2b-4b": 12,      # Fewer messages for small models
+    "7b": 20,         # Moderate for 7B
+    "13b+": 30        # More for large models
+}
+
+# Memory limits (OPTIMIZED)
+MAX_RECENT_MESSAGES = 12      # Reduced from 30 for 4B model
+MAX_REFLECTIONS_LOAD = 5      # Reduced from 20 - only recent days
+MAX_HISTORY_STORAGE = 1000    # Store up to 1000 on disk
+SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
+
+# Token budget per request (NEW)
+MAX_REQUEST_TOKENS = 3500     # Conservative for 4B model (leave room for response)
+
+# Search result limits
+MAX_SEARCH_RESULTS = 16       # Increased to 34 to improve search quality
+SEARCH_CONTENT_CHARS = 150    # Reduced from 200
+
+
+class CNSBridge(Node):
+    """
+    Central Nervous System Bridge (OPTIMIZED + TWO-WAY SLACK)
+    
+    Grace's main cognitive interface connecting:
+    - Text conversation (LLM)
+    - Vision processing (VLM)
+    - Web search (SearXNG)
+    - Memory (reflections)
+    - Notifications (Slack - NOW WITH TWO-WAY COMMUNICATION!)
+    
+    Optimizations:
+    - Reduced context window for 4B models
+    - Minimal system prompts
+    - Lazy loading of reflections
+    - Automatic context trimming
+    - Thread-safe state management
+    
+    NEW:
+    - Two-way Slack communication via Socket Mode
+    - Slack messages → ROS topic → Ollama → Slack response
+    - Support for @mentions and direct messages
+    """
+    
+    def __init__(self):
+        super().__init__('cns_bridge')
         
-        # Shutdown thread pool with timeout
-        self.get_logger().info("Shutting down thread pool...")
-        self.executor_pool.shutdown(wait=True)
+        # ═══════════════════════════════════════════════════
+        # THREAD SAFETY
+        # ═══════════════════════════════════════════════════
         
-        self.get_logger().info("Grace offline 💤")
+        self._message_count_lock = threading.Lock()
+        self._day_check_lock = threading.Lock()
+        
+        # ═══════════════════════════════════════════════════
+        # ROS TOPICS
+        # ═══════════════════════════════════════════════════
+        
+        # Text input
+        self.subscription = self.create_subscription(
+            String, '/cns/neural_input', self.listener_callback, 10)
+        
+        # Image input
+        self.image_subscription = self.create_subscription(
+            String, '/cns/image_input', self.image_listener_callback, 10)
+        
+        # Response output
+        self.publisher = self.create_publisher(String, '/gce/response', 10)
+        
+        # Thread pool for non-blocking processing
+        self.executor_pool = ThreadPoolExecutor(max_workers=2)
+        
+        # ═══════════════════════════════════════════════════
+        # MODEL SETTINGS (AUTO-OPTIMIZED)
+        # ═══════════════════════════════════════════════════
+        
+        self.model_name = GCE
+        self.keep_alive = -1  # Keep model in memory permanently
+        
+        # Auto-detect safe limits based on model size
+        self.safe_context = self._get_safe_context_size()
+        self.max_recent_messages = self._get_max_messages()
+        self.max_reflections_load = MAX_REFLECTIONS_LOAD
+        
+        # ═══════════════════════════════════════════════════
+        # MEMORY SYSTEMS
+        # ═══════════════════════════════════════════════════
+        
+        # Chat history
+        self.chat_history_file = Path.home() / CHAT_HISTORY_FILE
+        self.chat_history = self.load_chat_history()
+        
+        # Daily reflections
+        self.reflections_file = Path.home() / REFLECTIONS_FILE
+        self.reflections = self.load_reflections()
+        self.today_start = datetime.now().date()
+        self.today_message_count = 0
+        
+        # Birth date
+        self.birth_date = self._get_birth_date()
+        
+        # Handle missed days
+        self._handle_missed_reflections()
+        
+        # ═══════════════════════════════════════════════════
+        # EXTERNAL SERVICES
+        # ═══════════════════════════════════════════════════
+        
+        # Web search
+        self.searxng_url = SEARXNG_URL
+        self.search_enabled = self._check_searxng_available()
+        
+        # Slack (one-way notifications)
+        self.slack_client = None
+        self.slack_enabled = self._init_slack()
+        
+        # Slack (two-way listener) - NEW!
+        self.slack_app = None
+        self.slack_listener_enabled = self._init_slack_listener()
+        
+        # Telegram (two-way communication) - NEW!
+        self.telegram_app = None
+        self.telegram_enabled = self._init_telegram()
+        
+        # ═══════════════════════════════════════════════════
+        # RLHF SYSTEM (NEW - LEARNING FROM FEEDBACK)
+        # ═══════════════════════════════════════════════════
+        
+        # Initialize RLHF
+        self.rlhf = None
+        self.rlhf_enabled = False
+        self.current_response_id = None
+        
+        if RLHF_AVAILABLE:
+            try:
+                self.rlhf = get_rlhf()
+                self.rlhf_enabled = True
+                
+                # Feedback topic (receives pet/red X from web interface)
+                self.feedback_subscription = self.create_subscription(
+                    String,
+                    '/cns/feedback',
+                    self.feedback_callback,
+                    10
+                )
+                
+                self.get_logger().info("✅ RLHF feedback system initialized")
+            except Exception as e:
+                self.get_logger().error(f"❌ RLHF initialization failed: {e}")
+                self.rlhf_enabled = False
+        
+        # ═══════════════════════════════════════════════════
+        # STARTUP LOGGING
+        # ═══════════════════════════════════════════════════
+        
+        age_days = (datetime.now().date() - self.birth_date).days
+        
         self.get_logger().info("=" * 60)
+        self.get_logger().info("GRACE - COGNITIVE SYSTEMS ONLINE 🧠")
+        self.get_logger().info("=" * 60)
+        
+        if DOTENV_AVAILABLE:
+            self.get_logger().info("✅ python-dotenv loaded (.env file support)")
+        else:
+            self.get_logger().info("⚠️  python-dotenv not available (using system env only)")
+        
+        self.get_logger().info(f"Birth Date: {self.birth_date}")
+        self.get_logger().info(f"Age: {age_days} days old")
+        self.get_logger().info(f"Model: {self.model_name}")
+        self.get_logger().info("-" * 60)
+        self.get_logger().info("⚙️  OPTIMIZATIONS APPLIED:")
+        self.get_logger().info(f"   Safe context: {self.safe_context} tokens")
+        self.get_logger().info(f"   Max messages: {self.max_recent_messages}")
+        self.get_logger().info(f"   Target budget: {MAX_REQUEST_TOKENS} tokens")
+        self.get_logger().info(f"   Reflection limit: {self.max_reflections_load} days")
+        self.get_logger().info("-" * 60)
+        self.get_logger().info(f"Chat History: {len(self.chat_history)} total messages")
+        self.get_logger().info(f"  → Loading: {min(len(self.chat_history), self.max_recent_messages)} recent")
+        self.get_logger().info(f"Reflections: {len(self.reflections)} total days")
+        self.get_logger().info(f"  → Loading: {min(len(self.reflections), self.max_reflections_load)} recent")
+        self.get_logger().info(f"Today's Messages: {self.today_message_count}")
+        self.get_logger().info("-" * 60)
+        
+        # Feature status
+        self.get_logger().info("✅ Text conversation enabled")
+        self.get_logger().info("✅ Image processing enabled (VLM ready)")
+        
+        if self.search_enabled:
+            self.get_logger().info("✅ Web search enabled (SearXNG)")
+        else:
+            self.get_logger().warn("⚠️  Web search disabled (SearXNG unavailable)")
+        
+        if self.slack_enabled:
+            self.get_logger().info(f"✅ Slack notifications enabled → {SLACK_CHANNEL}")
+        else:
+            self.get_logger().warn("⚠️  Slack disabled (no token or error)")
+        
+        if self.slack_listener_enabled:
+            self.get_logger().info("✅ Slack listener enabled (TWO-WAY) 📱↔️🤖")
+            self.get_logger().info("   → Listening for @mentions and DMs")
+        else:
+            self.get_logger().warn("⚠️  Slack listener disabled (one-way only)")
+        
+        if self.telegram_enabled:
+            self.get_logger().info("✅ Telegram bot enabled (TWO-WAY) 💬↔️🤖")
+            self.get_logger().info("   → Listening for messages and commands")
+        else:
+            self.get_logger().warn("⚠️  Telegram disabled (no token or error)")
+        
+        if self.rlhf_enabled:
+            stats = self.rlhf.get_stats()
+            self.get_logger().info("✅ RLHF system enabled 👍👎")
+            self.get_logger().info(f"   → Total feedback: {stats['total_feedback']}")
+            self.get_logger().info(f"   → Training pairs: {stats.get('training_pairs', 0)}")
+        else:
+            self.get_logger().warn("⚠️  RLHF disabled (grace_rlhf.py not found)")
+        
+        self.get_logger().info("=" * 60)
+        
+        # Warm up model
+        self._verify_model_loaded()
 
+    # ═══════════════════════════════════════════════════════
+    # INITIALIZATION
+    # ═══════════════════════════════════════════════════════
 
-# ═══════════════════════════════════════════════════════
-# MAIN
-# ═══════════════════════════════════════════════════════
+    def _get_safe_context_size(self):
+        """Get safe context size based on model size"""
+        model_lower = self.model_name.lower()
+        
+        if any(x in model_lower for x in ["2b", "4b"]):
+            return SAFE_CONTEXT_SIZES["2b-4b"]
+        elif "7b" in model_lower:
+            return SAFE_CONTEXT_SIZES["7b"]
+        else:
+            return SAFE_CONTEXT_SIZES["13b+"]
+
+    def _get_max_messages(self):
+        """Get max messages based on model size"""
+        model_lower = self.model_name.lower()
+        
+        if any(x in model_lower for x in ["2b", "4b"]):
+            return MAX_MESSAGES_BY_SIZE["2b-4b"]
+        elif "7b" in model_lower:
+            return MAX_MESSAGES_BY_SIZE["7b"]
+        else:
+            return MAX_MESSAGES_BY_SIZE["13b+"]
+
+    def _verify_model_loaded(self):
+        """Verify model is loaded and warm in Ollama"""
+        try:
+            self.get_logger().info("🔥 Warming up model...")
+            response = requests.post(
+                f'{OLLAMA_BASE_URL}/api/generate',
+                json={
+                    "model": self.model_name,
+                    "prompt": "Hi",
+                    "stream": False,
+                    "keep_alive": -1
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                self.get_logger().info("✅ Model warmed up and cached in memory")
+                return True
+            else:
+                self.get_logger().warn(f"⚠️  Model warm-up returned status {response.status_code}")
+                
+        except Exception as e:
+            self.get_logger().warn(f"⚠️  Model warm-up failed: {e}")
+        
+        return False
+
+    def _get_birth_date(self):
+        """Get Grace's birth date from reflections or set today"""
+        if self.reflections:
+            birth_str = self.reflections[0].get('date', date.today().isoformat())
+            return date.fromisoformat(birth_str)
+        return date.today()
+
+    def _handle_missed_reflections(self):
+        """Create placeholder reflections for missed days"""
+        if not self.reflections:
+            return
+        
+        last_reflection_date = date.fromisoformat(self.reflections[-1]['date'])
+        today = date.today()
+        days_missed = (today - last_reflection_date).days - 1
+        
+        if days_missed > 0:
+            self.get_logger().warn(f"⚠️  Detected {days_missed} missed days - creating placeholders")
+            
+            for i in range(1, days_missed + 1):
+                missed_date = last_reflection_date + timedelta(days=i)
+                age_days = (missed_date - self.birth_date).days
+                
+                placeholder = {
+                    'day': age_days,
+                    'date': missed_date.isoformat(),
+                    'reflection': f"😴: Day {age_days} - Grace was offline. No conversations today.",
+                    'message_count': 0
+                }
+                
+                self.reflections.append(placeholder)
+            
+            self._save_reflections_file()
+            self.get_logger().info(f"✅ Created {days_missed} placeholder reflections")
+
+    def _check_searxng_available(self):
+        """Check if SearXNG is running"""
+        try:
+            response = requests.get(self.searxng_url, timeout=5)
+            # Accept 200 (OK) or 403 (Forbidden but alive)
+            is_available = response.status_code in [200, 403]
+            
+            if is_available:
+                self.get_logger().info(f"SearXNG check: status {response.status_code}")
+            
+            return is_available
+            
+        except requests.exceptions.RequestException as e:
+            self.get_logger().error(f"SearXNG check failed: {e}")
+            return False
+
+    def _init_slack(self):
+        """Initialize Slack client (uses token from .env file)"""
+        if not SLACK_AVAILABLE:
+            self.get_logger().info("Slack SDK not installed")
+            return False
+        
+        try:
+            if not SLACK_BOT_TOKEN:
+                self.get_logger().info("SLACK_BOT_TOKEN not set in .env or environment")
+                self.get_logger().info("Create .env file with: SLACK_BOT_TOKEN=xoxb-your-token")
+                return False
+            
+            if SLACK_BOT_TOKEN.startswith("xoxb-your"):
+                self.get_logger().warn("SLACK_BOT_TOKEN is still a placeholder")
+                self.get_logger().info("Update .env file with real token from https://api.slack.com/apps")
+                return False
+            
+            # Initialize Slack client
+            self.slack_client = WebClient(token=SLACK_BOT_TOKEN)
+            
+            # Test connection
+            response = self.slack_client.auth_test()
+            self.get_logger().info(f"Slack connected as: {response['user']}")
+            self.get_logger().info(f"Slack channel: {SLACK_CHANNEL}")
+            return True
+            
+        except SlackApiError as e:
+            self.get_logger().error(f"Slack API error: {e.response['error']}")
+            
+            if e.response['error'] == 'invalid_auth':
+                self.get_logger().error("Token is invalid. Get new token from https://api.slack.com/apps")
+            
+            return False
+            
+        except Exception as e:
+            self.get_logger().error(f"Slack init failed: {e}")
+            return False
+
+    def _init_slack_listener(self):
+        """Initialize Slack event listener for two-way communication (NEW)"""
+        if not self.slack_enabled or not SLACK_AVAILABLE or not SLACK_BOLT_AVAILABLE:
+            return False
+        
+        if not SLACK_APP_TOKEN:
+            self.get_logger().warn("⚠️  SLACK_APP_TOKEN not set. Two-way Slack disabled.")
+            self.get_logger().warn("   Add SLACK_APP_TOKEN to your ~/.AGi/.env file")
+            self.get_logger().warn("   Get it from: https://api.slack.com/apps → Socket Mode")
+            return False
+        
+        if SLACK_APP_TOKEN.startswith("xapp-your"):
+            self.get_logger().warn("SLACK_APP_TOKEN is still a placeholder")
+            return False
+        
+        try:
+            # Create Slack Bolt app
+            self.slack_app = App(token=SLACK_BOT_TOKEN)
+            
+            # Store reference to self for use in handlers
+            node_ref = self
+            
+            # Listen for app mentions (@Grace ...)
+            @self.slack_app.event("app_mention")
+            def handle_mention(event, say):
+                try:
+                    text = event.get('text', '')
+                    channel = event.get('channel', '')
+                    user = event.get('user', '')
+                    #ts = event.get('ts', '')
+                    
+                    # Remove bot mention from text (e.g., "<@U12345> hello" -> "hello")
+                    user_message = text.split('>', 1)[1].strip() if '>' in text else text
+                    
+                    node_ref.get_logger().info(f"📱 Slack @mention from user in {channel}: {user_message}")
+                    
+                    # Process through normal pipeline with Slack callback
+                    node_ref.executor_pool.submit(
+                        node_ref.process_with_ollama, 
+                        user_message, 
+                        slack_callback=say,
+                        slack_thread_ts=None
+                    )
+                    
+                except Exception as e:
+                    node_ref.get_logger().error(f"❌ Slack mention handler error: {e}")
+                 ════════════
 
 def main(args=None):
     rclpy.init(args=args)
