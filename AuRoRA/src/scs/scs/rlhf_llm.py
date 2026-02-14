@@ -363,3 +363,7 @@ def get_rlhf() -> GraceRLHF:
     if _rlhf_instance is None:
         _rlhf_instance = GraceRLHF()
     return _rlhf_instance
+
+if __name__ == "__main__":
+    rlhf = get_rlhf()
+    rlhf.print_stats()
