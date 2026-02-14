@@ -44,6 +44,15 @@ except ImportError:
     print("⚠️  slack-bolt not installed. Two-way Slack disabled.")
     print("   Install with: pip3 install slack-bolt")
 
+# ✅ RLHF System (NEW - REINFORCEMENT LEARNING FROM HUMAN FEEDBACK)
+try:
+    from grace_rlhf import get_rlhf
+    RLHF_AVAILABLE = True
+except ImportError:
+    RLHF_AVAILABLE = False
+    print("⚠️  grace_rlhf.py not found. RLHF disabled.")
+    print("   Place grace_rlhf.py in the same directory as cnc.py")
+
 # ═══════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════
@@ -195,6 +204,33 @@ class CNSBridge(Node):
         self.slack_listener_enabled = self._init_slack_listener()
         
         # ═══════════════════════════════════════════════════
+        # RLHF SYSTEM (NEW - LEARNING FROM FEEDBACK)
+        # ═══════════════════════════════════════════════════
+        
+        # Initialize RLHF
+        self.rlhf = None
+        self.rlhf_enabled = False
+        self.current_response_id = None
+        
+        if RLHF_AVAILABLE:
+            try:
+                self.rlhf = get_rlhf()
+                self.rlhf_enabled = True
+                
+                # Feedback topic (receives pet/red X from web interface)
+                self.feedback_subscription = self.create_subscription(
+                    String,
+                    '/cns/feedback',
+                    self.feedback_callback,
+                    10
+                )
+                
+                self.get_logger().info("✅ RLHF feedback system initialized")
+            except Exception as e:
+                self.get_logger().error(f"❌ RLHF initialization failed: {e}")
+                self.rlhf_enabled = False
+        
+        # ═══════════════════════════════════════════════════
         # STARTUP LOGGING
         # ═══════════════════════════════════════════════════
         
@@ -245,6 +281,14 @@ class CNSBridge(Node):
             self.get_logger().info("   → Listening for @mentions and DMs")
         else:
             self.get_logger().warn("⚠️  Slack listener disabled (one-way only)")
+        
+        if self.rlhf_enabled:
+            stats = self.rlhf.get_stats()
+            self.get_logger().info("✅ RLHF system enabled 👍👎")
+            self.get_logger().info(f"   → Total feedback: {stats['total_feedback']}")
+            self.get_logger().info(f"   → Training pairs: {stats.get('training_pairs', 0)}")
+        else:
+            self.get_logger().warn("⚠️  RLHF disabled (grace_rlhf.py not found)")
         
         self.get_logger().info("=" * 60)
         
@@ -483,6 +527,59 @@ class CNSBridge(Node):
         except Exception as e:
             self.get_logger().error(f"❌ Slack listener initialization failed: {e}")
             return False
+
+    # ═══════════════════════════════════════════════════════
+    # RLHF FEEDBACK HANDLING (NEW)
+    # ═══════════════════════════════════════════════════════
+
+    def feedback_callback(self, msg: String):
+        """
+        Handle feedback from web interface (pet 👍 or red X 👎)
+        
+        Expected format:
+        {
+            "type": "positive" | "negative",
+            "response_id": "optional_id",
+            "timestamp": "ISO timestamp"
+        }
+        """
+        if not self.rlhf_enabled:
+            return
+        
+        try:
+            data = json.loads(msg.data)
+            feedback_type = data.get('type')
+            
+            if feedback_type not in ['positive', 'negative']:
+                self.get_logger().warn(f"Invalid feedback type: {feedback_type}")
+                return
+            
+            # Record feedback
+            success = self.rlhf.record_feedback(
+                feedback_type=feedback_type,
+                prompt=None,  # Uses current interaction
+                response=None
+            )
+            
+            if success:
+                emoji = "👍" if feedback_type == 'positive' else "👎"
+                self.get_logger().info(f"{emoji} Feedback recorded: {feedback_type}")
+                
+                # Check if we should retrain
+                if self.rlhf.should_retrain(threshold=50):
+                    self.get_logger().info("🎓 Enough feedback for retraining!")
+                    self.get_logger().info("   Run: python3 grace_train.py")
+                    
+                    # Send Slack notification if enabled
+                    if self.slack_enabled:
+                        self.send_slack_notification(
+                            f"🎓 Grace RLHF: {self.rlhf.get_stats()['total_feedback']} feedback pairs collected. Ready for retraining!"
+                        )
+            
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f"Invalid feedback JSON: {e}")
+        except Exception as e:
+            self.get_logger().error(f"Feedback error: {e}")
 
     # ═══════════════════════════════════════════════════════
     # CHAT HISTORY MANAGEMENT
@@ -914,6 +1011,14 @@ Latest reflection:
             # Check for new day (thread-safe)
             self._check_and_handle_new_day()
             
+            # ═══════════════════════════════════════════════════
+            # RLHF: Start tracking interaction (NEW)
+            # ═══════════════════════════════════════════════════
+            if self.rlhf_enabled:
+                response_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+                self.current_response_id = response_id
+                self.rlhf.start_interaction(prompt, response_id)
+            
             # Web search if needed
             search_results = None
             if self.should_search(prompt):
@@ -1051,6 +1156,12 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             })
             self._increment_message_count()
             self.save_chat_history()
+            
+            # ═══════════════════════════════════════════════════
+            # RLHF: Record response (NEW)
+            # ═══════════════════════════════════════════════════
+            if self.rlhf_enabled:
+                self.rlhf.set_response(full_response)
             
             # Slack notification if requested (and not already sent via callback)
             if self._should_notify_slack(prompt) and not slack_callback:
@@ -1301,6 +1412,23 @@ Be concise but thorough in describing what you see."""
         
         # Save chat history
         self.save_chat_history()
+        
+        # ═══════════════════════════════════════════════════
+        # RLHF: Print session stats and export training data (NEW)
+        # ═══════════════════════════════════════════════════
+        if self.rlhf_enabled:
+            self.get_logger().info("-" * 60)
+            self.get_logger().info("RLHF Session Summary:")
+            self.rlhf.print_stats()
+            
+            # Export training data if ready
+            if self.rlhf.should_retrain(threshold=50):
+                try:
+                    output_file = self.rlhf.export_for_unsloth()
+                    self.get_logger().info(f"📦 Training data exported: {output_file}")
+                    self.get_logger().info("   Ready to train! Run: python3 grace_train.py")
+                except Exception as e:
+                    self.get_logger().error(f"Failed to export training data: {e}")
         
         # Shutdown thread pool with timeout
         self.get_logger().info("Shutting down thread pool...")
