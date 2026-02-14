@@ -169,6 +169,7 @@
             justify-content: center;
             margin: 30px 0;
             position: relative;
+            padding: 0 80px; /* Space for side buttons */
         }
         
         .robot {
@@ -246,70 +247,243 @@
             }
         }
         
-        /* NEGATIVE REWARD BUTTON (RED X) */
-        .negative-reward-btn {
+        /* NEGATIVE REWARD ROBOT BUTTON */
+        .negative-robot-btn {
             position: absolute;
             top: 50%;
-            right: -70px;
+            right: 10px; /* Moved closer to main robot */
             transform: translateY(-50%);
-            width: 50px;
-            height: 50px;
-            background: rgba(255, 107, 107, 0.2);
-            border: 2px solid rgba(255, 107, 107, 0.5);
-            border-radius: 50%;
+            width: 70px;
+            height: 90px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5em;
-            color: #ff6b6b;
-            transition: all 0.3s ease;
             z-index: 20;
-            box-shadow: 0 0 10px rgba(255, 107, 107, 0.2);
+            transition: all 0.3s ease;
+            filter: grayscale(0.3);
         }
         
-        .negative-reward-btn:hover {
-            background: rgba(255, 107, 107, 0.4);
+        .negative-robot-btn:hover {
             transform: translateY(-50%) scale(1.1);
-            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
-            border-color: #ff6b6b;
+            filter: grayscale(0);
         }
         
-        .negative-reward-btn:active {
+        .negative-robot-btn:active {
             transform: translateY(-50%) scale(0.95);
         }
         
-        .negative-reward-btn.active {
-            animation: negative-pulse 0.5s ease;
+        .negative-robot-btn.shaking {
+            animation: robot-shake 0.5s ease-in-out;
         }
         
-        @keyframes negative-pulse {
-            0%, 100% { transform: translateY(-50%) scale(1); }
-            50% { transform: translateY(-50%) scale(1.2); box-shadow: 0 0 30px rgba(255, 107, 107, 0.6); }
+        @keyframes robot-shake {
+            0%, 100% { transform: translateY(-50%) rotate(0deg); }
+            25% { transform: translateY(-50%) rotate(-10deg); }
+            75% { transform: translateY(-50%) rotate(10deg); }
         }
         
-        .negative-count {
+        /* Small angry robot head */
+        .neg-robot-head {
+            width: 50px;
+            height: 45px;
+            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+            border-radius: 50% 50% 45% 45%;
             position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #ff6b6b;
-            color: white;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            font-size: 0.7em;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transform: scale(0);
+            top: 15px;
+            left: 10px;
+            box-shadow: 
+                0 4px 10px rgba(255, 107, 107, 0.4),
+                0 0 15px rgba(255, 107, 107, 0.3);
             transition: all 0.3s ease;
         }
         
-        .negative-count.show {
+        .negative-robot-btn:hover .neg-robot-head {
+            box-shadow: 
+                0 6px 15px rgba(255, 107, 107, 0.6),
+                0 0 25px rgba(255, 107, 107, 0.5);
+        }
+        
+        /* Small antenna */
+        .neg-antenna {
+            width: 6px;
+            height: 18px;
+            background: linear-gradient(to bottom, #ff6b6b, #ff8e8e);
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 5px;
+        }
+        
+        .neg-antenna::after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background: radial-gradient(circle at 30% 30%, #fff, #ff6b6b);
+            border-radius: 50%;
+            position: absolute;
+            top: -6px;
+            left: -2px;
+            box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+        }
+        
+        /* Angry face */
+        .neg-face {
+            position: absolute;
+            top: 15px;
+            left: 8px;
+            width: 34px;
+            height: 20px;
+        }
+        
+        .neg-eyes {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        
+        .neg-eye {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .neg-eye::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #4a4a4a;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+        }
+        
+        /* Angry eyebrows */
+        .neg-eyebrow {
+            position: absolute;
+            top: -2px;
+            width: 12px;
+            height: 3px;
+            background: #4a4a4a;
+            border-radius: 2px;
+        }
+        
+        .neg-eyebrow.left {
+            left: 0;
+            transform: rotate(20deg);
+        }
+        
+        .neg-eyebrow.right {
+            right: 0;
+            transform: rotate(-20deg);
+        }
+        
+        /* Angry mouth */
+        .neg-mouth {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 6px;
+            background: #4a4a4a;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        /* Small body */
+        .neg-robot-body {
+            width: 35px;
+            height: 28px;
+            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+            border-radius: 15px 15px 12px 12px;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+        }
+        
+        /* X mark on body */
+        .neg-x-mark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+        }
+        
+        .neg-x-mark::before,
+        .neg-x-mark::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: #ff6b6b;
+            top: 50%;
+            left: 0;
+            border-radius: 2px;
+        }
+        
+        .neg-x-mark::before {
+            transform: translateY(-50%) rotate(45deg);
+        }
+        
+        .neg-x-mark::after {
+            transform: translateY(-50%) rotate(-45deg);
+        }
+        
+        /* Counter badge */
+        .neg-counter {
+            position: absolute;
+            top: 5px;
+            right: 0;
+            background: #ff6b6b;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            font-size: 0.75em;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(10, 10, 20, 0.9);
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.5);
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 25;
+        }
+        
+        .neg-counter.show {
             opacity: 1;
             transform: scale(1);
+        }
+        
+        /* Tooltip */
+        .neg-tooltip {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: 700;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        
+        .negative-robot-btn:hover .neg-tooltip {
+            opacity: 1;
+            bottom: -35px;
         }
         
         .robot-head {
@@ -1522,7 +1696,6 @@
             }
         }
     </style>
-<base target="_blank">
 </head>
 <body>
     <div class="cyber-bg" id="cyberBg">
@@ -1585,11 +1758,26 @@
                 <div class="arm-right"></div>
             </div>
             
-            <!-- NEGATIVE REWARD BUTTON -->
-            <button class="negative-reward-btn" id="negativeBtn" onclick="handleNegativeReward()" title="Bad response">
-                ✕
-                <span class="negative-count" id="negativeCount">0</span>
-            </button>
+            <!-- NEGATIVE REWARD ROBOT BUTTON -->
+            <div class="negative-robot-btn" id="negativeRobotBtn" onclick="handleNegativeReward()">
+                <div class="neg-robot-head">
+                    <div class="neg-antenna"></div>
+                    <div class="neg-face">
+                        <div class="neg-eyebrow left"></div>
+                        <div class="neg-eyebrow right"></div>
+                        <div class="neg-eyes">
+                            <div class="neg-eye"></div>
+                            <div class="neg-eye"></div>
+                        </div>
+                        <div class="neg-mouth"></div>
+                    </div>
+                </div>
+                <div class="neg-robot-body">
+                    <div class="neg-x-mark"></div>
+                </div>
+                <div class="neg-counter" id="negCounter">0</div>
+                <div class="neg-tooltip">Bad response!</div>
+            </div>
         </div>
         
         <!-- IMAGE PREVIEW AREA -->
@@ -1634,7 +1822,7 @@
         <div class="rl-feedback-text">
             <span class="thumb-up">👍</span> Pet robot for good response
             <span style="color: rgba(0,255,136,0.4);">|</span>
-            <span class="thumb-down">👎</span> Press ✕ for bad response
+            <span class="thumb-down">👎</span> Press angry bot for bad response
         </div>
         
         <div class="chat-container" id="chatContainer"></div>
@@ -1773,8 +1961,8 @@
         const sendBtn = document.getElementById('sendBtn');
         const plusMenu = document.getElementById('plusMenu');
         const globeBtn = document.getElementById('globeBtn');
-        const negativeBtn = document.getElementById('negativeBtn');
-        const negativeCount = document.getElementById('negativeCount');
+        const negativeRobotBtn = document.getElementById('negativeRobotBtn');
+        const negCounter = document.getElementById('negCounter');
         const rewardFeedback = document.getElementById('rewardFeedback');
         
         // Image elements
@@ -1907,12 +2095,12 @@
             showRewardFeedback(-1, intensity);
             
             // Update counter badge
-            negativeCount.textContent = negativeRewardCount;
-            negativeCount.classList.add('show');
+            negCounter.textContent = negativeRewardCount;
+            negCounter.classList.add('show');
             
-            // Button animation
-            negativeBtn.classList.add('active');
-            setTimeout(() => negativeBtn.classList.remove('active'), 500);
+            // Robot shake animation
+            negativeRobotBtn.classList.add('shaking');
+            setTimeout(() => negativeRobotBtn.classList.remove('shaking'), 500);
             
             // Send to ROS
             sendRLReward('negative', intensity, latestResponseId);
@@ -1930,7 +2118,7 @@
             // Reset after delay for next response
             setTimeout(() => {
                 negativeRewardCount = 0;
-                negativeCount.classList.remove('show');
+                negCounter.classList.remove('show');
             }, 5000);
         }
         
@@ -2055,7 +2243,7 @@
                             latestResponseId = generateResponseId();
                             positiveRewardCount = 0;
                             negativeRewardCount = 0;
-                            negativeCount.classList.remove('show');
+                            negCounter.classList.remove('show');
                             console.log('New response ID:', latestResponseId);
                         } else if (data.type === 'error') {
                             if (currentStreamMessage) finishStreaming();
@@ -2418,7 +2606,7 @@
             latestResponseId = null;
             positiveRewardCount = 0;
             negativeRewardCount = 0;
-            negativeCount.classList.remove('show');
+            negCounter.classList.remove('show');
             
             // Check if image is attached
             if (currentImage) {
