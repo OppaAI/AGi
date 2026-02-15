@@ -25,5 +25,8 @@ logs/
 # ROS 2 Catkin build system
 CATKIN_IGNORE
 
+# js Node files
+node_modules/
+
 # Secret files
 .env

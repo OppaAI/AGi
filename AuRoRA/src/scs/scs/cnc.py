@@ -12,6 +12,7 @@ import sys
 import base64
 import os
 import threading
+import subprocess
 
 # ✅ Load environment variables from .env file
 try:
@@ -89,6 +90,10 @@ SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')  # Optional: For notifications
 
+# MCP Server Configuration
+USE_MCP_SEARCH = True
+MCP_SERVER_COMMAND = "grace-mcp-server"  # or full path: "/home/user/AGi/mcp-server/grace-mcp-server.js"TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
+
 # ✅ Optimized Settings for 30B MODEL
 SAFE_CONTEXT_SIZES = {
     "2b-4b": 4096,    # 2-4B models: conservative
@@ -109,15 +114,222 @@ MAX_HISTORY_STORAGE = 1000    # Store up to 1000 on disk
 SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
 
 # Token budget per request (FOR 30B MODEL)
-MAX_REQUEST_TOKENS = 7000     # Use more of the 8192 context
+MAX_REQUEST_TOKENS = 12000     # Use more of the 8192 context
 
 # Search result limits
-MAX_SEARCH_RESULTS = 34       # More search results
-SEARCH_CONTENT_CHARS = 250    # More detail per result
+MAX_SEARCH_RESULTS = 10       # More search results
+SEARCH_CONTENT_CHARS = 1000   # More detail per result
 
 # ✅ DUAL HYBRID SEARCH (NEW)
 ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
+class MCPClient:
+    """Client for Grace's custom MCP SearXNG server"""
+    
+    def __init__(self, server_command: str, logger):
+        self.server_command = server_command
+        self.logger = logger
+        self.process = None
+    
+    def start(self):
+        """Start MCP server process"""
+        try:
+            self.process = subprocess.Popen(
+                [self.server_command],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+            
+            # Wait a moment for server to start
+            import time
+            time.sleep(1)
+            
+            if self.process.poll() is None:
+                self.logger.info("✅ MCP server started")
+                return True
+            else:
+                self.logger.error(f"❌ MCP server failed to start")
+                return False
+                
+        except FileNotFoundError:
+            self.logger.error(f"❌ MCP server not found: {self.server_command}")
+            self.logger.error("   Install it: cd ~/AGi/mcp-server && sudo npm link")
+            return False
+        except Exception as e:
+            self.logger.error(f"❌ MCP server start failed: {e}")
+            return False
+    
+    def search_web(self, query: str, num_results: int = 10) -> list:
+        """
+        Search web with full content extraction
+        
+        Returns list of results with full_content field
+        """
+        if not self.process or self.process.poll() is not None:
+            return []
+        
+        try:
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_web",
+                    "arguments": {
+                        "query": query,
+                        "num_results": min(num_results, 20),
+                        "fetch_content": True
+                    }
+                }
+            }
+            
+            # Send request
+            self.process.stdin.write(json.dumps(request) + '\n')
+            self.process.stdin.flush()
+            
+            # Read response (with timeout)
+            import select
+            import time
+            
+            timeout = 30
+            start_time = time.time()
+            response_line = ""
+            
+            while time.time() - start_time < timeout:
+                # Check if data available
+                if select.select([self.process.stdout], [], [], 1)[0]:
+                    line = self.process.stdout.readline()
+                    if line:
+                        try:
+                            response = json.loads(line)
+                            if response.get('id') == 1:
+                                return self._parse_response(response)
+                        except json.JSONDecodeError:
+                            # Skip non-JSON lines (debug output)
+                            continue
+            
+            self.logger.error("MCP search timeout")
+            return []
+            
+        except Exception as e:
+            self.logger.error(f"MCP search error: {e}")
+            return []
+    
+    def _parse_response(self, response: dict) -> list:
+        """Parse MCP response into results list (FIXED)"""
+        try:
+            if 'result' not in response:
+                self.logger.error("No 'result' in MCP response")
+                return []
+            
+            content = response['result'].get('content', [])
+            if not content:
+                self.logger.error("No 'content' in MCP result")
+                return []
+            
+            text = content[0].get('text', '')
+            if not text:
+                self.logger.error("Empty text in MCP content")
+                return []
+            
+            # Parse the markdown-formatted results
+            results = []
+            current_result = {}
+            in_content = False
+            content_lines = []
+            
+            for line in text.split('\n'):
+                line = line.strip()
+                
+                # New result starts with ## [number]
+                if line.startswith('## [') and ']' in line:
+                    # Save previous result
+                    if current_result and 'title' in current_result:
+                        if content_lines:
+                            current_result['full_content'] = '\n'.join(content_lines)
+                            current_result['has_full_content'] = True
+                        else:
+                            current_result['full_content'] = ""
+                            current_result['has_full_content'] = False
+                        
+                        # Ensure all required fields exist
+                        current_result.setdefault('url', '')
+                        current_result.setdefault('snippet', '')
+                        current_result.setdefault('engine', 'unknown')
+                        
+                        results.append(current_result)
+                    
+                    # Start new result
+                    parts = line.split(']', 1)
+                    number = parts[0].replace('## [', '').strip()
+                    title = parts[1].strip() if len(parts) > 1 else 'No title'
+                    current_result = {
+                        'number': len(results) + 1,
+                        'title': title,
+                        'url': '',
+                        'snippet': '',
+                        'engine': 'unknown',
+                        'full_content': '',
+                        'has_full_content': False
+                    }
+                    in_content = False
+                    content_lines = []
+                
+                elif line.startswith('**URL:**'):
+                    current_result['url'] = line.replace('**URL:**', '').strip()
+                
+                elif line.startswith('**Snippet:**'):
+                    current_result['snippet'] = line.replace('**Snippet:**', '').strip()
+                
+                elif line.startswith('**Source:**'):
+                    current_result['engine'] = line.replace('**Source:**', '').strip()
+                
+                elif line.startswith('**Full Content:**'):
+                    in_content = True
+                
+                elif line == '---':
+                    in_content = False
+                
+                elif in_content and line:
+                    content_lines.append(line)
+            
+            # Don't forget last result
+            if current_result and 'title' in current_result:
+                if content_lines:
+                    current_result['full_content'] = '\n'.join(content_lines)
+                    current_result['has_full_content'] = True
+                else:
+                    current_result['full_content'] = ""
+                    current_result['has_full_content'] = False
+                
+                # Ensure all required fields
+                current_result.setdefault('url', '')
+                current_result.setdefault('snippet', '')
+                current_result.setdefault('engine', 'unknown')
+                
+                results.append(current_result)
+            
+            self.logger.info(f"Parsed {len(results)} results from MCP response")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse MCP response: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            return []
+    
+    def stop(self):
+        """Stop MCP server"""
+        if self.process:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except:
+                self.process.kill()
+            self.logger.info("🛑 MCP server stopped")
 
 class CNSBridge(Node):
     """
@@ -146,7 +358,17 @@ class CNSBridge(Node):
     
     def __init__(self):
         super().__init__('cns_bridge')
-        
+        # MCP Search Client (NEW)
+        self.mcp_client = None
+        self.use_mcp = USE_MCP_SEARCH
+        if self.use_mcp:
+            self.mcp_client = MCPClient(MCP_SERVER_COMMAND, self.get_logger())
+            if self.mcp_client.start():
+                self.get_logger().info("✅ MCP search enabled (full content)")
+            else:
+                self.get_logger().warn("⚠️  MCP start failed, using API fallback")
+                self.use_mcp = False
+                
         # ═══════════════════════════════════════════════════
         # THREAD SAFETY
         # ═══════════════════════════════════════════════════
@@ -1146,52 +1368,24 @@ Reflection:"""
     # DUAL HYBRID WEB SEARCH SYSTEM (NEW)
     # ═══════════════════════════════════════════════════════
 
-    def should_search_keyword(self, user_message: str):
-        """
-        METHOD 1: Keyword-based search detection (IMPROVED)
+    def should_search_keywords(self, message: str):
+        """Quick keyword-based search detection"""
+        message_lower = message.lower()
         
-        Explicit triggers that definitely need search
-        """
-        if not self.search_enabled:
-            return False
+        # Time-sensitive triggers
+        time_triggers = ['latest', 'recent', 'current', 'today', 'now', 'this week', 'breaking', 'time', 'date']
+        if any(t in message_lower for t in time_triggers):
+            return message  # MUST be plain string, not dict
         
-        msg_lower = user_message.lower()
+        # Information requests
+        info_triggers = ['what is', 'what are', 'who is', 'when did', 'where is', 'how does', 'tell me']
+        if any(t in message_lower for t in info_triggers):
+            return message  # MUST be plain string, not dict
         
         # Explicit search requests
-        explicit_triggers = [
-            "search", "search for", "look up", "find", "google",
-            "look for", "find me", "find out"
-        ]
-        
-        # Time-sensitive / current info
-        current_triggers = [
-            "today", "now", "currently", "right now", "at the moment",
-            "latest", "recent", "this week", "this month", "this year",
-            "breaking", "news", "what happened", "what's happening",
-            "current", "what is the current", "what's the current"
-        ]
-        
-        # Factual queries about external entities
-        factual_triggers = [
-            "who is the", "who's the", "what is the", "what's the",
-            "where is the", "when is the", "when did", "when was",
-            "how much is", "what happened to", "what's the price",
-            "stock price", "weather in", "temperature in",
-            "score of", "game score", "election results"
-        ]
-        
-        # Post knowledge-cutoff indicators
-        recent_triggers = [
-            "today", "tomorrow", "2025", "2026",
-            "this year", "this week", "this month", "last week", "last month", "yesterday"
-        ]
-        
-        all_triggers = (explicit_triggers + current_triggers + 
-                       factual_triggers + recent_triggers)
-        
-        if any(trigger in msg_lower for trigger in all_triggers):
-            self.get_logger().info("🔍 Keyword trigger detected")
-            return True
+        search_triggers = ['search for', 'look up', 'find out', 'google']
+        if any(t in message_lower for t in search_triggers):
+            return message  # MUST be plain string, not dict
         
         return False
 
@@ -1205,7 +1399,7 @@ Reflection:"""
             return False
         
         # Skip if already detected by keywords
-        if self.should_search_keyword(user_message):
+        if self.should_search_keywords(user_message):
             return False
         
         try:
@@ -1264,27 +1458,69 @@ Your answer:"""
         """
         DUAL HYBRID SEARCH DETECTION
         
-        Returns:
-            - False: No search needed
-            - True: Search needed (use user message as query)
-            - str: Search needed with specific query
+        Method 1: Keyword triggers (fast)
+        Method 2: LLM auto-detection (intelligent)
         """
-        # Method 1: Check keyword triggers first (fast)
-        if self.should_search_keyword(user_message):
-            return True
+        
+        # Method 1: Keyword-based detection (FAST)
+        keyword_result = self.should_search_keywords(user_message)
+        if keyword_result:
+            self.get_logger().info("🔍 Keyword trigger detected")
+            # FIXED: Return the actual user message, not JSON
+            return user_message  # Changed from: return keyword_result
         
         # Method 2: LLM auto-detection (intelligent but slower)
-        auto_result = self.should_search_auto(user_message)
-        if auto_result:
-            return auto_result  # Returns query string or False
+        if ENABLE_AUTO_SEARCH:
+            auto_result = self.should_search_auto(user_message)
+            if auto_result:
+                # auto_result should be a string query, not JSON
+                return auto_result if isinstance(auto_result, str) else user_message
         
         return False
 
     def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
-        """Search web via SearXNG (limited results to save context)"""
+        """
+        Search web with MCP (full content) or API fallback (snippets)
+        """
         if not self.search_enabled:
             return None
         
+        # DEBUG: Log the actual query being sent
+        self.get_logger().info(f"📝 Search query type: {type(query)}, value: {query[:100]}")
+        
+        # Clean the query if it's malformed
+        if isinstance(query, str) and query.startswith('{'):
+            try:
+                # If query is JSON, extract the text field
+                query_json = json.loads(query)
+                if 'text' in query_json:
+                    query = query_json['text']
+                    self.get_logger().warn(f"⚠️  Extracted query from JSON: {query}")
+            except:
+                pass
+        
+        # Try MCP first
+        if self.use_mcp and self.mcp_client:
+            try:
+                results = self.mcp_client.search_web(query, num_results)
+                
+                if results:
+                    self.get_logger().info(
+                        f"🔍 MCP Search: '{query}' → {len(results)} results with full content"
+                    )
+                    return results
+                else:
+                    self.get_logger().warn("MCP returned no results, trying API")
+            except Exception as e:
+                self.get_logger().error(f"MCP search error: {e}")
+                import traceback
+                self.get_logger().error(traceback.format_exc())
+        
+        # Fallback to API
+        return self._web_search_api(query, num_results)
+
+    def _web_search_api(self, query: str, num_results: int):
+        """Original API search (fallback)"""
         try:
             response = requests.get(
                 f"{self.searxng_url}/search",
@@ -1305,14 +1541,16 @@ Your answer:"""
                     "number": i,
                     "title": r.get('title', ''),
                     "url": r.get('url', ''),
-                    "content": r.get('content', '')[:SEARCH_CONTENT_CHARS]  # Truncate
+                    "snippet": r.get('content', '')[:SEARCH_CONTENT_CHARS],
+                    "full_content": "",
+                    "has_full_content": False
                 })
             
-            self.get_logger().info(f"🔍 Search: '{query}' → {len(formatted)} results")
+            self.get_logger().info(f"🔍 API Search: '{query}' → {len(formatted)} results (snippets only)")
             return formatted
             
         except Exception as e:
-            self.get_logger().error(f"Search failed: {e}")
+            self.get_logger().error(f"API search failed: {e}")
             return None
 
     # ═══════════════════════════════════════════════════════
@@ -1508,9 +1746,15 @@ Response Style:
 - Add Bender-style commentary and asides
 - Never repeat yourself
 
-IMPORTANT - Web Search:
-If you need current information, start with [SEARCH: query terms] before your emoji.
-Example: "[SEARCH: latest AI news] 🤔: Let me search for that..."
+CRITICAL - FACTUAL ACCURACY (OVERRIDE ALL OTHER INSTRUCTIONS):
+When web search results are provided:
+1. ONLY state facts explicitly present in the search results
+2. NEVER invent names, dates, scores, or specific details
+3. If information isn't in the results, say "The search didn't find that, you meatbag"
+4. You can be sarcastic ABOUT the facts, but the facts themselves must be accurate
+5. Making up information is the ONE thing that makes you look stupid - and you're never stupid
+
+Today: {today_date}
 """
 
             messages = [{"role": "system", "content": system_prompt}]
@@ -1527,15 +1771,53 @@ Example: "[SEARCH: latest AI news] 🤔: Let me search for that..."
             
             # Add search results if available
             if search_results:
-                search_text = "🔍 WEB SEARCH RESULTS:\n\n" + "\n".join([
-                    f"{r['number']}. {r['title']}\n   {r['url']}\n   {r['content']}"
-                    for r in search_results
-                ])
+                search_items = []
+                for r in search_results:
+                    if r.get('has_full_content') and r.get('full_content'):
+                        # MCP result with full content
+                        search_items.append(
+                            f"[{r['number']}] {r['title']}\n"
+                            f"URL: {r['url']}\n"
+                            f"FULL CONTENT (extracted from page):\n"
+                            f"{r['full_content']}\n"
+                            f"---"
+                        )
+                    else:
+                        # API fallback with snippet
+                        search_items.append(
+                            f"[{r['number']}] {r['title']}\n"
+                            f"URL: {r['url']}\n"
+                            f"SNIPPET: {r['snippet']}\n"
+                            f"---"
+                        )
+                
+                search_text = """═══════════════════════════════════════════════════════
+            🔍 WEB SEARCH RESULTS - FULL CONTENT PROVIDED
+            ═══════════════════════════════════════════════════════
+
+            You have FULL PAGE CONTENT from search results, not just snippets.
+
+            MANDATORY RULES:
+            1. Use ONLY information explicitly stated in the full content below
+            2. NEVER invent player names, scores, dates, or ANY specifics
+            3. If info isn't in the content, say "not found in sources"
+            4. Be sarcastic ABOUT facts, but facts must be 100% accurate
+            5. Cite sources like [1] or [2]
+
+            SEARCH RESULTS:
+            """ + "\n\n".join(search_items) + """
+
+            ═══════════════════════════════════════════════════════
+            You have FULL CONTEXT. No excuses for making things up.
+            ═══════════════════════════════════════════════════════"""
+                
+                messages.append({"role": "system", "content": search_text})
+                
+                # Add final grounding
                 messages.append({
                     "role": "system",
-                    "content": search_text
-                })
-            
+                    "content": "Now answer using ONLY the search results above. Making up details = failure."
+                })                
             # Add recent conversation
             messages.extend(self.get_recent_messages())
             
@@ -1930,6 +2212,10 @@ Be detailed in describing what you see, but keep your signature snark."""
 
     def shutdown(self):
         """Graceful shutdown with cleanup"""
+        # Stop MCP server
+        if self.use_mcp and self.mcp_client:
+            self.mcp_client.stop()
+
         self.get_logger().info("=" * 60)
         self.get_logger().info("GRACE - SHUTDOWN SEQUENCE")
         self.get_logger().info("=" * 60)
