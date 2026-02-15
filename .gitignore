@@ -13,10 +13,10 @@ __pycache__/
 Thumbs.db
 
 # ROS 2 build artifacts
-/build/
-/install/
-/log/
-/logs/
+build/
+install/
+log/
+logs/
 
 # ROS 2 specific temp files
 *.egg-info/
@@ -24,3 +24,9 @@ Thumbs.db
 
 # ROS 2 Catkin build system
 CATKIN_IGNORE
+
+# js Node files
+node_modules/
+
+# Secret files
+.env

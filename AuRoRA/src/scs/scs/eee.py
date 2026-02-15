@@ -83,7 +83,7 @@ class RelayNodeLimiter:
             
             return False
     
-    def self_check(self) -> dict:
+    def get_status(self) -> dict:
         """
         Get current throttle status (for debugging).
         """
@@ -93,6 +93,7 @@ class RelayNodeLimiter:
                 "rate": self.rate,
                 "burst": self.burst
             }
+
 class EEEAggregator:
     """
     This is my centralized Emergency and Exception Event (EEE) Aggregator module, which collects and manages all emergency
@@ -124,6 +125,7 @@ class EEEAggregator:
     _ledger_queue: deque = deque()  # Ledger queue
     _ledger_flush_timer: threading.Timer | None = None
     _ledger_lock = threading.Lock()
+    _db_conn: sqlite3.Connection | None = None  # Single shared DB connection
     BATCH_SIZE = 50
     FLUSH_INTERVAL = 0.5  # seconds
 
@@ -189,12 +191,12 @@ class EEEAggregator:
         )
         anomaly_handler.setFormatter(logging.Formatter('%(message)s'))
 
-        # THE LEDGER: Initialize SQLite here
-        db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
-        db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
-        db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
-        db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
-        db_conn.execute("""
+        # ✅ THE LEDGER: Initialize SQLite ONCE - single persistent connection
+        EEEAggregator._db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
+        EEEAggregator._db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
+        EEEAggregator._db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
+        EEEAggregator._db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
+        EEEAggregator._db_conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 correlation_id TEXT NOT NULL UNIQUE,
@@ -210,12 +212,12 @@ class EEEAggregator:
                 created_at REAL DEFAULT (julianday('now'))
             )
         """)
-        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_correlation_id ON events(correlation_id)")
-        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON events(timestamp)")
-        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_level ON events(level)")
-        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_system ON events(system)")
-        db_conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON events(content_hash)")
-        db_conn.commit()
+        EEEAggregator._db_conn.execute("CREATE INDEX IF NOT EXISTS idx_correlation_id ON events(correlation_id)")
+        EEEAggregator._db_conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON events(timestamp)")
+        EEEAggregator._db_conn.execute("CREATE INDEX IF NOT EXISTS idx_level ON events(level)")
+        EEEAggregator._db_conn.execute("CREATE INDEX IF NOT EXISTS idx_system ON events(system)")
+        EEEAggregator._db_conn.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON events(content_hash)")
+        EEEAggregator._db_conn.commit()
 
         # Start periodic flush timer
         def _start_ledger_flush():
@@ -243,7 +245,7 @@ class EEEAggregator:
                             with gzip.open(backup_path, 'wb') as f_out:
                                 shutil.copyfileobj(f_in, f_out)
                         print(f"[EEE] Ledger backed up to {backup_path.name}")
-                        # Optional: VACUUM to compact (safe)
+                        # Optional: VACUUM to compact (safe) - use separate connection
                         temp_conn = sqlite3.connect(db_path)
                         temp_conn.execute("VACUUM;")
                         temp_conn.close()
@@ -261,7 +263,7 @@ class EEEAggregator:
         recent_hashes = {}
         DEDUP_WINDOW = 5.0  # 5 seconds
         
-         # Throttling stats (for monitoring)
+        # Throttling stats (for monitoring)
         throttled_count = 0
 
         system_handlers = {}  # proc_id -> handler (create on first use)
@@ -312,7 +314,7 @@ class EEEAggregator:
                 else:
                     # Get or create throttle for this proc_id
                     if proc_id not in EEEAggregator._throttles:
-                        EEEAggregator._throttles[proc_id] = TokenBucketThrottle(
+                        EEEAggregator._throttles[proc_id] = RelayNodeLimiter(
                             rate=EEEAggregator._throttle_config["default_rate"],
                             burst=EEEAggregator._throttle_config["burst_size"]
                         )
@@ -354,14 +356,14 @@ class EEEAggregator:
             plain_text_line = text_formatter.format(record)
 
             # Add correlation ID to the plain text line
-            parts = plain_text_line.split('|', 1)
-            plain_text_line = f"{parts[0]} | CID:{correlation_id[:8]} | {parts[1]}"
+            parts_split = plain_text_line.split('|', 1)
+            plain_text_line = f"{parts_split[0]} | CID:{correlation_id[:8]} | {parts_split[1]}"
             if evidence:
                 plain_text_line += f" | DATA: {json.dumps(evidence)}"
 
             # Call plugins BEFORE disk writes
             skip_disk = False
-            for plugin_name, callback in EEEAggregator._plugins.items():
+            for plugin_name, callback in list(EEEAggregator._plugins.items()):  # Use list() to avoid dict modification during iteration
                 try:
                     if callback(level, msg, evidence or {}, {
                         "correlation_id": correlation_id,
@@ -375,9 +377,11 @@ class EEEAggregator:
                             skip_disk = True
                             break  # Exit plugin loop early
                 except Exception as e:
-                    self.logger.exception(f"Plugin {plugin_name} crashed")
+                    # Use print instead of self.logger to avoid recursion
+                    print(f"[EEE] Plugin {plugin_name} crashed: {e}")
+                    traceback.print_exc()
                     # Auto-disable broken plugin:
-                    del self._plugins[plugin_name]
+                    EEEAggregator._plugins.pop(plugin_name, None)
                     print(f"[EEE] Plugin {plugin_name} DISABLED")
 
             # Skip disk writes if plugin handled it
@@ -387,7 +391,6 @@ class EEEAggregator:
 
             try:
                 # 📦 ARCHIVE A: MASTER LOG (Post-mortem)
-                # Create rotating + gzip handlers (shared across events)
                 master_handler.emit(record)
 
                 # 🔧 ARCHIVE B: SYSTEM LOG (Subsystem isolation)
@@ -403,7 +406,6 @@ class EEEAggregator:
                 # Severe warnings, Errors, and Fatals
                 if level >= logging.WARNING:
                     # We use a clean payload for JSONL, distinct from the text line
-                    # Write JSON line via anomaly_handler (set formatter to JSON)
                     payload = {
                         "correlation_id": correlation_id,
                         "timestamp": iso_timestamp,
@@ -433,7 +435,7 @@ class EEEAggregator:
                     )
                     json_record.created = timestamp # For potential time use
 
-                    # Write JSON line via anomaly_handler (set formatter to JSON)
+                    # Write JSON line via anomaly_handler
                     anomaly_handler.emit(json_record)
     
                 # 📊 THE LEDGER (SQLite Metadata) - Batched insert
@@ -456,13 +458,18 @@ class EEEAggregator:
                         EEEAggregator._flush_ledger_batch()
 
             except Exception as e:
-                # (TODO) If the disk fails, print to console for now
-                print(f"Failed to write to archive: {e}")
+                # If the disk fails, print to console for now
+                print(f"[EEE] Failed to write to archive: {e}")
+                traceback.print_exc()
 
             EEEAggregator._log_queue.task_done()
 
     @classmethod
     def _flush_ledger_batch(cls) -> None:
+        """
+        Flush batched ledger entries to SQLite.
+        Uses the single persistent connection from _db_conn.
+        """
         with cls._ledger_lock:
             if not cls._ledger_queue:
                 return
@@ -471,23 +478,22 @@ class EEEAggregator:
             cls._ledger_queue.clear()
 
             try:
-                # Re-use db_conn from worker scope? Better: open briefly or pass conn
-                # For simplicity: re-open conn here (cheap, safe)
-                log_dir = Path(LOG_PATH)
-                db_conn = sqlite3.connect(log_dir / LEDGER_DB_FILE, check_same_thread=False)
-                db_conn.execute("PRAGMA journal_mode=WAL;")  # Crash-safe, concurrent
-                db_conn.execute("PRAGMA synchronous=NORMAL;")  # Balanced safety/speed (still durable)
-                db_conn.execute("PRAGMA wal_autocheckpoint=100;")  # Auto-checkpoint every 100 pages
-                db_conn.executemany("""
+                # ✅ Use the single persistent connection
+                if cls._db_conn is None:
+                    print("[EEE] Database connection not initialized!")
+                    return
+                
+                cls._db_conn.executemany("""
                     INSERT INTO events
                     (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, batch)
-                db_conn.commit()
-                db_conn.close()
+                cls._db_conn.commit()
             except Exception as e:
                 print(f"[EEE] Ledger batch flush failed: {e}")
-                # Re-queue on failure? Optional: cls._ledger_queue.extendleft(reversed(batch))
+                traceback.print_exc()
+                # Re-queue on failure (optional)
+                # cls._ledger_queue.extendleft(reversed(batch))
                 
     @classmethod
     def get_throttle_status(cls) -> dict:
@@ -511,6 +517,9 @@ class EEEAggregator:
 
     @classmethod
     def shutdown(cls):
+        """
+        Graceful shutdown: flush all queues and close database connection.
+        """
         if cls._worker_started:
             print("[EEE] Flushing pending log entries...")
             cls._log_queue.join()
@@ -519,7 +528,15 @@ class EEEAggregator:
             if cls._ledger_flush_timer:
                 cls._ledger_flush_timer.cancel()
             
-            # ✅ NEW: Shutdown ACV
+            # ✅ Close the database connection
+            if cls._db_conn:
+                try:
+                    cls._db_conn.close()
+                    print("[EEE] Database connection closed.")
+                except Exception as e:
+                    print(f"[EEE] Error closing database: {e}")
+            
+            # ✅ Shutdown GzipRotatingFileHandler
             GzipRotatingFileHandler.shutdown()
             
             print(f"[EEE] All events written. Shutdown complete.")
@@ -623,8 +640,6 @@ class EEEAggregator:
             Args:
                 handler: The logging handler to which the filter and formatter will be applied.
             """
-
-
             # Pass the handler through the time filter
             EEE_handler.setFormatter(cls.pass_thru_EEE_filters())
             
@@ -718,19 +733,22 @@ class EEEAggregator:
         
         # Dispatch to the background worker (Async)
         self._dispatch(logging.ERROR, msg, evidence)
+
     def _dispatch(self, level: int, msg: str, evidence: dict):
-        """ Package the event and drop it in the mail """
-        self._log_queue.put((time.time(), level, self.logger.name, msg, evidence))
-
-        # Trigger the console output immediately
-        self.logger.log(level, f"{msg} | Data: {json.dumps(evidence)}")
-
+        """Package the event and drop it in the mail"""
         try:
-            self._log_queue.put(item, timeout=0.1)  # Block 100ms max
+            self._log_queue.put((time.time(), level, self.logger.name, msg, evidence), timeout=0.1)  # Block 100ms max
         except queue.Full:
             EEEAggregator._dropped_events += 1
             if EEEAggregator._dropped_events % 100 == 0:
                 print(f"[EEE] WARNING: Dropped {EEEAggregator._dropped_events} events (queue full!)")
+                
+        # Trigger the console output immediately
+        if evidence:
+            self.logger.log(level, f"{msg} | Data: {json.dumps(evidence)}")
+        else:
+            self.logger.log(level, msg)
+
 
 def get_logger(caller_id: str = "SCS.EEE") -> EEEAggregator:
     """
@@ -762,7 +780,7 @@ if __name__ == "__main__":
         logger.critical("Robot is UNDER ATTACK!")
         logger.exception("This is an exception message.")
     
-    print("Testing throttling with burst...")
+    print("\nTesting throttling with burst...")
     print("Config:", EEEAggregator._throttle_config)
     print()
     

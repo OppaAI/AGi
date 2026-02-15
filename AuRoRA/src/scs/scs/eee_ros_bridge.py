@@ -9,6 +9,7 @@ CHANGELOG (Bug Fixes):
 - Added Item #8: MetricsPlugin for real-time numeric trend visualization (/eee/metrics topic)
 """
 
+import json
 import logging
 import time
 from typing import Dict

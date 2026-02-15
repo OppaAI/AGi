@@ -16,31 +16,28 @@
         
         body {
             font-family: 'Nunito', sans-serif;
-            background: linear-gradient(135deg, #ffeef8 0%, #e8f4ff 50%, #fff5e6 100%);
+            background: #000;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
             overflow-x: hidden;
+            position: relative;
         }
         
-        .stars {
+        /* Cyberpunk Circuit Background */
+        .cyber-bg {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-<<<<<<< HEAD:AuRoRA/AGi.html
             z-index: 0;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a1a 100%);
             overflow: hidden;
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Circuit grid */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .circuit-grid {
             position: absolute;
             width: 200%;
@@ -59,36 +56,16 @@
             100% { transform: translate(50px, 50px) rotate(0deg); }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Matrix rain canvas */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        /* Matrix rain canvas - ENHANCED VISIBILITY */
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         #matrixCanvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
             opacity: 0.4;
             z-index: 1;
         }
         
-=======
-            opacity: 0.15;
-=======
-            opacity: 0.4;
-            z-index: 1;
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-        }
-        
-        /* Circuit nodes */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .circuit-node {
             position: absolute;
             width: 4px;
@@ -102,8 +79,6 @@
         @keyframes node-pulse {
             0%, 100% { opacity: 0.3; transform: scale(1); }
             50% { opacity: 1; transform: scale(1.5); }
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         }
         
         .data-line {
@@ -150,100 +125,43 @@
         @keyframes glow-pulse {
             0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
             50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-        }
-        
-        /* Data flow lines */
-        .data-line {
-            position: absolute;
-            background: linear-gradient(90deg, transparent, #00ff88, transparent);
-            height: 1px;
-            opacity: 0.4;
-            animation: data-flow 3s linear infinite;
-        }
-        
-        @keyframes data-flow {
-            0% { transform: translateX(-100%); opacity: 0; }
-            50% { opacity: 0.6; }
-            100% { transform: translateX(100vw); opacity: 0; }
-        }
-        
-        /* Floating circuit symbols */
-        .circuit-symbol {
-            position: absolute;
-            color: #00ff88;
-            font-family: monospace;
-            font-size: 14px;
-            opacity: 0.2;
-            animation: symbol-float 10s ease-in-out infinite;
-            text-shadow: 0 0 10px #00ff88;
-        }
-        
-        @keyframes symbol-float {
-            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.1; }
-            50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
-        }
-        
-        /* Pink accent glow */
-        .pink-glow {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(255, 105, 180, 0.15) 0%, transparent 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-            pointer-events: none;
-            z-index: 0;
-        }
-        
-        .star {
-            position: absolute;
-            color: #ffd700;
-            font-size: 20px;
-            animation: twinkle 3s infinite;
-            opacity: 0.6;
-        }
-        
-        @keyframes twinkle {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
         }
         
         .container {
             position: relative;
-            z-index: 1;
+            z-index: 10;
             max-width: 600px;
             width: 100%;
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(10, 10, 20, 0.85);
             backdrop-filter: blur(10px);
             border-radius: 30px;
             padding: 30px;
             box-shadow: 
-                0 10px 40px rgba(255, 182, 193, 0.3),
-                0 0 0 4px rgba(255, 255, 255, 0.5);
-            border: 3px solid #ffb6c1;
+                0 10px 40px rgba(255, 105, 180, 0.2),
+                0 0 0 1px rgba(0, 255, 136, 0.3),
+                inset 0 0 30px rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
         }
         
         h1 {
             text-align: center;
-            color: #ff6b9d;
+            color: #ff69b4;
             font-size: 2.5em;
             font-weight: 800;
-            text-shadow: 3px 3px 0px #ffe4e1;
+            text-shadow: 
+                0 0 10px rgba(255, 105, 180, 0.5),
+                0 0 20px rgba(255, 105, 180, 0.3);
             margin-bottom: 10px;
             letter-spacing: 2px;
         }
         
         .subtitle {
             text-align: center;
-            color: #a8a8a8;
+            color: #00ff88;
             font-size: 1.1em;
             margin-bottom: 25px;
             font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
         }
         
         .robot-container {
@@ -251,6 +169,7 @@
             justify-content: center;
             margin: 30px 0;
             position: relative;
+            padding: 0 80px; /* Space for side buttons */
         }
         
         .robot {
@@ -258,7 +177,6 @@
             height: 200px;
             position: relative;
             animation: float 3s ease-in-out infinite;
-<<<<<<< HEAD:AuRoRA/AGi.html
             cursor: default;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
@@ -268,10 +186,6 @@
             animation: wiggle 0.5s ease-in-out infinite;
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        /* Hand cursor zone around head */
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         .pet-zone {
             position: absolute;
             top: 10px;
@@ -285,8 +199,6 @@
         
         .pet-zone:active {
             cursor: grabbing;
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         }
         
         @keyframes float {
@@ -294,7 +206,6 @@
             50% { transform: translateY(-15px) rotate(2deg); }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         @keyframes wiggle {
             0%, 100% { transform: rotate(-3deg) scale(1.05); }
             50% { transform: rotate(3deg) scale(1.05); }
@@ -336,9 +247,245 @@
             }
         }
         
-=======
-        /* Robot Head */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+        /* NEGATIVE REWARD ROBOT BUTTON */
+        .negative-robot-btn {
+            position: absolute;
+            top: 50%;
+            right: 10px; /* Moved closer to main robot */
+            transform: translateY(-50%);
+            width: 70px;
+            height: 90px;
+            cursor: pointer;
+            z-index: 20;
+            transition: all 0.3s ease;
+            filter: grayscale(0.3);
+        }
+        
+        .negative-robot-btn:hover {
+            transform: translateY(-50%) scale(1.1);
+            filter: grayscale(0);
+        }
+        
+        .negative-robot-btn:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+        
+        .negative-robot-btn.shaking {
+            animation: robot-shake 0.5s ease-in-out;
+        }
+        
+        @keyframes robot-shake {
+            0%, 100% { transform: translateY(-50%) rotate(0deg); }
+            25% { transform: translateY(-50%) rotate(-10deg); }
+            75% { transform: translateY(-50%) rotate(10deg); }
+        }
+        
+        /* Small angry robot head */
+        .neg-robot-head {
+            width: 50px;
+            height: 45px;
+            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            top: 15px;
+            left: 10px;
+            box-shadow: 
+                0 4px 10px rgba(255, 107, 107, 0.4),
+                0 0 15px rgba(255, 107, 107, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .negative-robot-btn:hover .neg-robot-head {
+            box-shadow: 
+                0 6px 15px rgba(255, 107, 107, 0.6),
+                0 0 25px rgba(255, 107, 107, 0.5);
+        }
+        
+        /* Small antenna */
+        .neg-antenna {
+            width: 6px;
+            height: 18px;
+            background: linear-gradient(to bottom, #ff6b6b, #ff8e8e);
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 5px;
+        }
+        
+        .neg-antenna::after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background: radial-gradient(circle at 30% 30%, #fff, #ff6b6b);
+            border-radius: 50%;
+            position: absolute;
+            top: -6px;
+            left: -2px;
+            box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+        }
+        
+        /* Angry face */
+        .neg-face {
+            position: absolute;
+            top: 15px;
+            left: 8px;
+            width: 34px;
+            height: 20px;
+        }
+        
+        .neg-eyes {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        
+        .neg-eye {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .neg-eye::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #4a4a4a;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+        }
+        
+        /* Angry eyebrows */
+        .neg-eyebrow {
+            position: absolute;
+            top: -2px;
+            width: 12px;
+            height: 3px;
+            background: #4a4a4a;
+            border-radius: 2px;
+        }
+        
+        .neg-eyebrow.left {
+            left: 0;
+            transform: rotate(20deg);
+        }
+        
+        .neg-eyebrow.right {
+            right: 0;
+            transform: rotate(-20deg);
+        }
+        
+        /* Angry mouth */
+        .neg-mouth {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 6px;
+            background: #4a4a4a;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        /* Small body */
+        .neg-robot-body {
+            width: 35px;
+            height: 28px;
+            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+            border-radius: 15px 15px 12px 12px;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+        }
+        
+        /* X mark on body */
+        .neg-x-mark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+        }
+        
+        .neg-x-mark::before,
+        .neg-x-mark::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: #ff6b6b;
+            top: 50%;
+            left: 0;
+            border-radius: 2px;
+        }
+        
+        .neg-x-mark::before {
+            transform: translateY(-50%) rotate(45deg);
+        }
+        
+        .neg-x-mark::after {
+            transform: translateY(-50%) rotate(-45deg);
+        }
+        
+        /* Counter badge */
+        .neg-counter {
+            position: absolute;
+            top: 5px;
+            right: 0;
+            background: #ff6b6b;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            font-size: 0.75em;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(10, 10, 20, 0.9);
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.5);
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 25;
+        }
+        
+        .neg-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* Tooltip */
+        .neg-tooltip {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            font-weight: 700;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        
+        .negative-robot-btn:hover .neg-tooltip {
+            opacity: 1;
+            bottom: -35px;
+        }
+        
         .robot-head {
             width: 140px;
             height: 120px;
@@ -349,10 +496,10 @@
             left: 30px;
             box-shadow: 
                 0 8px 20px rgba(255, 105, 180, 0.3),
+                0 0 30px rgba(255, 105, 180, 0.2),
                 inset -5px -5px 15px rgba(0,0,0,0.1),
                 inset 5px 5px 15px rgba(255,255,255,0.3);
             z-index: 10;
-<<<<<<< HEAD:AuRoRA/AGi.html
             transition: all 0.5s ease;
         }
         
@@ -425,8 +572,6 @@
         @keyframes pulse-heart {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.08); }
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         }
         
         .antenna-left, .antenna-right {
@@ -436,6 +581,7 @@
             position: absolute;
             top: -25px;
             border-radius: 10px;
+            transition: all 0.3s ease;
         }
         
         .antenna-left {
@@ -448,7 +594,6 @@
             transform: rotate(15deg);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         .robot-head.sad .antenna-left,
         .robot-head.sad .antenna-right {
             background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
@@ -488,8 +633,6 @@
             50% { transform: rotate(25deg); }
         }
         
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .antenna-ball {
             width: 20px;
             height: 20px;
@@ -530,6 +673,7 @@
             position: relative;
             box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
             overflow: hidden;
+            transition: all 0.3s ease;
         }
         
         .eye::after {
@@ -567,6 +711,32 @@
             opacity: 0;
         }
         
+        .eye.sad::after {
+            transform: translateY(3px);
+        }
+        
+        .eye.sad::before {
+            transform: translateY(3px);
+        }
+        
+        .eye.angry::after {
+            transform: translateY(-2px) scale(0.9);
+        }
+        
+        .eye.angry::before {
+            opacity: 0;
+        }
+        
+        .eye.surprised::after {
+            transform: scale(0.5);
+        }
+        
+        .eye.love::after {
+            transform: scale(0.8) translateY(-2px);
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+        
         .eye.blink {
             animation: blink-anim 0.2s ease;
         }
@@ -588,14 +758,6 @@
             transform: translateY(-3px);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        .eye.surprised::after {
-            transform: scale(0.7);
-        }
-        
-        /* Cheeks */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .cheeks {
             display: flex;
             justify-content: space-between;
@@ -609,6 +771,29 @@
             background: rgba(255, 105, 180, 0.4);
             border-radius: 50%;
             opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        .robot-head.sad .cheek {
+            background: rgba(107, 140, 255, 0.4);
+            opacity: 0.3;
+        }
+        
+        .robot-head.angry .cheek {
+            background: rgba(255, 107, 107, 0.6);
+            opacity: 0.8;
+        }
+        
+        .robot-head.loving .cheek,
+        .robot-head.petted .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 1;
+            animation: blush 1s ease-in-out infinite;
+        }
+        
+        @keyframes blush {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
         }
         
         .mouth {
@@ -655,7 +840,6 @@
             margin-top: 15px;
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         .mouth.sad {
             width: 30px;
             height: 15px;
@@ -699,9 +883,6 @@
             50% { transform: scaleX(1.2); }
         }
         
-=======
-        /* Robot Body */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .robot-body {
             width: 100px;
             height: 80px;
@@ -714,6 +895,29 @@
                 0 5px 15px rgba(0,0,0,0.1),
                 inset -3px -3px 10px rgba(0,0,0,0.05);
             z-index: 5;
+            transition: all 0.5s ease;
+        }
+        
+        .robot-head.sad ~ .robot-body {
+            background: linear-gradient(145deg, #d4e0ff, #a8c0ff);
+        }
+        
+        .robot-head.angry ~ .robot-body {
+            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+        }
+        
+        .robot-head.thinking ~ .robot-body {
+            background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
+        }
+        
+        .robot-head.petted ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            animation: body-wiggle 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes body-wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
         }
         
         .heart {
@@ -725,6 +929,7 @@
             background: #ff69b4;
             transform: rotate(-45deg);
             animation: heartbeat 1.5s ease-in-out infinite;
+            transition: all 0.3s ease;
         }
         
         .heart::before,
@@ -752,7 +957,6 @@
             50% { transform: rotate(-45deg) scale(1.1); }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         .robot-head.sad .heart {
             background: #6b8cff;
             animation: heartbeat-slow 2s ease-in-out infinite;
@@ -786,9 +990,6 @@
             50% { transform: rotate(-45deg) scale(1.5); }
         }
         
-=======
-        /* Arms */
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         .arm-left, .arm-right {
             width: 30px;
             height: 60px;
@@ -797,6 +998,7 @@
             top: 80px;
             border-radius: 15px;
             z-index: 4;
+            transition: all 0.3s ease;
         }
         
         .arm-left {
@@ -809,6 +1011,73 @@
             right: 10px;
             transform-origin: top center;
             animation: wave-right 4s ease-in-out infinite;
+        }
+        
+        .robot-head.sad .arm-left,
+        .robot-head.sad .arm-right {
+            background: linear-gradient(to bottom, #a8c0ff, #6b8cff);
+            animation: none;
+            transform: rotate(20deg) translateY(10px);
+        }
+        
+        .robot-head.sad .arm-right {
+            transform: rotate(-20deg) translateY(10px);
+        }
+        
+        .robot-head.angry .arm-left,
+        .robot-head.angry .arm-right {
+            background: linear-gradient(to bottom, #ff6b6b, #ee5a5a);
+            animation: shake-fists 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-30deg); }
+        }
+        
+        .robot-head.angry .arm-right {
+            animation: shake-fists-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(30deg); }
+        }
+        
+        .robot-head.loving .arm-left {
+            animation: reach-out-left 2s ease-in-out infinite;
+        }
+        
+        .robot-head.loving .arm-right {
+            animation: reach-out-right 2s ease-in-out infinite;
+        }
+        
+        .robot-head.petted .arm-left {
+            animation: happy-wave-left 0.5s ease-in-out infinite;
+        }
+        
+        .robot-head.petted .arm-right {
+            animation: happy-wave-right 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes happy-wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg); }
+        }
+        
+        @keyframes happy-wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg); }
+        }
+        
+        @keyframes reach-out-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg) translateX(-5px); }
+        }
+        
+        @keyframes reach-out-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg) translateX(5px); }
         }
         
         @keyframes wave-left {
@@ -825,17 +1094,20 @@
             position: absolute;
             top: -60px;
             right: -80px;
-            background: white;
+            background: rgba(10, 10, 20, 0.95);
             padding: 15px 20px;
             border-radius: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 
+                0 5px 15px rgba(0,0,0,0.3),
+                0 0 20px rgba(0, 255, 136, 0.2);
             font-size: 0.9em;
-            color: #666;
+            color: #00ff88;
             max-width: 150px;
             opacity: 0;
             transform: scale(0);
             transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            border: 3px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
         }
         
         .speech-bubble::after {
@@ -845,9 +1117,9 @@
             left: 20px;
             width: 20px;
             height: 20px;
-            background: white;
-            border-bottom: 3px solid #ffb6c1;
-            border-right: 3px solid #ffb6c1;
+            background: rgba(10, 10, 20, 0.95);
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            border-right: 1px solid rgba(0, 255, 136, 0.3);
             transform: rotate(45deg);
         }
         
@@ -870,15 +1142,16 @@
             align-items: center;
             gap: 8px;
             padding: 8px 16px;
-            background: #ffe4e1;
+            background: rgba(255, 105, 180, 0.1);
             border-radius: 20px;
             font-size: 0.9em;
             font-weight: 700;
-            color: #ff6b9d;
+            color: #00ff88;
             margin: 0 auto 20px;
             display: block;
             width: fit-content;
-            border: 2px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         .status-dot {
@@ -890,8 +1163,8 @@
         }
         
         .status-dot.connected {
-            background: #69db7c;
-            box-shadow: 0 0 10px #69db7c;
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
         }
         
         @keyframes pulse {
@@ -974,31 +1247,55 @@
         .input-area {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+        
+        /* RL FEEDBACK TEXT */
+        .rl-feedback-text {
+            text-align: center;
+            color: rgba(0, 255, 136, 0.7);
+            font-size: 0.85em;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .rl-feedback-text .thumb-up {
+            color: #ff69b4;
+        }
+        
+        .rl-feedback-text .thumb-down {
+            color: #ff6b6b;
         }
         
         #userInput {
             flex: 1;
             padding: 15px 20px;
-            border: 3px solid #ffb6c1;
+            border: 1px solid rgba(0, 255, 136, 0.3);
             border-radius: 25px;
             font-size: 1em;
             font-family: 'Nunito', sans-serif;
             outline: none;
             transition: all 0.3s ease;
-            background: white;
-            color: #666;
+            background: rgba(10, 10, 20, 0.8);
+            color: #00ff88;
+            box-shadow: inset 0 0 10px rgba(0, 255, 136, 0.05);
         }
         
         #userInput:focus {
             border-color: #ff69b4;
-            box-shadow: 0 0 0 4px rgba(255, 105, 180, 0.2);
+            box-shadow: 
+                0 0 0 4px rgba(255, 105, 180, 0.2),
+                inset 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         #userInput::placeholder {
-<<<<<<< HEAD:AuRoRA/AGi.html
             color: rgba(0, 255, 136, 0.4);
-<<<<<<< HEAD:AuRoRA/AGi.html
         }
         
         /* SINGLE + BUTTON FOR IMAGE/CAMERA */
@@ -1070,11 +1367,40 @@
         
         .plus-menu-item span {
             font-size: 1.3em;
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-            color: #ccc;
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+        }
+        
+        /* GLOBE BUTTON FOR WEB SEARCH */
+        .globe-btn {
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1.3em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 55px;
+        }
+        
+        .globe-btn:hover {
+            transform: scale(1.1);
+            border-color: #ff69b4;
+        }
+        
+        .globe-btn.active {
+            color: #00ff88;
+            text-shadow: 0 0 15px #00ff88, 0 0 30px #00ff88;
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            animation: globe-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes globe-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
         }
         
         .send-btn {
@@ -1087,13 +1413,18 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(255, 20, 147, 0.3);
+            box-shadow: 
+                0 4px 15px rgba(255, 20, 147, 0.3),
+                0 0 10px rgba(255, 105, 180, 0.2);
             font-family: 'Nunito', sans-serif;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
         }
         
         .send-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 20, 147, 0.4);
+            box-shadow: 
+                0 6px 20px rgba(255, 20, 147, 0.4),
+                0 0 20px rgba(255, 105, 180, 0.3);
         }
         
         .send-btn:active {
@@ -1110,9 +1441,10 @@
             max-height: 300px;
             overflow-y: auto;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.6);
+            background: rgba(10, 10, 20, 0.6);
             border-radius: 20px;
-            border: 2px solid #e0e0e0;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
         }
         
         .message {
@@ -1132,19 +1464,23 @@
         }
         
         .message.user {
-            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
-            color: #1976d2;
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
             margin-left: auto;
             border-bottom-right-radius: 5px;
             text-align: right;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
         }
         
         .message.grace {
-            background: linear-gradient(145deg, #fce4ec, #f8bbd9);
-            color: #c2185b;
+            background: rgba(255, 105, 180, 0.1);
+            color: #ff69b4;
             margin-right: auto;
             border-bottom-left-radius: 5px;
             min-height: 44px;
+            border: 1px solid rgba(255, 105, 180, 0.2);
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.1);
         }
         
         .message-label {
@@ -1174,12 +1510,12 @@
         }
         
         .chat-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
+            background: rgba(0, 255, 136, 0.05);
             border-radius: 10px;
         }
         
         .chat-container::-webkit-scrollbar-thumb {
-            background: #ffb6c1;
+            background: rgba(0, 255, 136, 0.3);
             border-radius: 10px;
         }
         
@@ -1224,9 +1560,10 @@
         .wave {
             width: 4px;
             height: 20px;
-            background: #ff69b4;
+            background: #00ff88;
             border-radius: 2px;
             animation: wave-anim 0.5s ease-in-out infinite;
+            box-shadow: 0 0 10px #00ff88;
         }
         
         .wave:nth-child(2) { animation-delay: 0.1s; }
@@ -1251,9 +1588,10 @@
         .typing-dot {
             width: 8px;
             height: 8px;
-            background: #ff69b4;
+            background: #00ff88;
             border-radius: 50%;
             animation: typing-bounce 1.4s ease-in-out infinite;
+            box-shadow: 0 0 5px #00ff88;
         }
         
         .typing-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -1263,7 +1601,6 @@
             0%, 60%, 100% { transform: translateY(0); }
             30% { transform: translateY(-10px); }
         }
-<<<<<<< HEAD:AuRoRA/AGi.html
         
         .emotion-indicator {
             position: absolute;
@@ -1310,25 +1647,65 @@
             opacity: 1;
             transform: scale(1);
         }
+        
+        /* RL REWARD VISUAL FEEDBACK */
+        .reward-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            text-shadow: 0 0 30px currentColor;
+        }
+        
+        .reward-feedback.show {
+            animation: reward-pop 1s ease-out forwards;
+        }
+        
+        .reward-feedback.positive {
+            color: #ff69b4;
+        }
+        
+        .reward-feedback.negative {
+            color: #ff6b6b;
+        }
+        
+        @keyframes reward-pop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3) rotate(10deg);
+            }
+            40% {
+                transform: translate(-50%, -50%) scale(1.1) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8) translateY(-100px);
+            }
+        }
     </style>
 </head>
 <body>
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-    <!-- Cyberpunk Background -->
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
     <div class="cyber-bg" id="cyberBg">
         <div class="circuit-grid"></div>
         <canvas id="matrixCanvas"></canvas>
         <div class="pink-glow"></div>
     </div>
-=======
-    </style>
-</head>
-<body>
-    <!-- Background Stars -->
-    <div class="stars" id="stars"></div>
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+    
+    <!-- RL Reward Feedback Overlay -->
+    <div class="reward-feedback" id="rewardFeedback"></div>
     
     <div class="container">
         <h1>✨ Chat with Grace ✨</h1>
@@ -1341,41 +1718,18 @@
         
         <div class="robot-container">
             <div class="robot" id="robot">
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="pet-zone" id="petZone"></div>
-=======
-                <!-- Pet Zone (for hand cursor) -->
-                <div class="pet-zone" id="petZone"></div>
-                
-                <!-- Pet Counter -->
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
                 <div class="pet-counter" id="petCounter">Pets: 0</div>
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-=======
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-                <!-- Speech Bubble -->
-                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
-                
-                <!-- Speaking Waves -->
->>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
                 <div class="speaking-waves" id="speakingWaves">
                     <div class="wave"></div>
                     <div class="wave"></div>
                     <div class="wave"></div>
                 </div>
                 
-<<<<<<< HEAD:AuRoRA/AGi.html
                 <div class="robot-head" id="robotHead">
-=======
-                <!-- Head -->
-                <div class="robot-head">
-                    <!-- Antennas -->
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
                     <div class="antenna-left">
                         <div class="antenna-ball"></div>
                     </div>
@@ -1403,9 +1757,29 @@
                 <div class="arm-left"></div>
                 <div class="arm-right"></div>
             </div>
+            
+            <!-- NEGATIVE REWARD ROBOT BUTTON -->
+            <div class="negative-robot-btn" id="negativeRobotBtn" onclick="handleNegativeReward()">
+                <div class="neg-robot-head">
+                    <div class="neg-antenna"></div>
+                    <div class="neg-face">
+                        <div class="neg-eyebrow left"></div>
+                        <div class="neg-eyebrow right"></div>
+                        <div class="neg-eyes">
+                            <div class="neg-eye"></div>
+                            <div class="neg-eye"></div>
+                        </div>
+                        <div class="neg-mouth"></div>
+                    </div>
+                </div>
+                <div class="neg-robot-body">
+                    <div class="neg-x-mark"></div>
+                </div>
+                <div class="neg-counter" id="negCounter">0</div>
+                <div class="neg-tooltip">Bad response!</div>
+            </div>
         </div>
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         <!-- IMAGE PREVIEW AREA -->
         <div class="image-preview-area" id="imagePreviewArea">
             <button class="remove-btn" onclick="removeImage()">✕</button>
@@ -1413,9 +1787,8 @@
             <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
         </div>
         
-        <!-- INPUT AREA WITH SINGLE + BUTTON -->
+        <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
         <div class="input-area">
-<<<<<<< HEAD:AuRoRA/AGi.html
             <!-- SINGLE + BUTTON WITH DROPDOWN -->
             <div style="position: relative;">
                 <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">
@@ -1435,49 +1808,35 @@
                 </div>
             </div>
             
+            <!-- GLOBE BUTTON FOR WEB SEARCH -->
+            <button class="globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">
+                🌐
+            </button>
+            
             <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
             
             <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
-=======
-            <input type="text" id="userInput" placeholder="Initialize neural handshake..." maxlength="200">
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Transmit 💌</button>
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        <!-- Input Area -->
-        <div class="input-area">
-            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
->>>>>>> 22f5fe7 (Changed the speech bubble text and the matrix text):AuRoRA/src/scs/scs/AGi.html
+        </div>
+        
+        <!-- RL FEEDBACK INSTRUCTION TEXT -->
+        <div class="rl-feedback-text">
+            <span class="thumb-up">👍</span> Pet robot for good response
+            <span style="color: rgba(0,255,136,0.4);">|</span>
+            <span class="thumb-down">👎</span> Press angry bot for bad response
         </div>
         
         <div class="chat-container" id="chatContainer"></div>
     </div>
 
     <script>
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Matrix Rain (same as before)
-=======
-        // Initialize Matrix Rain
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-        // ENHANCED MATRIX RAIN
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
             initDrops();
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
-            initDrops();
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         }
         
         const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
@@ -1584,137 +1943,27 @@
         }
         createCircuitElements();
         
-        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
-        const charArray = chars.split('');
-        
-        const fontSize = 16;
-        let columns = 0;
-        let drops = [];
-        
-        function initDrops() {
-            columns = Math.floor(canvas.width / fontSize);
-            drops = [];
-            for (let i = 0; i < columns; i++) {
-                drops[i] = Math.random() * -50;
-            }
-        }
-        
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#00ff88';
-            ctx.font = fontSize + 'px monospace';
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = '#00ff88';
-            
-            for (let i = 0; i < drops.length; i++) {
-                const text = charArray[Math.floor(Math.random() * charArray.length)];
-                const x = i * fontSize;
-                const y = drops[i] * fontSize;
-                
-                ctx.fillText(text, x, y);
-                
-                if (y > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
-                }
-                drops[i]++;
-            }
-            
-            ctx.shadowBlur = 0;
-        }
-        
-        function drawMatrixHeads() {
-            for (let i = 0; i < drops.length; i++) {
-                if (Math.random() > 0.98) {
-                    const text = charArray[Math.floor(Math.random() * charArray.length)];
-                    const x = i * fontSize;
-                    const y = (drops[i] - 1) * fontSize;
-                    
-                    ctx.fillStyle = '#ccffcc';
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#00ff88';
-                    ctx.fillText(text, x, y);
-                }
-            }
-            ctx.shadowBlur = 0;
-        }
-        
-        setInterval(() => {
-            drawMatrix();
-            drawMatrixHeads();
-        }, 33);
-        
-        // Circuit elements
-        function createCircuitElements() {
-            const bg = document.getElementById('cyberBg');
-            
-            for (let i = 0; i < 20; i++) {
-                const node = document.createElement('div');
-                node.className = 'circuit-node';
-                node.style.left = Math.random() * 100 + '%';
-                node.style.top = Math.random() * 100 + '%';
-                node.style.animationDelay = Math.random() * 2 + 's';
-                bg.appendChild(node);
-            }
-            
-            for (let i = 0; i < 10; i++) {
-                const line = document.createElement('div');
-                line.className = 'data-line';
-                line.style.top = Math.random() * 100 + '%';
-                line.style.width = (100 + Math.random() * 200) + 'px';
-                line.style.animationDelay = Math.random() * 3 + 's';
-                line.style.animationDuration = (2 + Math.random() * 2) + 's';
-                bg.appendChild(line);
-            }
-            
-            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
-            for (let i = 0; i < 15; i++) {
-                const symbol = document.createElement('div');
-                symbol.className = 'circuit-symbol';
-                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                symbol.style.left = Math.random() * 100 + '%';
-                symbol.style.top = Math.random() * 100 + '%';
-                symbol.style.animationDelay = Math.random() * 10 + 's';
-                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
-                bg.appendChild(symbol);
-            }
-        }
-        createCircuitElements();
-        
-=======
-        // Create background stars
-        const starsContainer = document.getElementById('stars');
-        for (let i = 0; i < 20; i++) {
-            const star = document.createElement('div');
-            star.className = 'star';
-            star.innerHTML = '✦';
-            star.style.left = Math.random() * 100 + '%';
-            star.style.top = Math.random() * 100 + '%';
-            star.style.animationDelay = Math.random() * 3 + 's';
-            star.style.fontSize = (Math.random() * 15 + 10) + 'px';
-            starsContainer.appendChild(star);
-        }
-        
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         // Robot elements
+        const robot = document.getElementById('robot');
+        const petZone = document.getElementById('petZone');
+        const robotHead = document.getElementById('robotHead');
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
         const mouth = document.getElementById('mouth');
         const speechBubble = document.getElementById('speechBubble');
         const speakingWaves = document.getElementById('speakingWaves');
+        const emotionIndicator = document.getElementById('emotionIndicator');
+        const petCounter = document.getElementById('petCounter');
         const chatContainer = document.getElementById('chatContainer');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const plusMenu = document.getElementById('plusMenu');
+        const globeBtn = document.getElementById('globeBtn');
+        const negativeRobotBtn = document.getElementById('negativeRobotBtn');
+        const negCounter = document.getElementById('negCounter');
+        const rewardFeedback = document.getElementById('rewardFeedback');
         
         // Image elements
         const imagePreviewArea = document.getElementById('imagePreviewArea');
@@ -1730,18 +1979,31 @@
         let blinkInterval;
         let currentStreamMessage = null;
         let streamBuffer = '';
+        let currentEmotion = 'happy';
+        let petCount = 0;
+        let isBeingPetted = false;
+        let petTimeout;
+        let ros = null;
+        let isROSConnected = false;
+        let webSearchEnabled = false;
         
-        // ROS Connection
-        const ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
+        // RL Reward System
+        let latestResponseId = null;
+        let positiveRewardCount = 0;
+        let negativeRewardCount = 0;
+        let rlRewardTopic = null;
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-=======
-        // Emotion mapping
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
+        const petResponses = [
+            "💖: Aww, that feels nice!",
+            "🥰: I love it when you pet me!",
+            "💕: You're so sweet!",
+            "✨: *happy robot noises*",
+            "💗: More please!",
+            "🤗: That tickles!",
+            "💝: You're the best!",
+            "🥺: *blushes*"
+        ];
+        
         const emotionMap = {
             '😊': 'happy', '😄': 'happy', '😃': 'happy', '😁': 'happy', '😆': 'happy',
             '🥰': 'loving', '😍': 'loving', '🥳': 'happy', '✨': 'happy', '💖': 'loving',
@@ -1757,97 +2019,116 @@
             'default': 'happy'
         };
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Plus menu toggle
         function togglePlusMenu() {
             plusMenu.classList.toggle('show');
+        }
+        
+        // Globe toggle for web search
+        function toggleWebSearch() {
+            webSearchEnabled = !webSearchEnabled;
+            
+            if (webSearchEnabled) {
+                globeBtn.classList.add('active');
+                speechBubble.textContent = '🌐 Web search enabled!';
+                setEmotion('thinking', '🌐');
+            } else {
+                globeBtn.classList.remove('active');
+                speechBubble.textContent = 'Web search disabled';
+                setEmotion('happy', '💕');
+            }
+            
+            speechBubble.classList.add('show');
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+                if (!isBeingPetted) setEmotion('happy');
+            }, 2000);
+        }
+        
+        // RL Reward Functions
+        function generateResponseId() {
+            return 'resp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function showRewardFeedback(type, intensity) {
+            rewardFeedback.className = 'reward-feedback ' + (type > 0 ? 'positive' : 'negative');
+            rewardFeedback.textContent = type > 0 ? '👍 +' + intensity : '👎 ' + intensity;
+            rewardFeedback.classList.add('show');
+            
+            setTimeout(() => {
+                rewardFeedback.classList.remove('show');
+            }, 1000);
+        }
+        
+        function sendRLReward(rewardType, intensity, responseId) {
+            if (!isROSConnected || !rlRewardTopic) {
+                console.log('RL Reward (offline):', { type: rewardType, intensity, responseId });
+                return;
+            }
+            
+            const rewardData = {
+                response_id: responseId,
+                reward_type: rewardType, // 'positive' or 'negative'
+                intensity: intensity,    // 1, 2, 3... based on click count
+                timestamp: Date.now()
+            };
+            
+            rlRewardTopic.publish(new ROSLIB.Message({
+                data: JSON.stringify(rewardData)
+            }));
+            
+            console.log('RL Reward sent:', rewardData);
+        }
+        
+        function handleNegativeReward() {
+            if (!latestResponseId) {
+                speechBubble.textContent = 'No response to rate yet! 💭';
+                speechBubble.classList.add('show');
+                setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                return;
+            }
+            
+            negativeRewardCount++;
+            const intensity = Math.min(negativeRewardCount, 5); // Cap at 5
+            
+            // Visual feedback
+            showRewardFeedback(-1, intensity);
+            
+            // Update counter badge
+            negCounter.textContent = negativeRewardCount;
+            negCounter.classList.add('show');
+            
+            // Robot shake animation
+            negativeRobotBtn.classList.add('shaking');
+            setTimeout(() => negativeRobotBtn.classList.remove('shaking'), 500);
+            
+            // Send to ROS
+            sendRLReward('negative', intensity, latestResponseId);
+            
+            // Grace reaction
+            setEmotion('sad', '😢');
+            speechBubble.textContent = ['😢', '😭', '💔', '😞'][Math.min(intensity - 1, 3)] + ' I\'ll try better!';
+            speechBubble.classList.add('show');
+            
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+                if (!isBeingPetted) setEmotion('happy');
+            }, 2000);
+            
+            // Reset after delay for next response
+            setTimeout(() => {
+                negativeRewardCount = 0;
+                negCounter.classList.remove('show');
+            }, 5000);
         }
         
         // Close menu when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.plus-btn') && !e.target.closest('.plus-menu')) {
                 plusMenu.classList.remove('show');
-=======
-        // Initialize ROS (but petting works without it)
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-        function initROS() {
-            try {
-                ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
-                
-                ros.on('connection', () => {
-                    isROSConnected = true;
-                    statusDot.classList.add('connected');
-                    statusText.textContent = 'Connected! 💖';
-                    speechBubble.textContent = 'Connected! 💕';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
-                    startIdleAnimations();
-                });
-                
-                ros.on('error', () => {
-                    statusText.textContent = 'Offline Mode';
-                    speechBubble.textContent = 'Hello! 💕';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
-                    startIdleAnimations();
-                });
-                
-                ros.on('close', () => {
-                    isROSConnected = false;
-                    statusDot.classList.remove('connected');
-                    statusText.textContent = 'Offline Mode';
-                    stopIdleAnimations();
-                });
-                
-                const cnsTopic = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/cns/neural_input',
-                    messageType: 'std_msgs/String'
-                });
-                
-                const gceResponseTopic = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/gce/response',
-                    messageType: 'std_msgs/String'
-                });
-                
-                gceResponseTopic.subscribe((msg) => {
-                    try {
-                        const data = JSON.parse(msg.data);
-                        if (data.type === 'start') {
-                            detectAndSetEmotion(data.content);
-                            startStreaming(data.content);
-                        } else if (data.type === 'delta') {
-                            appendToStream(data.content);
-                        } else if (data.type === 'done') {
-                            finishStreaming();
-                        } else if (data.type === 'error') {
-                            if (currentStreamMessage) finishStreaming();
-                            setEmotion('sad');
-                            createMessageElement('grace', data.content);
-                        }
-                    } catch (e) {
-                        if (!isStreaming) {
-                            detectAndSetEmotion(msg.data);
-                            startStreaming(msg.data);
-                        } else {
-                            appendToStream(msg.data);
-                        }
-                    }
-                });
-                
-                window.cnsTopic = cnsTopic;
-            } catch (e) {
-                console.log('ROS not available, running in offline mode');
-                statusText.textContent = 'Offline Mode';
-                startIdleAnimations();
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
             }
-        }
+        });
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Image handling
         function handleImageSelect(input) {
             const file = input.files[0];
@@ -1865,7 +2146,7 @@
             
             const reader = new FileReader();
             reader.onload = function(event) {
-                currentImage = event.target.result;
+                currentImage = event.target.result
                 previewImg.src = currentImage;
                 imagePreviewArea.classList.add('show');
                 imagePrompt.focus();
@@ -1934,6 +2215,13 @@
                     messageType: 'std_msgs/String'
                 });
                 
+                // RL Reward topic
+                rlRewardTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/rl_reward',
+                    messageType: 'std_msgs/String'
+                });
+                
                 // Response topic
                 const gceResponseTopic = new ROSLIB.Topic({
                     ros: ros,
@@ -1951,6 +2239,12 @@
                             appendToStream(data.content);
                         } else if (data.type === 'done') {
                             finishStreaming();
+                            // Generate new response ID for RL tracking
+                            latestResponseId = generateResponseId();
+                            positiveRewardCount = 0;
+                            negativeRewardCount = 0;
+                            negCounter.classList.remove('show');
+                            console.log('New response ID:', latestResponseId);
                         } else if (data.type === 'error') {
                             if (currentStreamMessage) finishStreaming();
                             setEmotion('sad');
@@ -1968,6 +2262,7 @@
                 
                 window.cnsTopic = cnsTopic;
                 window.imageInputTopic = imageInputTopic;
+                window.rlRewardTopic = rlRewardTopic;
             } catch (e) {
                 console.log('ROS not available, running in offline mode');
                 statusText.textContent = 'Offline Mode';
@@ -1977,52 +2272,94 @@
         
         initROS();
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Petting
-=======
-        initROS();
-        
-        // Petting interaction - WORKS OFFLINE
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
+        // Petting (now with RL reward)
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handlePet(e);
-=======
-        ros.on('connection', () => {
-            statusDot.classList.add('connected');
-            statusText.textContent = 'Connected! 💖';
-            speechBubble.textContent = 'Connected! 💕';
-            speechBubble.classList.add('show');
-            setTimeout(() => speechBubble.classList.remove('show'), 2000);
-            startIdleAnimations();
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         });
         
-        ros.on('error', () => {
-            statusText.textContent = 'Error 😢';
-        });
+        function handlePet(e) {
+            if (isStreaming) return;
+            
+            // RL Reward logic
+            if (latestResponseId) {
+                positiveRewardCount++;
+                const intensity = Math.min(positiveRewardCount, 5);
+                showRewardFeedback(1, intensity);
+                sendRLReward('positive', intensity, latestResponseId);
+            }
+            
+            petCount++;
+            isBeingPetted = true;
+            clearTimeout(petTimeout);
+            
+            createRipple(e);
+            
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => createPetHeart(e, i), i * 100);
+            }
+            
+            petCounter.textContent = `Pets: ${petCount}`;
+            petCounter.classList.add('show');
+            
+            setEmotion('petted', '💖');
+            
+            if (petCount % 3 === 0) {
+                const response = petResponses[Math.floor(Math.random() * petResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
+                speechBubble.classList.add('show');
+            }
+            
+            robot.classList.add('petting');
+            
+            petTimeout = setTimeout(() => {
+                isBeingPetted = false;
+                robot.classList.remove('petting');
+                speechBubble.classList.remove('show');
+                petCounter.classList.remove('show');
+                setEmotion('happy');
+            }, 2000);
+        }
         
-        ros.on('close', () => {
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Disconnected 😢';
-            stopIdleAnimations();
-        });
+        function createRipple(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.width = '20px';
+            ripple.style.height = '20px';
+            ripple.style.left = (x - 10) + 'px';
+            ripple.style.top = (y - 10) + 'px';
+            
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
         
-        // ROS Topics
-        const cnsTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/cns/neural_input',
-            messageType: 'std_msgs/String'
-        });
+        function createPetHeart(e, index) {
+            const rect = robot.getBoundingClientRect();
+            const heart = document.createElement('div');
+            heart.className = 'pet-heart';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            
+            const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
+            const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
+            
+            heart.style.left = (offsetX + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.top = (offsetY + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.animationDelay = (index * 0.1) + 's';
+            
+            robot.appendChild(heart);
+            setTimeout(() => heart.remove(), 1500);
+        }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Emotion detection
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function detectAndSetEmotion(text) {
             const emojiRegex = /(\p{Emoji})/u;
             const match = text.match(emojiRegex);
@@ -2036,10 +2373,7 @@
             }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Set emotion
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         function setEmotion(emotion, emoji = null) {
             if (isBeingPetted && emotion !== 'petted') return;
             
@@ -2101,55 +2435,7 @@
             }
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
         // Streaming
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-=======
-        const gceResponseTopic = new ROSLIB.Topic({
-            ros: ros,
-            name: '/gce/response',
-            messageType: 'std_msgs/String'
-        });
-        
-        // Subscribe to responses with streaming support - FIXED FOR DELTA STREAMING
-        gceResponseTopic.subscribe((msg) => {
-            try {
-                const data = JSON.parse(msg.data);
-                console.log("Received:", data.type, data.content);
-                
-                if (data.type === 'start') {
-                    // First chunk - start new stream
-                    startStreaming(data.content);
-                } else if (data.type === 'delta') {
-                    // Subsequent chunks - append to existing stream
-                    appendToStream(data.content);
-                } else if (data.type === 'done') {
-                    // Stream complete
-                    finishStreaming();
-                } else if (data.type === 'error') {
-                    // Error occurred
-                    if (currentStreamMessage) {
-                        finishStreaming();
-                    }
-                    createMessageElement('grace', data.content);
-                    speechBubble.textContent = 'Error! 😢';
-                    speechBubble.classList.add('show');
-                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
-                }
-            } catch (e) {
-                console.error("Failed to parse message:", msg.data, e);
-                // Fallback: treat as plain text for backward compatibility
-                if (!isStreaming) {
-                    startStreaming(msg.data);
-                } else {
-                    appendToStream(msg.data);
-                }
-            }
-        });
-        
-        // Start streaming with first chunk
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
         function startStreaming(firstChunk) {
             if (isStreaming) return;
             
@@ -2157,37 +2443,29 @@
             isSpeaking = true;
             streamBuffer = firstChunk;
             
-            // Disable input during streaming
             userInput.disabled = true;
             sendBtn.disabled = true;
             
-            // Show speech bubble immediately with thinking state
             speechBubble.textContent = 'Thinking... 💭';
             speechBubble.classList.add('show');
             
-            // Create message element for streaming
             currentStreamMessage = createMessageElement('grace', '');
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             
-            // Add initial content
             contentDiv.textContent = streamBuffer;
             
-            // Add cursor
             const cursor = document.createElement('span');
             cursor.className = 'streaming-cursor';
             contentDiv.appendChild(cursor);
             
-            // Start speaking animation
             startSpeakingAnimation();
             
-            // Update speech bubble with preview if long enough
             if (streamBuffer.length > 15) {
                 const preview = streamBuffer.substring(0, 20);
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
             }
         }
         
-        // Append delta to existing stream
         function appendToStream(delta) {
             if (!isStreaming || !currentStreamMessage) return;
             
@@ -2196,10 +2474,8 @@
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             const cursor = contentDiv.querySelector('.streaming-cursor');
             
-            // Update content
             contentDiv.textContent = streamBuffer;
             
-            // Re-add cursor at the end
             if (cursor) {
                 contentDiv.appendChild(cursor);
             } else {
@@ -2208,18 +2484,15 @@
                 contentDiv.appendChild(newCursor);
             }
             
-            // Update speech bubble occasionally
             if (streamBuffer.length % 10 === 0 && streamBuffer.length > 15) {
                 const preview = streamBuffer.substring(0, 20);
                 speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
             }
             
-            // Random mouth movements during speech
             if (streamBuffer.length % 5 === 0) {
                 randomizeMouth();
             }
             
-            // Scroll to bottom
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
@@ -2227,30 +2500,23 @@
             isStreaming = false;
             isSpeaking = false;
             
-            // Remove cursor
             if (currentStreamMessage) {
                 const cursor = currentStreamMessage.querySelector('.streaming-cursor');
                 if (cursor) cursor.remove();
             }
             
-            // Re-enable input
             userInput.disabled = false;
             sendBtn.disabled = false;
             userInput.focus();
             
-            // Stop speaking animation
             stopSpeakingAnimation();
             
-            // Show final text in speech bubble briefly
             speechBubble.textContent = 'Done! 💕';
             setTimeout(() => {
                 speechBubble.classList.remove('show');
             }, 1500);
             
-            // Scroll to bottom
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Reset current stream message
             currentStreamMessage = null;
             streamBuffer = '';
         }
@@ -2284,27 +2550,33 @@
         function startSpeakingAnimation() {
             speechBubble.classList.add('show', 'speaking');
             speakingWaves.classList.add('active');
-            mouth.className = 'mouth open';
         }
         
         function stopSpeakingAnimation() {
             speechBubble.classList.remove('show', 'speaking');
             speakingWaves.classList.remove('active');
-            setExpression('happy');
+            setEmotion(currentEmotion);
         }
         
         // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted) {
                     const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
                     const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
-                    setExpression(randomExp);
+                    if (randomExp !== 'normal') {
+                        leftEye.classList.add(randomExp);
+                        rightEye.classList.add(randomExp);
+                    }
+                    setTimeout(() => {
+                        leftEye.classList.remove('look-left', 'look-right', 'look-up');
+                        rightEye.classList.remove('look-left', 'look-right', 'look-up');
+                    }, 1000);
                 }
             }, 3000);
             
             blinkInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted) {
                     blink();
                 }
             }, 4000);
@@ -2313,43 +2585,6 @@
         function stopIdleAnimations() {
             clearInterval(idleInterval);
             clearInterval(blinkInterval);
-        }
-        
-        // Expression functions
-        function setExpression(type) {
-            leftEye.className = 'eye';
-            rightEye.className = 'eye';
-            mouth.className = 'mouth';
-            
-            switch(type) {
-                case 'happy':
-                    leftEye.classList.add('happy');
-                    rightEye.classList.add('happy');
-                    mouth.classList.add('smile');
-                    break;
-                case 'look-left':
-                    leftEye.classList.add('look-left');
-                    rightEye.classList.add('look-left');
-                    mouth.classList.add('line');
-                    break;
-                case 'look-right':
-                    leftEye.classList.add('look-right');
-                    rightEye.classList.add('look-right');
-                    mouth.classList.add('line');
-                    break;
-                case 'look-up':
-                    leftEye.classList.add('look-up');
-                    rightEye.classList.add('look-up');
-                    mouth.classList.add('o-shape');
-                    break;
-                case 'surprised':
-                    leftEye.classList.add('surprised');
-                    rightEye.classList.add('surprised');
-                    mouth.classList.add('o-shape');
-                    break;
-                default:
-                    mouth.classList.add('smile');
-            }
         }
         
         function blink() {
@@ -2361,61 +2596,97 @@
             }, 200);
         }
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-        // Send message (fixed - no duplicate, with image support)
-=======
-        // FIXED: Removed duplicate user message printing
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-=======
-        // Send message
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
+        // Compress image before sending
+        function compressImage(dataUrl, callback) {
+            const img = new Image();
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
+                
+                // Resize if too large
+                const MAX_SIZE = 1024;
+                if (width > height) {
+                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                } else {
+                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                
+                // Compress to JPEG 70% quality
+                const compressed = canvas.toDataURL('image/jpeg', 0.7);
+                console.log(`Compressed: ${dataUrl.length} → ${compressed.length}`);
+                callback(compressed);
+            };
+            img.src = dataUrl;
+        }
+
+        // Send message (with web search support)
         function sendSignal() {
             const val = userInput.value.trim();
-            
             if (isStreaming) return;
-            
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
-            // Check if image is attached
+
             if (currentImage) {
                 const promptText = imagePrompt.value.trim() || "What's in this image?";
                 
-                // Display in chat
-                createMessageElement('user', `📷 ${promptText}`);
-                
-                if (isROSConnected && window.imageInputTopic) {
-                    // Send to CNS Bridge
+                if (!isROSConnected || !window.imageInputTopic) {
+                    speechBubble.textContent = 'Not connected! Check ROS...';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    return;
+                }
+
+                // Compress then send
+                compressImage(currentImage, function(compressed) {
+                    const base64 = compressed.split(',')[1];
+                    
+                    if (base64.length > 900000) {  // ~900KB max
+                        speechBubble.textContent = 'Image too large! Try smaller.';
+                        speechBubble.classList.add('show');
+                        setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                        return;
+                    }
+
+                    createMessageElement('user', `📷 ${promptText}`);
+                    
                     const imageData = {
                         prompt: promptText,
-                        image: currentImage
+                        image_base64: base64,
+                        web_search: webSearchEnabled
                     };
-                    
-                    window.imageInputTopic.publish(new ROSLIB.Message({ 
-                        data: JSON.stringify(imageData) 
-                    }));
-                    
-                    setEmotion('thinking', '🤔');
-                } else {
-                    // Offline mode
-                    setTimeout(() => {
-                        const offlineResponse = "😔: I can't process images in offline mode, but nice picture! 📸";
-                        detectAndSetEmotion(offlineResponse);
-                        createMessageElement('grace', offlineResponse);
-                    }, 500);
-                }
-                
-                // Clear image
-                removeImage();
-                createFloatingHeart();
-                
-            } else if (val) {
+
+                    try {
+                        window.imageInputTopic.publish(new ROSLIB.Message({ 
+                            data: JSON.stringify(imageData) 
+                        }));
+                        console.log('✅ Image sent:', base64.length, 'chars');
+                        setEmotion('thinking', '🤔');
+                        removeImage();
+                        createFloatingHeart();
+                    } catch (e) {
+                        console.error('❌ Send failed:', e);
+                    }
+                });
+        
+    } else if (val) {
                 // Normal text message
                 createMessageElement('user', val);
                 
                 if (isROSConnected && window.cnsTopic) {
-                    window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
+                    // FIXED: Send JSON with web search preference
+                    const messageData = {
+                        text: val,
+                        web_search: webSearchEnabled  // ← Actually use the globe button state!
+                    };
+                    
+                    window.cnsTopic.publish(new ROSLIB.Message({ 
+                        data: JSON.stringify(messageData)  // Send as JSON, not plain text
+                    }));
+                    
+                    console.log('💬 Sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
                 } else {
                     // Offline mode
                     setTimeout(() => {
@@ -2431,44 +2702,6 @@
                 userInput.value = '';
                 createFloatingHeart();
             }
-=======
-=======
-            // Print user message ONCE (moved outside the if-else)
-            createMessageElement('user', val);
-            
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
-            if (isROSConnected && window.cnsTopic) {
-                // Online mode - send to ROS
-                window.cnsTopic.publish(new ROSLIB.Message({ data: val }));
-            } else {
-                // Offline mode - generate response only (no duplicate user message)
-                setTimeout(() => {
-                    const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
-                    detectAndSetEmotion(offlineResponse);
-                    createMessageElement('grace', offlineResponse);
-                }, 500);
-            }
-            
-            setEmotion('surprised', '✨');
-            setTimeout(() => setEmotion('happy'), 500);
-=======
-            // Publish to ROS
-            cnsTopic.publish(new ROSLIB.Message({ data: val }));
-            
-            // Add to chat
-            createMessageElement('user', val);
-            
-            // Robot reaction
-            setExpression('surprised');
-            setTimeout(() => setExpression('happy'), 500);
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-            
-            // Create floating hearts
-            createFloatingHeart();
-            
-            // Clear input
-            userInput.value = '';
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
         }
         
         function createFloatingHeart() {
@@ -2482,22 +2715,19 @@
             setTimeout(() => heart.remove(), 5000);
         }
         
-        // Enter key support
+        // Event listeners
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         imagePrompt.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendSignal();
         });
         
         // Initial state
-=======
->>>>>>> b03b373 (Fixed bug not showing falling matrix text and double display user prompt when offline):AuRoRA/src/scs/scs/AGi.html
         setEmotion('happy');
         
+        // Test functions
         window.testEmotion = function(emotion) {
             const testEmojis = {
                 'happy': '😊',
@@ -2511,44 +2741,13 @@
             setEmotion(emotion, testEmojis[emotion]);
         };
         
-<<<<<<< HEAD:AuRoRA/AGi.html
-<<<<<<< HEAD:AuRoRA/AGi.html
         window.testPet = function() {
             const fakeEvent = { clientX: null, clientY: null };
             handlePet(fakeEvent);
         };
         
-=======
->>>>>>> d8dcb08 (Change web interface background to matrix/cyberpunk style, add petting actions can be performed offline and change mouse cursor to hand when around the robot's head):AuRoRA/src/scs/scs/AGi.html
-        window.testPet = function() {
-            const fakeEvent = { clientX: null, clientY: null };
-            handlePet(fakeEvent);
-=======
-        // Initial expression
-        setExpression('happy');
-        
-        // Test function for debugging (call from console: testStream())
-        window.testStream = function() {
-            // Simulate streaming
-            const testText = "😊: Hello! This is a test message from Grace! I hope you're having a wonderful day! 💕";
-            const chunks = testText.split('');
-            
-            let i = 0;
-            function sendNextChunk() {
-                if (i === 0) {
-                    startStreaming(chunks[0]);
-                } else if (i < chunks.length) {
-                    appendToStream(chunks[i]);
-                } else {
-                    finishStreaming();
-                    return;
-                }
-                i++;
-                setTimeout(sendNextChunk, 50);
-            }
-            sendNextChunk();
->>>>>>> 33de0de (Revert back to original because cannot merge):AuRoRA/src/scs/scs/AGi.html
-        };
+        window.toggleWebSearch = toggleWebSearch;
+        window.handleNegativeReward = handleNegativeReward;
     </script>
 </body>
 </html>

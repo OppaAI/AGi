@@ -1,20 +1,35 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
-[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi--ROS-darkcyan)](https://github.com/OppaAI/AGi-ROS)
+[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
+[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
 ![Status Experimental](https://img.shields.io/badge/status-experimental-orange.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
-![Platform Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
-![Ubuntu](https://img.shields.io/badge/ubuntu-22.04-E95420.svg)
-![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)
-![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-blue.svg)
+![ARM](https://img.shields.io/badge/ARM64-aarch64-0091BD?logo=arm)
+![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
+![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
 
+![Platform Linux](https://img.shields.io/badge/platform-Linux-lightgrey.svg?logo=linux)
+![Ubuntu](https://img.shields.io/badge/ubuntu-22.04-E95420.svg?logo=ubuntu)
+![Python 3.10.12](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python)
+![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-blue.svg?logo=ros)
+![Ollama 0.15.6](https://img.shields.io/badge/Model-Qwen3%204B-FF6B6B?logo=ollama)
+
+![Started](https://img.shields.io/badge/Started-2026--01--01-darkcyan?&logo=github)
+![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan?&logo=github)
+![Version](https://img.shields.io/badge/Version-0.1.3-darkcyan?&logo=github)
+![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan&logo=github)
+
+![Owner](https://img.shields.io/badge/owner-OppaAI-salmon)
 ![Maintainer](https://img.shields.io/badge/maintainer-OppaAI-salmon)
-![CS Credentials](https://img.shields.io/badge/Credentials-None-lightgrey)
+![Admin](https://img.shields.io/badge/admin-OppaAI-salmon)
+![Tech](https://img.shields.io/badge/tech-OppaAI-salmon)
 ![Contributors](https://img.shields.io/github/contributors/OppaAI/AGi-ROS)
-![Last Commit](https://img.shields.io/github/last-commit/OppaAI/AGi-ROS?color=darkcyan)
+![CS Credentials](https://img.shields.io/badge/Credentials-None-lightgrey)
 
+**Comprehensive Documentation (EN/ZH):** 
+[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/OppaAI/AGi)
 
 AGi-ROS (AGi for ROS) is a modular framework to build and run intelligent agents that interact with robots and simulators through ROS. AGi-ROS combines perception adapters, planning modules, LLM-based reasoning, and execution components to enable high-level tasking, autonomous decision-making, and integration with standard robotics stacks.
 I am only a one man team with limited programming capability since the era of QBASIC, and superficial knowledge of ML/DL/Agentic/Robotics.

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Chat with Grace ✨</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/background.css">
+    <link rel="stylesheet" href="css/robot.css">
+    <link rel="stylesheet" href="css/chat.css">
+    
+    <base target="_blank">
+</head>
+<body>
+    <!-- Cyberpunk Circuit Background -->
+    <div class="cyber-bg" id="cyberBg">
+        <div class="circuit-grid"></div>
+        <canvas id="matrixCanvas"></canvas>
+        <div class="pink-glow"></div>
+    </div>
+    
+    <!-- Main Container -->
+    <div class="container">
+        <h1>✨ Chat with Grace ✨</h1>
+        <p class="subtitle">Your Cute AI Companion 💕</p>
+        
+        <div class="status-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+        
+        <!-- Robot Component -->
+        <div class="robot-container">
+            <div class="robot" id="robot">
+                <div class="pet-zone" id="petZone"></div>
+                <div class="pet-counter" id="petCounter">Pets: 0</div>
+                <div class="emotion-indicator" id="emotionIndicator">😊</div>
+                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+                
+                <div class="speaking-waves" id="speakingWaves">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+                
+                <div class="robot-head" id="robotHead">
+                    <div class="antenna-left">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    <div class="antenna-right">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    
+                    <div class="face">
+                        <div class="eyes">
+                            <div class="eye" id="leftEye"></div>
+                            <div class="eye" id="rightEye"></div>
+                        </div>
+                        <div class="cheeks">
+                            <div class="cheek"></div>
+                            <div class="cheek"></div>
+                        </div>
+                        <div class="mouth" id="mouth"></div>
+                    </div>
+                </div>
+                
+                <div class="robot-body">
+                    <div class="heart"></div>
+                </div>
+                
+                <div class="arm-left"></div>
+                <div class="arm-right"></div>
+            </div>
+        </div>
+        
+        <!-- Image Preview Area -->
+        <div class="image-preview-area" id="imagePreviewArea">
+            <button class="remove-btn" onclick="removeImage()">✕</button>
+            <img id="previewImg" alt="Preview">
+            <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-area">
+            <!-- + Button with Dropdown -->
+            <div style="position: relative;">
+                <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">+</button>
+                <div class="plus-menu" id="plusMenu">
+                    <label class="plus-menu-item">
+                        <span>📁</span>
+                        <span>Upload Image</span>
+                        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
+                    </label>
+                    <label class="plus-menu-item">
+                        <span>📷</span>
+                        <span>Take Photo</span>
+                        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Globe Button -->
+            <button class="globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">🌐</button>
+            
+            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+            
+            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+        </div>
+        
+        <!-- Chat Container -->
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+
+    <!-- Modular JavaScript -->
+    <script src="js/background-animation.js"></script>
+    <script src="js/robot-emotions.js"></script>
+    <script src="js/ros-connection.js"></script>
+    <script src="js/chat-handler.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
