@@ -67,7 +67,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "huihui_ai/qwen3-vl-abliterated:30b-a3b-instruct"
+GCE = "PetrosStav/gemma3-tools:12b"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -531,15 +531,59 @@ class CNSBridge(Node):
                     text = event.get('text', '')
                     user = event.get('user', '')
                     
-                    node_ref.get_logger().info(f"📱 Slack DM from user: {text}")
+                    # FIXED: Check for image attachments
+                    files = event.get('files', [])
                     
-                    # Process through normal pipeline
-                    node_ref.executor_pool.submit(
-                        node_ref.process_with_ollama, 
-                        text, 
-                        slack_callback=say,
-                        slack_thread_ts=None
-                    )
+                    if files and any(f.get('mimetype', '').startswith('image/') for f in files):
+                        # Handle image message
+                        image_file = next((f for f in files if f.get('mimetype', '').startswith('image/')), None)
+                        
+                        if image_file:
+                            node_ref.get_logger().info(f"📷 Slack image from user: {text or '(no caption)'}")
+                            
+                            # Download and encode image
+                            try:
+                                image_url = image_file.get('url_private')
+                                headers = {'Authorization': f'Bearer {SLACK_BOT_TOKEN}'}
+                                img_response = requests.get(image_url, headers=headers, timeout=30)
+                                img_response.raise_for_status()
+                                
+                                # Encode to base64
+                                image_base64 = base64.b64encode(img_response.content).decode('utf-8')
+                                
+                                # Use text as prompt, or default
+                                prompt = text.strip() if text.strip() else "What's in this image?"
+                                
+                                # FIXED: Create JSON string for the function
+                                image_data_json = json.dumps({
+                                    'prompt': prompt,
+                                    'image_base64': image_base64
+                                })
+                                
+                                # Process image with VLM
+                                node_ref.executor_pool.submit(
+                                    node_ref.process_image_with_vlm,
+                                    image_data_json,
+                                    slack_callback=say
+                                )
+                                
+                            except Exception as e:
+                                node_ref.get_logger().error(f"❌ Failed to download Slack image: {e}")
+                                try:
+                                    say(f"😵: Failed to download image: {str(e)}")
+                                except:
+                                    pass
+                    else:
+                        # Regular text message
+                        node_ref.get_logger().info(f"📱 Slack DM from user: {text}")
+                        
+                        # Process through normal pipeline
+                        node_ref.executor_pool.submit(
+                            node_ref.process_with_ollama, 
+                            text, 
+                            slack_callback=say,
+                            slack_thread_ts=None
+                        )
                     
                 except Exception as e:
                     node_ref.get_logger().error(f"❌ Slack message handler error: {e}")
@@ -1367,17 +1411,22 @@ Latest reflection:
         self.executor_pool.submit(self.process_with_ollama, msg.data)
 
     def image_listener_callback(self, msg: String):
-        """
-        Handle image input from web interface
+        self.get_logger().info(f'📸 Received: {len(msg.data)} chars')
         
-        Expected format:
-        {
-            "prompt": "What's in this image?",
-            "image": "data:image/jpeg;base64,/9j/4AAQ..."
-        }
-        """
-        self.get_logger().info('📸 Image + prompt received')
-        self.executor_pool.submit(self.process_image_with_vlm, msg.data)
+        try:
+            data = json.loads(msg.data)
+            prompt = data.get('prompt', '')
+            image_b64 = data.get('image_base64', '') or data.get('image', '')
+            
+            if not image_b64:
+                self.get_logger().error('❌ No image data found')
+                return
+                
+            self.get_logger().info(f'✅ Image: {len(image_b64)} chars, Prompt: {prompt[:30]}')
+            self.executor_pool.submit(self.process_image_with_vlm, msg.data)
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ Error: {e}')
 
     # ═══════════════════════════════════════════════════════
     # TEXT PROCESSING WITH DUAL HYBRID SEARCH (UPDATED)
@@ -1679,18 +1728,20 @@ Example: "[SEARCH: latest AI news] 🤔: Let me search for that..."
                 raise ValueError(f"Invalid JSON: {e}")
             
             prompt = data.get('prompt', 'What do you see in this image?')
-            image_data = data.get('image', '')
+            # FIXED: Accept both 'image' and 'image_base64' keys
+            image_data = data.get('image_base64') or data.get('image', '')
             
             if not image_data:
                 raise ValueError("No image data provided")
             
-            # Extract and validate base64 from data URL
+            # Extract and validate base64 from data URL (if needed)
             if image_data.startswith('data:image'):
                 parts = image_data.split(',', 1)
                 if len(parts) != 2:
                     raise ValueError("Malformed data URL")
                 image_base64 = parts[1]
             else:
+                # Already base64-encoded
                 image_base64 = image_data
             
             # Validate base64
