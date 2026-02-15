@@ -19,7 +19,7 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).parent.absolute()
 
 # Path to the web interface HTML file
-WEB_INTERFACE_FILE = BASE_DIR / "index.html"
+WEB_INTERFACE_FILE = BASE_DIR / "AGi.html"
 CSS_DIR = BASE_DIR / "css"
 JS_DIR = BASE_DIR / "js"
 

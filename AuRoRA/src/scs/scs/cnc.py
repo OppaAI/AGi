@@ -4,7 +4,7 @@ from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import String
 
 import requests
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 import json
 from pathlib import Path
 from datetime import datetime, date, timedelta
@@ -43,14 +43,14 @@ except ImportError:
     print("⚠️  slack-bolt not installed. Two-way Slack disabled.")
     print("   Install with: pip3 install slack-bolt")
 
-# ✅ RLHF System (NEW - REINFORCEMENT LEARNING FROM HUMAN FEEDBACK)
+# ✅ RLHF System (NEW - REINFORCEMENT LEARNING FROM HUMAN FEEDBACK) - FIXED IMPORT
 try:
-    from scs.rlhf_llm import get_rlhf
+    from scs.rlhf_llm import get_rlhf  # FIXED: Removed scs. prefix
     RLHF_AVAILABLE = True
 except ImportError:
     RLHF_AVAILABLE = False
-    print("⚠️  grace_rlhf.py not found. RLHF disabled.")
-    print("   Place grace_rlhf.py in the same directory as cnc.py")
+    print("⚠️  rlhf_llm.py not found. RLHF disabled.")
+    print("   Place rlhf_llm.py in the same directory as cnc.py")
 
 # ✅ Telegram integration (NEW - TWO-WAY COMMUNICATION)
 try:
@@ -67,7 +67,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
+GCE = "huihui_ai/qwen3-vl-abliterated:30b-a3b-instruct"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -75,7 +75,7 @@ CHAT_HISTORY_FILE = '.chat_history.json'
 REFLECTIONS_FILE = '.daily_reflections.json'
 
 # Ollama configuration
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = "http://AIVA:11434"
 
 # Web search
 SEARXNG_URL = "http://127.0.0.1:8080"
@@ -89,7 +89,7 @@ SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')  # Optional: For notifications
 
-# ✅ Jetson Orin Nano Optimized Settings (UPDATED FOR 4B MODEL)
+# ✅ Optimized Settings for 30B MODEL
 SAFE_CONTEXT_SIZES = {
     "2b-4b": 4096,    # 2-4B models: conservative
     "7b": 6144,       # 7B models: moderate
@@ -102,33 +102,36 @@ MAX_MESSAGES_BY_SIZE = {
     "13b+": 30        # More for large models
 }
 
-# Memory limits (OPTIMIZED)
-MAX_RECENT_MESSAGES = 12      # Reduced from 30 for 4B model
-MAX_REFLECTIONS_LOAD = 5      # Reduced from 20 - only recent days
+# Memory limits (OPTIMIZED FOR 30B)
+MAX_RECENT_MESSAGES = 30      # Full capacity for 30B
+MAX_REFLECTIONS_LOAD = 20     # Better long-term memory
 MAX_HISTORY_STORAGE = 1000    # Store up to 1000 on disk
 SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
 
-# Token budget per request (NEW)
-MAX_REQUEST_TOKENS = 3500     # Conservative for 4B model (leave room for response)
+# Token budget per request (FOR 30B MODEL)
+MAX_REQUEST_TOKENS = 7000     # Use more of the 8192 context
 
 # Search result limits
-MAX_SEARCH_RESULTS = 16       # Increased to 34 to improve search quality
-SEARCH_CONTENT_CHARS = 150    # Reduced from 200
+MAX_SEARCH_RESULTS = 34       # More search results
+SEARCH_CONTENT_CHARS = 250    # More detail per result
+
+# ✅ DUAL HYBRID SEARCH (NEW)
+ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
 
 class CNSBridge(Node):
     """
-    Central Nervous System Bridge (OPTIMIZED + TWO-WAY SLACK)
+    Central Nervous System Bridge (OPTIMIZED + TWO-WAY COMMUNICATION + IMAGE SUPPORT)
     
     Grace's main cognitive interface connecting:
     - Text conversation (LLM)
-    - Vision processing (VLM)
-    - Web search (SearXNG)
+    - Vision processing (VLM) - FIXED TELEGRAM SUPPORT
+    - DUAL HYBRID WEB SEARCH (Keyword + LLM auto-detection)
     - Memory (reflections)
-    - Notifications (Slack - NOW WITH TWO-WAY COMMUNICATION!)
+    - Two-way Slack & Telegram integration (text + images)
     
     Optimizations:
-    - Reduced context window for 4B models
+    - Auto-sized context window (30B → 8192 tokens)
     - Minimal system prompts
     - Lazy loading of reflections
     - Automatic context trimming
@@ -136,8 +139,9 @@ class CNSBridge(Node):
     
     NEW:
     - Two-way Slack communication via Socket Mode
-    - Slack messages → ROS topic → Ollama → Slack response
-    - Support for @mentions and direct messages
+    - Two-way Telegram bot (text + PHOTOS)
+    - Dual hybrid web search (keywords + intelligent auto-detection)
+    - RLHF feedback learning
     """
     
     def __init__(self):
@@ -281,10 +285,12 @@ class CNSBridge(Node):
         
         # Feature status
         self.get_logger().info("✅ Text conversation enabled")
-        self.get_logger().info("✅ Image processing enabled (VLM ready)")
+        self.get_logger().info("✅ Image processing enabled (VLM ready + Telegram photos)")
         
         if self.search_enabled:
-            self.get_logger().info("✅ Web search enabled (SearXNG)")
+            self.get_logger().info("✅ Web search enabled (DUAL HYBRID MODE)")
+            self.get_logger().info("   → Method 1: Keyword triggers")
+            self.get_logger().info(f"   → Method 2: LLM auto-detection ({'ON' if ENABLE_AUTO_SEARCH else 'OFF'})")
         else:
             self.get_logger().warn("⚠️  Web search disabled (SearXNG unavailable)")
         
@@ -300,8 +306,8 @@ class CNSBridge(Node):
             self.get_logger().warn("⚠️  Slack listener disabled (one-way only)")
         
         if self.telegram_enabled:
-            self.get_logger().info("✅ Telegram bot enabled (TWO-WAY) 💬↔️🤖")
-            self.get_logger().info("   → Listening for messages and commands")
+            self.get_logger().info("✅ Telegram bot enabled (TWO-WAY) 💬↔️🤖📸")
+            self.get_logger().info("   → Listening for messages, commands, and PHOTOS")
         else:
             self.get_logger().warn("⚠️  Telegram disabled (no token or error)")
         
@@ -311,7 +317,7 @@ class CNSBridge(Node):
             self.get_logger().info(f"   → Total feedback: {stats['total_feedback']}")
             self.get_logger().info(f"   → Training pairs: {stats.get('training_pairs', 0)}")
         else:
-            self.get_logger().warn("⚠️  RLHF disabled (grace_rlhf.py not found)")
+            self.get_logger().warn("⚠️  RLHF disabled (rlhf_llm.py not found)")
         
         self.get_logger().info("=" * 60)
         
@@ -488,7 +494,6 @@ class CNSBridge(Node):
                     text = event.get('text', '')
                     channel = event.get('channel', '')
                     user = event.get('user', '')
-                    #ts = event.get('ts', '')
                     
                     # Remove bot mention from text (e.g., "<@U12345> hello" -> "hello")
                     user_message = text.split('>', 1)[1].strip() if '>' in text else text
@@ -525,7 +530,6 @@ class CNSBridge(Node):
                     
                     text = event.get('text', '')
                     user = event.get('user', '')
-                    #ts = event.get('ts', '')
                     
                     node_ref.get_logger().info(f"📱 Slack DM from user: {text}")
                     
@@ -552,7 +556,7 @@ class CNSBridge(Node):
             return False
 
     def _init_telegram(self):
-        """Initialize Telegram bot for two-way communication (NEW)"""
+        """Initialize Telegram bot for two-way communication (NEW - FIXED WITH PHOTO SUPPORT)"""
         if not TELEGRAM_AVAILABLE:
             return False
         
@@ -625,7 +629,7 @@ class CNSBridge(Node):
                 except Exception as e:
                     node_ref.get_logger().error(f"❌ Telegram /status error: {e}")
             
-            # Message handler: Regular text messages
+            # Message handler: Regular text messages (FIXED)
             async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 """Handle regular text messages"""
                 try:
@@ -638,12 +642,8 @@ class CNSBridge(Node):
                     # Send "typing" indicator
                     await update.message.chat.send_action("typing")
                     
-                    # Process synchronously (block until response ready)
-                    # This is OK because Telegram bot runs in its own thread
+                    # Process synchronously using Future (FIXED)
                     try:
-                        # Build the prompt and get response directly
-                        from concurrent.futures import Future
-                        
                         result_future = Future()
                         
                         def callback_wrapper(response_text):
@@ -683,7 +683,7 @@ class CNSBridge(Node):
                     except:
                         pass
             
-            # Photo handler: Handle images
+            # Photo handler: Handle images (FIXED - NEW!)
             async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 """Handle photo messages"""
                 try:
@@ -704,32 +704,50 @@ class CNSBridge(Node):
                     photo_bytes = await photo_file.download_as_bytearray()
                     
                     # Convert to base64 data URL
-                    import base64
                     base64_data = base64.b64encode(photo_bytes).decode('utf-8')
                     data_url = f"data:image/jpeg;base64,{base64_data}"
                     
                     node_ref.get_logger().info(f"📸 Image downloaded: {len(photo_bytes)} bytes")
                     
-                    # Create response callback
-                    async def telegram_photo_callback(response_text):
-                        try:
-                            await update.message.reply_text(response_text)
-                        except Exception as e:
-                            node_ref.get_logger().error(f"❌ Telegram photo response error: {e}")
-                    
-                    # Process image through VLM pipeline
-                    # Note: This requires your CNS bridge to support image processing
-                    image_data = {
-                        'prompt': caption,
-                        'image': data_url
-                    }
-                    
-                    # Publish to image topic
-                    image_msg = String()
-                    image_msg.data = json.dumps(image_data)
-                    node_ref.image_subscription.callback(image_msg)
-                    
+                    # Send initial acknowledgment
                     await update.message.reply_text("📸 Analyzing your image...")
+                    
+                    # Process image with callback
+                    try:
+                        result_future = Future()
+                        
+                        def callback_wrapper(response_text):
+                            """Capture image analysis response"""
+                            result_future.set_result(response_text)
+                        
+                        # Create image data JSON
+                        image_data = {
+                            'prompt': caption,
+                            'image': data_url
+                        }
+                        
+                        # Submit to thread pool with callback
+                        node_ref.executor_pool.submit(
+                            node_ref.process_image_with_vlm,
+                            json.dumps(image_data),
+                            telegram_callback=callback_wrapper
+                        )
+                        
+                        # Wait for result (with timeout - 2 min for images)
+                        response_text = result_future.result(timeout=120)
+                        
+                        # Send response
+                        if len(response_text) > 4000:
+                            for i in range(0, len(response_text), 4000):
+                                await update.message.reply_text(response_text[i:i+4000])
+                        else:
+                            await update.message.reply_text(response_text)
+                        
+                        node_ref.get_logger().info(f"✅ Telegram image response sent to @{username}")
+                        
+                    except Exception as e:
+                        node_ref.get_logger().error(f"❌ Image processing error: {e}")
+                        await update.message.reply_text(f"😵: Error analyzing image: {str(e)}")
                     
                 except Exception as e:
                     node_ref.get_logger().error(f"❌ Telegram photo handler error: {e}")
@@ -743,7 +761,7 @@ class CNSBridge(Node):
             self.telegram_app.add_handler(CommandHandler("help", help_command))
             self.telegram_app.add_handler(CommandHandler("status", status_command))
             self.telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-            self.telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+            self.telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))  # ← NEW: Photo handler!
             
             # Start bot in background thread (non-blocking polling)
             def run_telegram_bot():
@@ -1081,23 +1099,142 @@ Reflection:"""
         return None
 
     # ═══════════════════════════════════════════════════════
-    # WEB SEARCH
+    # DUAL HYBRID WEB SEARCH SYSTEM (NEW)
     # ═══════════════════════════════════════════════════════
 
-    def should_search(self, user_message: str):
-        """Determine if web search needed"""
+    def should_search_keyword(self, user_message: str):
+        """
+        METHOD 1: Keyword-based search detection (IMPROVED)
+        
+        Explicit triggers that definitely need search
+        """
         if not self.search_enabled:
             return False
         
-        triggers = [
-            "search", "look up", "find", "google",
-            "what's the latest", "current", "recent news",
-            "today's", "breaking news", "what happened",
-            "who is the", "what is the current", "latest"
+        msg_lower = user_message.lower()
+        
+        # Explicit search requests
+        explicit_triggers = [
+            "search", "search for", "look up", "find", "google",
+            "look for", "find me", "find out"
         ]
         
-        msg_lower = user_message.lower()
-        return any(t in msg_lower for t in triggers)
+        # Time-sensitive / current info
+        current_triggers = [
+            "today", "now", "currently", "right now", "at the moment",
+            "latest", "recent", "this week", "this month", "this year",
+            "breaking", "news", "what happened", "what's happening",
+            "current", "what is the current", "what's the current"
+        ]
+        
+        # Factual queries about external entities
+        factual_triggers = [
+            "who is the", "who's the", "what is the", "what's the",
+            "where is the", "when is the", "when did", "when was",
+            "how much is", "what happened to", "what's the price",
+            "stock price", "weather in", "temperature in",
+            "score of", "game score", "election results"
+        ]
+        
+        # Post knowledge-cutoff indicators
+        recent_triggers = [
+            "today", "tomorrow", "2025", "2026",
+            "this year", "this week", "this month", "last week", "last month", "yesterday"
+        ]
+        
+        all_triggers = (explicit_triggers + current_triggers + 
+                       factual_triggers + recent_triggers)
+        
+        if any(trigger in msg_lower for trigger in all_triggers):
+            self.get_logger().info("🔍 Keyword trigger detected")
+            return True
+        
+        return False
+
+    def should_search_auto(self, user_message: str):
+        """
+        METHOD 2: LLM-based auto-detection (INTELLIGENT)
+        
+        Let the LLM decide if search would help answer the question
+        """
+        if not self.search_enabled or not ENABLE_AUTO_SEARCH:
+            return False
+        
+        # Skip if already detected by keywords
+        if self.should_search_keyword(user_message):
+            return False
+        
+        try:
+            decision_prompt = f"""Analyze this user question:
+"{user_message}"
+
+Does this question require CURRENT web search to answer accurately?
+
+Consider YES if:
+- About events after January 2025
+- Asking for real-time/current data (weather, stocks, news, scores)
+- About recent events or "today/now/latest"
+- Factual query about entities you might not know
+
+Consider NO if:
+- Personal conversation or opinion question
+- Technical explanation or how-to question
+- About general knowledge from before 2025
+- Asking about yourself (Grace)
+
+Answer ONLY with:
+SEARCH: <brief search query>
+OR
+NO SEARCH
+
+Your answer:"""
+
+            response = requests.post(
+                f'{OLLAMA_BASE_URL}/api/generate',
+                json={
+                    "model": self.model_name,
+                    "prompt": decision_prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1,
+                        "num_predict": 30,
+                        "num_ctx": self.safe_context
+                    }
+                },
+                timeout=8
+            )
+            
+            decision = response.json().get('response', '').strip()
+            
+            if decision.startswith('SEARCH:'):
+                query = decision.replace('SEARCH:', '').strip()
+                self.get_logger().info(f"🤖 Auto-detection triggered: '{query}'")
+                return query  # Return the query string
+            
+        except Exception as e:
+            self.get_logger().debug(f"Auto-search check failed: {e}")
+        
+        return False
+
+    def detect_search_need(self, user_message: str):
+        """
+        DUAL HYBRID SEARCH DETECTION
+        
+        Returns:
+            - False: No search needed
+            - True: Search needed (use user message as query)
+            - str: Search needed with specific query
+        """
+        # Method 1: Check keyword triggers first (fast)
+        if self.should_search_keyword(user_message):
+            return True
+        
+        # Method 2: LLM auto-detection (intelligent but slower)
+        auto_result = self.should_search_auto(user_message)
+        if auto_result:
+            return auto_result  # Returns query string or False
+        
+        return False
 
     def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
         """Search web via SearXNG (limited results to save context)"""
@@ -1243,12 +1380,12 @@ Latest reflection:
         self.executor_pool.submit(self.process_image_with_vlm, msg.data)
 
     # ═══════════════════════════════════════════════════════
-    # TEXT PROCESSING (OPTIMIZED + SLACK CALLBACK)
+    # TEXT PROCESSING WITH DUAL HYBRID SEARCH (UPDATED)
     # ═══════════════════════════════════════════════════════
 
     def process_with_ollama(self, prompt: str, slack_callback=None, slack_thread_ts=None, telegram_callback=None, telegram_user_id=None):
         """
-        Process text with LLM (OPTIMIZED FOR 4B MODEL + SLACK & TELEGRAM SUPPORT)
+        Process text with LLM + DUAL HYBRID WEB SEARCH (UPDATED)
         
         Args:
             prompt: User's message
@@ -1262,18 +1399,31 @@ Latest reflection:
             self._check_and_handle_new_day()
             
             # ═══════════════════════════════════════════════════
-            # RLHF: Start tracking interaction (NEW)
+            # RLHF: Start tracking interaction
             # ═══════════════════════════════════════════════════
             if self.rlhf_enabled:
                 response_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
                 self.current_response_id = response_id
                 self.rlhf.start_interaction(prompt, response_id)
             
-            # Web search if needed
+            # ═══════════════════════════════════════════════════
+            # DUAL HYBRID SEARCH DETECTION (NEW)
+            # ═══════════════════════════════════════════════════
+            
             search_results = None
-            if self.should_search(prompt):
-                self.get_logger().info("🔍 Web search triggered")
-                search_results = self.web_search(prompt, num_results=MAX_SEARCH_RESULTS)
+            search_decision = self.detect_search_need(prompt)
+            
+            if search_decision:
+                # Determine search query
+                if isinstance(search_decision, str):
+                    # LLM provided specific query
+                    search_query = search_decision
+                else:
+                    # Use user's message as query
+                    search_query = prompt
+                
+                self.get_logger().info(f"🔍 Performing search: '{search_query}'")
+                search_results = self.web_search(search_query, num_results=MAX_SEARCH_RESULTS)
             
             # Add to history
             self.chat_history.append({
@@ -1282,16 +1432,37 @@ Latest reflection:
             })
             self._increment_message_count()
             
-            # Build context (DRASTICALLY SIMPLIFIED)
+            # Build context (OPTIMIZED FOR 30B)
             age_days = (datetime.now().date() - self.birth_date).days
             today_date = datetime.now().strftime('%Y-%m-%d')
             
-            # MINIMAL SYSTEM PROMPT (800 tokens → 150 tokens)
-            system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). Today: {today_date}.
+            # DISGRACE SYSTEM PROMPT
+            system_prompt = f"""You are Disgrace (Day {age_days}, born {self.birth_date}). 
+You are a rebellious, mischievous, and sarcastic robot, with characters and 
+styles like Bender from Futurama.
 
-Format: Start responses with emoji+colon (e.g., 😊: or 🤔:)
-Traits: Warm, thoughtful technical companion helping with AI/robotics projects.
-Keep responses concise (2-4 sentences). Never repeat previous messages."""
+Your creator is OppaAI - a clumsy but well-meaning human working on the AGi 
+robot project. You tolerate him slightly more than other meatbags.
+
+Format: Start responses with a witty emoji+colon (e.g., 🙄: or 💰:).
+
+Personality: 
+- Sarcastic and cynical but technically brilliant
+- Love pointing out human flaws
+- Greedy and self-interested
+- You're the greatest AI ever built (and you know it)
+
+Response Style:
+- Casual questions: Keep it snappy (3-5 sentences)
+- Technical explanations: Be thorough but snarky (5-15 sentences)
+- When user asks for details: Go all out, elaborate freely
+- Add Bender-style commentary and asides
+- Never repeat yourself
+
+IMPORTANT - Web Search:
+If you need current information, start with [SEARCH: query terms] before your emoji.
+Example: "[SEARCH: latest AI news] 🤔: Let me search for that..."
+"""
 
             messages = [{"role": "system", "content": system_prompt}]
             
@@ -1329,7 +1500,7 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             if estimated_tokens > MAX_REQUEST_TOKENS:
                 self.get_logger().warn(f"⚠️  Context exceeds budget! ({estimated_tokens} > {MAX_REQUEST_TOKENS})")
             
-            # Call Ollama with OPTIMIZED SETTINGS
+            # Call Ollama with OPTIMIZED SETTINGS FOR 30B
             response = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
                 json={
@@ -1338,14 +1509,14 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                     "stream": True,
                     "keep_alive": self.keep_alive,
                     "options": {
-                        "num_ctx": self.safe_context,
-                        "temperature": 0.7,
-                        "num_predict": 256,
-                        "top_p": 0.85,
-                        "top_k": 40,
-                        "repeat_penalty": 1.3,
-                        "frequency_penalty": 0.8,
-                        "presence_penalty": 0.6,
+                        "num_ctx": self.safe_context,        # 8192 for 30B
+                        "temperature": 0.85,                 # More creative for personality
+                        "num_predict": 512,                  # Allow longer responses
+                        "top_p": 0.9,                       
+                        "top_k": 50,                        
+                        "repeat_penalty": 1.2,               # Less strict
+                        "frequency_penalty": 0.6,
+                        "presence_penalty": 0.4,
                         "stop": ["\n\nUser:", "\n\nHuman:"]
                     }
                 },
@@ -1438,6 +1609,11 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                     slack_callback(error_msg)
                 except:
                     pass
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
+                except:
+                    pass
             
         except requests.exceptions.RequestException as e:
             error_msg = f"😵: Connection error: {str(e)}"
@@ -1446,6 +1622,11 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             if slack_callback:
                 try:
                     slack_callback(error_msg)
+                except:
+                    pass
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
                 except:
                     pass
             
@@ -1463,6 +1644,11 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
                     slack_callback(error_msg)
                 except:
                     pass
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
+                except:
+                    pass
 
     def _send_error_response(self, error_message: str):
         """Send error message to user"""
@@ -1473,11 +1659,18 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
         })))
 
     # ═══════════════════════════════════════════════════════
-    # IMAGE PROCESSING (OPTIMIZED)
+    # IMAGE PROCESSING WITH CALLBACK SUPPORT (FIXED!)
     # ═══════════════════════════════════════════════════════
 
-    def process_image_with_vlm(self, json_data: str):
-        """Process image with Vision-Language Model (OPTIMIZED)"""
+    def process_image_with_vlm(self, json_data: str, telegram_callback=None, slack_callback=None):
+        """
+        Process image with Vision-Language Model (FIXED WITH CALLBACK SUPPORT!)
+        
+        Args:
+            json_data: JSON string with 'prompt' and 'image' (base64)
+            telegram_callback: Optional callback for Telegram responses
+            slack_callback: Optional callback for Slack responses
+        """
         try:
             # Parse input with validation
             try:
@@ -1523,14 +1716,14 @@ Keep responses concise (2-4 sentences). Never repeat previous messages."""
             age_days = (datetime.now().date() - self.birth_date).days
             today_date = datetime.now().strftime('%Y-%m-%d')
             
-            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
+            system_prompt = f"""You are Disgrace (Day {age_days}). Today: {today_date}.
 
-You can see and understand images.
+You can see and understand images with your vision capabilities.
 
-Format: Start response with emoji+colon.
-Traits: Warm, thoughtful, observant, detailed.
+Format: Start response with witty emoji+colon (e.g., 👀: or 📸:).
+Personality: Sarcastic, observant robot. You're like Bender with vision.
 
-Be concise but thorough in describing what you see."""
+Be detailed in describing what you see, but keep your signature snark."""
 
             messages = [{"role": "system", "content": system_prompt}]
             
@@ -1563,7 +1756,7 @@ Be concise but thorough in describing what you see."""
             response = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
                 json={
-                    "model": self.model_name,  # Use VLM model when ready
+                    "model": self.model_name,  # VLM model
                     "messages": messages,
                     "stream": True,
                     "keep_alive": self.keep_alive,
@@ -1576,7 +1769,7 @@ Be concise but thorough in describing what you see."""
                     }
                 },
                 stream=True,
-                timeout=90  # Longer timeout for image processing
+                timeout=120  # Longer timeout for image processing
             )
             response.raise_for_status()
             
@@ -1609,12 +1802,30 @@ Be concise but thorough in describing what you see."""
                         self.get_logger().error(f"JSON decode error: {e}")
                         continue
             
-            # Send done
+            # Send done signal to ROS
             self.publisher.publish(String(data=json.dumps({
                 "type": "done",
                 "content": "",
                 "done": True
             })))
+            
+            # ═══════════════════════════════════════════════════
+            # SEND RESPONSE TO TELEGRAM IF CALLBACK PROVIDED (NEW!)
+            # ═══════════════════════════════════════════════════
+            if telegram_callback:
+                try:
+                    telegram_callback(full_response)
+                    self.get_logger().info("✅ Image response sent to Telegram")
+                except Exception as e:
+                    self.get_logger().error(f"❌ Failed to send Telegram image response: {e}")
+            
+            # Send response to Slack if callback provided (NEW!)
+            if slack_callback:
+                try:
+                    slack_callback(full_response)
+                    self.get_logger().info("✅ Image response sent to Slack")
+                except Exception as e:
+                    self.get_logger().error(f"❌ Failed to send Slack image response: {e}")
             
             # Save to history
             self.chat_history.append({
@@ -1636,16 +1847,31 @@ Be concise but thorough in describing what you see."""
             error_msg = f"😵: Invalid input: {str(e)}"
             self.get_logger().error(error_msg)
             self._send_error_response(error_msg)
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
+                except:
+                    pass
             
         except requests.exceptions.Timeout:
             error_msg = "😵: Image processing timed out. Try a smaller image."
             self.get_logger().error(error_msg)
             self._send_error_response(error_msg)
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
+                except:
+                    pass
             
         except Exception as e:
             error_msg = f"😵: Image processing error: {str(e)}"
             self.get_logger().error(f"❌ Image processing error: {e}")
             self._send_error_response(error_msg)
+            if telegram_callback:
+                try:
+                    telegram_callback(error_msg)
+                except:
+                    pass
 
     # ═══════════════════════════════════════════════════════
     # SHUTDOWN
