@@ -12,6 +12,7 @@ import sys
 import base64
 import os
 import threading
+import time
 import subprocess
 
 # ✅ Load environment variables from .env file
@@ -92,7 +93,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')  # Optional: For notificati
 
 # MCP Server Configuration
 USE_MCP_SEARCH = True
-MCP_SERVER_COMMAND = "grace-mcp-server"  # or full path: "/home/user/AGi/mcp-server/grace-mcp-server.js"TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
+MCP_SERVER_COMMAND = "/home/oppa-ai/AGi/mcp_server/searxng-mcp-server/searxng-mcp-server.js"
 
 # ✅ Optimized Settings for 30B MODEL
 SAFE_CONTEXT_SIZES = {
@@ -130,7 +131,7 @@ class MCPClient:
         self.server_command = server_command
         self.logger = logger
         self.process = None
-    
+
     def start(self):
         """Start MCP server process"""
         try:
@@ -156,7 +157,7 @@ class MCPClient:
                 
         except FileNotFoundError:
             self.logger.error(f"❌ MCP server not found: {self.server_command}")
-            self.logger.error("   Install it: cd ~/AGi/mcp-server && sudo npm link")
+            self.logger.error("   Install it: cd ~/AGi/mcp_server/searxng-mcp-server && sudo npm link")
             return False
         except Exception as e:
             self.logger.error(f"❌ MCP server start failed: {e}")
@@ -192,7 +193,6 @@ class MCPClient:
             
             # Read response (with timeout)
             import select
-            import time
             
             timeout = 30
             start_time = time.time()
@@ -331,6 +331,128 @@ class MCPClient:
                 self.process.kill()
             self.logger.info("🛑 MCP server stopped")
 
+class NatureSkillsClient:
+    """
+    Client for Nature Exploration Skills MCP Server
+    Uses native Ollama tool calling
+    """
+    
+    def __init__(self, server_path: str, logger):
+        self.server_path = server_path
+        self.logger = logger
+        self.process = None
+        self.tools_schema = []
+    
+    def start(self) -> bool:
+        """Start skills MCP server"""
+        try:
+            self.process = subprocess.Popen(
+                ["python3", self.server_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+            
+            time.sleep(1)
+            
+            if self.process.poll() is None:
+                # Get list of tools
+                self._fetch_tools()
+                self.logger.info(f"✅ Nature skills server started ({len(self.tools_schema)} tools)")
+                return True
+            else:
+                self.logger.error("❌ Skills server failed to start")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ Skills server error: {e}")
+            return False
+    
+    def _fetch_tools(self):
+        """Fetch available tools from MCP server"""
+        try:
+            request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list"
+            }
+            
+            self.process.stdin.write(json.dumps(request) + '\n')
+            self.process.stdin.flush()
+            
+            # Read response
+            import select
+            if select.select([self.process.stdout], [], [], 5)[0]:
+                line = self.process.stdout.readline()
+                response = json.loads(line)
+                
+                if 'result' in response:
+                    tools = response['result'].get('tools', [])
+                    # Convert MCP tools to Ollama format
+                    self.tools_schema = [
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": tool['name'],
+                                "description": tool['description'],
+                                "parameters": tool['inputSchema']
+                            }
+                        }
+                        for tool in tools
+                    ]
+                    self.logger.info(f"Loaded {len(self.tools_schema)} tools")
+        except Exception as e:
+            self.logger.error(f"Failed to fetch tools: {e}")
+    
+    def call_tool(self, name: str, arguments: dict) -> str:
+        """Call a tool and get result"""
+        try:
+            request = {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": name,
+                    "arguments": arguments
+                }
+            }
+            
+            self.process.stdin.write(json.dumps(request) + '\n')
+            self.process.stdin.flush()
+            
+            # Read response with timeout
+            import select
+            if select.select([self.process.stdout], [], [], 10)[0]:
+                line = self.process.stdout.readline()
+                response = json.loads(line)
+                
+                if 'result' in response:
+                    content = response['result'].get('content', [])
+                    if content:
+                        return content[0].get('text', 'No result')
+            
+            return "Tool execution timeout"
+            
+        except Exception as e:
+            self.logger.error(f"Tool call error: {e}")
+            return f"Error: {str(e)}"
+    
+    def get_tools_for_ollama(self) -> list:
+        """Get tools in Ollama format"""
+        return self.tools_schema
+    
+    def stop(self):
+        """Stop skills server"""
+        if self.process:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except:
+                self.process.kill()
+            self.logger.info("🛑 Skills server stopped")
+
 class CNSBridge(Node):
     """
     Central Nervous System Bridge (OPTIMIZED + TWO-WAY COMMUNICATION + IMAGE SUPPORT)
@@ -368,6 +490,18 @@ class CNSBridge(Node):
             else:
                 self.get_logger().warn("⚠️  MCP start failed, using API fallback")
                 self.use_mcp = False
+
+        # Nature Skills Server (NEW)
+        self.skills_client = None
+        self.use_skills = True
+        if self.use_skills:
+            skills_server_path = str(Path.home() / "AGi" / "mcp_server" / "skills_server" / "skills_server.py")
+            self.skills_client = NatureSkillsClient(skills_server_path, self.get_logger())
+            if self.skills_client.start():
+                self.get_logger().info("✅ Nature exploration skills enabled")
+            else:
+                self.get_logger().warn("⚠️  Skills server failed, disabling skills")
+                self.use_skills = False                
                 
         # ═══════════════════════════════════════════════════
         # THREAD SAFETY
@@ -1831,33 +1965,44 @@ Today: {today_date}
             if estimated_tokens > MAX_REQUEST_TOKENS:
                 self.get_logger().warn(f"⚠️  Context exceeds budget! ({estimated_tokens} > {MAX_REQUEST_TOKENS})")
             
-            # Call Ollama with OPTIMIZED SETTINGS FOR 30B
+            # Prepare Ollama request
+            ollama_params = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": True,
+                "keep_alive": self.keep_alive,
+                "options": {
+                    "num_ctx": self.safe_context,
+                    "temperature": 0.85,
+                    "num_predict": 512,
+                    "top_p": 0.9,
+                    "top_k": 50,
+                    "repeat_penalty": 1.2,
+                    "frequency_penalty": 0.6,
+                    "presence_penalty": 0.4,
+                    "stop": ["\n\nUser:", "\n\nHuman:"]
+                }
+            }
+            
+            # Add tools if skills are enabled
+            if self.use_skills and self.skills_client:
+                tools = self.skills_client.get_tools_for_ollama()
+                if tools:
+                    ollama_params["tools"] = tools
+                    self.get_logger().info(f"🔧 {len(tools)} skills available to LLM")
+            
+            # Call Ollama
             response = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
-                json={
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": True,
-                    "keep_alive": self.keep_alive,
-                    "options": {
-                        "num_ctx": self.safe_context,        # 8192 for 30B
-                        "temperature": 0.85,                 # More creative for personality
-                        "num_predict": 512,                  # Allow longer responses
-                        "top_p": 0.9,                       
-                        "top_k": 50,                        
-                        "repeat_penalty": 1.2,               # Less strict
-                        "frequency_penalty": 0.6,
-                        "presence_penalty": 0.4,
-                        "stop": ["\n\nUser:", "\n\nHuman:"]
-                    }
-                },
+                json=ollama_params,
                 stream=True,
-                timeout=60
+                timeout=120
             )
             response.raise_for_status()
             
-            # Stream response
+            # Stream response and handle tool calls
             full_response = ""
+            tool_calls = []
             is_first = True
             
             for line in response.iter_lines():
@@ -1865,19 +2010,27 @@ Today: {today_date}
                     try:
                         chunk = json.loads(line)
                         
-                        if 'message' in chunk and 'content' in chunk['message']:
-                            delta = chunk['message']['content']
-                            full_response += delta
+                        # Check for tool calls
+                        if 'message' in chunk:
+                            msg = chunk['message']
                             
-                            # Publish to ROS topic (for web interface)
-                            stream_data = {
-                                "type": "start" if is_first else "delta",
-                                "content": delta,
-                                "done": False
-                            }
-                            is_first = False
+                            # Handle tool calls
+                            if 'tool_calls' in msg:
+                                tool_calls.extend(msg.get('tool_calls', []))
                             
-                            self.publisher.publish(String(data=json.dumps(stream_data)))
+                            # Handle text content
+                            if 'content' in msg:
+                                delta = msg['content']
+                                full_response += delta
+                                
+                                # Stream to user
+                                stream_data = {
+                                    "type": "start" if is_first else "delta",
+                                    "content": delta,
+                                    "done": False
+                                }
+                                is_first = False
+                                self.publisher.publish(String(data=json.dumps(stream_data)))
                         
                         if chunk.get('done'):
                             break
@@ -1885,6 +2038,71 @@ Today: {today_date}
                     except json.JSONDecodeError as e:
                         self.get_logger().error(f"JSON decode error: {e}")
                         continue
+            
+            # Execute tool calls if any
+            if tool_calls and self.skills_client:
+                self.get_logger().info(f"🔧 Executing {len(tool_calls)} tool calls")
+                
+                tool_results = []
+                for tool_call in tool_calls:
+                    function = tool_call.get('function', {})
+                    tool_name = function.get('name')
+                    tool_args = function.get('arguments', {})
+                    
+                    self.get_logger().info(f"  → {tool_name}({tool_args})")
+                    
+                    # Execute tool
+                    result = self.skills_client.call_tool(tool_name, tool_args)
+                    tool_results.append({
+                        "role": "tool",
+                        "content": result
+                    })
+                
+                # Send tool results back to LLM for final response
+                messages.append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "tool_calls": tool_calls
+                })
+                
+                messages.extend(tool_results)
+                
+                # Get final response with tool results
+                final_request = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {"num_ctx": self.safe_context, "temperature": 0.8}
+                }
+                
+                final_response = requests.post(
+                    f'{OLLAMA_BASE_URL}/api/chat',
+                    json=final_request,
+                    stream=True,
+                    timeout=120
+                )
+                
+                # Stream final response
+                full_response = ""
+                for line in final_response.iter_lines():
+                    if line:
+                        try:
+                            chunk = json.loads(line)
+                            if 'message' in chunk and 'content' in chunk['message']:
+                                delta = chunk['message']['content']
+                                full_response += delta
+                                
+                                stream_data = {
+                                    "type": "delta",
+                                    "content": delta,
+                                    "done": False
+                                }
+                                self.publisher.publish(String(data=json.dumps(stream_data)))
+                            
+                            if chunk.get('done'):
+                                break
+                        except json.JSONDecodeError:
+                            continue
             
             # Send done signal to ROS
             self.publisher.publish(String(data=json.dumps({
@@ -2215,6 +2433,10 @@ Be detailed in describing what you see, but keep your signature snark."""
         # Stop MCP server
         if self.use_mcp and self.mcp_client:
             self.mcp_client.stop()
+
+        # Stop skills server
+        if self.use_skills and self.skills_client:
+            self.skills_client.stop()
 
         self.get_logger().info("=" * 60)
         self.get_logger().info("GRACE - SHUTDOWN SEQUENCE")

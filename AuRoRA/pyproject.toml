@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = "==3.10.12"
 dependencies = [
     "flask>=3.1.2",
+    "mcp>=1.26.0",
     "python-dotenv>=1.2.1",
     "python-telegram-bot>=22.6",
     "slack-bolt>=1.27.0",
