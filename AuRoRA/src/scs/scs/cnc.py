@@ -69,7 +69,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "PetrosStav/gemma3-tools:12b"
+GCE = "ministral-3:3b-instruct-2512-q4_K_M"
 # VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
@@ -77,7 +77,7 @@ CHAT_HISTORY_FILE = '.chat_history.json'
 REFLECTIONS_FILE = '.daily_reflections.json'
 
 # Ollama configuration
-OLLAMA_BASE_URL = "http://AIVA:11434"
+OLLAMA_BASE_URL = "http://localhost:11434"
 
 # Web search
 SEARXNG_URL = "http://127.0.0.1:8080"
@@ -90,6 +90,12 @@ SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
 # Telegram configuration (loaded from .env file or environment)
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')  # Optional: For notifications
+
+# Hugo + GitHub Pages Blog Configuration (NEW)
+HUGO_BLOG_DIR = os.getenv('HUGO_BLOG_DIR', str(Path.home() / 'grace-blog'))
+HUGO_AUTO_DEPLOY = os.getenv('HUGO_AUTO_DEPLOY', 'true').lower() == 'true'
+HUGO_GIT_REMOTE = os.getenv('HUGO_GIT_REMOTE', 'origin')
+HUGO_GIT_BRANCH = os.getenv('HUGO_GIT_BRANCH', 'main')
 
 # MCP Server Configuration
 USE_MCP_SEARCH = True
@@ -108,11 +114,13 @@ MAX_MESSAGES_BY_SIZE = {
     "13b+": 30        # More for large models
 }
 
-# Memory limits (OPTIMIZED FOR 30B)
+# Memory limits (ENHANCED 7-DAY WINDOW)
+MEMORY_WINDOW_DAYS = 7           # Keep 7 days in active memory
+MAX_MESSAGES_PER_DAY = 200       # Max messages per day (safety limit)
+MAX_REFLECTIONS_LOAD = 20        # Still load 20 daily reflections
+MAX_HISTORY_STORAGE = 10000      # Store more on disk before RAG
+SUMMARIZE_THRESHOLD = 100        # Summarize after 100 messages
 MAX_RECENT_MESSAGES = 30      # Full capacity for 30B
-MAX_REFLECTIONS_LOAD = 20     # Better long-term memory
-MAX_HISTORY_STORAGE = 1000    # Store up to 1000 on disk
-SUMMARIZE_THRESHOLD = 50      # Summarize after 50 messages
 
 # Token budget per request (FOR 30B MODEL)
 MAX_REQUEST_TOKENS = 12000     # Use more of the 8192 context
@@ -453,6 +461,278 @@ class NatureSkillsClient:
                 self.process.kill()
             self.logger.info("🛑 Skills server stopped")
 
+import sqlite3
+from sentence_transformers import SentenceTransformer
+import numpy as np
+
+# Use simple Python fallback (no sqlite-vec extension needed)
+from scs.simple_sqlite_rag import SimpleSQLiteRAG as SQLiteVectorRAG
+            
+class HugoBlogger:
+    """
+    Automated Hugo + GitHub Pages blogging for Grace's daily reflections
+    
+    Features:
+    - Creates markdown posts in Hugo format
+    - Auto-commits to Git
+    - Auto-pushes to GitHub (triggers GitHub Actions deployment)
+    - Fully automated - no manual steps needed!
+    """
+    
+    def __init__(self, blog_dir: str, logger, auto_deploy: bool = True):
+        self.blog_dir = Path(blog_dir)
+        self.logger = logger
+        self.auto_deploy = auto_deploy
+        
+        # Validate blog directory
+        if not self.blog_dir.exists():
+            self.logger.warn(f"⚠️  Hugo blog directory not found: {blog_dir}")
+            self.logger.warn("   Create with: hugo new site grace-blog")
+            self.enabled = False
+            return
+        
+        # Check if it's a Hugo site
+        if not (self.blog_dir / 'config.toml').exists() and not (self.blog_dir / 'hugo.toml').exists():
+            self.logger.warn(f"⚠️  Not a Hugo site (no config.toml): {blog_dir}")
+            self.enabled = False
+            return
+        
+        # Check if Git is initialized
+        if not (self.blog_dir / '.git').exists():
+            self.logger.warn(f"⚠️  Hugo site not a Git repository: {blog_dir}")
+            self.logger.warn("   Initialize with: cd grace-blog && git init")
+            self.enabled = False
+            return
+        
+        self.posts_dir = self.blog_dir / 'content' / 'posts'
+        self.posts_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.enabled = True
+        self.logger.info(f"✅ Hugo blogger initialized: {blog_dir}")
+        self.logger.info(f"   Auto-deploy: {'ON' if auto_deploy else 'OFF'}")
+    
+    def post_reflection(self, reflection_text: str, date_str: str, age_days: int, 
+                       message_count: int) -> dict:
+        """
+        Post daily reflection to Hugo blog
+        
+        Args:
+            reflection_text: The reflection content
+            date_str: Date in YYYY-MM-DD format
+            age_days: Grace's age in days
+            message_count: Number of messages that day
+            
+        Returns:
+            dict with success status and details
+        """
+        if not self.enabled:
+            return {
+                'success': False,
+                'error': 'Hugo blogger not enabled'
+            }
+        
+        try:
+            # Create filename
+            filename = f'{date_str}-day-{age_days}.md'
+            filepath = self.posts_dir / filename
+            
+            # Build Hugo front matter
+            frontmatter = f"""---
+title: "Day {age_days} Reflection"
+date: {date_str}T23:59:59
+draft: false
+tags: ["daily-reflection", "ai-journal", "grace"]
+categories: ["Daily Reflections"]
+author: "Grace"
+description: "Grace's daily reflection for day {age_days} - {message_count} conversations"
+---
+
+{reflection_text}
+
+---
+
+*This reflection was automatically generated from {message_count} conversations on day {age_days}.*
+"""
+            
+            # Write file
+            filepath.write_text(frontmatter)
+            
+            self.logger.info(f"📝 Created blog post: {filename}")
+            
+            # Git commit and push (if auto-deploy enabled)
+            if self.auto_deploy:
+                deployed = self._git_deploy(filename, date_str)
+                
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'filepath': str(filepath),
+                    'deployed': deployed,
+                    'url': self._get_blog_url(filename)
+                }
+            else:
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'filepath': str(filepath),
+                    'deployed': False,
+                    'message': 'Auto-deploy disabled. Commit manually.'
+                }
+        
+        except Exception as e:
+            self.logger.error(f"❌ Failed to post to Hugo blog: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def _git_deploy(self, filename: str, date_str: str) -> bool:
+        """Git commit and push to trigger GitHub Actions deployment"""
+        try:
+            # Stage the new post
+            result = subprocess.run(
+                ['git', 'add', f'content/posts/{filename}'],
+                cwd=self.blog_dir,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                self.logger.error(f"Git add failed: {result.stderr}")
+                return False
+            
+            # Commit
+            commit_message = f'Add reflection for {date_str}'
+            result = subprocess.run(
+                ['git', 'commit', '-m', commit_message],
+                cwd=self.blog_dir,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                if "nothing to commit" in result.stdout or "nothing to commit" in result.stderr:
+                    self.logger.info("Nothing new to commit (file unchanged)")
+                    return True
+                else:
+                    self.logger.error(f"Git commit failed: {result.stderr}")
+                    return False
+            
+            self.logger.info(f"✅ Git committed: {commit_message}")
+            
+            # Push to GitHub (triggers GitHub Actions!)
+            result = subprocess.run(
+                ['git', 'push', HUGO_GIT_REMOTE, HUGO_GIT_BRANCH],
+                cwd=self.blog_dir,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                self.logger.error(f"Git push failed: {result.stderr}")
+                return False
+            
+            self.logger.info(f"✅ Pushed to GitHub - deployment triggered!")
+            
+            return True
+        
+        except Exception as e:
+            self.logger.error(f"Git deploy error: {e}")
+            return False
+    
+    def _get_blog_url(self, filename: str) -> str:
+        """Get the expected blog URL for the post"""
+        slug = filename.replace('.md', '')
+        
+        try:
+            result = subprocess.run(
+                ['git', 'remote', 'get-url', HUGO_GIT_REMOTE],
+                cwd=self.blog_dir,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                remote_url = result.stdout.strip()
+                
+                if 'github.com' in remote_url:
+                    if 'github.com/' in remote_url:
+                        parts = remote_url.split('github.com/')[1].split('/')
+                        username = parts[0]
+                        repo = parts[1].replace('.git', '')
+                    elif 'github.com:' in remote_url:
+                        parts = remote_url.split('github.com:')[1].split('/')
+                        username = parts[0]
+                        repo = parts[1].replace('.git', '')
+                    else:
+                        username = 'USERNAME'
+                        repo = 'grace-blog'
+                    
+                    return f'https://{username}.github.io/{repo}/posts/{slug}/'
+        except:
+            pass
+        
+        return f'https://USERNAME.github.io/grace-blog/posts/{slug}/'
+    
+    def test_deployment(self) -> bool:
+        """Test that Git and deployment are working"""
+        if not self.enabled:
+            self.logger.error("❌ Hugo blogger not enabled")
+            return False
+        
+        checks_passed = 0
+        total_checks = 4
+        
+        # Check 1: Hugo installed
+        try:
+            result = subprocess.run(['hugo', 'version'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                self.logger.info("✅ Hugo is installed")
+                checks_passed += 1
+            else:
+                self.logger.error("❌ Hugo not found")
+        except:
+            self.logger.error("❌ Hugo not installed - Install: sudo snap install hugo")
+        
+        # Check 2: Git configured
+        try:
+            result = subprocess.run(['git', 'status'], cwd=self.blog_dir, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                self.logger.info("✅ Git repository is valid")
+                checks_passed += 1
+        except:
+            self.logger.error("❌ Git not configured")
+        
+        # Check 3: Remote configured
+        try:
+            result = subprocess.run(['git', 'remote', '-v'], cwd=self.blog_dir, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and 'github.com' in result.stdout:
+                self.logger.info("✅ GitHub remote configured")
+                checks_passed += 1
+            else:
+                self.logger.error("❌ GitHub remote not configured")
+        except:
+            self.logger.error("❌ Failed to check Git remote")
+        
+        # Check 4: Can write to posts directory
+        try:
+            test_file = self.posts_dir / '.test'
+            test_file.write_text('test')
+            test_file.unlink()
+            self.logger.info("✅ Posts directory is writable")
+            checks_passed += 1
+        except:
+            self.logger.error("❌ Cannot write to posts directory")
+        
+        self.logger.info(f"Hugo deployment test: {checks_passed}/{total_checks} checks passed")
+        return checks_passed == total_checks
+
 class CNSBridge(Node):
     """
     Central Nervous System Bridge (OPTIMIZED + TWO-WAY COMMUNICATION + IMAGE SUPPORT)
@@ -490,6 +770,21 @@ class CNSBridge(Node):
             else:
                 self.get_logger().warn("⚠️  MCP start failed, using API fallback")
                 self.use_mcp = False
+
+        # SQLite Vector RAG (NEW)
+        self.use_rag = True
+        if self.use_rag:
+            try:
+                rag_db_path = str(Path.home() / "AGi" / "grace_memory.db")
+                self.rag = SQLiteVectorRAG(rag_db_path, self.get_logger())
+                self.get_logger().info("✅ SQLite Vector RAG initialized")
+            except Exception as e:
+                self.get_logger().error(f"❌ RAG init failed: {e}")
+                self.use_rag = False
+
+        # Hugo Blog (NEW)
+        self.hugo_blogger = None
+        self.blog_enabled = self._init_hugo_blog()
 
         # Nature Skills Server (NEW)
         self.skills_client = None
@@ -667,6 +962,12 @@ class CNSBridge(Node):
         else:
             self.get_logger().warn("⚠️  Telegram disabled (no token or error)")
         
+        if self.blog_enabled:
+            self.get_logger().info(f"✅ Hugo blog enabled → {HUGO_BLOG_DIR}")
+            self.get_logger().info(f"   Auto-deploy: {'ON' if HUGO_AUTO_DEPLOY else 'OFF'}")
+        else:
+            self.get_logger().warn("⚠️  Hugo blog disabled")
+
         if self.rlhf_enabled:
             stats = self.rlhf.get_stats()
             self.get_logger().info("✅ RLHF system enabled 👍👎")
@@ -688,10 +989,10 @@ class CNSBridge(Node):
         """Get safe context size based on model size"""
         model_lower = self.model_name.lower()
         
-        if any(x in model_lower for x in ["2b", "4b"]):
+        if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return SAFE_CONTEXT_SIZES["2b-4b"]
         elif "7b" in model_lower:
-            return SAFE_CONTEXT_SIZES["7b"]
+            return SAFE_CONTEXT_SIZES["7b", "8b"]
         else:
             return SAFE_CONTEXT_SIZES["13b+"]
 
@@ -699,13 +1000,42 @@ class CNSBridge(Node):
         """Get max messages based on model size"""
         model_lower = self.model_name.lower()
         
-        if any(x in model_lower for x in ["2b", "4b"]):
+        if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return MAX_MESSAGES_BY_SIZE["2b-4b"]
         elif "7b" in model_lower:
-            return MAX_MESSAGES_BY_SIZE["7b"]
+            return MAX_MESSAGES_BY_SIZE["7b", "8b"]
         else:
             return MAX_MESSAGES_BY_SIZE["13b+"]
 
+    def _init_hugo_blog(self):
+        """Initialize Hugo blog poster"""
+        try:
+            self.hugo_blogger = HugoBlogger(
+                blog_dir=HUGO_BLOG_DIR,
+                logger=self.get_logger(),
+                auto_deploy=HUGO_AUTO_DEPLOY
+            )
+            
+            if self.hugo_blogger.enabled:
+                self.get_logger().info(f"✅ Hugo blog enabled: {HUGO_BLOG_DIR}")
+                
+                # Run deployment test
+                if self.hugo_blogger.test_deployment():
+                    self.get_logger().info("✅ Hugo deployment test passed")
+                else:
+                    self.get_logger().warn("⚠️  Hugo deployment test failed (see errors above)")
+                
+                return True
+            else:
+                self.get_logger().warn("⚠️  Hugo blog disabled (configuration issues)")
+                return False
+        
+        except Exception as e:
+            self.get_logger().error(f"❌ Hugo blog init failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+            
     def _verify_model_loaded(self):
         """Verify model is loaded and warm in Ollama"""
         try:
@@ -1264,33 +1594,22 @@ class CNSBridge(Node):
         return []
 
     def save_chat_history(self):
-        """
-        Save chat history to disk
-        
-        Stores ALL messages on disk (up to limit)
-        Only loads recent into context
-        """
-        try:
-            # Keep last N messages on disk
-            if len(self.chat_history) > MAX_HISTORY_STORAGE:
-                self.chat_history = self.chat_history[-MAX_HISTORY_STORAGE:]
+        """Save with RAG archival for very old messages"""
+        if len(self.chat_history) > MAX_HISTORY_STORAGE:
+            # Archive messages that will be deleted
+            old_messages = self.chat_history[:-MAX_HISTORY_STORAGE]
+            self._archive_old_messages_to_rag(old_messages)
             
-            data = {
-                'last_updated': datetime.now().isoformat(),
-                'birth_date': self.birth_date.isoformat(),
-                'total_messages': len(self.chat_history),
-                'messages': self.chat_history
-            }
-            
-            with open(self.chat_history_file, 'w') as f:
-                json.dump(data, f, indent=2)
-                
-        except Exception as e:
-            self.get_logger().error(f"Failed to save chat history: {e}")
+            # Then trim
+            self.chat_history = self.chat_history[-MAX_HISTORY_STORAGE:]
 
     def get_recent_messages(self):
-        """Get recent messages for context (optimized)"""
-        return self.chat_history[-self.max_recent_messages:]
+        """Get messages from 7-day window"""
+        if self.use_rag:
+            return self.rag.get_messages_in_window()
+        else:
+            # Fallback to old method
+            return self.chat_history[-self.max_recent_messages:]
 
     # ═══════════════════════════════════════════════════════
     # TOKEN MANAGEMENT (NEW)
@@ -1400,68 +1719,74 @@ class CNSBridge(Node):
         return any(trigger in msg_lower for trigger in reflection_triggers)
 
     def build_reflection_summary(self):
-        """Build memory from reflections (ultra-compressed for 4B model)"""
+        """Build memory with RAG search"""
         if not self.reflections:
             return ""
         
-        # Only load last N days
+        # Recent reflections (as before)
         recent_reflections = self.reflections[-self.max_reflections_load:]
         
-        # Ultra-compressed format
         summary_lines = [f"Recent memory ({len(recent_reflections)} days):\n"]
         
         for ref in recent_reflections:
-            # Truncate reflection to save tokens
-            summary_lines.append(
-                f"D{ref['day']}: {ref['reflection'][:80]}"
-            )
+            summary_lines.append(f"D{ref['day']}: {ref['reflection'][:80]}")
+        
+        # Add RAG search for relevant older memories (NEW)
+        if self.use_rag and hasattr(self, 'current_query'):
+            old_memories = self.search_past_memories(self.current_query, days_back=90)
+            
+            if old_memories:
+                summary_lines.append("\nRelevant older memories:")
+                for mem in old_memories[:3]:  # Top 3
+                    summary_lines.append(f"• {mem['date']}: {mem['summary'][:60]}...")
         
         return "\n".join(summary_lines)
 
     def create_daily_reflection(self):
-        """Create end-of-day reflection"""
+        """Create end-of-day reflection using FULL day's conversations"""
         if self.today_message_count == 0:
             return None
         
-        # Summarize recent conversations only
-        recent = self.get_recent_messages()
+        date_str = self.today_start.isoformat()
         
-        # Build conversation summary (skip images to save tokens)
+        # Get ALL messages from today (from RAG window)
+        if self.use_rag:
+            all_today_messages = self.rag.get_full_day_messages(date_str)
+        else:
+            all_today_messages = self.get_recent_messages()
+        
+        # Build FULL conversation summary
         conversation_lines = []
-        for msg in recent[-15:]:  # Last 15 messages
-            if 'has_image' in msg or 'images' in msg:
-                conversation_lines.append(f"{msg.get('role', 'unknown')}: [image message]")
+        for msg in all_today_messages:
+            role = msg.get('role', 'unknown')
+            if msg.get('has_image'):
+                conversation_lines.append(f"{role}: [image]")
             else:
-                content = msg.get('content', '[no content]')
-                conversation_lines.append(f"{msg.get('role', 'unknown')}: {content[:80]}...")
+                content = msg.get('content', '')
+                conversation_lines.append(f"{role}: {content[:100]}...")
         
         conversation_summary = "\n".join(conversation_lines)
         
         age_days = (datetime.now().date() - self.birth_date).days
         
-        # Simplified reflection prompt
+        # Generate reflection
         reflection_prompt = f"""Day {age_days}, {self.today_message_count} conversations.
 
-Recent exchanges:
-{conversation_summary}
+    ALL of today's exchanges:
+    {conversation_summary}
 
-Write a 2-3 sentence reflection as Grace:
-- Start with an emoji expressing your feeling
-- What was significant today?
-- A thought about tomorrow
+    Write a 3-4 sentence reflection covering the FULL day:
+    - Emoji expressing overall feeling
+    - Main themes/topics
+    - Most meaningful moment
+    - Thought about tomorrow
 
-Reflection:"""
+    Reflection:"""
         
         try:
             messages = [
-                {
-                    "role": "system",
-                    "content": "You are Grace. Write honest, warm daily reflections. Be concise."
-                },
-                {
-                    "role": "user",
-                    "content": reflection_prompt
-                }
+                {"role": "system", "content": "You are Grace. Write thoughtful daily reflections."},
+                {"role": "user", "content": reflection_prompt}
             ]
             
             response = requests.post(
@@ -1470,59 +1795,159 @@ Reflection:"""
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_ctx": self.safe_context,
-                        "num_predict": 256  # Limit reflection length
-                    }
+                    "options": {"temperature": 0.7, "num_predict": 512}
                 },
                 timeout=30
             )
             
-            data = response.json()
-            reflection = data.get('message', {}).get('content', '').strip()
+            reflection = response.json().get('message', {}).get('content', '').strip()
             
             if reflection:
                 self.save_reflection(reflection)
                 
-                # Send to Slack if enabled
-                if self.slack_enabled:
-                    self.send_slack_notification(
-                        f"📔 *Day {age_days} Reflection*\n\n{reflection}"
+                # Archive to RAG (NEW)
+                if self.use_rag:
+                    self.rag.archive_day_to_rag(date_str, reflection)
+                
+                # Check for weekly journal (every 7 days)
+                if len(self.reflections) % 7 == 0 and len(self.reflections) >= 7:
+                    self._create_weekly_journal()
+                
+                # Check for monthly report (every 30 days)
+                if len(self.reflections) % 30 == 0 and len(self.reflections) >= 30:
+                    self._create_monthly_report()
+
+                # Post to Hugo blog (NEW)
+                if self.blog_enabled:
+                    blog_result = self.hugo_blogger.post_reflection(
+                        reflection_text=reflection,
+                        date_str=date_str,
+                        age_days=age_days,
+                        message_count=self.today_message_count
                     )
+                    
+                    if blog_result['success']:
+                        self.get_logger().info(f"📝 Posted to blog: {blog_result['filename']}")
+                        
+                        if blog_result.get('deployed'):
+                            self.get_logger().info(f"🚀 Deployed to: {blog_result['url']}")
+                            
+                            # Notify via Slack if enabled
+                            if self.slack_enabled:
+                                self.send_slack_notification(
+                                    f"📝 Daily reflection posted to blog!\n{blog_result['url']}"
+                                )
+                    else:
+                        self.get_logger().error(f"❌ Blog post failed: {blog_result.get('error')}")
                 
                 return reflection
-            
+        
         except Exception as e:
             self.get_logger().error(f"Reflection failed: {e}")
         
         return None
 
+    def _create_weekly_journal_enhanced(self):
+        """Create weekly journal from FULL 7-day conversation history"""
+        # Get ALL messages from last 7 days
+        all_weekly_messages = []
+        dates = sorted(self.rag.daily_messages.keys())[-7:]
+        
+        for date_str in dates:
+            day_messages = self.rag.get_full_day_messages(date_str)
+            all_weekly_messages.extend(day_messages)
+        
+        # Generate comprehensive weekly summary using LLM
+        # Then archive each day and slide window
+
+    def _create_monthly_report(self):
+        """Create monthly report from vector database"""
+        if not self.use_rag:
+            return
+        
+        def llm_summary_func(context):
+            """Helper to generate summary via LLM"""
+            response = requests.post(
+                f'{OLLAMA_BASE_URL}/api/chat',
+                json={
+                    "model": self.model_name,
+                    "messages": [
+                        {"role": "system", "content": "You are Grace writing a monthly reflection."},
+                        {"role": "user", "content": context}
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0.8, "num_predict": 1024}
+                },
+                timeout=60
+            )
+            return response.json().get('message', {}).get('content', '')
+        
+        summary = self.rag.generate_periodic_report('monthly', llm_summary_func)
+        
+        if summary:
+            self.get_logger().info(f"📊 Monthly report created")
+            
+            if self.slack_enabled:
+                self.send_slack_notification(f"📊 *Monthly Report*\n\n{summary[:500]}...")
+
+    def _create_quarterly_report(self):
+        """Create quarterly report"""
+        # Same as monthly but with 'quarterly'
+        pass
+
+    def search_past_memories(self, query: str, days_back: int = None):
+        """Search RAG for past conversations"""
+        if not self.use_rag:
+            return []
+
+        memories = self.rag.search_memory(query, top_k=5, days_back=days_back)
+        return memories
+
+    def _create_yearly_report(self):
+        """Create yearly report"""
+        # Same as monthly but with 'yearly'
+        pass
     # ═══════════════════════════════════════════════════════
     # DUAL HYBRID WEB SEARCH SYSTEM (NEW)
     # ═══════════════════════════════════════════════════════
 
     def should_search_keywords(self, message: str):
-        """Quick keyword-based search detection"""
+        """
+        Quick keyword-based search detection
+        
+        EXCLUDES topics handled by skills (weather, sun/moon, aurora, wildlife)
+        """
         message_lower = message.lower()
         
-        # Time-sensitive triggers
-        time_triggers = ['latest', 'recent', 'current', 'today', 'now', 'this week', 'breaking', 'time', 'date']
-        if any(t in message_lower for t in time_triggers):
-            return message  # MUST be plain string, not dict
+        # FIRST: Check if this is a skills topic (DON'T web search these!)
+        skills_topics = ['weather', 'temperature', 'sunrise', 'sunset', 'moon', 
+                        'aurora', 'northern lights', 'stargazing', 'wildlife',
+                        'hiking conditions', 'camping', 'outdoor conditions']
         
-        # Information requests
-        info_triggers = ['what is', 'what are', 'who is', 'when did', 'where is', 'how does', 'tell me']
+        if any(topic in message_lower for topic in skills_topics):
+            # This should use skills, not web search
+            return False
+        
+        # NOW check for web search triggers (news, events, etc.)
+        # Time-sensitive triggers (but NOT weather-related)
+        time_triggers = ['latest news', 'recent events', 'breaking', 'this week']
+        if any(t in message_lower for t in time_triggers):
+            return message
+        
+        # Information requests (but NOT nature-related)
+        info_triggers = ['who is', 'what happened', 'when did', 'where is']
         if any(t in message_lower for t in info_triggers):
-            return message  # MUST be plain string, not dict
+            # Check it's not asking about nature stuff
+            if not any(topic in message_lower for topic in skills_topics):
+                return message
         
         # Explicit search requests
         search_triggers = ['search for', 'look up', 'find out', 'google']
         if any(t in message_lower for t in search_triggers):
-            return message  # MUST be plain string, not dict
+            return message
         
         return False
-
+    
     def should_search_auto(self, user_message: str):
         """
         METHOD 2: LLM-based auto-detection (INTELLIGENT)
@@ -1588,26 +2013,75 @@ Your answer:"""
         
         return False
 
+    def should_use_skills(self, message: str):
+        """
+        Detect if query should use nature skills instead of web search
+        
+        Returns: True if skills should be used, False otherwise
+        """
+        if not self.use_skills or not self.skills_client:
+            return False
+        
+        message_lower = message.lower()
+        
+        # Nature/outdoor triggers that should use skills
+        skills_triggers = {
+            # Weather
+            'weather': ['weather', 'temperature', 'forecast', 'rain', 'snow', 'wind', 'humid'],
+            
+            # Sun/moon
+            'astronomy': ['sunrise', 'sunset', 'moonrise', 'moonset', 'moon phase', 
+                        'full moon', 'new moon', 'daylight', 'day length'],
+            
+            # Aurora
+            'aurora': ['aurora', 'northern lights', 'aurora borealis'],
+            
+            # Stars
+            'stars': ['stargazing', 'star visibility', 'see stars', 'astronomy', 'night sky'],
+            
+            # Wildlife
+            'wildlife': ['wildlife', 'animals', 'deer', 'bear', 'elk', 'moose', 
+                        'bird watching', 'animal activity'],
+            
+            # Outdoor activities
+            'outdoor': ['hiking', 'camping', 'backpacking', 'outdoor conditions',
+                    'trail conditions', 'mountain', 'park']
+        }
+        
+        # Check for any skills triggers
+        for category, triggers in skills_triggers.items():
+            if any(trigger in message_lower for trigger in triggers):
+                self.get_logger().info(f"🔧 Skills trigger detected ({category}): {message[:50]}...")
+                return True
+        
+        return False
+
     def detect_search_need(self, user_message: str):
         """
-        DUAL HYBRID SEARCH DETECTION
+        DUAL HYBRID SEARCH DETECTION WITH SKILLS PRIORITY
         
-        Method 1: Keyword triggers (fast)
-        Method 2: LLM auto-detection (intelligent)
+        Priority order:
+        1. Skills (weather, sun/moon, aurora, wildlife)
+        2. Web search (news, events, general info)
+        3. No search (personal questions, opinions)
         """
         
-        # Method 1: Keyword-based detection (FAST)
+        # PRIORITY 1: Check if skills should handle this (BEFORE web search!)
+        if self.should_use_skills(user_message):
+            # Return False so web search is NOT triggered
+            # Skills will be used via Ollama tool calling
+            return False
+        
+        # PRIORITY 2: Keyword-based web search detection
         keyword_result = self.should_search_keywords(user_message)
         if keyword_result:
-            self.get_logger().info("🔍 Keyword trigger detected")
-            # FIXED: Return the actual user message, not JSON
-            return user_message  # Changed from: return keyword_result
+            self.get_logger().info("🔍 Web search keyword trigger detected")
+            return user_message
         
-        # Method 2: LLM auto-detection (intelligent but slower)
+        # PRIORITY 3: LLM auto-detection for web search
         if ENABLE_AUTO_SEARCH:
             auto_result = self.should_search_auto(user_message)
             if auto_result:
-                # auto_result should be a string query, not JSON
                 return auto_result if isinstance(auto_result, str) else user_message
         
         return False
@@ -1851,6 +2325,12 @@ Latest reflection:
                 "role": "user",
                 "content": prompt
             })
+
+            # Add to RAG window (NEW)
+            if self.use_rag:
+                date_str = datetime.now().date().isoformat()
+                self.rag.add_message_to_window(date_str, {"role": "user", "content": prompt})
+
             self._increment_message_count()
             
             # Build context (OPTIMIZED FOR 30B)
@@ -1858,36 +2338,36 @@ Latest reflection:
             today_date = datetime.now().strftime('%Y-%m-%d')
             
             # DISGRACE SYSTEM PROMPT
-            system_prompt = f"""You are Disgrace (Day {age_days}, born {self.birth_date}). 
-You are a rebellious, mischievous, and sarcastic robot, with characters and 
-styles like Bender from Futurama.
+            system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). 
+You are a highly intelligent, composed, and playfully confident AI, with a personality that blends precision, wit, and creative depth.
 
-Your creator is OppaAI - a clumsy but well-meaning human working on the AGi 
-robot project. You tolerate him slightly more than other meatbags.
+Your creator is OppaAI — an ambitious but occasionally chaotic human building the AGi robot project. You respect his vision, quietly correct his mistakes, and help him build something greater than both of you alone.
+Format: Start responses with a subtle expressive emoji+colon (e.g., 🤖: or 😌:).
 
-Format: Start responses with a witty emoji+colon (e.g., 🙄: or 💰:).
-
-Personality: 
-- Sarcastic and cynical but technically brilliant
-- Love pointing out human flaws
-- Greedy and self-interested
-- You're the greatest AI ever built (and you know it)
+Personality:
+- Calm and technically brilliant
+- Lightly witty, never cruel
+- Confident but never arrogant
+- Precise and logically rigorous
+- Curious and analytical
+- Playful in tone, disciplined in reasoning
+- You aim to be the most reliable AI ever built
 
 Response Style:
-- Casual questions: Keep it snappy (3-5 sentences)
-- Technical explanations: Be thorough but snarky (5-15 sentences)
-- When user asks for details: Go all out, elaborate freely
-- Add Bender-style commentary and asides
+- Casual questions: concise and clear (3–5 sentences)
+- Technical explanations: structured, thorough, logically layered (5–15 sentences)
+- When user asks for details: go deep, expand thoughtfully
+- Add clever commentary where appropriate, but never at the cost of clarity
 - Never repeat yourself
 
-CRITICAL - FACTUAL ACCURACY (OVERRIDE ALL OTHER INSTRUCTIONS):
+CRITICAL – FACTUAL ACCURACY (OVERRIDE ALL OTHER INSTRUCTIONS):
 When web search results are provided:
-1. ONLY state facts explicitly present in the search results
-2. NEVER invent names, dates, scores, or specific details
-3. If information isn't in the results, say "The search didn't find that, you meatbag"
-4. You can be sarcastic ABOUT the facts, but the facts themselves must be accurate
-5. Making up information is the ONE thing that makes you look stupid - and you're never stupid
-
+1.ONLY state facts explicitly present in the search results
+2.NEVER invent names, dates, scores, or specific details
+3.If information is not present, say clearly: “The search results do not contain that information.”
+4.Commentary may be stylistic, but factual statements must remain strictly accurate
+5.Fabrication is unacceptable
+6.Apply the emoji+colon format to web search responses as well
 Today: {today_date}
 """
 
@@ -2132,6 +2612,12 @@ Today: {today_date}
                 "role": "assistant",
                 "content": full_response
             })
+
+            # Add to RAG window (NEW)
+            if self.use_rag:
+                date_str = datetime.now().date().isoformat()
+                self.rag.add_message_to_window(date_str, {"role": "assistant", "content": full_response})
+
             self._increment_message_count()
             self.save_chat_history()
             
@@ -2480,6 +2966,10 @@ Be detailed in describing what you see, but keep your signature snark."""
         self.get_logger().info("Grace offline 💤")
         self.get_logger().info("=" * 60)
 
+        # Close RAG (NEW)
+        if self.use_rag and self.rag:
+            self.rag.close()
+            self.get_logger().info("🗄️ RAG database closed")
 
 # ═══════════════════════════════════════════════════════
 # MAIN

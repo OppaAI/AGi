@@ -6,9 +6,10 @@ This module handles the ignition sequence (bootstrap) of the robot's system.
 
 Startup sequence:
     1. TallEEE: Centralized Triple-Aggregation Logger & Ledger Emergency and Exception Entry
-    2. Flask Web Server: Serves the Grace web interface
-    3. SearXNG MCP Server: Enhanced web search with full content extraction
-    4. ROS2 Bridge: Connects all components
+    2. ROS Bridge WebSocket Server: Enables web interface communication
+    3. Flask Web Server: Serves the Grace web interface
+    4. SearXNG MCP Server: Enhanced web search with full content extraction
+    5. ROS2 Bridge: Connects all components
 """
 # System modules
 from enum import Enum
@@ -39,13 +40,57 @@ class StateOfModule(str, Enum):
 
 class ServerManager:
     """
-    Manages external servers (Flask, MCP) for the robot
+    Manages external servers (ROS Bridge, Flask, MCP) for the robot
     """
     def __init__(self, logger):
         self.logger = logger
+        self.rosbridge_process = None
         self.flask_process = None
         self.mcp_process = None
         self.base_dir = Path.home() / "AGi"
+    
+    def start_rosbridge_server(self) -> bool:
+        """Start ROS Bridge WebSocket server for web interface communication"""
+        try:
+            self.logger.info("🌉 Starting ROS Bridge WebSocket server...")
+            
+            # Start rosbridge_server
+            self.rosbridge_process = subprocess.Popen(
+                ["ros2", "launch", "rosbridge_server", "rosbridge_websocket_launch.xml"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for startup
+            time.sleep(3)
+            
+            if self.rosbridge_process.poll() is None:
+                self.logger.info("✅ ROS Bridge started on ws://aurora-usb:9090")
+                
+                # Start thread to capture output
+                threading.Thread(
+                    target=self._log_rosbridge_output,
+                    daemon=True
+                ).start()
+                
+                return True
+            else:
+                stderr_output = self.rosbridge_process.stderr.read() if self.rosbridge_process.stderr else ""
+                self.logger.error("❌ ROS Bridge failed to start")
+                if stderr_output:
+                    self.logger.error(f"   Error: {stderr_output}")
+                return False
+                
+        except FileNotFoundError:
+            self.logger.error("❌ rosbridge_server not found!")
+            self.logger.error("   Install with: sudo apt install ros-humble-rosbridge-suite")
+            return False
+        except Exception as e:
+            self.logger.error(f"❌ ROS Bridge error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
         
     def start_flask_server(self) -> bool:
         """Start Flask web server for Grace UI"""
@@ -94,11 +139,16 @@ class ServerManager:
                 
                 return True
             else:
+                stderr_output = self.flask_process.stderr.read() if self.flask_process.stderr else ""
                 self.logger.error("❌ Flask server failed to start")
+                if stderr_output:
+                    self.logger.error(f"   Error: {stderr_output}")
                 return False
                 
         except Exception as e:
             self.logger.error(f"❌ Flask server error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def start_mcp_server(self) -> bool:
@@ -164,35 +214,69 @@ class ServerManager:
                 
                 return True
             else:
+                stderr_output = self.mcp_process.stderr.read() if self.mcp_process.stderr else ""
                 self.logger.error("❌ MCP server failed to start")
+                if stderr_output:
+                    self.logger.error(f"   Error: {stderr_output}")
                 return False
                 
         except Exception as e:
             self.logger.error(f"❌ MCP server error: {e}")
+            import traceback
+            traceback.print_exc()
             return False
+    
+    def _log_rosbridge_output(self):
+        """Log ROS Bridge output"""
+        if not self.rosbridge_process:
+            return
+        
+        try:
+            for line in self.rosbridge_process.stderr:
+                if line.strip():
+                    self.logger.info(f"[ROS Bridge] {line.strip()}")
+        except Exception:
+            pass  # Process terminated
     
     def _log_flask_output(self):
         """Log Flask server output"""
         if not self.flask_process:
             return
         
-        for line in self.flask_process.stderr:
-            if line.strip():
-                self.logger.info(f"[Flask] {line.strip()}")
+        try:
+            for line in self.flask_process.stderr:
+                if line.strip():
+                    self.logger.info(f"[Flask] {line.strip()}")
+        except Exception:
+            pass  # Process terminated
     
     def _log_mcp_output(self):
         """Log MCP server output"""
         if not self.mcp_process:
             return
         
-        for line in self.mcp_process.stderr:
-            if line.strip():
-                self.logger.info(f"[MCP] {line.strip()}")
+        try:
+            for line in self.mcp_process.stderr:
+                if line.strip():
+                    self.logger.info(f"[MCP] {line.strip()}")
+        except Exception:
+            pass  # Process terminated
     
     def stop_all(self):
         """Stop all managed servers"""
         self.logger.info("Stopping servers...")
         
+        # Stop ROS Bridge
+        if self.rosbridge_process:
+            self.logger.info("🛑 Stopping ROS Bridge...")
+            self.rosbridge_process.terminate()
+            try:
+                self.rosbridge_process.wait(timeout=5)
+            except:
+                self.rosbridge_process.kill()
+            self.logger.info("✅ ROS Bridge stopped")
+        
+        # Stop Flask
         if self.flask_process:
             self.logger.info("🛑 Stopping Flask server...")
             self.flask_process.terminate()
@@ -202,6 +286,7 @@ class ServerManager:
                 self.flask_process.kill()
             self.logger.info("✅ Flask server stopped")
         
+        # Stop MCP
         if self.mcp_process:
             self.logger.info("🛑 Stopping MCP server...")
             self.mcp_process.terminate()
@@ -214,6 +299,7 @@ class ServerManager:
     def check_health(self) -> dict:
         """Check health of all servers"""
         return {
+            "rosbridge": self.rosbridge_process.poll() is None if self.rosbridge_process else False,
             "flask": self.flask_process.poll() is None if self.flask_process else False,
             "mcp": self.mcp_process.poll() is None if self.mcp_process else False
         }
@@ -222,7 +308,7 @@ class ServerManager:
 class Igniter(Node):
     """
     This is the ROS 2 Wrapper. It acts as a bridge between ROS and your TALLEEE system.
-    Also manages external servers (Flask, MCP) for the robot.
+    Also manages external servers (ROS Bridge, Flask, MCP) for the robot.
     """
     def __init__(self):
         super().__init__('igniter')
@@ -243,6 +329,9 @@ class Igniter(Node):
         self.eee.info("STARTING EXTERNAL SERVERS")
         self.eee.info("=" * 60)
         
+        # Start ROS Bridge FIRST (critical for web interface)
+        rosbridge_ok = self.server_manager.start_rosbridge_server()
+        
         # Start Flask server
         flask_ok = self.server_manager.start_flask_server()
         
@@ -253,14 +342,21 @@ class Igniter(Node):
         self.eee.info("=" * 60)
         self.eee.info("SERVER STARTUP SUMMARY")
         self.eee.info("=" * 60)
-        self.eee.info(f"Flask Web Server:    {'✅ RUNNING' if flask_ok else '❌ FAILED'}")
-        self.eee.info(f"SearXNG MCP Server:  {'✅ RUNNING' if mcp_ok else '❌ FAILED'}")
+        self.eee.info(f"ROS Bridge (WebSocket): {'✅ RUNNING' if rosbridge_ok else '❌ FAILED'}")
+        self.eee.info(f"Flask Web Server:       {'✅ RUNNING' if flask_ok else '❌ FAILED'}")
+        self.eee.info(f"SearXNG MCP Server:     {'✅ RUNNING' if mcp_ok else '❌ FAILED'}")
         self.eee.info("=" * 60)
         
-        if flask_ok:
-            self.eee.info("🌐 Access Grace UI at: http://localhost:9413")
+        if rosbridge_ok:
+            self.eee.info("🌉 WebSocket available at: ws://localhost:9090")
+        else:
+            self.eee.error("⚠️  CRITICAL: Web interface will NOT work without ROS Bridge!")
+            self.eee.error("   Install: sudo apt install ros-humble-rosbridge-suite")
         
-        if not flask_ok and not mcp_ok:
+        if flask_ok:
+            self.eee.info("🌸 Access Grace UI at: http://localhost:9413")
+        
+        if not rosbridge_ok and not flask_ok and not mcp_ok:
             self.eee.warn("⚠️  No external servers started - robot will run in basic mode")
     
     def _health_check(self):
@@ -268,11 +364,15 @@ class Igniter(Node):
         health = self.server_manager.check_health()
         
         # Log any failures
+        if not health['rosbridge']:
+            self.eee.warn("⚠️  ROS Bridge is down - web interface will not work!")
+        
         if not health['flask']:
             self.eee.warn("⚠️  Flask server is down")
         
         if not health['mcp']:
-            self.eee.warn("⚠️  MCP server is down")
+            # MCP is optional, so just debug log
+            pass
     
     def shutdown(self):
         """Cleanup plugins and stop servers"""
@@ -301,9 +401,10 @@ def main(args=None):
     1. ROS2 initialization
     2. EEE Bridge (logging)
     3. Igniter (server management)
-    4. Flask web server
-    5. SearXNG MCP server
-    6. Spin all nodes
+    4. ROS Bridge WebSocket server (port 9090)
+    5. Flask web server (port 9413)
+    6. SearXNG MCP server
+    7. Spin all nodes
     """
     rclpy.init(args=args)
 

@@ -7,8 +7,11 @@ requires-python = "==3.10.12"
 dependencies = [
     "flask>=3.1.2",
     "mcp>=1.26.0",
+    "pillow>=9.1.0",
     "python-dotenv>=1.2.1",
     "python-telegram-bot>=22.6",
+    "sentence-transformers>=5.2.2",
     "slack-bolt>=1.27.0",
     "slack-sdk>=3.40.0",
+    "sqlite-vec>=0.1.6",
 ]
