@@ -512,34 +512,51 @@ class HugoBlogger:
         self.logger.info(f"   Auto-deploy: {'ON' if auto_deploy else 'OFF'}")
     
     def post_reflection(self, reflection_text: str, date_str: str, age_days: int, 
-                       message_count: int) -> dict:
-        """
-        Post daily reflection to Hugo blog
+                   message_count: int) -> dict:
+    """
+    Post daily reflection to Hugo blog
+    
+    Args:
+        reflection_text: The reflection content
+        date_str: Date in YYYY-MM-DD format
+        age_days: Grace's age in days
+        message_count: Number of messages that day
         
-        Args:
-            reflection_text: The reflection content
-            date_str: Date in YYYY-MM-DD format
-            age_days: Grace's age in days
-            message_count: Number of messages that day
-            
-        Returns:
-            dict with success status and details
-        """
-        if not self.enabled:
-            return {
-                'success': False,
-                'error': 'Hugo blogger not enabled'
-            }
+    Returns:
+        dict with success status and details
+    """
+    if not self.enabled:
+        return {
+            'success': False,
+            'error': 'Hugo blogger not enabled'
+        }
+    
+    try:
+        # Create filename
+        filename = f'{date_str}-day-{age_days}.md'
+        filepath = self.posts_dir / filename
         
-        try:
-            # Create filename
-            filename = f'{date_str}-day-{age_days}.md'
-            filepath = self.posts_dir / filename
-            
-            # Build Hugo front matter
-            frontmatter = f"""---
+        # Smart date/time logic
+        now = datetime.now()
+        post_date = datetime.fromisoformat(date_str)
+        
+        # If posting for today, use current time
+        # If posting after midnight for yesterday, use 11:59 PM of yesterday
+        # If posting for past days, use 11:59 PM
+        if post_date.date() == now.date():
+            # Today - use current time
+            post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+        elif post_date.date() < now.date():
+            # Past day - use 11:59 PM of that day
+            post_datetime = f"{date_str}T23:59:59"
+        else:
+            # Future date (shouldn't happen) - use current time
+            post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+        
+        # Build Hugo front matter
+        frontmatter = f"""---
 title: "Day {age_days} Reflection"
-date: {date_str}T23:59:59
+date: {post_datetime}
 draft: false
 tags: ["daily-reflection", "ai-journal", "grace"]
 categories: ["Daily Reflections"]
@@ -553,40 +570,41 @@ description: "Grace's daily reflection for day {age_days} - {message_count} conv
 
 *This reflection was automatically generated from {message_count} conversations on day {age_days}.*
 """
-            
-            # Write file
-            filepath.write_text(frontmatter)
-            
-            self.logger.info(f"📝 Created blog post: {filename}")
-            
-            # Git commit and push (if auto-deploy enabled)
-            if self.auto_deploy:
-                deployed = self._git_deploy(filename, date_str)
-                
-                return {
-                    'success': True,
-                    'filename': filename,
-                    'filepath': str(filepath),
-                    'deployed': deployed,
-                    'url': self._get_blog_url(filename)
-                }
-            else:
-                return {
-                    'success': True,
-                    'filename': filename,
-                    'filepath': str(filepath),
-                    'deployed': False,
-                    'message': 'Auto-deploy disabled. Commit manually.'
-                }
         
-        except Exception as e:
-            self.logger.error(f"❌ Failed to post to Hugo blog: {e}")
-            import traceback
-            traceback.print_exc()
+        # Write file
+        filepath.write_text(frontmatter)
+        
+        self.logger.info(f"📝 Created blog post: {filename}")
+        self.logger.info(f"   Post date/time: {post_datetime}")
+        
+        # Git commit and push (if auto-deploy enabled)
+        if self.auto_deploy:
+            deployed = self._git_deploy(filename, date_str)
+            
             return {
-                'success': False,
-                'error': str(e)
+                'success': True,
+                'filename': filename,
+                'filepath': str(filepath),
+                'deployed': deployed,
+                'url': self._get_blog_url(filename)
             }
+        else:
+            return {
+                'success': True,
+                'filename': filename,
+                'filepath': str(filepath),
+                'deployed': False,
+                'message': 'Auto-deploy disabled. Commit manually.'
+            }
+    
+    except Exception as e:
+        self.logger.error(f"❌ Failed to post to Hugo blog: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'error': str(e)
+        }
     
     def _git_deploy(self, filename: str, date_str: str) -> bool:
         """Git commit and push to trigger GitHub Actions deployment"""
