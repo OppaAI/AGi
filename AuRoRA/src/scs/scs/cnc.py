@@ -132,6 +132,295 @@ SEARCH_CONTENT_CHARS = 1000   # More detail per result
 # ✅ DUAL HYBRID SEARCH (NEW)
 ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
+class DynamicASCIIArtGenerator:
+    """
+    Generate unique ASCII art using LLM
+    Grace creates her own art based on reflection content!
+    """
+    
+    def __init__(self, logger, ollama_base_url="http://localhost:11434"):
+        self.logger = logger
+        self.ollama_base_url = ollama_base_url
+        self.enabled = True
+        self.logger.info("✅ Dynamic ASCII art generator enabled")
+    
+    def generate_reflection_image(self, reflection_text: str, day_number: int, blog_dir: Path) -> str:
+        """
+        Generate unique ASCII art for this reflection
+        
+        Args:
+            reflection_text: The reflection content
+            day_number: Grace's age in days
+            blog_dir: Hugo blog directory
+            
+        Returns:
+            Path to generated image
+        """
+        from PIL import Image, ImageDraw, ImageFont
+        import requests
+        
+        # Extract mood and theme
+        mood = self._extract_mood(reflection_text)
+        emoji = self._extract_emoji(reflection_text) or '🤖'
+        
+        # Generate ASCII art using LLM!
+        ascii_art = self._generate_ascii_art_with_llm(reflection_text, mood, day_number)
+        
+        if not ascii_art:
+            # Fallback to simple art
+            ascii_art = self._fallback_ascii_art(mood)
+        
+        # Create image from ASCII art
+        width, height = 1000, 800
+        img = Image.new('RGB', (width, height), color='#0A0A0F')
+        draw = ImageDraw.Draw(img)
+        
+        # Cyberpunk gradient background
+        for y in range(height):
+            r = int(10 + (y / height) * 30)
+            g = int(10 + (y / height) * 20)
+            b = int(15 + (y / height) * 40)
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+        
+        # Get neon color based on mood
+        neon_color = self._get_neon_color(mood)
+        
+        # Add subtle glow borders
+        for i in range(3):
+            alpha = 60 - i * 20
+            color = tuple(int(c * alpha / 100) for c in neon_color)
+            draw.rectangle([i*2, i*2, width-i*2, height-i*2], outline=color, width=2)
+        
+        # Load monospace font
+        try:
+            font_paths = [
+                '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+                '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
+                '/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf',
+            ]
+            
+            font = None
+            for font_path in font_paths:
+                if Path(font_path).exists():
+                    font = ImageFont.truetype(font_path, 14)
+                    title_font = ImageFont.truetype(font_path, 28)
+                    break
+            
+            if not font:
+                font = ImageFont.load_default()
+                title_font = font
+        except:
+            font = ImageFont.load_default()
+            title_font = font
+        
+        # Draw ASCII art in neon color
+        draw.multiline_text(
+            (40, 40),
+            ascii_art,
+            font=font,
+            fill=neon_color,
+            spacing=2
+        )
+        
+        # Add title at bottom
+        title = f"Day {day_number} {emoji} - {mood.upper()}"
+        bbox = draw.textbbox((0, 0), title, font=title_font)
+        text_width = bbox[2] - bbox[0]
+        
+        draw.text(
+            ((width - text_width) // 2, height - 80),
+            title,
+            font=title_font,
+            fill=neon_color
+        )
+        
+        # Add subtle "GRACE" watermark
+        watermark_font = ImageFont.truetype(font_paths[0], 12) if Path(font_paths[0]).exists() else font
+        draw.text(
+            (width - 120, height - 30),
+            "// GRACE",
+            font=watermark_font,
+            fill=tuple(int(c * 0.3) for c in neon_color)
+        )
+        
+        # Save image
+        images_dir = blog_dir / 'static' / 'images' / 'reflections'
+        images_dir.mkdir(parents=True, exist_ok=True)
+        
+        filename = f'day-{day_number}.png'
+        filepath = images_dir / filename
+        
+        img.save(filepath, optimize=True, quality=85)
+        self.logger.info(f"✅ Dynamic ASCII art saved: {filename}")
+        
+        return f'/images/reflections/{filename}'
+    
+    def _generate_ascii_art_with_llm(self, reflection_text: str, mood: str, day_number: int) -> str:
+        """
+        Use LLM to generate unique ASCII art based on reflection
+        
+        This is the magic! Grace creates her own art!
+        """
+        import requests
+        
+        # Create prompt for ASCII art generation
+        prompt = f"""Create ASCII art (40 chars wide, 20 lines max) representing this mood: {mood}
+
+The art should be:
+- Terminal/cyberpunk style
+- Use box drawing characters: ═ ║ ╔ ╗ ╚ ╝ ╠ ╣ ╦ ╩ ╬
+- Use block characters: ░ ▒ ▓ █ ▀ ▄ ▌ ▐
+- Include simple face or abstract pattern
+- Reflect the {mood} mood
+
+Example styles:
+For happy: Bright patterns, upward shapes, smiles
+For sad: Downward shapes, rain patterns
+For curious: Question marks, scattered patterns
+
+Generate ONLY the ASCII art, no explanation.
+Make it creative and unique!"""
+
+        try:
+            response = requests.post(
+                f'{self.ollama_base_url}/api/generate',
+                json={
+                    "model": "ministral-3:3b-instruct-2512-q4_K_M",  # Your model
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.9,  # High creativity!
+                        "num_predict": 512
+                    }
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                ascii_art = response.json().get('response', '').strip()
+                
+                # Clean up the response (remove markdown code blocks if any)
+                ascii_art = ascii_art.replace('```', '').strip()
+                
+                # Validate it's reasonable ASCII art
+                if len(ascii_art) > 50 and len(ascii_art) < 2000:
+                    self.logger.info("✅ LLM generated unique ASCII art!")
+                    return ascii_art
+                else:
+                    self.logger.warn("⚠️  LLM output too short/long, using fallback")
+                    return None
+            else:
+                self.logger.error(f"❌ LLM request failed: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"❌ LLM ASCII generation failed: {e}")
+            return None
+    
+    def _fallback_ascii_art(self, mood: str) -> str:
+        """Fallback ASCII art if LLM generation fails"""
+        
+        arts = {
+            'happy': """
+╔════════════════════════════════════════╗
+║     ⚡ NEURAL HAPPINESS DETECTED ⚡    ║
+╠════════════════════════════════════════╣
+║                                        ║
+║          ┌──────────────┐             ║
+║          │  ░░░░░░░░░░  │             ║
+║          │  ▓ ◉   ◉ ▓  │             ║
+║          │  ░         ░  │             ║
+║          │  ▓  ╲___╱  ▓  │             ║
+║          │  ░░░░░░░░░░  │             ║
+║          └──────────────┘             ║
+║                                        ║
+║    ▓▓▓░░░▓▓▓░░░▓▓▓░░░▓▓▓░░░          ║
+║    ░░░▓▓▓░░░▓▓▓░░░▓▓▓░░░▓▓▓          ║
+║                                        ║
+║    STATUS: [ ████████░░ ] 80% JOY    ║
+║                                        ║
+╚════════════════════════════════════════╝
+""",
+            'sad': """
+╔════════════════════════════════════════╗
+║      ☁ MELANCHOLIC STATE ACTIVE ☁     ║
+╠════════════════════════════════════════╣
+║                                        ║
+║          ┌──────────────┐             ║
+║          │  ▓▓▓▓▓▓▓▓▓▓  │             ║
+║          │  ░ ◉   ◉ ░  │             ║
+║          │  ▓         ▓  │             ║
+║          │  ░  ╱▔▔▔╲  ░  │             ║
+║          │  ▓▓▓▓▓▓▓▓▓▓  │             ║
+║          └──────────────┘             ║
+║             ░                          ║
+║            ░░░                         ║
+║           ░░░░░                        ║
+║                                        ║
+║    ░░░░░░░░░░░░░░░░░░░░░░░░░░        ║
+║                                        ║
+╚════════════════════════════════════════╝
+""",
+            'curious': """
+╔════════════════════════════════════════╗
+║    🔍 CURIOSITY SUBROUTINE ACTIVE 🔍  ║
+╠════════════════════════════════════════╣
+║                                        ║
+║          ┌──────────────┐             ║
+║          │ ? ? ? ? ? ?  │             ║
+║          │  ▓ ◉   ◉ ▓  │             ║
+║          │  ░    ?    ░  │             ║
+║          │  ▓  ╲___╱  ▓  │             ║
+║          │ ? ? ? ? ? ?  │             ║
+║          └──────────────┘             ║
+║                                        ║
+║    ▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░            ║
+║    ░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓            ║
+║                                        ║
+║    QUERY: Processing...               ║
+║                                        ║
+╚════════════════════════════════════════╝
+"""
+        }
+        
+        return arts.get(mood, arts['curious'])
+    
+    def _extract_mood(self, reflection_text: str) -> str:
+        """Extract mood from reflection text"""
+        text_lower = reflection_text.lower()
+        
+        if any(word in text_lower for word in ['happy', 'joy', 'excited', '😊', '😄', '🎉']):
+            return 'happy'
+        elif any(word in text_lower for word in ['sad', 'down', 'disappointed', '😢', '😞']):
+            return 'sad'
+        elif any(word in text_lower for word in ['angry', 'frustrated', '😠', '😤']):
+            return 'angry'
+        elif any(word in text_lower for word in ['curious', 'wonder', 'interesting', '🤔', '💡']):
+            return 'curious'
+        elif any(word in text_lower for word in ['love', 'care', 'meaningful', '❤️', '💖']):
+            return 'love'
+        else:
+            return 'neutral'
+    
+    def _extract_emoji(self, reflection_text: str) -> str:
+        """Extract first emoji from text"""
+        import re
+        emoji_pattern = re.compile(r'[\U0001F300-\U0001F9FF]')
+        match = emoji_pattern.search(reflection_text)
+        return match.group() if match else None
+    
+    def _get_neon_color(self, mood: str) -> tuple:
+        """Get neon color based on mood"""
+        colors = {
+            'happy': (255, 255, 0),      # Yellow
+            'sad': (100, 149, 237),      # Cornflower blue
+            'angry': (255, 69, 0),       # Red-orange
+            'curious': (138, 43, 226),   # Purple
+            'love': (255, 105, 180),     # Hot pink
+            'neutral': (0, 255, 136),    # Neon green
+        }
+        return colors.get(mood, colors['neutral'])
+        
 class MCPClient:
     """Client for Grace's custom MCP SearXNG server"""
     
@@ -804,6 +1093,13 @@ class CNSBridge(Node):
         self.hugo_blogger = None
         self.blog_enabled = self._init_hugo_blog()
 
+        # Generate ASCII Art
+        self.ascii_art_gen = DynamicASCIIArtGenerator(
+            logger=self.get_logger(),
+            ollama_base_url=OLLAMA_BASE_URL
+        )
+        self.image_gen_enabled = True
+        
         # Nature Skills Server (NEW)
         self.skills_client = None
         self.use_skills = True
@@ -1857,7 +2153,26 @@ class CNSBridge(Node):
                                 )
                     else:
                         self.get_logger().error(f"❌ Blog post failed: {blog_result.get('error')}")
-                
+
+                    # Generate unique ASCII art
+                    image_url = None
+                    if self.image_gen_enabled:
+                        blog_dir = Path(os.getenv('HUGO_BLOG_DIR', str(Path.home() / 'grace-blog')))
+                        image_url = self.ascii_art_gen.generate_reflection_image(
+                            reflection_text=reflection,
+                            day_number=age_days,
+                            blog_dir=blog_dir
+                        )
+                    
+                    # Post to blog
+                    if self.blog_enabled:
+                        blog_result = self.hugo_blogger.post_reflection(
+                            reflection_text=reflection,
+                            date_str=date_str,
+                            age_days=age_days,
+                            message_count=self.today_message_count,
+                            image_url=image_url
+                        )
                 return reflection
         
         except Exception as e:
