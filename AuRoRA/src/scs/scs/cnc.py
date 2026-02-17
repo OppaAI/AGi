@@ -1846,6 +1846,7 @@ class CNSBridge(Node):
             'day': age_days,
             'date': reflection_date.isoformat(),  # ✅ Feb 16, not Feb 17
             'reflection': reflection_text,
+            'ascii_art': ascii_art,
             'message_count': self.today_message_count
         }
         
