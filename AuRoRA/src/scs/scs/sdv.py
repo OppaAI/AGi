@@ -196,16 +196,18 @@ class GzipRotatingFileHandler(RotatingFileHandler):
             
             # Shutdown the ACV gracefully
             try:                                                # Attempt to shutdown the ACV without waiting for the queue to clear
-                cls._ACV_buffer_queue.put(None, timeout=2.0)    # Transfer the shutdown signal into the ACV buffer, giving 2 seconds for the buffer to clear one slot
+                cls._ACV_buffer_queue.put(None, timeout=0.2)    # Transfer the shutdown signal into the ACV buffer, giving 0.2 seconds for the buffer to clear one slot
             except queue.Full:                                  # If the ACV buffer is full, move on
                 pass                                            # Move on to the next step
             
             # Wait for ACV buffer to drain
-            cls._ACV_buffer_queue.join()                        # Wait for all queued archives in the ACV buffer to be compacted before shutting down
+            deadline = time.monotonic() + 1.0
+            while cls._ACV_buffer_queue.qsize() > 0 and time.monotonic() < deadline:
+                time.sleep(0.05)                       # Wait for all queued archives in the ACV buffer to be compacted before shutting down
             
             # Wait for ACV thread
             if cls._ACV_thread:                                 # If ACV thread is in operation
-                cls._ACV_thread.join(timeout=5.0)               # Wait for the ACV thread to finish before shutting down
-                if cls._ACV_thread.is_alive():                  # If ACV thread is still running after 5 seconds
+                cls._ACV_thread.join(timeout=0.5)               # Wait for the ACV thread to finish before shutting down
+                if cls._ACV_thread.is_alive():                  # If ACV thread is still running after 0.5 seconds
                     # (TODO) Switch to TALLE logic to report the warning
                     print("[TALLE] ACV not able to shutdown. Cutting power forcefully...") # Alert the robot system/humans that ACV failed to shutdown gracefully

@@ -125,6 +125,8 @@ class EEEAggregator:
     _ledger_queue: deque = deque()  # Ledger queue
     _ledger_flush_timer: threading.Timer | None = None
     _ledger_lock = threading.Lock()
+    _shutting_down: bool = False
+    _shutdown_complete: bool = False  # ← add with other class variables
     _db_conn: sqlite3.Connection | None = None  # Single shared DB connection
     BATCH_SIZE = 50
     FLUSH_INTERVAL = 0.5  # seconds
@@ -224,13 +226,14 @@ class EEEAggregator:
             with EEEAggregator._ledger_lock:
                 if EEEAggregator._ledger_flush_timer is None:
                     def flush_loop():
+                        if EEEAggregator._shutting_down:
+                            return
                         EEEAggregator._flush_ledger_batch()
                         EEEAggregator._ledger_flush_timer = threading.Timer(
                             EEEAggregator.FLUSH_INTERVAL, flush_loop
                         )
                         EEEAggregator._ledger_flush_timer.daemon = True
                         EEEAggregator._ledger_flush_timer.start()
-                    flush_loop()
 
         _start_ledger_flush()
 
@@ -483,12 +486,19 @@ class EEEAggregator:
                     print("[EEE] Database connection not initialized!")
                     return
                 
-                cls._db_conn.executemany("""
-                    INSERT INTO events
-                    (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, batch)
-                cls._db_conn.commit()
+                def _do_write():
+                    cls._db_conn.executemany("""
+                        INSERT INTO events
+                        (correlation_id, timestamp, level, proc_id, system, node, module, message_preview, channels, content_hash)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, batch)
+                    cls._db_conn.commit()
+
+                t = threading.Thread(target=_do_write, daemon=True)
+                t.start()
+                t.join(timeout=1.0)
+                if t.is_alive():
+                    print("[EEE] Ledger flush timed out - skipping remaining writes")
             except Exception as e:
                 print(f"[EEE] Ledger batch flush failed: {e}")
                 traceback.print_exc()
@@ -517,52 +527,42 @@ class EEEAggregator:
 
     @classmethod
     def shutdown(cls):
-        """
-        Graceful shutdown: flush all queues and close database connection.
-        """
-        if cls._worker_started:
-            print("[EEE] Flushing pending log entries...")
-            cls._log_queue.join()
-            cls._flush_ledger_batch()
-            
-            if cls._ledger_flush_timer:
-                cls._ledger_flush_timer.cancel()
-            
-            # ✅ Close the database connection
-            if cls._db_conn:
-                try:
-                    cls._db_conn.close()
-                    print("[EEE] Database connection closed.")
-                except Exception as e:
-                    print(f"[EEE] Error closing database: {e}")
-            
-            # ✅ Shutdown GzipRotatingFileHandler
-            GzipRotatingFileHandler.shutdown()
-            
-            print(f"[EEE] All events written. Shutdown complete.")
+        if not cls._worker_started or cls._shutdown_complete:
+            return
+        cls._shutdown_complete = True  # ← prevent double call
+        print("[EEE] t=0 shutdown start")
+
+        print("[EEE] t=A draining queue...")
+        deadline = time.monotonic() + 1.0
+        while cls._log_queue.qsize() > 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        print(f"[EEE] t=B queue drained, dropped={cls._log_queue.qsize()}")
+
+        cls._shutting_down = True          # ← stop flush_loop from running
+        if cls._ledger_flush_timer:
+            cls._ledger_flush_timer.cancel()
+            cls._ledger_flush_timer = None
+        print("[EEE] t=C timer cancelled")
+        # skip _flush_ledger_batch() - SQLite WAL handles incomplete transactions safely
+        print("[EEE] t=D skipping ledger flush")
+
+        if cls._db_conn:
+            try:
+                cls._db_conn.close()
+                cls._db_conn = None
+                print("[EEE] t=E db closed")
+            except Exception as e:
+                print(f"[EEE] t=E db close error: {e}")
+
+        print("[EEE] t=F calling GzipRotatingFileHandler.shutdown()...")
+        GzipRotatingFileHandler.shutdown()
+        print("[EEE] t=G done")
     
     @classmethod
     def _register_shutdown_handlers(cls):
         """Register shutdown handlers for clean exit."""
         if cls._shutdown_registered:
             return
-        
-        # Register with atexit (normal program exit)
-        atexit.register(cls.shutdown)
-        
-        # Register signal handlers (Ctrl+C, kill)
-        def signal_handler(signum, frame):
-            print(f"\n[EEE] Signal {signum} received. Initiating graceful shutdown...")
-            cls.shutdown()
-            # Re-raise to allow normal termination
-            if signum == signal.SIGINT:
-                raise KeyboardInterrupt
-            elif signum == signal.SIGTERM:
-                import sys
-                sys.exit(0)
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
         
         cls._shutdown_registered = True
         print("[EEE] Shutdown handlers registered.")

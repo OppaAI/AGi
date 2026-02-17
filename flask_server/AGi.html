@@ -2174,7 +2174,17 @@
         // ROS Initialization
         function initROS() {
             try {
-                ros = new ROSLIB.Ros({ url: 'ws://aurora-usb:9090' });
+                // ── AUTO-DETECT server IP from the page URL ──────────────
+                // Whatever IP you used to open this page IS the robot's IP
+                // Works from phone, PC, tablet - anything on same WiFi
+                const serverHost = window.location.hostname;
+                const rosPort = 9090;
+                const rosUrl = `ws://${serverHost}:${rosPort}`;
+                
+                console.log(`🤖 Connecting to ROS at: ${rosUrl}`);
+                statusText.textContent = `Connecting to ${serverHost}...`;
+                
+                ros = new ROSLIB.Ros({ url: rosUrl });
                 
                 ros.on('connection', () => {
                     isROSConnected = true;
@@ -2186,8 +2196,10 @@
                     startIdleAnimations();
                 });
                 
-                ros.on('error', () => {
+                ros.on('error', (error) => {
+                    console.error('ROS connection error:', error);
                     statusText.textContent = 'Offline Mode';
+                    statusDot.classList.remove('connected');
                     speechBubble.textContent = 'Hello! 💕';
                     speechBubble.classList.add('show');
                     setTimeout(() => speechBubble.classList.remove('show'), 3000);
@@ -2197,8 +2209,14 @@
                 ros.on('close', () => {
                     isROSConnected = false;
                     statusDot.classList.remove('connected');
-                    statusText.textContent = 'Offline Mode';
+                    statusText.textContent = 'Reconnecting...';
                     stopIdleAnimations();
+                    
+                    // Auto-reconnect after 5 seconds
+                    setTimeout(() => {
+                        console.log('🔄 Attempting reconnect...');
+                        initROS();
+                    }, 5000);
                 });
                 
                 // Text input topic
@@ -2239,7 +2257,6 @@
                             appendToStream(data.content);
                         } else if (data.type === 'done') {
                             finishStreaming();
-                            // Generate new response ID for RL tracking
                             latestResponseId = generateResponseId();
                             positiveRewardCount = 0;
                             negativeRewardCount = 0;
@@ -2263,8 +2280,9 @@
                 window.cnsTopic = cnsTopic;
                 window.imageInputTopic = imageInputTopic;
                 window.rlRewardTopic = rlRewardTopic;
+                
             } catch (e) {
-                console.log('ROS not available, running in offline mode');
+                console.log('ROS not available, running in offline mode:', e);
                 statusText.textContent = 'Offline Mode';
                 startIdleAnimations();
             }

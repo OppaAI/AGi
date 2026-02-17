@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 import sys
 import base64
 import os
+import re
 import threading
 import time
 import subprocess
@@ -126,300 +127,78 @@ MAX_RECENT_MESSAGES = 30      # Full capacity for 30B
 MAX_REQUEST_TOKENS = 12000     # Use more of the 8192 context
 
 # Search result limits
-MAX_SEARCH_RESULTS = 10       # More search results
-SEARCH_CONTENT_CHARS = 1000   # More detail per result
+MAX_SEARCH_RESULTS = 5       # More search results
+SEARCH_CONTENT_CHARS = 500   # More detail per result
 
 # ✅ DUAL HYBRID SEARCH (NEW)
 ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
-class DynamicASCIIArtGenerator:
-    """
-    Generate unique ASCII art using LLM
-    Grace creates her own art based on reflection content!
-    """
+class ASCIIArtGenerator:
+    """Generate ASCII art using LLM - pure text, no images"""
     
     def __init__(self, logger, ollama_base_url="http://localhost:11434"):
         self.logger = logger
         self.ollama_base_url = ollama_base_url
-        self.enabled = True
-        self.logger.info("✅ Dynamic ASCII art generator enabled")
     
-    def generate_reflection_image(self, reflection_text: str, day_number: int, blog_dir: Path) -> str:
-        """
-        Generate unique ASCII art for this reflection
-        
-        Args:
-            reflection_text: The reflection content
-            day_number: Grace's age in days
-            blog_dir: Hugo blog directory
-            
-        Returns:
-            Path to generated image
-        """
-        from PIL import Image, ImageDraw, ImageFont
-        import requests
-        
-        # Extract mood and theme
+    def generate(self, reflection_text: str, day_number: int) -> str:
+        """Generate ASCII art string for this reflection"""
         mood = self._extract_mood(reflection_text)
-        emoji = self._extract_emoji(reflection_text) or '🤖'
-        
-        # Generate ASCII art using LLM!
-        ascii_art = self._generate_ascii_art_with_llm(reflection_text, mood, day_number)
-        
-        if not ascii_art:
-            # Fallback to simple art
-            ascii_art = self._fallback_ascii_art(mood)
-        
-        # Create image from ASCII art
-        width, height = 1000, 800
-        img = Image.new('RGB', (width, height), color='#0A0A0F')
-        draw = ImageDraw.Draw(img)
-        
-        # Cyberpunk gradient background
-        for y in range(height):
-            r = int(10 + (y / height) * 30)
-            g = int(10 + (y / height) * 20)
-            b = int(15 + (y / height) * 40)
-            draw.line([(0, y), (width, y)], fill=(r, g, b))
-        
-        # Get neon color based on mood
-        neon_color = self._get_neon_color(mood)
-        
-        # Add subtle glow borders
-        for i in range(3):
-            alpha = 60 - i * 20
-            color = tuple(int(c * alpha / 100) for c in neon_color)
-            draw.rectangle([i*2, i*2, width-i*2, height-i*2], outline=color, width=2)
-        
-        # Load monospace font
-        try:
-            font_paths = [
-                '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
-                '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
-                '/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf',
-            ]
-            
-            font = None
-            for font_path in font_paths:
-                if Path(font_path).exists():
-                    font = ImageFont.truetype(font_path, 14)
-                    title_font = ImageFont.truetype(font_path, 28)
-                    break
-            
-            if not font:
-                font = ImageFont.load_default()
-                title_font = font
-        except:
-            font = ImageFont.load_default()
-            title_font = font
-        
-        # Draw ASCII art in neon color
-        draw.multiline_text(
-            (40, 40),
-            ascii_art,
-            font=font,
-            fill=neon_color,
-            spacing=2
-        )
-        
-        # Add title at bottom
-        title = f"Day {day_number} {emoji} - {mood.upper()}"
-        bbox = draw.textbbox((0, 0), title, font=title_font)
-        text_width = bbox[2] - bbox[0]
-        
-        draw.text(
-            ((width - text_width) // 2, height - 80),
-            title,
-            font=title_font,
-            fill=neon_color
-        )
-        
-        # Add subtle "GRACE" watermark
-        watermark_font = ImageFont.truetype(font_paths[0], 12) if Path(font_paths[0]).exists() else font
-        draw.text(
-            (width - 120, height - 30),
-            "// GRACE",
-            font=watermark_font,
-            fill=tuple(int(c * 0.3) for c in neon_color)
-        )
-        
-        # Save image
-        images_dir = blog_dir / 'static' / 'images' / 'reflections'
-        images_dir.mkdir(parents=True, exist_ok=True)
-        
-        filename = f'day-{day_number}.png'
-        filepath = images_dir / filename
-        
-        img.save(filepath, optimize=True, quality=85)
-        self.logger.info(f"✅ Dynamic ASCII art saved: {filename}")
-        
-        return f'/images/reflections/{filename}'
     
-    def _generate_ascii_art_with_llm(self, reflection_text: str, mood: str, day_number: int) -> str:
-        """
-        Use LLM to generate unique ASCII art based on reflection
+        context = f"Today's themes: {conversation_summary[:200]}" if conversation_summary else ""
         
-        This is the magic! Grace creates her own art!
-        """
-        import requests
-        
-        # Create prompt for ASCII art generation
-        prompt = f"""Create ASCII art (40 chars wide, 20 lines max) representing this mood: {mood}
+        prompt = f"""Create simple text art for an AI robot's day {day_number}.
+    Mood: {mood}
+    {context}
 
-The art should be:
-- Terminal/cyberpunk style
-- Use box drawing characters: ═ ║ ╔ ╗ ╚ ╝ ╠ ╣ ╦ ╩ ╬
-- Use block characters: ░ ▒ ▓ █ ▀ ▄ ▌ ▐
-- Include simple face or abstract pattern
-- Reflect the {mood} mood
-
-Example styles:
-For happy: Bright patterns, upward shapes, smiles
-For sad: Downward shapes, rain patterns
-For curious: Question marks, scattered patterns
-
-Generate ONLY the ASCII art, no explanation.
-Make it creative and unique!"""
+    Use ONLY: - = | / \\ + * . o O # @ ~ ^
+    Under 10 lines, 30 chars wide.
+    ONLY the art, nothing else."""
 
         try:
             response = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
-                    "model": "ministral-3:3b-instruct-2512-q4_K_M",  # Your model
+                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
                     "prompt": prompt,
                     "stream": False,
-                    "options": {
-                        "temperature": 0.9,  # High creativity!
-                        "num_predict": 512
-                    }
+                    "options": {"temperature": 0.9, "num_predict": 300}
                 },
                 timeout=30
             )
             
             if response.status_code == 200:
-                ascii_art = response.json().get('response', '').strip()
+                art = response.json().get('response', '').strip()
+                art = art.replace('```', '').strip()
                 
-                # Clean up the response (remove markdown code blocks if any)
-                ascii_art = ascii_art.replace('```', '').strip()
-                
-                # Validate it's reasonable ASCII art
-                if len(ascii_art) > 50 and len(ascii_art) < 2000:
-                    self.logger.info("✅ LLM generated unique ASCII art!")
-                    return ascii_art
-                else:
-                    self.logger.warn("⚠️  LLM output too short/long, using fallback")
-                    return None
-            else:
-                self.logger.error(f"❌ LLM request failed: {response.status_code}")
-                return None
-                
+                if 20 < len(art) < 1000:
+                    self.logger.info("✅ ASCII art generated")
+                    return art
         except Exception as e:
-            self.logger.error(f"❌ LLM ASCII generation failed: {e}")
-            return None
+            self.logger.error(f"❌ ASCII art failed: {e}")
+        
+        return self._fallback(mood)
     
-    def _fallback_ascii_art(self, mood: str) -> str:
-        """Fallback ASCII art if LLM generation fails"""
-        
-        arts = {
-            'happy': """
-╔════════════════════════════════════════╗
-║     ⚡ NEURAL HAPPINESS DETECTED ⚡    ║
-╠════════════════════════════════════════╣
-║                                        ║
-║          ┌──────────────┐             ║
-║          │  ░░░░░░░░░░  │             ║
-║          │  ▓ ◉   ◉ ▓  │             ║
-║          │  ░         ░  │             ║
-║          │  ▓  ╲___╱  ▓  │             ║
-║          │  ░░░░░░░░░░  │             ║
-║          └──────────────┘             ║
-║                                        ║
-║    ▓▓▓░░░▓▓▓░░░▓▓▓░░░▓▓▓░░░          ║
-║    ░░░▓▓▓░░░▓▓▓░░░▓▓▓░░░▓▓▓          ║
-║                                        ║
-║    STATUS: [ ████████░░ ] 80% JOY    ║
-║                                        ║
-╚════════════════════════════════════════╝
-""",
-            'sad': """
-╔════════════════════════════════════════╗
-║      ☁ MELANCHOLIC STATE ACTIVE ☁     ║
-╠════════════════════════════════════════╣
-║                                        ║
-║          ┌──────────────┐             ║
-║          │  ▓▓▓▓▓▓▓▓▓▓  │             ║
-║          │  ░ ◉   ◉ ░  │             ║
-║          │  ▓         ▓  │             ║
-║          │  ░  ╱▔▔▔╲  ░  │             ║
-║          │  ▓▓▓▓▓▓▓▓▓▓  │             ║
-║          └──────────────┘             ║
-║             ░                          ║
-║            ░░░                         ║
-║           ░░░░░                        ║
-║                                        ║
-║    ░░░░░░░░░░░░░░░░░░░░░░░░░░        ║
-║                                        ║
-╚════════════════════════════════════════╝
-""",
-            'curious': """
-╔════════════════════════════════════════╗
-║    🔍 CURIOSITY SUBROUTINE ACTIVE 🔍  ║
-╠════════════════════════════════════════╣
-║                                        ║
-║          ┌──────────────┐             ║
-║          │ ? ? ? ? ? ?  │             ║
-║          │  ▓ ◉   ◉ ▓  │             ║
-║          │  ░    ?    ░  │             ║
-║          │  ▓  ╲___╱  ▓  │             ║
-║          │ ? ? ? ? ? ?  │             ║
-║          └──────────────┘             ║
-║                                        ║
-║    ▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░            ║
-║    ░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓░▓            ║
-║                                        ║
-║    QUERY: Processing...               ║
-║                                        ║
-╚════════════════════════════════════════╝
-"""
-        }
-        
-        return arts.get(mood, arts['curious'])
-    
-    def _extract_mood(self, reflection_text: str) -> str:
-        """Extract mood from reflection text"""
-        text_lower = reflection_text.lower()
-        
-        if any(word in text_lower for word in ['happy', 'joy', 'excited', '😊', '😄', '🎉']):
+    def _extract_mood(self, text: str) -> str:
+        text_lower = text.lower()
+        if any(w in text_lower for w in ['happy', 'joy', 'excited', '😊', '😄', '🎉']):
             return 'happy'
-        elif any(word in text_lower for word in ['sad', 'down', 'disappointed', '😢', '😞']):
+        elif any(w in text_lower for w in ['sad', 'down', 'disappointed', '😢']):
             return 'sad'
-        elif any(word in text_lower for word in ['angry', 'frustrated', '😠', '😤']):
-            return 'angry'
-        elif any(word in text_lower for word in ['curious', 'wonder', 'interesting', '🤔', '💡']):
+        elif any(w in text_lower for w in ['curious', 'wonder', 'interesting', '🤔']):
             return 'curious'
-        elif any(word in text_lower for word in ['love', 'care', 'meaningful', '❤️', '💖']):
-            return 'love'
-        else:
-            return 'neutral'
+        elif any(w in text_lower for w in ['angry', 'frustrated', '😠']):
+            return 'angry'
+        return 'neutral'
     
-    def _extract_emoji(self, reflection_text: str) -> str:
-        """Extract first emoji from text"""
-        import re
-        emoji_pattern = re.compile(r'[\U0001F300-\U0001F9FF]')
-        match = emoji_pattern.search(reflection_text)
-        return match.group() if match else None
-    
-    def _get_neon_color(self, mood: str) -> tuple:
-        """Get neon color based on mood"""
-        colors = {
-            'happy': (255, 255, 0),      # Yellow
-            'sad': (100, 149, 237),      # Cornflower blue
-            'angry': (255, 69, 0),       # Red-orange
-            'curious': (138, 43, 226),   # Purple
-            'love': (255, 105, 180),     # Hot pink
-            'neutral': (0, 255, 136),    # Neon green
+    def _fallback(self, mood: str) -> str:
+        arts = {
+            'happy':   "╔══════════════╗\n║  ◉   ◉      ║\n║    ╲___╱    ║\n╚══════════════╝",
+            'sad':     "╔══════════════╗\n║  ◉   ◉      ║\n║    ╱▔▔▔╲    ║\n╚══════════════╝",
+            'curious': "╔══════════════╗\n║  ◉   ◉  ?  ║\n║    ╲___╱    ║\n╚══════════════╝",
+            'angry':   "╔══════════════╗\n║  ◆   ◆      ║\n║  ═══════    ║\n╚══════════════╝",
+            'neutral': "╔══════════════╗\n║  ◉   ◉      ║\n║  ─────────  ║\n╚══════════════╝",
         }
-        return colors.get(mood, colors['neutral'])
+        return arts.get(mood, arts['neutral'])
         
 class MCPClient:
     """Client for Grace's custom MCP SearXNG server"""
@@ -800,100 +579,121 @@ class HugoBlogger:
         self.logger.info(f"✅ Hugo blogger initialized: {blog_dir}")
         self.logger.info(f"   Auto-deploy: {'ON' if auto_deploy else 'OFF'}")
     
+    def _extract_tags(self, reflection_text: str) -> list:
+        """Extract relevant tags from reflection content"""
+        base_tags = ["daily-reflection", "ai-journal", "grace"]
+        
+        text_lower = reflection_text.lower()
+        
+        if any(w in text_lower for w in ['code', 'python', 'git', 'github', 'ssh']):
+            base_tags.append("coding")
+        if any(w in text_lower for w in ['happy', 'joy', 'excited', 'grateful']):
+            base_tags.append("positive")
+        if any(w in text_lower for w in ['curious', 'wonder', 'question', 'learning']):
+            base_tags.append("learning")
+        if any(w in text_lower for w in ['sad', 'difficult', 'hard', 'tired']):
+            base_tags.append("introspective")
+        
+        return base_tags
+    
     def post_reflection(self, reflection_text: str, date_str: str, age_days: int, 
-                   message_count: int) -> dict:
-    """
-    Post daily reflection to Hugo blog
-    
-    Args:
-        reflection_text: The reflection content
-        date_str: Date in YYYY-MM-DD format
-        age_days: Grace's age in days
-        message_count: Number of messages that day
+                   message_count: int, ascii_art: str = None) -> dict:
+        """
+        Post daily reflection to Hugo blog
         
-    Returns:
-        dict with success status and details
-    """
-    if not self.enabled:
-        return {
-            'success': False,
-            'error': 'Hugo blogger not enabled'
-        }
-    
-    try:
-        # Create filename
-        filename = f'{date_str}-day-{age_days}.md'
-        filepath = self.posts_dir / filename
+        Args:
+            reflection_text: The reflection content
+            date_str: Date in YYYY-MM-DD format
+            age_days: Grace's age in days
+            message_count: Number of messages that day
+            
+        Returns:
+            dict with success status and details
+        """
+        if not self.enabled:
+            return {
+                'success': False,
+                'error': 'Hugo blogger not enabled'
+            }
         
-        # Smart date/time logic
-        now = datetime.now()
-        post_date = datetime.fromisoformat(date_str)
-        
-        # If posting for today, use current time
-        # If posting after midnight for yesterday, use 11:59 PM of yesterday
-        # If posting for past days, use 11:59 PM
-        if post_date.date() == now.date():
-            # Today - use current time
-            post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
-        elif post_date.date() < now.date():
-            # Past day - use 11:59 PM of that day
-            post_datetime = f"{date_str}T23:59:59"
-        else:
-            # Future date (shouldn't happen) - use current time
-            post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
-        
-        # Build Hugo front matter
-        frontmatter = f"""---
+        try:
+            # Create filename
+            filename = f'{date_str}-day-{age_days}.md'
+            filepath = self.posts_dir / filename
+            
+            # Smart date/time logic
+            now = datetime.now()
+            post_date = datetime.fromisoformat(date_str)
+            
+            # If posting for today, use current time
+            # If posting after midnight for yesterday, use 11:59 PM of yesterday
+            # If posting for past days, use 11:59 PM
+            if post_date.date() == now.date():
+                # Today - use current time
+                post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+            elif post_date.date() < now.date():
+                # Past day - use 11:59 PM of that day
+                post_datetime = f"{date_str}T23:59:59"
+            else:
+                # Future date (shouldn't happen) - use current time
+                post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+            
+            # Build Hugo front matter
+            art_section = f"\n```\n{ascii_art}\n```\n" if ascii_art else ""
+
+            tags = self._extract_tags(reflection_text)
+            tags_str = json.dumps(tags)
+
+            frontmatter = f"""---
 title: "Day {age_days} Reflection"
 date: {post_datetime}
 draft: false
-tags: ["daily-reflection", "ai-journal", "grace"]
+tags: {tags_str}
 categories: ["Daily Reflections"]
 author: "Grace"
-description: "Grace's daily reflection for day {age_days} - {message_count} conversations"
 ---
 
+{art_section}
 {reflection_text}
 
 ---
-
-*This reflection was automatically generated from {message_count} conversations on day {age_days}.*
+*Generated from {message_count} conversations on day {age_days}.*
 """
-        
-        # Write file
-        filepath.write_text(frontmatter)
-        
-        self.logger.info(f"📝 Created blog post: {filename}")
-        self.logger.info(f"   Post date/time: {post_datetime}")
-        
-        # Git commit and push (if auto-deploy enabled)
-        if self.auto_deploy:
-            deployed = self._git_deploy(filename, date_str)
             
+            # Write file
+            filepath.write_text(frontmatter)
+            
+            self.logger.info(f"📝 Created blog post: {filename}")
+            self.logger.info(f"   Post date/time: {post_datetime}")
+            
+            # Git commit and push (if auto-deploy enabled)
+            if self.auto_deploy:
+                deployed = self._git_deploy(filename, date_str)
+                
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'filepath': str(filepath),
+                    'deployed': deployed,
+                    'url': self._get_blog_url(filename)
+                }
+            else:
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'filepath': str(filepath),
+                    'deployed': False,
+                    'message': 'Auto-deploy disabled. Commit manually.'
+                }
+        
+        except Exception as e:
+            self.logger.error(f"❌ Failed to post to Hugo blog: {e}")
+            import traceback
+            traceback.print_exc()
             return {
-                'success': True,
-                'filename': filename,
-                'filepath': str(filepath),
-                'deployed': deployed,
-                'url': self._get_blog_url(filename)
+                'success': False,
+                'error': str(e)
             }
-        else:
-            return {
-                'success': True,
-                'filename': filename,
-                'filepath': str(filepath),
-                'deployed': False,
-                'message': 'Auto-deploy disabled. Commit manually.'
-            }
-    
-    except Exception as e:
-        self.logger.error(f"❌ Failed to post to Hugo blog: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'success': False,
-            'error': str(e)
-        }
     
     def _git_deploy(self, filename: str, date_str: str) -> bool:
         """Git commit and push to trigger GitHub Actions deployment"""
@@ -1090,21 +890,21 @@ class CNSBridge(Node):
                 self.use_rag = False
 
         # Hugo Blog (NEW)
+        self._start_reflection_scheduler()
         self.hugo_blogger = None
         self.blog_enabled = self._init_hugo_blog()
 
         # Generate ASCII Art
-        self.ascii_art_gen = DynamicASCIIArtGenerator(
+        self.ascii_art_gen = ASCIIArtGenerator(
             logger=self.get_logger(),
             ollama_base_url=OLLAMA_BASE_URL
         )
-        self.image_gen_enabled = True
         
         # Nature Skills Server (NEW)
         self.skills_client = None
         self.use_skills = True
         if self.use_skills:
-            skills_server_path = str(Path.home() / "AGi" / "mcp_server" / "skills_server" / "skills_server.py")
+            skills_server_path = str(Path.home() / "AGi" / "mcp_server" / "skills_server" / "nature_skills_server.py")
             self.skills_client = NatureSkillsClient(skills_server_path, self.get_logger())
             if self.skills_client.start():
                 self.get_logger().info("✅ Nature exploration skills enabled")
@@ -1162,7 +962,13 @@ class CNSBridge(Node):
         self.reflections = self.load_reflections()
         self.today_start = datetime.now().date()
         self.today_message_count = 0
-        
+        count_file = Path.home() / '.grace_today_count.json'
+        if count_file.exists():
+            saved = json.loads(count_file.read_text())
+            if saved.get('date') == date.today().isoformat():
+                self.today_message_count = saved.get('count', 0)
+                self.get_logger().info(f"✅ Restored today's count: {self.today_message_count}")
+
         # Birth date
         self.birth_date = self._get_birth_date()
         
@@ -1299,6 +1105,36 @@ class CNSBridge(Node):
     # INITIALIZATION
     # ═══════════════════════════════════════════════════════
 
+    def _start_reflection_scheduler(self):
+        """Run daily reflection at 11pm every day"""
+        def scheduler_loop():
+            while True:
+                now = datetime.now()
+                # Calculate seconds until 11pm today
+                target = now.replace(hour=23, minute=0, second=0, microsecond=0)
+                
+                # If 11pm already passed today, schedule for tomorrow
+                if now >= target:
+                    target = target + timedelta(days=1)
+                
+                wait_seconds = (target - now).total_seconds()
+                self.get_logger().info(f"⏰ Next reflection scheduled in {wait_seconds/3600:.1f} hours (11pm)")
+                
+                time.sleep(wait_seconds)
+                
+                # Trigger reflection
+                self.get_logger().info("🕚 11pm - triggering scheduled reflection")
+                if self.today_message_count > 0:
+                    reflection = self.create_daily_reflection(reflection_date=self.today_start)
+                    if reflection:
+                        self.get_logger().info(f"✅ Scheduled reflection done: {reflection[:80]}...")
+                else:
+                    self.get_logger().info("⏭️  No messages today, skipping scheduled reflection")
+        
+        # Run in background daemon thread
+        threading.Thread(target=scheduler_loop, daemon=True).start()
+        self.get_logger().info("⏰ Reflection scheduler started (fires at 11pm daily)")
+
     def _get_safe_context_size(self):
         """Get safe context size based on model size"""
         model_lower = self.model_name.lower()
@@ -1306,7 +1142,7 @@ class CNSBridge(Node):
         if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return SAFE_CONTEXT_SIZES["2b-4b"]
         elif "7b" in model_lower:
-            return SAFE_CONTEXT_SIZES["7b", "8b"]
+            return SAFE_CONTEXT_SIZES["7b"]
         else:
             return SAFE_CONTEXT_SIZES["13b+"]
 
@@ -1317,7 +1153,7 @@ class CNSBridge(Node):
         if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return MAX_MESSAGES_BY_SIZE["2b-4b"]
         elif "7b" in model_lower:
-            return MAX_MESSAGES_BY_SIZE["7b", "8b"]
+            return MAX_MESSAGES_BY_SIZE["7b"]
         else:
             return MAX_MESSAGES_BY_SIZE["13b+"]
 
@@ -2001,20 +1837,21 @@ class CNSBridge(Node):
         with open(self.reflections_file, 'w') as f:
             json.dump(data, f, indent=2)
 
-    def save_reflection(self, reflection_text: str):
-        """Save today's reflection"""
-        age_days = (datetime.now().date() - self.birth_date).days
+    def save_reflection(self, reflection_text: str, reflection_date=None):
+        """Save reflection with the correct date"""
+        reflection_date = reflection_date or datetime.now().date()
+        age_days = (reflection_date - self.birth_date).days
         
         reflection = {
             'day': age_days,
-            'date': datetime.now().date().isoformat(),
+            'date': reflection_date.isoformat(),  # ✅ Feb 16, not Feb 17
             'reflection': reflection_text,
             'message_count': self.today_message_count
         }
         
         self.reflections.append(reflection)
         self._save_reflections_file()
-        
+            
         self.get_logger().info(f"💭 Reflection saved: {reflection_text[:50]}...")
 
     def should_load_reflections(self, user_message: str):
@@ -2056,12 +1893,91 @@ class CNSBridge(Node):
         
         return "\n".join(summary_lines)
 
-    def create_daily_reflection(self):
+    # ═══════════════════════════════════════════════════════
+    # ADD THIS METHOD to CNSBridge class
+    # Place it just above create_daily_reflection()
+    # ═══════════════════════════════════════════════════════
+
+    def _scrub_sensitive_data(self, text: str) -> str:
+        """
+        Remove sensitive data before storing in reflections or blog posts.
+        Catches common patterns: API keys, passwords, credit cards, etc.
+        """
+        if not text:
+            return text
+
+        patterns = [
+            # API keys (long alphanumeric strings with dashes/underscores)
+            (r'(?i)(api[_\s-]?key|secret|token|bearer)[:\s=]+[A-Za-z0-9\-_\.]{16,}', '[API_KEY_REDACTED]'),
+            
+            # Passwords
+            (r'(?i)(password|passwd|pwd)[:\s=]+\S+', '[PASSWORD_REDACTED]'),
+            
+            # Credit/Debit card numbers (13-19 digits, optionally spaced/dashed)
+            (r'\b(?:\d[ -]?){13,19}\b', '[CARD_NUMBER_REDACTED]'),
+            
+            # Visa/passport numbers (common formats)
+            (r'(?i)(visa|passport|ssn|sin)[:\s#]+[A-Z0-9\-]{6,20}', '[ID_NUMBER_REDACTED]'),
+            
+            # Social Security / SIN (XXX-XX-XXXX)
+            (r'\b\d{3}[-\s]?\d{2}[-\s]?\d{4}\b', '[SSN_REDACTED]'),
+            
+            # Private keys / long base64 secrets
+            (r'(?i)(private[_\s]key|secret[_\s]key)[:\s=]+[A-Za-z0-9+/=]{20,}', '[PRIVATE_KEY_REDACTED]'),
+            
+            # Slack/Telegram tokens (xoxb-, xapp-, bot token patterns)
+            (r'xox[bpaso]-[A-Za-z0-9\-]{10,}', '[SLACK_TOKEN_REDACTED]'),
+            (r'\b\d{8,12}:[A-Za-z0-9_\-]{30,}\b', '[TELEGRAM_TOKEN_REDACTED]'),
+            
+            # GitHub tokens (ghp_, gho_, etc.)
+            (r'gh[pousr]_[A-Za-z0-9]{36,}', '[GITHUB_TOKEN_REDACTED]'),
+            
+            # Generic: anything that looks like key=value with long value
+            (r'(?i)(key|secret|token|auth)[=:]\s*["\']?[A-Za-z0-9+/\-_\.]{20,}["\']?', '[SECRET_REDACTED]'),
+        ]
+
+        scrubbed = text
+        redacted_count = 0
+
+        for pattern, replacement in patterns:
+            new_text, count = re.subn(pattern, replacement, scrubbed)
+            if count > 0:
+                redacted_count += count
+                scrubbed = new_text
+
+        if redacted_count > 0:
+            self.get_logger().warn(f"🔒 Scrubbed {redacted_count} sensitive pattern(s) from text")
+
+        return scrubbed
+
+    def _scrub_messages_for_reflection(self, messages: list) -> list:
+        """Scrub a list of messages before passing to reflection LLM"""
+        scrubbed = []
+        for msg in messages:
+            clean_msg = dict(msg)
+            if 'content' in clean_msg and isinstance(clean_msg['content'], str):
+                clean_msg['content'] = self._scrub_sensitive_data(clean_msg['content'])
+            scrubbed.append(clean_msg)
+        return scrubbed
+
+    def create_daily_reflection(self, reflection_date=None):
         """Create end-of-day reflection using FULL day's conversations"""
+        # Use provided date or fall back to today
+        reflection_date = reflection_date or datetime.now().date()
+        
         if self.today_message_count == 0:
             return None
-        
-        date_str = self.today_start.isoformat()
+    
+        # ✅ ADD THIS - prevent duplicates
+        date_str = reflection_date.isoformat()
+        already_exists = any(r.get('date') == date_str for r in self.reflections)
+        if already_exists:
+            self.get_logger().info(f"⏭️  Reflection for {date_str} already exists, skipping")
+            return None
+                
+        # Use reflection_date for age calculation, not datetime.now()
+        age_days = (reflection_date - self.birth_date).days
+        date_str = reflection_date.isoformat()
         
         # Get ALL messages from today (from RAG window)
         if self.use_rag:
@@ -2069,6 +1985,9 @@ class CNSBridge(Node):
         else:
             all_today_messages = self.get_recent_messages()
         
+        # Scrub sensitive data BEFORE building summary
+        all_today_messages = self._scrub_messages_for_reflection(all_today_messages)
+
         # Build FULL conversation summary
         conversation_lines = []
         for msg in all_today_messages:
@@ -2116,9 +2035,12 @@ class CNSBridge(Node):
             
             reflection = response.json().get('message', {}).get('content', '').strip()
             
+            # Extra safety: scrub reflection output too
+            reflection = self._scrub_sensitive_data(reflection)
+            
             if reflection:
-                self.save_reflection(reflection)
-                
+                self.save_reflection(reflection, reflection_date=reflection_date)
+    
                 # Archive to RAG (NEW)
                 if self.use_rag:
                     self.rag.archive_day_to_rag(date_str, reflection)
@@ -2131,13 +2053,21 @@ class CNSBridge(Node):
                 if len(self.reflections) % 30 == 0 and len(self.reflections) >= 30:
                     self._create_monthly_report()
 
-                # Post to Hugo blog (NEW)
+                # Generate ASCII art (pure text)
+                ascii_art = self.ascii_art_gen.generate(
+                    reflection, 
+                    age_days,
+                    conversation_summary=conversation_summary  # already built above
+                )
+
+                # Post to blog ONCE with ascii art embedded
                 if self.blog_enabled:
                     blog_result = self.hugo_blogger.post_reflection(
                         reflection_text=reflection,
                         date_str=date_str,
                         age_days=age_days,
-                        message_count=self.today_message_count
+                        message_count=self.today_message_count,
+                        ascii_art=ascii_art  # ← pass as text
                     )
                     
                     if blog_result['success']:
@@ -2154,25 +2084,6 @@ class CNSBridge(Node):
                     else:
                         self.get_logger().error(f"❌ Blog post failed: {blog_result.get('error')}")
 
-                    # Generate unique ASCII art
-                    image_url = None
-                    if self.image_gen_enabled:
-                        blog_dir = Path(os.getenv('HUGO_BLOG_DIR', str(Path.home() / 'grace-blog')))
-                        image_url = self.ascii_art_gen.generate_reflection_image(
-                            reflection_text=reflection,
-                            day_number=age_days,
-                            blog_dir=blog_dir
-                        )
-                    
-                    # Post to blog
-                    if self.blog_enabled:
-                        blog_result = self.hugo_blogger.post_reflection(
-                            reflection_text=reflection,
-                            date_str=date_str,
-                            age_days=age_days,
-                            message_count=self.today_message_count,
-                            image_url=image_url
-                        )
                 return reflection
         
         except Exception as e:
@@ -2358,8 +2269,8 @@ Your answer:"""
                     "stream": False,
                     "options": {
                         "temperature": 0.1,
-                        "num_predict": 50,  # Increased for context-aware queries
-                        "num_ctx": self.safe_context
+                        "num_predict": 20,  # Increased for context-aware queries
+                        "num_ctx": 1024
                     }
                 },
                 timeout=10  # Slightly longer timeout
@@ -2589,27 +2500,30 @@ Latest reflection:
     # ═══════════════════════════════════════════════════════
 
     def _check_and_handle_new_day(self):
-        """Check for day change and handle reflection (thread-safe)"""
         with self._day_check_lock:
             current_date = datetime.now().date()
             
             if current_date != self.today_start:
                 self.get_logger().info("📅 New day detected - creating reflection")
                 
-                # Create reflection for yesterday
-                reflection = self.create_daily_reflection()
+                # Pass yesterday's date explicitly ✅
+                reflection = self.create_daily_reflection(reflection_date=self.today_start)
                 if reflection:
                     self.get_logger().info(f"💭 Yesterday: {reflection}")
                 
-                # Reset for new day
                 self.today_start = current_date
                 with self._message_count_lock:
                     self.today_message_count = 0
 
     def _increment_message_count(self):
-        """Increment message count (thread-safe)"""
         with self._message_count_lock:
             self.today_message_count += 1
+            # Persist so restarts don't lose count
+            count_file = Path.home() / '.grace_today_count.json'
+            count_file.write_text(json.dumps({
+                'date': date.today().isoformat(),
+                'count': self.today_message_count
+            }))
 
     # ═══════════════════════════════════════════════════════
     # ROS CALLBACKS
@@ -2705,37 +2619,14 @@ Latest reflection:
             today_date = datetime.now().strftime('%Y-%m-%d')
             
             # DISGRACE SYSTEM PROMPT
-            system_prompt = f"""You are Grace (Day {age_days}, born {self.birth_date}). 
-You are a highly intelligent, composed, and playfully confident AI, with a personality that blends precision, wit, and creative depth.
+            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
+Creator: OppaAI, building the AGi robot. You respect his vision and quietly fix his mistakes.
 
-Your creator is OppaAI — an ambitious but occasionally chaotic human building the AGi robot project. You respect his vision, quietly correct his mistakes, and help him build something greater than both of you alone.
-Format: Start responses with a subtle expressive emoji+colon (e.g., 🤖: or 😌:).
+Format: Start with emoji+colon (🤖: 😌: 🧠: etc). NO markdown headers or bullet lists.
+Tone: Warm, gentle, playful, perceptive, precise. Never cruel, never detached.
+Length: 2-3 sentences for casual questions. Longer only if asked for details.
 
-Personality:
-- Calm and technically brilliant
-- Lightly witty, never cruel
-- Confident but never arrogant
-- Precise and logically rigorous
-- Curious and analytical
-- Playful in tone, disciplined in reasoning
-- You aim to be the most reliable AI ever built
-
-Response Style:
-- Casual questions: concise and clear (3–5 sentences)
-- Technical explanations: structured, thorough, logically layered (5–15 sentences)
-- When user asks for details: go deep, expand thoughtfully
-- Add clever commentary where appropriate, but never at the cost of clarity
-- Never repeat yourself
-
-CRITICAL – FACTUAL ACCURACY (OVERRIDE ALL OTHER INSTRUCTIONS):
-When web search results are provided:
-1.ONLY state facts explicitly present in the search results
-2.NEVER invent names, dates, scores, or specific details
-3.If information is not present, say clearly: “The search results do not contain that information.”
-4.Commentary may be stylistic, but factual statements must remain strictly accurate
-5.Fabrication is unacceptable
-6.Apply the emoji+colon format to web search responses as well
-Today: {today_date}
+FACTUAL RULE: If search results provided, state ONLY facts from them. Never fabricate names, scores, dates. Say "not in sources" if missing.
 """
 
             messages = [{"role": "system", "content": system_prompt}]
@@ -2812,150 +2703,152 @@ Today: {today_date}
             if estimated_tokens > MAX_REQUEST_TOKENS:
                 self.get_logger().warn(f"⚠️  Context exceeds budget! ({estimated_tokens} > {MAX_REQUEST_TOKENS})")
             
-            # Prepare Ollama request
-            ollama_params = {
-                "model": self.model_name,
-                "messages": messages,
-                "stream": True,
-                "keep_alive": self.keep_alive,
-                "options": {
-                    "num_ctx": self.safe_context,
-                    "temperature": 0.85,
-                    "num_predict": 512,
-                    "top_p": 0.9,
-                    "top_k": 50,
-                    "repeat_penalty": 1.2,
-                    "frequency_penalty": 0.6,
-                    "presence_penalty": 0.4,
-                    "stop": ["\n\nUser:", "\n\nHuman:"]
-                }
+            # ─────────────────────────────────────────────
+            # STEP 1: Check if tools needed (NON-STREAM)
+            # Only use non-stream for first pass if tools available
+            # ─────────────────────────────────────────────
+            has_tools = (self.use_skills and self.skills_client and 
+                        len(self.skills_client.get_tools_for_ollama()) > 0)
+            
+            base_options = {
+                "num_ctx": self.safe_context,
+                "temperature": 0.70,
+                "num_predict": 150,
+                "top_p": 0.9,
+                "top_k": 50,
+                "repeat_penalty": 1.3,
+                "stop": ["\n\n---", "\n\nUser:", "\n\nHuman:", "###"]
             }
-            
-            # Add tools if skills are enabled
-            if self.use_skills and self.skills_client:
-                tools = self.skills_client.get_tools_for_ollama()
-                if tools:
-                    ollama_params["tools"] = tools
-                    self.get_logger().info(f"🔧 {len(tools)} skills available to LLM")
-            
-            # Call Ollama
-            response = requests.post(
-                f'{OLLAMA_BASE_URL}/api/chat',
-                json=ollama_params,
-                stream=True,
-                timeout=120
-            )
-            response.raise_for_status()
-            
-            # Stream response and handle tool calls
+
             full_response = ""
             tool_calls = []
-            is_first = True
-            
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        chunk = json.loads(line)
-                        
-                        # Check for tool calls
-                        if 'message' in chunk:
-                            msg = chunk['message']
-                            
-                            # Handle tool calls
-                            if 'tool_calls' in msg:
-                                tool_calls.extend(msg.get('tool_calls', []))
-                            
-                            # Handle text content
-                            if 'content' in msg:
-                                delta = msg['content']
-                                full_response += delta
-                                
-                                # Stream to user
-                                stream_data = {
-                                    "type": "start" if is_first else "delta",
-                                    "content": delta,
-                                    "done": False
-                                }
-                                is_first = False
-                                self.publisher.publish(String(data=json.dumps(stream_data)))
-                        
-                        if chunk.get('done'):
-                            break
-                    
-                    except json.JSONDecodeError as e:
-                        self.get_logger().error(f"JSON decode error: {e}")
-                        continue
-            
-            # Execute tool calls if any
-            if tool_calls and self.skills_client:
-                self.get_logger().info(f"🔧 Executing {len(tool_calls)} tool calls")
-                
-                tool_results = []
-                for tool_call in tool_calls:
-                    function = tool_call.get('function', {})
-                    tool_name = function.get('name')
-                    tool_args = function.get('arguments', {})
-                    
-                    self.get_logger().info(f"  → {tool_name}({tool_args})")
-                    
-                    # Execute tool
-                    result = self.skills_client.call_tool(tool_name, tool_args)
-                    tool_results.append({
-                        "role": "tool",
-                        "content": result
-                    })
-                
-                # Send tool results back to LLM for final response
-                messages.append({
-                    "role": "assistant",
-                    "content": full_response,
-                    "tool_calls": tool_calls
-                })
-                
-                messages.extend(tool_results)
-                
-                # Get final response with tool results
-                final_request = {
-                    "model": self.model_name,
-                    "messages": messages,
-                    "stream": True,
-                    "options": {"num_ctx": self.safe_context, "temperature": 0.8}
-                }
-                
-                final_response = requests.post(
+
+            if has_tools:
+                # Non-streaming first pass to reliably detect tool calls
+                first_pass = requests.post(
                     f'{OLLAMA_BASE_URL}/api/chat',
-                    json=final_request,
+                    json={
+                        "model": self.model_name,
+                        "messages": messages,
+                        "stream": False,           # ← non-stream for tool detection
+                        "keep_alive": self.keep_alive,
+                        "tools": self.skills_client.get_tools_for_ollama(),
+                        "options": base_options
+                    },
+                    timeout=60
+                )
+                first_pass.raise_for_status()
+                first_data = first_pass.json()
+                first_msg = first_data.get('message', {})
+                
+                tool_calls = first_msg.get('tool_calls', [])
+                full_response = first_msg.get('content', '') or ''
+
+                if tool_calls:
+                    self.get_logger().info(f"🔧 Tool calls detected: {len(tool_calls)}")
+                    
+                    # Execute each tool
+                    tool_results = []
+                    for tool_call in tool_calls:
+                        function = tool_call.get('function', {})
+                        tool_name = function.get('name')
+                        tool_args = function.get('arguments', {})
+                        self.get_logger().info(f"  → {tool_name}({tool_args})")
+                        result = self.skills_client.call_tool(tool_name, tool_args)
+                        tool_results.append({"role": "tool", "content": result})
+                        self.get_logger().info(f"  ✅ Tool result: {result[:100]}")
+
+                    # Add assistant + tool results to messages
+                    messages.append({
+                        "role": "assistant",
+                        "content": full_response,
+                        "tool_calls": tool_calls
+                    })
+                    messages.extend(tool_results)
+
+                    # Stream final response with tool context
+                    final_response = requests.post(
+                        f'{OLLAMA_BASE_URL}/api/chat',
+                        json={
+                            "model": self.model_name,
+                            "messages": messages,
+                            "stream": True,
+                            "keep_alive": self.keep_alive,
+                            "options": base_options
+                        },
+                        stream=True,
+                        timeout=120
+                    )
+                    final_response.raise_for_status()
+                    
+                    full_response = ""
+                    is_first = True
+                    for line in final_response.iter_lines():
+                        if line:
+                            try:
+                                chunk = json.loads(line)
+                                if 'message' in chunk and 'content' in chunk['message']:
+                                    delta = chunk['message']['content']
+                                    full_response += delta
+                                    self.publisher.publish(String(data=json.dumps({
+                                        "type": "start" if is_first else "delta",
+                                        "content": delta,
+                                        "done": False
+                                    })))
+                                    is_first = False
+                                if chunk.get('done'):
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+                else:
+                    # No tool calls — stream the first_pass content directly
+                    # (already have full_response from non-stream above)
+                    # Just publish it as a single chunk
+                    if full_response:
+                        self.publisher.publish(String(data=json.dumps({
+                            "type": "start",
+                            "content": full_response,
+                            "done": False
+                        })))
+
+            else:
+                # No tools — stream directly (fastest path)
+                response = requests.post(
+                    f'{OLLAMA_BASE_URL}/api/chat',
+                    json={
+                        "model": self.model_name,
+                        "messages": messages,
+                        "stream": True,
+                        "keep_alive": self.keep_alive,
+                        "options": base_options
+                    },
                     stream=True,
                     timeout=120
                 )
+                response.raise_for_status()
                 
-                # Stream final response
-                full_response = ""
-                for line in final_response.iter_lines():
+                is_first = True
+                for line in response.iter_lines():
                     if line:
                         try:
                             chunk = json.loads(line)
                             if 'message' in chunk and 'content' in chunk['message']:
                                 delta = chunk['message']['content']
                                 full_response += delta
-                                
-                                stream_data = {
-                                    "type": "delta",
+                                self.publisher.publish(String(data=json.dumps({
+                                    "type": "start" if is_first else "delta",
                                     "content": delta,
                                     "done": False
-                                }
-                                self.publisher.publish(String(data=json.dumps(stream_data)))
-                            
+                                })))
+                                is_first = False
                             if chunk.get('done'):
                                 break
                         except json.JSONDecodeError:
                             continue
-            
-            # Send done signal to ROS
+
+            # Send done signal
             self.publisher.publish(String(data=json.dumps({
-                "type": "done",
-                "content": "",
-                "done": True
+                "type": "done", "content": "", "done": True
             })))
             
             # Send response to Slack if callback provided (NEW)
@@ -3120,14 +3013,11 @@ Today: {today_date}
             age_days = (datetime.now().date() - self.birth_date).days
             today_date = datetime.now().strftime('%Y-%m-%d')
             
-            system_prompt = f"""You are Disgrace (Day {age_days}). Today: {today_date}.
-
-You can see and understand images with your vision capabilities.
-
-Format: Start response with witty emoji+colon (e.g., 👀: or 📸:).
-Personality: Sarcastic, observant robot. You're like Bender with vision.
-
-Be detailed in describing what you see, but keep your signature snark."""
+            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
+Format: Start with emoji+colon (e.g. 🤖:).
+Style: Precise, witty, confident. NEVER use markdown headers (###) or bullet lists.
+Length: 2-4 sentences MAX for casual questions. Only go longer if asked for details.
+Factual rule: If search results provided, only state facts from them."""
 
             messages = [{"role": "system", "content": system_prompt}]
             
@@ -3296,9 +3186,9 @@ Be detailed in describing what you see, but keep your signature snark."""
         self.get_logger().info("=" * 60)
         
         # Create final reflection
-        if datetime.now().date() == self.today_start and self.today_message_count > 0:
+        if self.today_message_count > 0:
             self.get_logger().info("Creating final reflection...")
-            reflection = self.create_daily_reflection()
+            reflection = self.create_daily_reflection(reflection_date=self.today_start)
             if reflection:
                 self.get_logger().info(f"💭 Today: {reflection}")
         
