@@ -1,7 +1,6 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
 [![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
-[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
 ![Status Experimental](https://img.shields.io/badge/status-experimental-orange.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
@@ -14,7 +13,8 @@
 ![Ubuntu](https://img.shields.io/badge/ubuntu-22.04-E95420.svg?logo=ubuntu)
 ![Python 3.10.12](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python)
 ![ROS2 Humble](https://img.shields.io/badge/ROS-2%20Humble-blue.svg?logo=ros)
-![Ollama 0.15.6](https://img.shields.io/badge/Model-Qwen3%204B-FF6B6B?logo=ollama)
+![Ollama 0.15.6](https://img.shields.io/badge/Model-Qwen3VL%204B-FF6B6B?logo=ollama)
+![Ollama 0.15.6](https://img.shields.io/badge/Model-Ministral3%203B-FF6B6B?logo=ollama)
 
 ![Started](https://img.shields.io/badge/Started-2026--01--01-darkcyan?&logo=github)
 ![Release](https://img.shields.io/badge/Released-2026--01--26-darkcyan?&logo=github)
