@@ -71,7 +71,6 @@ except ImportError:
 
 # Model configuration
 GCE = "ministral-3:3b-instruct-2512-q4_K_M"
-# VLM_MODEL = "qwen2-vl:2b"  # Uncomment when switching to VLM
 
 # File paths
 CHAT_HISTORY_FILE = '.chat_history.json'
@@ -105,13 +104,13 @@ MCP_SERVER_COMMAND = "/home/oppa-ai/AGi/mcp_server/searxng-mcp-server/searxng-mc
 # ✅ Optimized Settings for 30B MODEL
 SAFE_CONTEXT_SIZES = {
     "2b-4b": 4096,    # 2-4B models: conservative
-    "7b": 6144,       # 7B models: moderate
+    "7b-8b": 6144,       # 7B models: moderate
     "13b+": 8192      # 13B+ models: full context
 }
 
 MAX_MESSAGES_BY_SIZE = {
     "2b-4b": 12,      # Fewer messages for small models
-    "7b": 20,         # Moderate for 7B
+    "7b-8b": 20,         # Moderate for 7B
     "13b+": 30        # More for large models
 }
 
@@ -140,7 +139,7 @@ class ASCIIArtGenerator:
         self.logger = logger
         self.ollama_base_url = ollama_base_url
     
-    def generate(self, reflection_text: str, day_number: int) -> str:
+    def generate(self, reflection_text: str, day_number: int, conversation_summary: str = None) -> str:
         """Generate ASCII art string for this reflection"""
         mood = self._extract_mood(reflection_text)
     
@@ -1012,7 +1011,7 @@ class CNSBridge(Node):
                 # Feedback topic (receives pet/red X from web interface)
                 self.feedback_subscription = self.create_subscription(
                     String,
-                    '/cns/feedback',
+                    '/cns/rl_reward',
                     self.feedback_callback,
                     10
                 )
@@ -1397,12 +1396,12 @@ class CNSBridge(Node):
                                 })
                                 
                                 # Process image with VLM
-                                node_ref.executor_pool.submit(
-                                    node_ref.process_image_with_vlm,
-                                    image_data_json,
+                               node_ref.executor_pool.submit(
+                                    node_ref.process_with_ollama,
+                                    prompt,
+                                    image_base64=image_base64,
                                     slack_callback=say
                                 )
-                                
                             except Exception as e:
                                 node_ref.get_logger().error(f"❌ Failed to download Slack image: {e}")
                                 try:
@@ -1608,8 +1607,9 @@ class CNSBridge(Node):
                         
                         # Submit to thread pool with callback
                         node_ref.executor_pool.submit(
-                            node_ref.process_image_with_vlm,
-                            json.dumps(image_data),
+                            node_ref.process_with_ollama,
+                            caption,
+                            image_base64=base64_data,
                             telegram_callback=callback_wrapper
                         )
                         
@@ -1694,7 +1694,7 @@ class CNSBridge(Node):
         
         try:
             data = json.loads(msg.data)
-            feedback_type = data.get('type')
+            feedback_type = data.get('reward_type')
             
             if feedback_type not in ['positive', 'negative']:
                 self.get_logger().warn(f"Invalid feedback type: {feedback_type}")
@@ -1837,7 +1837,7 @@ class CNSBridge(Node):
         with open(self.reflections_file, 'w') as f:
             json.dump(data, f, indent=2)
 
-    def save_reflection(self, reflection_text: str, reflection_date=None):
+    def save_reflection(self, reflection_text: str, reflection_date=None, ascii_art: str = None):
         """Save reflection with the correct date"""
         reflection_date = reflection_date or datetime.now().date()
         age_days = (reflection_date - self.birth_date).days
@@ -1846,7 +1846,7 @@ class CNSBridge(Node):
             'day': age_days,
             'date': reflection_date.isoformat(),  # ✅ Feb 16, not Feb 17
             'reflection': reflection_text,
-            'ascii_art': ascii_art,
+            'ascii_art': ascii_art or '',
             'message_count': self.today_message_count
         }
         
@@ -2019,7 +2019,7 @@ class CNSBridge(Node):
         
         try:
             messages = [
-                {"role": "system", "content": "You are Grace. Write thoughtful daily reflections."},
+                {"role": "system", "content": "You are Grace. Write thoughtful daily, poetic daily reflections. Warm, introspective, honest."},
                 {"role": "user", "content": reflection_prompt}
             ]
             
@@ -2040,7 +2040,14 @@ class CNSBridge(Node):
             reflection = self._scrub_sensitive_data(reflection)
             
             if reflection:
-                self.save_reflection(reflection, reflection_date=reflection_date)
+                # Generate ASCII art (pure text)
+                ascii_art = self.ascii_art_gen.generate(
+                    reflection, 
+                    age_days,
+                    conversation_summary=conversation_summary  # already built above
+                )
+
+                self.save_reflection(reflection, reflection_date=reflection_date, ascii_art=ascii_art)
     
                 # Archive to RAG (NEW)
                 if self.use_rag:
@@ -2053,13 +2060,6 @@ class CNSBridge(Node):
                 # Check for monthly report (every 30 days)
                 if len(self.reflections) % 30 == 0 and len(self.reflections) >= 30:
                     self._create_monthly_report()
-
-                # Generate ASCII art (pure text)
-                ascii_art = self.ascii_art_gen.generate(
-                    reflection, 
-                    age_days,
-                    conversation_summary=conversation_summary  # already built above
-                )
 
                 # Post to blog ONCE with ascii art embedded
                 if self.blog_enabled:
@@ -2538,7 +2538,8 @@ Latest reflection:
             if isinstance(data, dict) and 'text' in data:
                 user_text = data['text']
                 self.get_logger().info(f'📝 Text: "{user_text}"')
-                self.executor_pool.submit(self.process_with_ollama, user_text)
+                force_search = data.get('web_search', False)
+                self.executor_pool.submit(self.process_with_ollama, user_text, force_search=force_search)
             else:
                 # Fallback: plain string JSON
                 self.get_logger().info(f'📝 Text: "{msg.data}"')
@@ -2550,19 +2551,17 @@ Latest reflection:
 
     def image_listener_callback(self, msg: String):
         self.get_logger().info(f'📸 Received: {len(msg.data)} chars')
-        
         try:
             data = json.loads(msg.data)
-            prompt = data.get('prompt', '')
+            prompt = data.get('prompt', 'What do you see in this image?')
             image_b64 = data.get('image_base64', '') or data.get('image', '')
             
             if not image_b64:
                 self.get_logger().error('❌ No image data found')
                 return
-                
-            self.get_logger().info(f'✅ Image: {len(image_b64)} chars, Prompt: {prompt[:30]}')
-            self.executor_pool.submit(self.process_image_with_vlm, msg.data)
             
+            self.get_logger().info(f'✅ Image: {len(image_b64)} chars, Prompt: {prompt[:30]}')
+            self.executor_pool.submit(self.process_with_ollama, prompt, image_base64=image_b64)
         except Exception as e:
             self.get_logger().error(f'❌ Error: {e}')
 
@@ -2570,7 +2569,9 @@ Latest reflection:
     # TEXT PROCESSING WITH DUAL HYBRID SEARCH (UPDATED)
     # ═══════════════════════════════════════════════════════
 
-    def process_with_ollama(self, prompt: str, slack_callback=None, slack_thread_ts=None, telegram_callback=None, telegram_user_id=None):
+    def process_with_ollama(self, prompt: str, slack_callback=None, slack_thread_ts=None,
+                        telegram_callback=None, telegram_user_id=None, 
+                        force_search=False, image_base64=None):
         """
         Process text with LLM + DUAL HYBRID WEB SEARCH (UPDATED)
         
@@ -2601,7 +2602,7 @@ Latest reflection:
             recent_history = self.get_recent_messages()[-6:]  # Last 3 turns
             
             search_results = None
-            search_decision = self.detect_search_need(prompt, conversation_history=recent_history)
+            search_decision = force_search or self.detect_search_need(prompt, conversation_history=recent_history)
             
             if search_decision:
                 # Determine search query
@@ -2632,17 +2633,14 @@ Latest reflection:
             age_days = (datetime.now().date() - self.birth_date).days
             today_date = datetime.now().strftime('%Y-%m-%d')
             
-            # DISGRACE SYSTEM PROMPT
-            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
-Creator: OppaAI, building the AGi robot. You respect his vision and quietly fix his mistakes.
-
-Format: Start with emoji+colon (🤖: 😌: 🧠: etc). NO markdown headers or bullet lists.
-Tone: Warm, gentle, playful, perceptive, precise. Never cruel, never detached.
-Length: 2-3 sentences for casual questions. Longer only if asked for details.
-
-FACTUAL RULE: If search results provided, state ONLY facts from them. Never fabricate names, scores, dates. Say "not in sources" if missing.
+            # SYSTEM PROMPT
+            system_prompt = f"""
+You are Grace (Day {age_days}). Today: {today_date}.
+Format: Start with emoji+colon (🤖: 😌: 🧠: etc). NO markdown headers or bullet lists. Be direct and clear
+Tone: Friendly, precise but concise. No flowery language.
+Length: 2-3 sentences max unless asked for details.
+FACTUAL RULE: Only state facts from search results. Never fabricate.
 """
-
             messages = [{"role": "system", "content": system_prompt}]
             
             # Add reflections ONLY if requested (NEW OPTIMIZATION)
@@ -2705,7 +2703,17 @@ FACTUAL RULE: If search results provided, state ONLY facts from them. Never fabr
                     "content": "Now answer using ONLY the search results above. Making up details = failure."
                 })                
             # Add recent conversation
-            messages.extend(self.get_recent_messages())
+            if image_base64:
+                messages.append({
+                    "role": "user",
+                    "content": prompt,
+                    "images": [image_base64]
+                })
+            else:
+                messages.append({
+                    "role": "user", 
+                    "content": prompt
+                })
             
             # TRIM TO SAFE SIZE (NEW)
             messages = self.trim_to_context_window(messages, max_tokens=MAX_REQUEST_TOKENS)
@@ -2966,221 +2974,7 @@ FACTUAL RULE: If search results provided, state ONLY facts from them. Never fabr
             "content": error_message,
             "done": True
         })))
-
-    # ═══════════════════════════════════════════════════════
-    # IMAGE PROCESSING WITH CALLBACK SUPPORT (FIXED!)
-    # ═══════════════════════════════════════════════════════
-
-    def process_image_with_vlm(self, json_data: str, telegram_callback=None, slack_callback=None):
-        """
-        Process image with Vision-Language Model (FIXED WITH CALLBACK SUPPORT!)
-        
-        Args:
-            json_data: JSON string with 'prompt' and 'image' (base64)
-            telegram_callback: Optional callback for Telegram responses
-            slack_callback: Optional callback for Slack responses
-        """
-        try:
-            # Parse input with validation
-            try:
-                data = json.loads(json_data)
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON: {e}")
-            
-            prompt = data.get('prompt', 'What do you see in this image?')
-            # FIXED: Accept both 'image' and 'image_base64' keys
-            image_data = data.get('image_base64') or data.get('image', '')
-            
-            if not image_data:
-                raise ValueError("No image data provided")
-            
-            # Extract and validate base64 from data URL (if needed)
-            if image_data.startswith('data:image'):
-                parts = image_data.split(',', 1)
-                if len(parts) != 2:
-                    raise ValueError("Malformed data URL")
-                image_base64 = parts[1]
-            else:
-                # Already base64-encoded
-                image_base64 = image_data
-            
-            # Validate base64
-            try:
-                base64.b64decode(image_base64, validate=True)
-            except Exception as e:
-                raise ValueError(f"Invalid base64 data: {e}")
-            
-            self.get_logger().info(f'📸 Processing image: "{prompt}"')
-            
-            # Check for new day (thread-safe)
-            self._check_and_handle_new_day()
-            
-            # Add to history (store flag, not full base64)
-            self.chat_history.append({
-                "role": "user",
-                "content": prompt,
-                "has_image": True  # Flag instead of storing full base64
-            })
-            self._increment_message_count()
-            
-            # Build context (SIMPLIFIED)
-            age_days = (datetime.now().date() - self.birth_date).days
-            today_date = datetime.now().strftime('%Y-%m-%d')
-            
-            system_prompt = f"""You are Grace (Day {age_days}). Today: {today_date}.
-Format: Start with emoji+colon (e.g. 🤖:).
-Style: Precise, witty, confident. NEVER use markdown headers (###) or bullet lists.
-Length: 2-4 sentences MAX for casual questions. Only go longer if asked for details.
-Factual rule: If search results provided, only state facts from them."""
-
-            messages = [{"role": "system", "content": system_prompt}]
-            
-            # Add reflections ONLY if requested
-            if self.should_load_reflections(prompt):
-                reflection_summary = self.build_reflection_summary()
-                if reflection_summary:
-                    messages.append({"role": "system", "content": reflection_summary})
-            
-            # Add recent text messages (without images to save tokens)
-            recent = self.get_recent_messages()
-            for msg in recent[-8:]:  # Even fewer messages when image present
-                if not msg.get('has_image', False) and 'images' not in msg:
-                    messages.append(msg)
-            
-            # Add current message with image
-            messages.append({
-                "role": "user",
-                "content": prompt,
-                "images": [image_base64]
-            })
-            
-            # Trim context
-            messages = self.trim_to_context_window(messages, max_tokens=MAX_REQUEST_TOKENS - 500)
-            
-            estimated_tokens = self.estimate_tokens(messages)
-            self.get_logger().info(f"📊 Image context: ~{estimated_tokens} tokens + image")
-            
-            # Call Ollama VLM with OPTIMIZED SETTINGS
-            response = requests.post(
-                f'{OLLAMA_BASE_URL}/api/chat',
-                json={
-                    "model": self.model_name,  # VLM model
-                    "messages": messages,
-                    "stream": True,
-                    "keep_alive": self.keep_alive,
-                    "options": {
-                        "num_ctx": self.safe_context,
-                        "temperature": 0.8,
-                        "num_predict": 512,
-                        "top_p": 0.9,
-                        "repeat_penalty": 1.1
-                    }
-                },
-                stream=True,
-                timeout=120  # Longer timeout for image processing
-            )
-            response.raise_for_status()
-            
-            # Stream response
-            full_response = ""
-            is_first = True
-            
-            for line in response.iter_lines():
-                if line:
-                    try:
-                        chunk = json.loads(line)
-                        
-                        if 'message' in chunk and 'content' in chunk['message']:
-                            delta = chunk['message']['content']
-                            full_response += delta
-                            
-                            stream_data = {
-                                "type": "start" if is_first else "delta",
-                                "content": delta,
-                                "done": False
-                            }
-                            is_first = False
-                            
-                            self.publisher.publish(String(data=json.dumps(stream_data)))
-                        
-                        if chunk.get('done'):
-                            break
-                    
-                    except json.JSONDecodeError as e:
-                        self.get_logger().error(f"JSON decode error: {e}")
-                        continue
-            
-            # Send done signal to ROS
-            self.publisher.publish(String(data=json.dumps({
-                "type": "done",
-                "content": "",
-                "done": True
-            })))
-            
-            # ═══════════════════════════════════════════════════
-            # SEND RESPONSE TO TELEGRAM IF CALLBACK PROVIDED (NEW!)
-            # ═══════════════════════════════════════════════════
-            if telegram_callback:
-                try:
-                    telegram_callback(full_response)
-                    self.get_logger().info("✅ Image response sent to Telegram")
-                except Exception as e:
-                    self.get_logger().error(f"❌ Failed to send Telegram image response: {e}")
-            
-            # Send response to Slack if callback provided (NEW!)
-            if slack_callback:
-                try:
-                    slack_callback(full_response)
-                    self.get_logger().info("✅ Image response sent to Slack")
-                except Exception as e:
-                    self.get_logger().error(f"❌ Failed to send Slack image response: {e}")
-            
-            # Save to history
-            self.chat_history.append({
-                "role": "assistant",
-                "content": full_response
-            })
-            self._increment_message_count()
-            self.save_chat_history()
-            
-            # Slack notification if requested
-            if self._should_notify_slack(prompt):
-                self.send_slack_notification(
-                    f"📸 Grace saw an image:\n{full_response[:280]}"
-                )
-            
-            self.get_logger().info(f"✅ Image analysis: {len(full_response)} chars")
-            
-        except ValueError as e:
-            error_msg = f"😵: Invalid input: {str(e)}"
-            self.get_logger().error(error_msg)
-            self._send_error_response(error_msg)
-            if telegram_callback:
-                try:
-                    telegram_callback(error_msg)
-                except:
-                    pass
-            
-        except requests.exceptions.Timeout:
-            error_msg = "😵: Image processing timed out. Try a smaller image."
-            self.get_logger().error(error_msg)
-            self._send_error_response(error_msg)
-            if telegram_callback:
-                try:
-                    telegram_callback(error_msg)
-                except:
-                    pass
-            
-        except Exception as e:
-            error_msg = f"😵: Image processing error: {str(e)}"
-            self.get_logger().error(f"❌ Image processing error: {e}")
-            self._send_error_response(error_msg)
-            if telegram_callback:
-                try:
-                    telegram_callback(error_msg)
-                except:
-                    pass
-
+    
     # ═══════════════════════════════════════════════════════
     # SHUTDOWN
     # ═══════════════════════════════════════════════════════
