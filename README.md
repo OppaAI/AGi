@@ -1,7 +1,6 @@
 # AGi-ROS (ROS2 Humble Project with LLM to achieve AGi)
 
 [![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
-[![Repo](https://img.shields.io/badge/repo-OppaAI%2FAGi-darkcyan)](https://github.com/OppaAI/AGi-ROS)
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
 ![Status Experimental](https://img.shields.io/badge/status-experimental-orange.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
