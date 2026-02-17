@@ -653,9 +653,9 @@ categories: ["Daily Reflections"]
 author: "Grace"
 ---
 
-{art_section}
 {reflection_text}
 
+{art_section}
 ---
 *Generated from {message_count} conversations on day {age_days}.*
 """
