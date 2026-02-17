@@ -169,7 +169,7 @@
             justify-content: center;
             margin: 30px 0;
             position: relative;
-            padding: 0 80px; /* Space for side buttons */
+            padding: 0 20px;
         }
         
         .robot {
@@ -184,6 +184,10 @@
         
         .robot.petting {
             animation: wiggle 0.5s ease-in-out infinite;
+        }
+        
+        .robot.poking {
+            animation: shake 0.3s ease-in-out;
         }
         
         .pet-zone {
@@ -201,6 +205,49 @@
             cursor: grabbing;
         }
         
+        /* CHEEK POKE ZONES - LEFT AND RIGHT */
+        .cheek-poke-zone {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            z-index: 16;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .cheek-poke-zone.left {
+            top: 85px;
+            left: 15px;
+        }
+        
+        .cheek-poke-zone.right {
+            top: 85px;
+            right: 15px;
+        }
+        
+        .cheek-poke-zone:hover {
+            background: rgba(255, 107, 107, 0.2);
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .cheek-poke-zone::after {
+            content: '👈';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 20px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        
+        .cheek-poke-zone:hover::after {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.8;
+        }
+        
         @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
             50% { transform: translateY(-15px) rotate(2deg); }
@@ -209,6 +256,12 @@
         @keyframes wiggle {
             0%, 100% { transform: rotate(-3deg) scale(1.05); }
             50% { transform: rotate(3deg) scale(1.05); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-2deg); }
+            75% { transform: translateX(5px) rotate(2deg); }
         }
         
         .pet-heart {
@@ -230,6 +283,25 @@
             }
         }
         
+        .poke-mark {
+            position: absolute;
+            font-size: 20px;
+            pointer-events: none;
+            animation: poke-float 1s ease-out forwards;
+            z-index: 100;
+        }
+        
+        @keyframes poke-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.5);
+            }
+        }
+        
         .ripple {
             position: absolute;
             border-radius: 50%;
@@ -240,250 +312,15 @@
             z-index: 50;
         }
         
+        .ripple.poke {
+            background: rgba(255, 107, 107, 0.4);
+        }
+        
         @keyframes ripple-effect {
             to {
                 transform: scale(4);
                 opacity: 0;
             }
-        }
-        
-        /* NEGATIVE REWARD ROBOT BUTTON */
-        .negative-robot-btn {
-            position: absolute;
-            top: 50%;
-            right: 10px; /* Moved closer to main robot */
-            transform: translateY(-50%);
-            width: 70px;
-            height: 90px;
-            cursor: pointer;
-            z-index: 20;
-            transition: all 0.3s ease;
-            filter: grayscale(0.3);
-        }
-        
-        .negative-robot-btn:hover {
-            transform: translateY(-50%) scale(1.1);
-            filter: grayscale(0);
-        }
-        
-        .negative-robot-btn:active {
-            transform: translateY(-50%) scale(0.95);
-        }
-        
-        .negative-robot-btn.shaking {
-            animation: robot-shake 0.5s ease-in-out;
-        }
-        
-        @keyframes robot-shake {
-            0%, 100% { transform: translateY(-50%) rotate(0deg); }
-            25% { transform: translateY(-50%) rotate(-10deg); }
-            75% { transform: translateY(-50%) rotate(10deg); }
-        }
-        
-        /* Small angry robot head */
-        .neg-robot-head {
-            width: 50px;
-            height: 45px;
-            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
-            border-radius: 50% 50% 45% 45%;
-            position: absolute;
-            top: 15px;
-            left: 10px;
-            box-shadow: 
-                0 4px 10px rgba(255, 107, 107, 0.4),
-                0 0 15px rgba(255, 107, 107, 0.3);
-            transition: all 0.3s ease;
-        }
-        
-        .negative-robot-btn:hover .neg-robot-head {
-            box-shadow: 
-                0 6px 15px rgba(255, 107, 107, 0.6),
-                0 0 25px rgba(255, 107, 107, 0.5);
-        }
-        
-        /* Small antenna */
-        .neg-antenna {
-            width: 6px;
-            height: 18px;
-            background: linear-gradient(to bottom, #ff6b6b, #ff8e8e);
-            position: absolute;
-            top: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            border-radius: 5px;
-        }
-        
-        .neg-antenna::after {
-            content: '';
-            width: 10px;
-            height: 10px;
-            background: radial-gradient(circle at 30% 30%, #fff, #ff6b6b);
-            border-radius: 50%;
-            position: absolute;
-            top: -6px;
-            left: -2px;
-            box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
-        }
-        
-        /* Angry face */
-        .neg-face {
-            position: absolute;
-            top: 15px;
-            left: 8px;
-            width: 34px;
-            height: 20px;
-        }
-        
-        .neg-eyes {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-        }
-        
-        .neg-eye {
-            width: 10px;
-            height: 10px;
-            background: white;
-            border-radius: 50%;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .neg-eye::after {
-            content: '';
-            width: 6px;
-            height: 6px;
-            background: #4a4a4a;
-            border-radius: 50%;
-            position: absolute;
-            top: 2px;
-            left: 2px;
-        }
-        
-        /* Angry eyebrows */
-        .neg-eyebrow {
-            position: absolute;
-            top: -2px;
-            width: 12px;
-            height: 3px;
-            background: #4a4a4a;
-            border-radius: 2px;
-        }
-        
-        .neg-eyebrow.left {
-            left: 0;
-            transform: rotate(20deg);
-        }
-        
-        .neg-eyebrow.right {
-            right: 0;
-            transform: rotate(-20deg);
-        }
-        
-        /* Angry mouth */
-        .neg-mouth {
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 16px;
-            height: 6px;
-            background: #4a4a4a;
-            border-radius: 0 0 8px 8px;
-        }
-        
-        /* Small body */
-        .neg-robot-body {
-            width: 35px;
-            height: 28px;
-            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
-            border-radius: 15px 15px 12px 12px;
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-        }
-        
-        /* X mark on body */
-        .neg-x-mark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-        }
-        
-        .neg-x-mark::before,
-        .neg-x-mark::after {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 3px;
-            background: #ff6b6b;
-            top: 50%;
-            left: 0;
-            border-radius: 2px;
-        }
-        
-        .neg-x-mark::before {
-            transform: translateY(-50%) rotate(45deg);
-        }
-        
-        .neg-x-mark::after {
-            transform: translateY(-50%) rotate(-45deg);
-        }
-        
-        /* Counter badge */
-        .neg-counter {
-            position: absolute;
-            top: 5px;
-            right: 0;
-            background: #ff6b6b;
-            color: white;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            font-size: 0.75em;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid rgba(10, 10, 20, 0.9);
-            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.5);
-            opacity: 0;
-            transform: scale(0);
-            transition: all 0.3s ease;
-            z-index: 25;
-        }
-        
-        .neg-counter.show {
-            opacity: 1;
-            transform: scale(1);
-        }
-        
-        /* Tooltip */
-        .neg-tooltip {
-            position: absolute;
-            bottom: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 107, 107, 0.9);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 10px;
-            font-size: 0.7em;
-            font-weight: 700;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.3s ease;
-        }
-        
-        .negative-robot-btn:hover .neg-tooltip {
-            opacity: 1;
-            bottom: -35px;
         }
         
         .robot-head {
@@ -503,27 +340,31 @@
             transition: all 0.5s ease;
         }
         
+        /* ALL EMOTIONS NOW PINK - Different expressions only */
         .robot-head.happy {
             background: linear-gradient(145deg, #ffb6c1, #ff69b4);
         }
         
+        /* SAD - Now pink but with sad expression */
         .robot-head.sad {
-            background: linear-gradient(145deg, #a8c0ff, #6b8cff);
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
             animation: float-slow 4s ease-in-out infinite;
         }
         
+        /* ANGRY - Now pink but with angry expression */
         .robot-head.angry {
-            background: linear-gradient(145deg, #ff6b6b, #ee5a5a);
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
             animation: shake 0.5s ease-in-out infinite;
         }
         
+        /* SURPRISED - Now pink instead of yellow */
         .robot-head.surprised {
-            background: linear-gradient(145deg, #ffd93d, #ff9f43);
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
             animation: bounce-quick 0.8s ease-in-out infinite;
         }
         
         .robot-head.thinking {
-            background: linear-gradient(145deg, #c8b6ff, #9d8ec4);
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
         }
         
         .robot-head.loving {
@@ -534,6 +375,18 @@
         .robot-head.petted {
             background: linear-gradient(145deg, #ffb6c1, #ff1493);
             animation: petted-glow 1s ease-in-out infinite;
+        }
+        
+        /* POKED - Pink with hurt expression */
+        .robot-head.poked {
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            animation: poked-wince 0.5s ease-in-out;
+        }
+        
+        @keyframes poked-wince {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-3deg); }
+            75% { transform: translateX(5px) rotate(3deg); }
         }
         
         @keyframes petted-glow {
@@ -556,12 +409,6 @@
         @keyframes float-slow {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-5px); }
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-3px) rotate(-1deg); }
-            75% { transform: translateX(3px) rotate(1deg); }
         }
         
         @keyframes bounce-quick {
@@ -594,9 +441,10 @@
             transform: rotate(15deg);
         }
         
+        /* SAD - droopy antennas */
         .robot-head.sad .antenna-left,
         .robot-head.sad .antenna-right {
-            background: linear-gradient(to bottom, #6b8cff, #a8c0ff);
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
             transform: rotate(-25deg) translateY(5px);
         }
         
@@ -604,14 +452,25 @@
             transform: rotate(25deg) translateY(5px);
         }
         
+        /* ANGRY - antennas shaking */
         .robot-head.angry .antenna-left,
         .robot-head.angry .antenna-right {
-            background: linear-gradient(to bottom, #ee5a5a, #ff6b6b);
-            transform: rotate(-35deg);
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            animation: antenna-shake 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-shake {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
         }
         
         .robot-head.angry .antenna-right {
-            transform: rotate(35deg);
+            animation: antenna-shake-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-shake-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
         }
         
         .robot-head.petted .antenna-left,
@@ -631,6 +490,18 @@
         @keyframes antenna-wiggle-right {
             0%, 100% { transform: rotate(15deg); }
             50% { transform: rotate(25deg); }
+        }
+        
+        /* POKED - antennas droop */
+        .robot-head.poked .antenna-left,
+        .robot-head.poked .antenna-right {
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            transform: rotate(-30deg) translateY(8px);
+            transition: all 0.3s ease;
+        }
+        
+        .robot-head.poked .antenna-right {
+            transform: rotate(30deg) translateY(8px);
         }
         
         .antenna-ball {
@@ -701,6 +572,7 @@
             transition: all 0.3s ease;
         }
         
+        /* HAPPY - smiling eyes */
         .eye.happy::after {
             height: 10px;
             border-radius: 0 0 15px 15px;
@@ -711,30 +583,54 @@
             opacity: 0;
         }
         
+        /* SAD - looking down, teary */
         .eye.sad::after {
-            transform: translateY(3px);
+            transform: translateY(3px) scale(0.9);
         }
         
         .eye.sad::before {
-            transform: translateY(3px);
+            transform: translateY(3px) scale(0.9);
+            opacity: 0.5;
         }
         
+        /* ANGRY - narrowed eyes */
         .eye.angry::after {
             transform: translateY(-2px) scale(0.9);
+            height: 12px;
+            border-radius: 50% 50% 40% 40%;
         }
         
         .eye.angry::before {
             opacity: 0;
         }
         
+        /* SURPRISED - wide eyes */
         .eye.surprised::after {
-            transform: scale(0.5);
+            transform: scale(0.6);
         }
         
+        .eye.surprised::before {
+            transform: scale(0.6);
+            opacity: 0.8;
+        }
+        
+        /* LOVE - heart shaped pupils */
         .eye.love::after {
             transform: scale(0.8) translateY(-2px);
             background: linear-gradient(145deg, #ff69b4, #ff1493);
             border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+        
+        /* POKED - squeezed shut */
+        .eye.poked::after {
+            height: 3px;
+            border-radius: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .eye.poked::before {
+            opacity: 0;
         }
         
         .eye.blink {
@@ -774,21 +670,31 @@
             transition: all 0.3s ease;
         }
         
+        /* SAD - pale cheeks */
         .robot-head.sad .cheek {
-            background: rgba(107, 140, 255, 0.4);
-            opacity: 0.3;
+            background: rgba(255, 105, 180, 0.2);
+            opacity: 0.4;
         }
         
+        /* ANGRY - flushed cheeks */
         .robot-head.angry .cheek {
-            background: rgba(255, 107, 107, 0.6);
-            opacity: 0.8;
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 0.9;
         }
         
+        /* LOVING/PETTED - blushing hard */
         .robot-head.loving .cheek,
         .robot-head.petted .cheek {
             background: rgba(255, 20, 147, 0.6);
             opacity: 1;
             animation: blush 1s ease-in-out infinite;
+        }
+        
+        /* POKED - red mark on cheek */
+        .robot-head.poked .cheek {
+            background: rgba(255, 107, 107, 0.8);
+            opacity: 1;
+            transform: scale(1.2);
         }
         
         @keyframes blush {
@@ -808,6 +714,7 @@
             background: transparent;
         }
         
+        /* HAPPY - big smile */
         .mouth.smile {
             height: 25px;
             border-radius: 0 0 50px 50px;
@@ -815,31 +722,7 @@
             border: none;
         }
         
-        .mouth.open {
-            height: 30px;
-            width: 35px;
-            border-radius: 50%;
-            background: #ff69b4;
-            border: 3px solid #4a4a4a;
-        }
-        
-        .mouth.o-shape {
-            width: 20px;
-            height: 25px;
-            border-radius: 50%;
-            background: #ff69b4;
-            border: 3px solid #4a4a4a;
-        }
-        
-        .mouth.line {
-            width: 30px;
-            height: 3px;
-            border: none;
-            background: #4a4a4a;
-            border-radius: 2px;
-            margin-top: 15px;
-        }
-        
+        /* SAD - frown */
         .mouth.sad {
             width: 30px;
             height: 15px;
@@ -848,17 +731,31 @@
             border-bottom: none;
             background: transparent;
             margin-top: 12px;
+            transform: rotate(180deg);
         }
         
+        /* ANGRY - gritted teeth line */
         .mouth.angry {
             width: 35px;
             height: 8px;
-            border-radius: 0;
+            border-radius: 4px;
             background: #4a4a4a;
             transform: rotate(-5deg);
             margin-top: 18px;
+            border: none;
         }
         
+        /* SURPRISED - O shape */
+        .mouth.surprised {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #ff69b4;
+            border: 3px solid #4a4a4a;
+            margin-top: 8px;
+        }
+        
+        /* LOVE - heart mouth */
         .mouth.love {
             width: 25px;
             height: 20px;
@@ -869,6 +766,7 @@
             margin-top: 10px;
         }
         
+        /* PETTED - big grin */
         .mouth.petted {
             width: 35px;
             height: 20px;
@@ -878,15 +776,31 @@
             animation: mouth-happy 0.5s ease-in-out infinite;
         }
         
+        /* POKED - wavy mouth */
+        .mouth.poked {
+            width: 30px;
+            height: 10px;
+            border: none;
+            border-bottom: 3px solid #4a4a4a;
+            border-radius: 50%;
+            margin-top: 15px;
+            animation: mouth-wince 0.5s ease-in-out;
+        }
+        
         @keyframes mouth-happy {
             0%, 100% { transform: scaleX(1); }
             50% { transform: scaleX(1.2); }
         }
         
+        @keyframes mouth-wince {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(0.8) translateY(-2px); }
+        }
+        
         .robot-body {
             width: 100px;
             height: 80px;
-            background: linear-gradient(145deg, #e6f3ff, #b8d4f0);
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
             border-radius: 40px 40px 30px 30px;
             position: absolute;
             bottom: 0;
@@ -898,16 +812,17 @@
             transition: all 0.5s ease;
         }
         
+        /* All body colors now pink */
         .robot-head.sad ~ .robot-body {
-            background: linear-gradient(145deg, #d4e0ff, #a8c0ff);
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
         }
         
         .robot-head.angry ~ .robot-body {
-            background: linear-gradient(145deg, #ffcfcf, #ff9f9f);
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
         }
         
         .robot-head.thinking ~ .robot-body {
-            background: linear-gradient(145deg, #e6e0ff, #c8b6ff);
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
         }
         
         .robot-head.petted ~ .robot-body {
@@ -915,9 +830,19 @@
             animation: body-wiggle 0.5s ease-in-out infinite;
         }
         
+        .robot-head.poked ~ .robot-body {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            animation: body-flinch 0.5s ease-in-out;
+        }
+        
         @keyframes body-wiggle {
             0%, 100% { transform: rotate(-1deg); }
             50% { transform: rotate(1deg); }
+        }
+        
+        @keyframes body-flinch {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.95); }
         }
         
         .heart {
@@ -957,14 +882,15 @@
             50% { transform: rotate(-45deg) scale(1.1); }
         }
         
+        /* All heart colors pink */
         .robot-head.sad .heart {
-            background: #6b8cff;
+            background: #ff69b4;
             animation: heartbeat-slow 2s ease-in-out infinite;
         }
         
         .robot-head.sad .heart::before,
         .robot-head.sad .heart::after {
-            background: #6b8cff;
+            background: #ff69b4;
         }
         
         @keyframes heartbeat-slow {
@@ -1013,9 +939,10 @@
             animation: wave-right 4s ease-in-out infinite;
         }
         
+        /* SAD - arms down */
         .robot-head.sad .arm-left,
         .robot-head.sad .arm-right {
-            background: linear-gradient(to bottom, #a8c0ff, #6b8cff);
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
             animation: none;
             transform: rotate(20deg) translateY(10px);
         }
@@ -1024,9 +951,10 @@
             transform: rotate(-20deg) translateY(10px);
         }
         
+        /* ANGRY - fists shaking */
         .robot-head.angry .arm-left,
         .robot-head.angry .arm-right {
-            background: linear-gradient(to bottom, #ff6b6b, #ee5a5a);
+            background: linear-gradient(to bottom, #ff69b4, #ff1493);
             animation: shake-fists 0.3s ease-in-out infinite;
         }
         
@@ -1044,6 +972,7 @@
             50% { transform: rotate(30deg); }
         }
         
+        /* LOVING - reaching out */
         .robot-head.loving .arm-left {
             animation: reach-out-left 2s ease-in-out infinite;
         }
@@ -1052,12 +981,33 @@
             animation: reach-out-right 2s ease-in-out infinite;
         }
         
+        /* PETTED - happy wave */
         .robot-head.petted .arm-left {
             animation: happy-wave-left 0.5s ease-in-out infinite;
         }
         
         .robot-head.petted .arm-right {
             animation: happy-wave-right 0.5s ease-in-out infinite;
+        }
+        
+        /* POKED - covering cheeks */
+        .robot-head.poked .arm-left,
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks 0.5s ease-in-out;
+        }
+        
+        @keyframes cover-cheeks {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(45deg) translateX(10px); }
+        }
+        
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks-right 0.5s ease-in-out;
+        }
+        
+        @keyframes cover-cheeks-right {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-45deg) translateX(-10px); }
         }
         
         @keyframes happy-wave-left {
@@ -1648,6 +1598,29 @@
             transform: scale(1);
         }
         
+        /* POKE COUNTER - Same style but red */
+        .poke-counter {
+            position: absolute;
+            top: -30px;
+            right: -60px;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+        
+        .poke-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
         /* RL REWARD VISUAL FEEDBACK */
         .reward-feedback {
             position: fixed;
@@ -1719,7 +1692,13 @@
         <div class="robot-container">
             <div class="robot" id="robot">
                 <div class="pet-zone" id="petZone"></div>
+                
+                <!-- CHEEK POKE ZONES FOR NEGATIVE FEEDBACK -->
+                <div class="cheek-poke-zone left" id="pokeZoneLeft" title="Poke for bad response"></div>
+                <div class="cheek-poke-zone right" id="pokeZoneRight" title="Poke for bad response"></div>
+                
                 <div class="pet-counter" id="petCounter">Pets: 0</div>
+                <div class="poke-counter" id="pokeCounter">Pokes: 0</div>
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
@@ -1743,8 +1722,8 @@
                             <div class="eye" id="rightEye"></div>
                         </div>
                         <div class="cheeks">
-                            <div class="cheek"></div>
-                            <div class="cheek"></div>
+                            <div class="cheek" id="leftCheek"></div>
+                            <div class="cheek" id="rightCheek"></div>
                         </div>
                         <div class="mouth" id="mouth"></div>
                     </div>
@@ -1756,27 +1735,6 @@
                 
                 <div class="arm-left"></div>
                 <div class="arm-right"></div>
-            </div>
-            
-            <!-- NEGATIVE REWARD ROBOT BUTTON -->
-            <div class="negative-robot-btn" id="negativeRobotBtn" onclick="handleNegativeReward()">
-                <div class="neg-robot-head">
-                    <div class="neg-antenna"></div>
-                    <div class="neg-face">
-                        <div class="neg-eyebrow left"></div>
-                        <div class="neg-eyebrow right"></div>
-                        <div class="neg-eyes">
-                            <div class="neg-eye"></div>
-                            <div class="neg-eye"></div>
-                        </div>
-                        <div class="neg-mouth"></div>
-                    </div>
-                </div>
-                <div class="neg-robot-body">
-                    <div class="neg-x-mark"></div>
-                </div>
-                <div class="neg-counter" id="negCounter">0</div>
-                <div class="neg-tooltip">Bad response!</div>
             </div>
         </div>
         
@@ -1820,16 +1778,16 @@
         
         <!-- RL FEEDBACK INSTRUCTION TEXT -->
         <div class="rl-feedback-text">
-            <span class="thumb-up">👍</span> Pet robot for good response
+            <span class="thumb-up">👍</span> Pet head for good response
             <span style="color: rgba(0,255,136,0.4);">|</span>
-            <span class="thumb-down">👎</span> Press angry bot for bad response
+            <span class="thumb-down">👈</span> Poke cheeks for bad response
         </div>
         
         <div class="chat-container" id="chatContainer"></div>
     </div>
 
     <script>
-        // Matrix Rain (same as before)
+        // Matrix Rain
         const canvas = document.getElementById('matrixCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1946,6 +1904,8 @@
         // Robot elements
         const robot = document.getElementById('robot');
         const petZone = document.getElementById('petZone');
+        const pokeZoneLeft = document.getElementById('pokeZoneLeft');
+        const pokeZoneRight = document.getElementById('pokeZoneRight');
         const robotHead = document.getElementById('robotHead');
         const leftEye = document.getElementById('leftEye');
         const rightEye = document.getElementById('rightEye');
@@ -1954,6 +1914,7 @@
         const speakingWaves = document.getElementById('speakingWaves');
         const emotionIndicator = document.getElementById('emotionIndicator');
         const petCounter = document.getElementById('petCounter');
+        const pokeCounter = document.getElementById('pokeCounter');
         const chatContainer = document.getElementById('chatContainer');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -1961,8 +1922,6 @@
         const sendBtn = document.getElementById('sendBtn');
         const plusMenu = document.getElementById('plusMenu');
         const globeBtn = document.getElementById('globeBtn');
-        const negativeRobotBtn = document.getElementById('negativeRobotBtn');
-        const negCounter = document.getElementById('negCounter');
         const rewardFeedback = document.getElementById('rewardFeedback');
         
         // Image elements
@@ -1981,8 +1940,11 @@
         let streamBuffer = '';
         let currentEmotion = 'happy';
         let petCount = 0;
+        let pokeCount = 0;
         let isBeingPetted = false;
+        let isBeingPoked = false;
         let petTimeout;
+        let pokeTimeout;
         let ros = null;
         let isROSConnected = false;
         let webSearchEnabled = false;
@@ -2002,6 +1964,14 @@
             "🤗: That tickles!",
             "💝: You're the best!",
             "🥺: *blushes*"
+        ];
+        
+        const pokeResponses = [
+            "😢: Ouch! That hurt...",
+            "💔: I'll try to do better...",
+            "😞: Sorry if I messed up...",
+            "🥺: *sad beep boop*",
+            "😿: Please don't be mad..."
         ];
         
         const emotionMap = {
@@ -2041,7 +2011,7 @@
             speechBubble.classList.add('show');
             setTimeout(() => {
                 speechBubble.classList.remove('show');
-                if (!isBeingPetted) setEmotion('happy');
+                if (!isBeingPetted && !isBeingPoked) setEmotion('happy');
             }, 2000);
         }
         
@@ -2052,7 +2022,7 @@
         
         function showRewardFeedback(type, intensity) {
             rewardFeedback.className = 'reward-feedback ' + (type > 0 ? 'positive' : 'negative');
-            rewardFeedback.textContent = type > 0 ? '👍 +' + intensity : '👎 ' + intensity;
+            rewardFeedback.textContent = type > 0 ? '👍 +' + intensity : '👎 -' + intensity;
             rewardFeedback.classList.add('show');
             
             setTimeout(() => {
@@ -2080,7 +2050,12 @@
             console.log('RL Reward sent:', rewardData);
         }
         
-        function handleNegativeReward() {
+        // POKE HANDLER (replaces angry robot button)
+        function handlePoke(e) {
+            e.stopPropagation(); // Don't trigger petting
+            
+            if (isStreaming) return;
+            
             if (!latestResponseId) {
                 speechBubble.textContent = 'No response to rate yet! 💭';
                 speechBubble.classList.add('show');
@@ -2089,37 +2064,89 @@
             }
             
             negativeRewardCount++;
-            const intensity = Math.min(negativeRewardCount, 5); // Cap at 5
+            pokeCount++;
+            const intensity = Math.min(negativeRewardCount, 5);
             
             // Visual feedback
             showRewardFeedback(-1, intensity);
             
-            // Update counter badge
-            negCounter.textContent = negativeRewardCount;
-            negCounter.classList.add('show');
+            // Update counter
+            pokeCounter.textContent = `Pokes: ${pokeCount}`;
+            pokeCounter.classList.add('show');
             
-            // Robot shake animation
-            negativeRobotBtn.classList.add('shaking');
-            setTimeout(() => negativeRobotBtn.classList.remove('shaking'), 500);
+            // Create poke effect
+            createPokeEffect(e);
+            
+            // Robot reaction
+            isBeingPoked = true;
+            clearTimeout(pokeTimeout);
+            
+            robot.classList.add('poking');
+            setEmotion('poked', '😢');
+            
+            // Red mark on poked cheek
+            const cheekSide = e.target.id === 'pokeZoneLeft' ? 'left' : 'right';
+            const cheek = document.getElementById(cheekSide + 'Cheek');
+            if (cheek) {
+                cheek.style.background = 'rgba(255, 107, 107, 0.9)';
+                cheek.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    cheek.style.background = '';
+                    cheek.style.transform = '';
+                }, 1000);
+            }
             
             // Send to ROS
             sendRLReward('negative', intensity, latestResponseId);
             
-            // Grace reaction
-            setEmotion('sad', '😢');
-            speechBubble.textContent = ['😢', '😭', '💔', '😞'][Math.min(intensity - 1, 3)] + ' I\'ll try better!';
-            speechBubble.classList.add('show');
+            // Response
+            if (pokeCount % 2 === 0) {
+                const response = pokeResponses[Math.floor(Math.random() * pokeResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['😢', '💔', '😞', '🥺'][Math.min(intensity - 1, 3)] + ' Ouch!';
+                speechBubble.classList.add('show');
+            }
             
-            setTimeout(() => {
+            pokeTimeout = setTimeout(() => {
+                isBeingPoked = false;
+                robot.classList.remove('poking');
                 speechBubble.classList.remove('show');
-                if (!isBeingPetted) setEmotion('happy');
+                pokeCounter.classList.remove('show');
+                setEmotion('happy');
             }, 2000);
             
-            // Reset after delay for next response
+            // Reset after delay
             setTimeout(() => {
                 negativeRewardCount = 0;
-                negCounter.classList.remove('show');
             }, 5000);
+        }
+        
+        function createPokeEffect(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            // Ripple
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple poke';
+            ripple.style.width = '15px';
+            ripple.style.height = '15px';
+            ripple.style.left = (x - 7) + 'px';
+            ripple.style.top = (y - 7) + 'px';
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+            
+            // Poke mark
+            const mark = document.createElement('div');
+            mark.className = 'poke-mark';
+            mark.innerHTML = '💢';
+            mark.style.left = (x - 10) + 'px';
+            mark.style.top = (y - 20) + 'px';
+            robot.appendChild(mark);
+            setTimeout(() => mark.remove(), 1000);
         }
         
         // Close menu when clicking outside
@@ -2152,7 +2179,6 @@
                 imagePrompt.focus();
                 plusMenu.classList.remove('show');
                 
-                // Auto-focus the image prompt input
                 setTimeout(() => imagePrompt.focus(), 100);
             };
             
@@ -2174,9 +2200,6 @@
         // ROS Initialization
         function initROS() {
             try {
-                // ── AUTO-DETECT server IP from the page URL ──────────────
-                // Whatever IP you used to open this page IS the robot's IP
-                // Works from phone, PC, tablet - anything on same WiFi
                 const serverHost = window.location.hostname;
                 const rosPort = 9090;
                 const rosUrl = `ws://${serverHost}:${rosPort}`;
@@ -2212,35 +2235,30 @@
                     statusText.textContent = 'Reconnecting...';
                     stopIdleAnimations();
                     
-                    // Auto-reconnect after 5 seconds
                     setTimeout(() => {
                         console.log('🔄 Attempting reconnect...');
                         initROS();
                     }, 5000);
                 });
                 
-                // Text input topic
                 const cnsTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/neural_input',
                     messageType: 'std_msgs/String'
                 });
                 
-                // Image input topic
                 imageInputTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/image_input',
                     messageType: 'std_msgs/String'
                 });
                 
-                // RL Reward topic
                 rlRewardTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/rl_reward',
                     messageType: 'std_msgs/String'
                 });
                 
-                // Response topic
                 const gceResponseTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/gce/response',
@@ -2260,7 +2278,7 @@
                             latestResponseId = generateResponseId();
                             positiveRewardCount = 0;
                             negativeRewardCount = 0;
-                            negCounter.classList.remove('show');
+                            pokeCount = 0;
                             console.log('New response ID:', latestResponseId);
                         } else if (data.type === 'error') {
                             if (currentStreamMessage) finishStreaming();
@@ -2290,17 +2308,30 @@
         
         initROS();
         
-        // Petting (now with RL reward)
+        // Petting (positive reward)
         petZone.addEventListener('click', handlePet);
         petZone.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handlePet(e);
         });
         
+        // Poking (negative reward) - both cheeks
+        pokeZoneLeft.addEventListener('click', handlePoke);
+        pokeZoneRight.addEventListener('click', handlePoke);
+        pokeZoneLeft.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePoke(e);
+        });
+        pokeZoneRight.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePoke(e);
+        });
+        
         function handlePet(e) {
             if (isStreaming) return;
             
-            // RL Reward logic
             if (latestResponseId) {
                 positiveRewardCount++;
                 const intensity = Math.min(positiveRewardCount, 5);
@@ -2394,13 +2425,14 @@
         // Set emotion
         function setEmotion(emotion, emoji = null) {
             if (isBeingPetted && emotion !== 'petted') return;
+            if (isBeingPoked && emotion !== 'poked') return;
             
             currentEmotion = emotion;
             
-            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving', 'petted');
-            leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
-            rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'look-left', 'look-right', 'look-up');
-            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love', 'petted');
+            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving', 'petted', 'poked');
+            leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'poked', 'look-left', 'look-right', 'look-up');
+            rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'poked', 'look-left', 'look-right', 'look-up');
+            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love', 'petted', 'surprised', 'poked');
             
             robotHead.classList.add(emotion);
             
@@ -2429,7 +2461,7 @@
                 case 'surprised':
                     leftEye.classList.add('surprised');
                     rightEye.classList.add('surprised');
-                    mouth.classList.add('o-shape');
+                    mouth.classList.add('surprised');
                     break;
                 case 'thinking':
                     leftEye.classList.add('look-up');
@@ -2445,6 +2477,11 @@
                     leftEye.classList.add('happy');
                     rightEye.classList.add('happy');
                     mouth.classList.add('petted');
+                    break;
+                case 'poked':
+                    leftEye.classList.add('poked');
+                    rightEye.classList.add('poked');
+                    mouth.classList.add('poked');
                     break;
                 default:
                     leftEye.classList.add('happy');
@@ -2579,7 +2616,7 @@
         // Idle animations
         function startIdleAnimations() {
             idleInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming && !isBeingPetted) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted && !isBeingPoked) {
                     const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
                     const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
                     if (randomExp !== 'normal') {
@@ -2594,7 +2631,7 @@
             }, 3000);
             
             blinkInterval = setInterval(() => {
-                if (!isSpeaking && !isStreaming && !isBeingPetted) {
+                if (!isSpeaking && !isStreaming && !isBeingPetted && !isBeingPoked) {
                     blink();
                 }
             }, 4000);
@@ -2621,7 +2658,6 @@
                 let width = img.width;
                 let height = img.height;
                 
-                // Resize if too large
                 const MAX_SIZE = 1024;
                 if (width > height) {
                     if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
@@ -2634,7 +2670,6 @@
                 canvas.height = height;
                 canvas.getContext('2d').drawImage(img, 0, 0, width, height);
                 
-                // Compress to JPEG 70% quality
                 const compressed = canvas.toDataURL('image/jpeg', 0.7);
                 console.log(`Compressed: ${dataUrl.length} → ${compressed.length}`);
                 callback(compressed);
@@ -2642,7 +2677,7 @@
             img.src = dataUrl;
         }
 
-        // Send message (with web search support)
+        // Send message
         function sendSignal() {
             const val = userInput.value.trim();
             if (isStreaming) return;
@@ -2657,11 +2692,10 @@
                     return;
                 }
 
-                // Compress then send
                 compressImage(currentImage, function(compressed) {
                     const base64 = compressed.split(',')[1];
                     
-                    if (base64.length > 900000) {  // ~900KB max
+                    if (base64.length > 900000) {
                         speechBubble.textContent = 'Image too large! Try smaller.';
                         speechBubble.classList.add('show');
                         setTimeout(() => speechBubble.classList.remove('show'), 3000);
@@ -2689,24 +2723,21 @@
                     }
                 });
         
-    } else if (val) {
-                // Normal text message
+            } else if (val) {
                 createMessageElement('user', val);
                 
                 if (isROSConnected && window.cnsTopic) {
-                    // FIXED: Send JSON with web search preference
                     const messageData = {
                         text: val,
-                        web_search: webSearchEnabled  // ← Actually use the globe button state!
+                        web_search: webSearchEnabled
                     };
                     
                     window.cnsTopic.publish(new ROSLIB.Message({ 
-                        data: JSON.stringify(messageData)  // Send as JSON, not plain text
+                        data: JSON.stringify(messageData)
                     }));
                     
                     console.log('💬 Sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
                 } else {
-                    // Offline mode
                     setTimeout(() => {
                         const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
                         detectAndSetEmotion(offlineResponse);
@@ -2754,7 +2785,8 @@
                 'surprised': '😮',
                 'thinking': '🤔',
                 'loving': '❤️',
-                'petted': '💖'
+                'petted': '💖',
+                'poked': '😢'
             };
             setEmotion(emotion, testEmojis[emotion]);
         };
@@ -2764,8 +2796,12 @@
             handlePet(fakeEvent);
         };
         
+        window.testPoke = function() {
+            const fakeEvent = { clientX: null, clientY: null, target: { id: 'pokeZoneLeft' } };
+            handlePoke(fakeEvent);
+        };
+        
         window.toggleWebSearch = toggleWebSearch;
-        window.handleNegativeReward = handleNegativeReward;
     </script>
 </body>
 </html>
