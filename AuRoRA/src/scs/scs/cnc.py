@@ -2531,8 +2531,21 @@ Latest reflection:
 
     def listener_callback(self, msg: String):
         """Handle text input from web interface"""
-        self.get_logger().info(f'📝 Text: "{msg.data}"')
-        self.executor_pool.submit(self.process_with_ollama, msg.data)
+        try:
+            # Try to parse as JSON (new web UI format)
+            data = json.loads(msg.data)
+            if isinstance(data, dict) and 'text' in data:
+                user_text = data['text']
+                self.get_logger().info(f'📝 Text: "{user_text}"')
+                self.executor_pool.submit(self.process_with_ollama, user_text)
+            else:
+                # Fallback: plain string JSON
+                self.get_logger().info(f'📝 Text: "{msg.data}"')
+                self.executor_pool.submit(self.process_with_ollama, msg.data)
+        except (json.JSONDecodeError, TypeError):
+            # Not JSON — treat as plain text (backward compatible)
+            self.get_logger().info(f'📝 Text: "{msg.data}"')
+            self.executor_pool.submit(self.process_with_ollama, msg.data)
 
     def image_listener_callback(self, msg: String):
         self.get_logger().info(f'📸 Received: {len(msg.data)} chars')
