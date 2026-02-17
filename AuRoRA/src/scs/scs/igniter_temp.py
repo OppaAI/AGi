@@ -7,10 +7,11 @@ This module handles the ignition sequence (bootstrap) of the robot's system.
 Startup sequence:
     1. TallEEE: Centralized Triple-Aggregation Logger & Ledger Emergency and Exception Entry
     2. ROS Bridge WebSocket Server: Enables web interface communication
-    3. Flask Web Server: Serves the Grace web interface
-    4. SearXNG MCP Server: Enhanced web search with full content extraction
-    5. Nature Skills MCP Server: Outdoor/nature exploration tools
-    6. ROS2 Bridge: Connects all components
+    3. SearXNG MCP Server: Enhanced web search with full content extraction
+    4. Nature Skills MCP Server: Outdoor/nature exploration tools
+    5. ROS2 Bridge: Connects all components
+
+Note: Web interface served by Nginx (systemd service - no startup needed)
 """
 # System modules
 from enum import Enum
@@ -43,12 +44,12 @@ class StateOfModule(str, Enum):
 
 class ServerManager:
     """
-    Manages external servers (ROS Bridge, Flask, MCP, Skills) for the robot.
+    Manages external servers (ROS Bridge, MCP, Skills) for the robot.
+    Web interface served by Nginx (systemd - always on, not managed here).
     Starts all servers in parallel and polls for readiness instead of sleeping.
     """
     # How long to poll for each server before giving up (seconds)
     ROSBRIDGE_TIMEOUT = 5
-    FLASK_TIMEOUT     = 5
     MCP_TIMEOUT       = 3
     SKILLS_TIMEOUT    = 3
     POLL_INTERVAL     = 0.1  # Check every 100ms
@@ -56,7 +57,6 @@ class ServerManager:
     def __init__(self, logger):
         self.logger = logger
         self.rosbridge_process = None
-        self.flask_process     = None
         self.mcp_process       = None
         self.skills_process    = None
         self.base_dir          = Path.home() / "AGi"
@@ -102,48 +102,6 @@ class ServerManager:
             return False
         except Exception as e:
             self.logger.error(f"❌ ROS Bridge error: {e}")
-            return False
-
-    def _launch_flask(self) -> bool:
-        try:
-            flask_locations = [
-                self.base_dir / "flask_server" / "flask_server.py",
-                self.base_dir / "flask_server.py",
-            ]
-            flask_script = flask_dir = None
-            for loc in flask_locations:
-                if loc.exists():
-                    flask_script = loc
-                    flask_dir    = loc.parent
-                    break
-
-            if not flask_script:
-                self.logger.error("❌ Flask server not found in:")
-                for loc in flask_locations:
-                    self.logger.error(f"   - {loc}")
-                return False
-
-            self.logger.info(f"🌸 Starting Flask web server from {flask_dir}...")
-            self.flask_process = subprocess.Popen(
-                ["python3", str(flask_script)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=str(flask_dir),
-                preexec_fn=os.setsid
-            )
-            if self._wait_for_process(self.flask_process, self.FLASK_TIMEOUT):
-                self.logger.info("✅ Flask server started on http://localhost:9413")
-                threading.Thread(target=self._log_flask_output, daemon=True).start()
-                return True
-            else:
-                stderr_output = self.flask_process.stderr.read() if self.flask_process.stderr else ""
-                self.logger.error("❌ Flask server failed to start")
-                if stderr_output:
-                    self.logger.error(f"   Error: {stderr_output}")
-                return False
-        except Exception as e:
-            self.logger.error(f"❌ Flask server error: {e}")
             return False
 
     def _launch_mcp(self) -> bool:
@@ -260,7 +218,6 @@ class ServerManager:
 
         threads = [
             threading.Thread(target=run, args=("rosbridge", self._launch_rosbridge), daemon=True),
-            threading.Thread(target=run, args=("flask",     self._launch_flask),     daemon=True),
             threading.Thread(target=run, args=("mcp",       self._launch_mcp),       daemon=True),
             threading.Thread(target=run, args=("skills",    self._launch_skills),    daemon=True),
         ]
@@ -284,7 +241,6 @@ class ServerManager:
 
         processes = {
             "ROS Bridge":  self.rosbridge_process,
-            "Flask":       self.flask_process,
             "SearXNG MCP": self.mcp_process,
             "Skills MCP":  self.skills_process,
         }
@@ -346,9 +302,8 @@ class ServerManager:
     def check_health(self) -> dict:
         return {
             "rosbridge": self.rosbridge_process.poll() is None if self.rosbridge_process else False,
-            "flask":     self.flask_process.poll()     is None if self.flask_process     else False,
             "mcp":       self.mcp_process.poll()       is None if self.mcp_process       else False,
-            "skills":    self.skills_process.poll()    is None if self.skills_process    else False,
+            "skills":    self.skills_process.poll()    is None if self.skills_process     else False,
         }
 
     # -------------------------------------------------------------------------
@@ -359,14 +314,6 @@ class ServerManager:
             for line in self.rosbridge_process.stderr:
                 if line.strip():
                     self.logger.info(f"[ROS Bridge] {line.strip()}")
-        except Exception:
-            pass
-
-    def _log_flask_output(self):
-        try:
-            for line in self.flask_process.stderr:
-                if line.strip():
-                    self.logger.info(f"[Flask] {line.strip()}")
         except Exception:
             pass
 
@@ -412,9 +359,9 @@ class Igniter(Node):
         self.eee.info("SERVER STARTUP SUMMARY")
         self.eee.info("=" * 60)
         self.eee.info(f"ROS Bridge (WebSocket):    {'✅ RUNNING' if results.get('rosbridge') else '❌ FAILED'}")
-        self.eee.info(f"Flask Web Server:          {'✅ RUNNING' if results.get('flask')     else '❌ FAILED'}")
         self.eee.info(f"SearXNG MCP Server:        {'✅ RUNNING' if results.get('mcp')       else '❌ FAILED'}")
         self.eee.info(f"Nature Skills MCP Server:  {'✅ RUNNING' if results.get('skills')    else '❌ FAILED'}")
+        self.eee.info(f"Web Interface (Nginx):     ✅ systemd service (always on)")
         self.eee.info("=" * 60)
 
         if results.get('rosbridge'):
@@ -422,8 +369,7 @@ class Igniter(Node):
         else:
             self.eee.error("⚠️  CRITICAL: Web interface will NOT work without ROS Bridge!")
 
-        if results.get('flask'):
-            self.eee.info("🌸 Access Grace UI at: http://localhost:9413")
+        self.eee.info("🌐 Access Grace UI at: http://localhost:9413")
 
         if not any(results.values()):
             self.eee.warning("⚠️  No external servers started - robot will run in basic mode")
@@ -432,8 +378,6 @@ class Igniter(Node):
         health = self.server_manager.check_health()
         if not health['rosbridge']:
             self.eee.warning("⚠️  ROS Bridge is down - web interface will not work!")
-        if not health['flask']:
-            self.eee.warning("⚠️  Flask server is down")
 
     def shutdown(self):
         self.eee.info("=" * 60)
