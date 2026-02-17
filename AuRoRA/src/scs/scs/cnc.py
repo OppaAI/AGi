@@ -2281,11 +2281,11 @@ class CNSBridge(Node):
         
         return False
     
-    def should_search_auto(self, user_message: str):
+    def should_search_auto(self, user_message: str, conversation_context: list = None):
         """
-        METHOD 2: LLM-based auto-detection (INTELLIGENT)
+        METHOD 2: LLM-based auto-detection WITH CONTEXT (INTELLIGENT)
         
-        Let the LLM decide if search would help answer the question
+        Considers conversation history for context-aware search queries
         """
         if not self.search_enabled or not ENABLE_AUTO_SEARCH:
             return False
@@ -2295,27 +2295,58 @@ class CNSBridge(Node):
             return False
         
         try:
-            decision_prompt = f"""Analyze this user question:
+            # Build context from recent conversation
+            context_text = ""
+            if conversation_context and len(conversation_context) > 0:
+                recent = conversation_context[-6:]  # Last 3 turns
+                context_lines = []
+                for msg in recent:
+                    role = msg.get('role', 'unknown')
+                    content = msg.get('content', '')[:100]
+                    if not msg.get('has_image'):
+                        context_lines.append(f"{role}: {content}")
+                
+                if context_lines:
+                    context_text = f"""
+
+Previous conversation:
+{chr(10).join(context_lines)}
+"""
+            
+            decision_prompt = f"""Analyze this conversation:
+{context_text}
+
+Current user question:
 "{user_message}"
 
-Does this question require CURRENT web search to answer accurately?
+Does this require CURRENT web search? Consider conversation context!
 
-Consider YES if:
-- About events after January 2025
-- Asking for real-time/current data (weather, stocks, news, scores)
-- About recent events or "today/now/latest"
-- Factual query about entities you might not know
+IMPORTANT:
+- If follow-up (e.g. "how about X?" after discussing Y), search for X IN CONTEXT OF Y
+- Include previous entities in search query
+- Example: "How about Scottie Barnes?" after "Raptors score?" → search "Scottie Barnes stats Raptors game"
 
-Consider NO if:
-- Personal conversation or opinion question
-- Technical explanation or how-to question
-- About general knowledge from before 2025
-- Asking about yourself (Grace)
+YES if:
+- Events after January 2025
+- Real-time data (weather, stocks, news, scores)
+- Recent events/"today/now/latest"
+- Follow-up needing current data
 
-Answer ONLY with:
-SEARCH: <brief search query>
+NO if:
+- Personal conversation
+- Technical explanation
+- General knowledge pre-2025
+- About Grace herself
+
+Format:
+SEARCH: <query with context>
 OR
 NO SEARCH
+
+Example:
+Previous: "What's the Raptors score?"
+Current: "How about Scottie Barnes?"
+→ SEARCH: Scottie Barnes stats Toronto Raptors game today
 
 Your answer:"""
 
@@ -2327,18 +2358,18 @@ Your answer:"""
                     "stream": False,
                     "options": {
                         "temperature": 0.1,
-                        "num_predict": 30,
+                        "num_predict": 50,  # Increased for context-aware queries
                         "num_ctx": self.safe_context
                     }
                 },
-                timeout=8
+                timeout=10  # Slightly longer timeout
             )
             
             decision = response.json().get('response', '').strip()
             
             if decision.startswith('SEARCH:'):
                 query = decision.replace('SEARCH:', '').strip()
-                self.get_logger().info(f"🤖 Auto-detection triggered: '{query}'")
+                self.get_logger().info(f"🤖 Context-aware search: '{query}'")
                 return query  # Return the query string
             
         except Exception as e:
@@ -2389,13 +2420,13 @@ Your answer:"""
         
         return False
 
-    def detect_search_need(self, user_message: str):
+    def detect_search_need(self, user_message: str, conversation_history: list = None):
         """
-        DUAL HYBRID SEARCH DETECTION WITH SKILLS PRIORITY
+        DUAL HYBRID SEARCH DETECTION WITH SKILLS PRIORITY + CONTEXT
         
         Priority order:
         1. Skills (weather, sun/moon, aurora, wildlife)
-        2. Web search (news, events, general info)
+        2. Web search (news, events, general info) - NOW CONTEXT-AWARE
         3. No search (personal questions, opinions)
         """
         
@@ -2411,9 +2442,9 @@ Your answer:"""
             self.get_logger().info("🔍 Web search keyword trigger detected")
             return user_message
         
-        # PRIORITY 3: LLM auto-detection for web search
+        # PRIORITY 3: LLM auto-detection for web search (WITH CONTEXT!)
         if ENABLE_AUTO_SEARCH:
-            auto_result = self.should_search_auto(user_message)
+            auto_result = self.should_search_auto(user_message, conversation_context=conversation_history)
             if auto_result:
                 return auto_result if isinstance(auto_result, str) else user_message
         
@@ -2635,11 +2666,14 @@ Latest reflection:
                 self.rlhf.start_interaction(prompt, response_id)
             
             # ═══════════════════════════════════════════════════
-            # DUAL HYBRID SEARCH DETECTION (NEW)
+            # DUAL HYBRID SEARCH DETECTION WITH CONTEXT (FIXED)
             # ═══════════════════════════════════════════════════
             
+            # Get recent conversation for context-aware search
+            recent_history = self.get_recent_messages()[-6:]  # Last 3 turns
+            
             search_results = None
-            search_decision = self.detect_search_need(prompt)
+            search_decision = self.detect_search_need(prompt, conversation_history=recent_history)
             
             if search_decision:
                 # Determine search query
