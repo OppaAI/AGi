@@ -528,11 +528,8 @@ class NatureSkillsClient:
                 self.process.kill()
             self.logger.info("🛑 Skills server stopped")
 
-import sqlite3
-from sentence_transformers import SentenceTransformer
-import numpy as np
-
-# Use simple Python fallback (no sqlite-vec extension needed)
+# RAG via EmbeddingGemma (Ollama) — no HuggingFace, no numpy, no torch
+# Run: ollama pull embeddinggemma:300m-qat-q4_0
 from scs.simple_sqlite_rag import SimpleSQLiteRAG as SQLiteVectorRAG
             
 class HugoBlogger:
@@ -877,13 +874,25 @@ class CNSBridge(Node):
                 self.get_logger().warn("⚠️  MCP start failed, using API fallback")
                 self.use_mcp = False
 
-        # SQLite Vector RAG (NEW)
+        # SQLite Vector RAG (EmbeddingGemma via Ollama)
         self.use_rag = True
         if self.use_rag:
             try:
                 rag_db_path = str(Path.home() / "AGi" / "grace_memory.db")
-                self.rag = SQLiteVectorRAG(rag_db_path, self.get_logger())
-                self.get_logger().info("✅ SQLite Vector RAG initialized")
+                self.rag = SQLiteVectorRAG(rag_db_path, self.get_logger(), OLLAMA_BASE_URL)
+                self.get_logger().info("✅ SQLite Vector RAG initialized (EmbeddingGemma)")
+
+                # One-time migration from old DB (renames old file after, so only runs once)
+                old_db_path = Path.home() / "AGi" / "grace_memory_old.db"
+                if old_db_path.exists():
+                    self.get_logger().info("🔄 Old RAG DB detected — migrating to EmbeddingGemma…")
+                    result = self.rag.migrate_from_old_db(str(old_db_path))
+                    self.get_logger().info(
+                        f"Migration: {result['migrated']} migrated, "
+                        f"{result['skipped']} skipped, {result['failed']} failed"
+                    )
+                    old_db_path.rename(old_db_path.with_suffix('.migrated'))
+
             except Exception as e:
                 self.get_logger().error(f"❌ RAG init failed: {e}")
                 self.use_rag = False
@@ -1396,7 +1405,7 @@ class CNSBridge(Node):
                                 })
                                 
                                 # Process image with VLM
-                               node_ref.executor_pool.submit(
+                                node_ref.executor_pool.submit(
                                     node_ref.process_with_ollama,
                                     prompt,
                                     image_base64=image_base64,
