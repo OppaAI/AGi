@@ -97,10 +97,6 @@ HUGO_AUTO_DEPLOY = os.getenv('HUGO_AUTO_DEPLOY', 'true').lower() == 'true'
 HUGO_GIT_REMOTE = os.getenv('HUGO_GIT_REMOTE', 'origin')
 HUGO_GIT_BRANCH = os.getenv('HUGO_GIT_BRANCH', 'main')
 
-# MCP Server Configuration
-USE_MCP_SEARCH = True
-MCP_SERVER_COMMAND = "/home/oppa-ai/AGi/mcp_server/searxng-mcp-server/searxng-mcp-server.js"
-
 # ✅ Optimized Settings for 30B MODEL
 SAFE_CONTEXT_SIZES = {
     "2b-4b": 4096,    # 2-4B models: conservative
@@ -805,7 +801,7 @@ class CNSBridge(Node):
         if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return SAFE_CONTEXT_SIZES["2b-4b"]
         elif any(x in model_lower for x in ["7b", "8b"]):
-            return SAFE_CONTEXT_SIZES["7b-8b"
+            return SAFE_CONTEXT_SIZES["7b-8b"]
         else:
             return SAFE_CONTEXT_SIZES["13b+"]
 
@@ -815,8 +811,8 @@ class CNSBridge(Node):
         
         if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return MAX_MESSAGES_BY_SIZE["2b-4b"]
-        elif "7b" in model_lower:
-            return MAX_MESSAGES_BY_SIZE["7b"]
+        elif any(x in model_lower for x in ["7b", "8b"]):
+            return MAX_MESSAGES_BY_SIZE["7b-8b"]
         else:
             return MAX_MESSAGES_BY_SIZE["13b+"]
 
@@ -2027,10 +2023,17 @@ Your answer:"""
         return False
 
     def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
-        """Search via SearXNG HTTP API directly (MCP managed by igniter)"""
+        """
+        Search with full-content results via igniter's MCPSearchProxy,
+        falling back to direct SearXNG HTTP API (snippets only) if the
+        proxy is unavailable.
+
+        Proxy:   POST http://127.0.0.1:11435/search  → full page content
+        Fallback: GET  http://127.0.0.1:8080/search  → snippets only
+        """
         if not self.search_enabled:
             return None
-    
+
         # Clean query if malformed JSON arrived
         if isinstance(query, str) and query.startswith('{'):
             try:
@@ -2038,34 +2041,62 @@ Your answer:"""
                 if 'text' in query_json:
                     query = query_json['text']
                     self.get_logger().warn(f"⚠️  Extracted query from JSON: {query}")
-            except:
+            except Exception:
                 pass
-    
+
+        # ── Try 1: MCP proxy (full-content results) ──────────────────────
+        try:
+            response = requests.post(
+                "http://127.0.0.1:11435/search",
+                json={"query": query, "num_results": num_results},
+                timeout=35,   # slightly longer than proxy's own 30s MCP timeout
+            )
+            if response.status_code == 200:
+                results = response.json()
+                if results:
+                    self.get_logger().info(
+                        f"🔍 MCP Search (full content): '{query}' → {len(results)} results"
+                    )
+                    return results
+                self.get_logger().warn("MCP proxy returned empty results, trying SearXNG API")
+            else:
+                self.get_logger().warn(
+                    f"MCP proxy returned HTTP {response.status_code}, trying SearXNG API"
+                )
+        except requests.exceptions.ConnectionError:
+            # Proxy not running (igniter not up, or MCP failed to start)
+            self.get_logger().warn("MCP proxy not reachable, falling back to SearXNG API")
+        except Exception as e:
+            self.get_logger().error(f"MCP proxy error: {e}, falling back to SearXNG API")
+
+        # ── Try 2: Direct SearXNG HTTP (snippets) ────────────────────────
         try:
             response = requests.get(
                 f"{self.searxng_url}/search",
                 params={"q": query, "format": "json", "categories": "general"},
-                timeout=10
+                timeout=10,
             )
             response.raise_for_status()
-    
+
             results = response.json().get('results', [])[:num_results]
             formatted = []
             for i, r in enumerate(results, 1):
                 formatted.append({
-                    "number": i,
-                    "title": r.get('title', ''),
-                    "url": r.get('url', ''),
-                    "snippet": r.get('content', '')[:SEARCH_CONTENT_CHARS],
-                    "full_content": "",
-                    "has_full_content": False
+                    "number":           i,
+                    "title":            r.get('title', ''),
+                    "url":              r.get('url', ''),
+                    "snippet":          r.get('content', '')[:SEARCH_CONTENT_CHARS],
+                    "full_content":     "",
+                    "has_full_content": False,
                 })
-    
-            self.get_logger().info(f"🔍 Search: '{query}' → {len(formatted)} results")
+
+            self.get_logger().info(
+                f"🔍 SearXNG Search (snippets): '{query}' → {len(formatted)} results"
+            )
             return formatted
-    
+
         except Exception as e:
-            self.get_logger().error(f"Search failed: {e}")
+            self.get_logger().error(f"SearXNG API search failed: {e}")
             return None
 
     # ═══════════════════════════════════════════════════════
