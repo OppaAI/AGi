@@ -7,22 +7,22 @@ This module handles the ignition sequence (bootstrap) of the robot's system.
 Startup sequence:
     1. TallEEE: Centralized Triple-Aggregation Logger & Ledger Emergency and Exception Entry
     2. ROS Bridge WebSocket Server: Enables web interface communication
-    3. SearXNG MCP Server: Enhanced web search with full content extraction
-    4. Nature Skills MCP Server: Outdoor/nature exploration tools
-    5. ROS2 Bridge: Connects all components
+    3. Nature Skills MCP Server: Outdoor/nature exploration tools
+    4. ROS2 Bridge: Connects all components
 
 Note: Web interface served by Caddy (systemd service - no startup needed)
+Note: Web search handled by Ollama Cloud API (no SearXNG/MCP required)
+      Set OLLAMA_API_KEY in .env to enable web search.
+      To re-enable SearXNG: docker compose up -d searxng
 """
 # System modules
 from enum import Enum
 import json
-import select
 import signal
 import subprocess
 import sys
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import os
 
@@ -45,7 +45,13 @@ class StateOfModule(str, Enum):
     OFF = "OFF"
 
 
-class MCPSearchProxy:
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTE: MCPSearchProxy removed — web search now via Ollama Cloud API in cnc.py
+# To restore SearXNG: docker compose up -d searxng
+#   and recover MCPSearchProxy + _launch_mcp() from git history.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _MCPSearchProxy_DISABLED:
     """
     Thin HTTP proxy that sits in front of the igniter-owned MCP process.
 
@@ -229,8 +235,9 @@ class MCPSearchProxy:
 
 class ServerManager:
     """
-    Manages external servers (ROS Bridge, MCP, Skills) for the robot.
+    Manages external servers (ROS Bridge, Skills) for the robot.
     Web interface served by Caddy (systemd - always on, not managed here).
+    Web search handled by Ollama Cloud API in cnc.py (no SearXNG needed).
     Starts all servers in parallel and polls for readiness instead of sleeping.
     """
     # How long to poll for each server before giving up (seconds)
@@ -242,7 +249,7 @@ class ServerManager:
     def __init__(self, logger):
         self.logger = logger
         self.rosbridge_process = None
-        self.mcp_process       = None
+        # mcp_process removed — search handled by Ollama Cloud API in cnc.py
         self.skills_process    = None
         self.base_dir          = Path.home() / "AGi"
 
@@ -289,54 +296,9 @@ class ServerManager:
             self.logger.error(f"❌ ROS Bridge error: {e}")
             return False
 
-    def _launch_mcp(self) -> bool:
-        try:
-            mcp_locations = [
-                self.base_dir / "mcp_server" / "searxng-mcp-server" / "searxng-mcp-server.js",
-                self.base_dir / "searxng-mcp-server.js",
-                "/usr/local/bin/searxng-mcp-server",
-            ]
-            mcp_script = None
-            for loc in mcp_locations:
-                if Path(loc).exists():
-                    mcp_script = loc
-                    break
-
-            if not mcp_script:
-                self.logger.warning("⚠️  SearXNG MCP server not found, skipping")
-                return False
-
-            self.logger.info("🔍 Starting SearXNG MCP server...")
-            env = os.environ.copy()
-            env.update({
-                'SEARXNG_URL':        os.getenv('SEARXNG_URL',        'http://127.0.0.1:8080'),
-                'MAX_CONTENT_LENGTH': os.getenv('MAX_CONTENT_LENGTH', '3000'),
-                'REQUEST_TIMEOUT':    os.getenv('REQUEST_TIMEOUT',    '10000'),
-            })
-            cmd = ["node", str(mcp_script)] if str(mcp_script).endswith('.js') else [str(mcp_script)]
-            self.mcp_process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                env=env,
-                cwd=str(self.base_dir),
-                preexec_fn=os.setsid
-            )
-            if self._wait_for_process(self.mcp_process, self.MCP_TIMEOUT):
-                self.logger.info("✅ SearXNG MCP server started")
-                threading.Thread(target=self._log_mcp_output, daemon=True).start()
-                return True
-            else:
-                stderr_output = self.mcp_process.stderr.read() if self.mcp_process.stderr else ""
-                self.logger.error("❌ SearXNG MCP server failed to start")
-                if stderr_output:
-                    self.logger.error(f"   Error: {stderr_output}")
-                return False
-        except Exception as e:
-            self.logger.error(f"❌ MCP server error: {e}")
-            return False
+    # _launch_mcp() removed — SearXNG MCP disabled.
+    # To re-enable: docker compose up -d searxng
+    # and restore _launch_mcp() from git history.
 
     def _launch_skills(self) -> bool:
         try:
@@ -403,7 +365,6 @@ class ServerManager:
 
         threads = [
             threading.Thread(target=run, args=("rosbridge", self._launch_rosbridge), daemon=True),
-            threading.Thread(target=run, args=("mcp",       self._launch_mcp),       daemon=True),
             threading.Thread(target=run, args=("skills",    self._launch_skills),    daemon=True),
         ]
 
@@ -426,7 +387,7 @@ class ServerManager:
 
         processes = {
             "ROS Bridge":  self.rosbridge_process,
-            "SearXNG MCP": self.mcp_process,
+            # "SearXNG MCP": disabled — re-enable with docker compose up -d searxng
             "Skills MCP":  self.skills_process,
         }
 
@@ -487,7 +448,7 @@ class ServerManager:
     def check_health(self) -> dict:
         return {
             "rosbridge": self.rosbridge_process.poll() is None if self.rosbridge_process else False,
-            "mcp":       self.mcp_process.poll()       is None if self.mcp_process       else False,
+            # mcp removed — search via Ollama Cloud API
             "skills":    self.skills_process.poll()    is None if self.skills_process     else False,
         }
 
@@ -499,14 +460,6 @@ class ServerManager:
             for line in self.rosbridge_process.stderr:
                 if line.strip():
                     self.logger.info(f"[ROS Bridge] {line.strip()}")
-        except Exception:
-            pass
-
-    def _log_mcp_output(self):
-        try:
-            for line in self.mcp_process.stderr:
-                if line.strip():
-                    self.logger.info(f"[MCP] {line.strip()}")
         except Exception:
             pass
 
@@ -530,14 +483,6 @@ class Igniter(Node):
         self.server_manager = ServerManager(self.eee)
         self._start_servers()
 
-        # MCP full-content search proxy — exposes mcp_process over HTTP
-        # so cnc.py can get full-page results without owning the process.
-        self.mcp_proxy = MCPSearchProxy(self.eee)
-        if self.server_manager.mcp_process and self.mcp_proxy.attach(self.server_manager.mcp_process):
-            self.mcp_proxy.start()
-        else:
-            self.eee.warning("⚠️  MCPSearchProxy not started (MCP server unavailable)")
-
         # Health check every 30 seconds
         self._health_timer = self.create_timer(30.0, self._health_check)
 
@@ -552,9 +497,8 @@ class Igniter(Node):
         self.eee.info("SERVER STARTUP SUMMARY")
         self.eee.info("=" * 60)
         self.eee.info(f"ROS Bridge (WebSocket):    {'✅ RUNNING' if results.get('rosbridge') else '❌ FAILED'}")
-        self.eee.info(f"SearXNG MCP Server:        {'✅ RUNNING' if results.get('mcp')       else '❌ FAILED'}")
         self.eee.info(f"Nature Skills MCP Server:  {'✅ RUNNING' if results.get('skills')    else '❌ FAILED'}")
-        self.eee.info(f"MCP Search Proxy (HTTP):   will start after MCP confirmed running")
+        self.eee.info(f"Web Search:                ✅ Ollama Cloud API (OLLAMA_API_KEY in .env)")
         self.eee.info(f"Web Interface (Caddy):     ✅ systemd service (always on)")
         self.eee.info("=" * 60)
 
@@ -582,8 +526,6 @@ class Igniter(Node):
         self.eee.info("=" * 60)
         self.eee.info("SHUTDOWN SEQUENCE")
         self.eee.info("=" * 60)
-        # Stop HTTP proxy before killing the MCP process it wraps
-        self.mcp_proxy.stop()
         self.server_manager.stop_all()
         print("[SHUTDOWN] calling EEEAggregator.shutdown() with 1s timeout")
         eee_thread = threading.Thread(target=EEEAggregator.shutdown, daemon=True)
