@@ -82,8 +82,12 @@ REFLECTIONS_FILE = '.daily_reflections.json'
 # Ollama configuration
 OLLAMA_BASE_URL = "http://localhost:11434"
 
-# Web search
-SEARXNG_URL = "http://127.0.0.1:8080"
+# Ollama Cloud web search API (replaces SearXNG)
+# Get free API key: https://ollama.com/settings/keys
+# Add to .env: OLLAMA_API_KEY=your-key-here
+OLLAMA_API_KEY  = os.getenv('OLLAMA_API_KEY', '')
+OLLAMA_SEARCH_URL = "https://ollama.com/api/web_search"
+OLLAMA_FETCH_URL  = "https://ollama.com/api/web_fetch"
 
 # Slack configuration (loaded from .env file or environment)
 SLACK_BOT_TOKEN  = os.getenv('SLACK_BOT_TOKEN', '')
@@ -609,7 +613,7 @@ class CNSBridge(Node):
     def __init__(self):
         super().__init__('cns_bridge')
         self.mcp_client = None
-        self.use_mcp = False   # igniter owns the MCP process; we use SearXNG HTTP API directly
+        self.use_mcp = False   # search now via Ollama Cloud API — no MCP process needed
 
         # SQLite Vector RAG (EmbeddingGemma via Ollama)
         self.use_rag = True
@@ -716,9 +720,8 @@ class CNSBridge(Node):
         # EXTERNAL SERVICES
         # ═══════════════════════════════════════════════════
         
-        # Web search
-        self.searxng_url = SEARXNG_URL
-        self.search_enabled = self._check_searxng_available()
+        # Web search (Ollama Cloud API — replaces SearXNG)
+        self.search_enabled = self._check_ollama_search_available()
         
         # Slack (one-way notifications)
         self.slack_client = None
@@ -799,11 +802,12 @@ class CNSBridge(Node):
         self.get_logger().info("✅ Image processing enabled (VLM ready + Telegram photos)")
         
         if self.search_enabled:
-            self.get_logger().info("✅ Web search enabled (DUAL HYBRID MODE)")
+            self.get_logger().info("✅ Web search enabled (Ollama Cloud API — DUAL HYBRID MODE)")
             self.get_logger().info("   → Method 1: Keyword triggers")
             self.get_logger().info(f"   → Method 2: LLM auto-detection ({'ON' if ENABLE_AUTO_SEARCH else 'OFF'})")
+            self.get_logger().info("   → search: snippet  |  fetch: full page content")
         else:
-            self.get_logger().warn("⚠️  Web search disabled (SearXNG unavailable)")
+            self.get_logger().warn("⚠️  Web search disabled (set OLLAMA_API_KEY in .env)")
         
         if self.slack_enabled:
             self.get_logger().info(f"✅ Slack notifications enabled → {SLACK_CHANNEL}")
@@ -1000,20 +1004,33 @@ class CNSBridge(Node):
             self._save_reflections_file()
             self.get_logger().info(f"✅ Created {days_missed} placeholder reflections")
 
-    def _check_searxng_available(self):
-        """Check if SearXNG is running"""
+    def _check_ollama_search_available(self):
+        """Check if Ollama Cloud web search API is configured and reachable."""
+        if not OLLAMA_API_KEY:
+            self.get_logger().warn(
+                "⚠️  OLLAMA_API_KEY not set — web search disabled.\n"
+                "   Get a free key: https://ollama.com/settings/keys\n"
+                "   Add to .env:    OLLAMA_API_KEY=your-key-here"
+            )
+            return False
         try:
-            response = requests.get(self.searxng_url, timeout=5)
-            # Accept 200 (OK) or 403 (Forbidden but alive)
-            is_available = response.status_code in [200, 403]
-            
-            if is_available:
-                self.get_logger().info(f"SearXNG check: status {response.status_code}")
-            
-            return is_available
-            
+            # Lightweight probe: search with 1 result, short timeout
+            resp = requests.post(
+                OLLAMA_SEARCH_URL,
+                headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"},
+                json={"query": "test", "max_results": 1},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                self.get_logger().info("✅ Ollama Cloud web search API reachable")
+                return True
+            elif resp.status_code == 401:
+                self.get_logger().error("❌ Ollama API key invalid (401 Unauthorized)")
+            else:
+                self.get_logger().warn(f"⚠️  Ollama search probe returned HTTP {resp.status_code}")
+            return False
         except requests.exceptions.RequestException as e:
-            self.get_logger().error(f"SearXNG check failed: {e}")
+            self.get_logger().error(f"❌ Ollama search API unreachable: {e}")
             return False
 
     def _init_slack(self):
@@ -2802,19 +2819,22 @@ Your answer:"""
         
         return False
 
-    def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
+    def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS, fetch_content: bool = False):
         """
-        Search with full-content results via igniter's MCPSearchProxy,
-        falling back to direct SearXNG HTTP API (snippets only) if the
-        proxy is unavailable.
+        Search the web using Ollama Cloud API.
 
-        Proxy:   POST http://127.0.0.1:51622/search  → full page content
-        Fallback: GET  http://127.0.0.1:8080/search  → snippets only
+        Step 1 (always):  POST https://ollama.com/api/web_search  → snippets
+        Step 2 (optional): POST https://ollama.com/api/web_fetch  → full page content
+                           Only triggered when fetch_content=True AND snippet
+                           looks insufficient (short or no content).
+
+        Returns a list of result dicts compatible with the rest of the code:
+            {number, title, url, snippet, full_content, has_full_content}
         """
         if not self.search_enabled:
             return None
 
-        # Clean query if malformed JSON arrived
+        # Clean malformed JSON queries (defensive — keeps old behaviour)
         if isinstance(query, str) and query.startswith('{'):
             try:
                 query_json = json.loads(query)
@@ -2824,60 +2844,84 @@ Your answer:"""
             except Exception:
                 pass
 
-        # ── Try 1: MCP proxy (full-content results) ──────────────────────
+        headers = {
+            "Authorization": f"Bearer {OLLAMA_API_KEY}",
+            "Content-Type":  "application/json",
+        }
+
+        # ── Step 1: Web search (snippets) ────────────────────────────────
         try:
-            response = requests.post(
-                "http://127.0.0.1:51622/search",
-                json={"query": query, "num_results": num_results},
-                timeout=35,   # slightly longer than proxy's own 30s MCP timeout
+            resp = requests.post(
+                OLLAMA_SEARCH_URL,
+                headers=headers,
+                json={"query": query, "max_results": min(num_results, 10)},
+                timeout=15,
             )
-            if response.status_code == 200:
-                results = response.json()
-                if results:
-                    self.get_logger().info(
-                        f"🔍 MCP Search (full content): '{query}' → {len(results)} results"
-                    )
-                    return results
-                self.get_logger().warn("MCP proxy returned empty results, trying SearXNG API")
-            else:
-                self.get_logger().warn(
-                    f"MCP proxy returned HTTP {response.status_code}, trying SearXNG API"
-                )
-        except requests.exceptions.ConnectionError:
-            # Proxy not running (igniter not up, or MCP failed to start)
-            self.get_logger().warn("MCP proxy not reachable, falling back to SearXNG API")
-        except Exception as e:
-            self.get_logger().error(f"MCP proxy error: {e}, falling back to SearXNG API")
-
-        # ── Try 2: Direct SearXNG HTTP (snippets) ────────────────────────
-        try:
-            response = requests.get(
-                f"{self.searxng_url}/search",
-                params={"q": query, "format": "json", "categories": "general"},
-                timeout=10,
-            )
-            response.raise_for_status()
-
-            results = response.json().get('results', [])[:num_results]
-            formatted = []
-            for i, r in enumerate(results, 1):
-                formatted.append({
-                    "number":           i,
-                    "title":            r.get('title', ''),
-                    "url":              r.get('url', ''),
-                    "snippet":          r.get('content', '')[:SEARCH_CONTENT_CHARS],
-                    "full_content":     "",
-                    "has_full_content": False,
-                })
-
-            self.get_logger().info(
-                f"🔍 SearXNG Search (snippets): '{query}' → {len(formatted)} results"
-            )
-            return formatted
-
-        except Exception as e:
-            self.get_logger().error(f"SearXNG API search failed: {e}")
+            resp.raise_for_status()
+            raw_results = resp.json().get("results", [])
+        except requests.exceptions.Timeout:
+            self.get_logger().error("❌ Ollama web_search timed out")
             return None
+        except Exception as e:
+            self.get_logger().error(f"❌ Ollama web_search error: {e}")
+            return None
+
+        if not raw_results:
+            self.get_logger().warn(f"⚠️  Ollama web_search returned no results for: {query}")
+            return None
+
+        # Normalise to internal format
+        formatted = []
+        for i, r in enumerate(raw_results, 1):
+            formatted.append({
+                "number":           i,
+                "title":            r.get("title", ""),
+                "url":              r.get("url", ""),
+                "snippet":          r.get("content", "")[:SEARCH_CONTENT_CHARS],
+                "full_content":     "",
+                "has_full_content": False,
+            })
+
+        self.get_logger().info(
+            f"🔍 Ollama search (snippet): '{query}' → {len(formatted)} results"
+        )
+
+        # ── Step 2: Web fetch (full content) — only when needed ──────────
+        # Fetch the first result when:
+        #   a) caller explicitly requests it, OR
+        #   b) auto-mode: snippet is very short (< 200 chars) suggesting thin content
+        SNIPPET_SHORT_THRESHOLD = 200
+        should_fetch = fetch_content or (
+            formatted and len(formatted[0]["snippet"]) < SNIPPET_SHORT_THRESHOLD
+        )
+
+        if should_fetch and formatted:
+            top_url = formatted[0]["url"]
+            try:
+                fetch_resp = requests.post(
+                    OLLAMA_FETCH_URL,
+                    headers=headers,
+                    json={"url": top_url},
+                    timeout=20,
+                )
+                if fetch_resp.status_code == 200:
+                    fetch_data = fetch_resp.json()
+                    full_text  = fetch_data.get("content", "")
+                    if full_text:
+                        # Cap at ~3000 chars to protect context window on 4B model
+                        formatted[0]["full_content"]     = full_text[:3000]
+                        formatted[0]["has_full_content"] = True
+                        self.get_logger().info(
+                            f"📄 Ollama web_fetch: {top_url[:60]}… ({len(full_text)} chars)"
+                        )
+                else:
+                    self.get_logger().warn(
+                        f"⚠️  Ollama web_fetch HTTP {fetch_resp.status_code} for {top_url}"
+                    )
+            except Exception as e:
+                self.get_logger().warn(f"⚠️  Ollama web_fetch failed ({e}), using snippet only")
+
+        return formatted
 
     # ═══════════════════════════════════════════════════════
     # SLACK INTEGRATION  (multi-channel routing)
