@@ -231,23 +231,6 @@
             box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
         }
         
-        .cheek-poke-zone::after {
-            content: '👈';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            font-size: 20px;
-            opacity: 0;
-            transition: all 0.3s ease;
-            pointer-events: none;
-        }
-        
-        .cheek-poke-zone:hover::after {
-            transform: translate(-50%, -50%) scale(1);
-            opacity: 0.8;
-        }
-        
         @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
             50% { transform: translateY(-15px) rotate(2deg); }
@@ -1621,6 +1604,50 @@
             transform: scale(1);
         }
         
+        /* THUMB UP/DOWN ANIMATION STYLES */
+        .thumb-animation {
+            position: absolute;
+            font-size: 2em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transform: scale(0);
+            animation: thumb-pop 1s ease-out forwards;
+        }
+        
+        .thumb-animation.up {
+            color: #ff69b4;
+            text-shadow: 0 0 20px #ff69b4, 0 0 40px #ff69b4;
+        }
+        
+        .thumb-animation.down {
+            color: #ff6b6b;
+            text-shadow: 0 0 20px #ff6b6b, 0 0 40px #ff6b6b;
+        }
+        
+        @keyframes thumb-pop {
+            0% {
+                opacity: 0;
+                transform: scale(0) translateY(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: scale(1.3) translateY(-20px) rotate(10deg);
+            }
+            40% {
+                transform: scale(1.1) translateY(-30px) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: scale(1.2) translateY(-40px) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8) translateY(-80px);
+            }
+        }
+        
         /* RL REWARD VISUAL FEEDBACK */
         .reward-feedback {
             position: fixed;
@@ -1697,8 +1724,8 @@
                 <div class="cheek-poke-zone left" id="pokeZoneLeft" title="Poke for bad response"></div>
                 <div class="cheek-poke-zone right" id="pokeZoneRight" title="Poke for bad response"></div>
                 
-                <div class="pet-counter" id="petCounter">Pets: 0</div>
-                <div class="poke-counter" id="pokeCounter">Pokes: 0</div>
+                <div class="pet-counter" id="petCounter">Reward: 0</div>
+                <div class="poke-counter" id="pokeCounter">Reward: 0</div>
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
@@ -1901,6 +1928,26 @@
         }
         createCircuitElements();
         
+        // Show thumb up/down animation with number
+        function showThumbAnimation(type, count, event) {
+            const thumb = document.createElement('div');
+            thumb.className = `thumb-animation ${type}`;
+            thumb.innerHTML = type === 'up' ? `👍 +${count}` : `👎 -${count}`;
+            
+            // Position near the click/touch
+            const rect = robot.getBoundingClientRect();
+            const x = event && event.clientX ? event.clientX - rect.left : rect.width / 2;
+            const y = event && event.clientY ? event.clientY - rect.top : rect.height / 2;
+            
+            // Add some randomness to position
+            const randomX = (Math.random() - 0.5) * 60;
+            thumb.style.left = (x + randomX) + 'px';
+            thumb.style.top = (y - 20) + 'px';
+            
+            robot.appendChild(thumb);
+            setTimeout(() => thumb.remove(), 1000);
+        }
+
         // Robot elements
         const robot = document.getElementById('robot');
         const petZone = document.getElementById('petZone');
@@ -2071,8 +2118,11 @@
             showRewardFeedback(-1, intensity);
             
             // Update counter
-            pokeCounter.textContent = `Pokes: ${pokeCount}`;
+            pokeCounter.textContent = `Reward: ${pokeCount}`;
             pokeCounter.classList.add('show');
+            
+            // Show thumb down animation
+            showThumbAnimation('down', pokeCount, e);
             
             // Create poke effect
             createPokeEffect(e);
@@ -2343,13 +2393,16 @@
             isBeingPetted = true;
             clearTimeout(petTimeout);
             
+            // Show thumb up animation
+            showThumbAnimation('up', petCount, e);
+
             createRipple(e);
             
             for (let i = 0; i < 3; i++) {
                 setTimeout(() => createPetHeart(e, i), i * 100);
             }
             
-            petCounter.textContent = `Pets: ${petCount}`;
+            petCounter.textContent = `Reward: ${petCount}`;
             petCounter.classList.add('show');
             
             setEmotion('petted', '💖');
