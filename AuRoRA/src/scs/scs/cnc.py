@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor
 from std_msgs.msg import String
 
 import requests
@@ -120,10 +120,10 @@ MAX_MESSAGES_PER_DAY = 200       # Max messages per day (safety limit)
 MAX_REFLECTIONS_LOAD = 20        # Still load 20 daily reflections
 MAX_HISTORY_STORAGE = 10000      # Store more on disk before RAG
 SUMMARIZE_THRESHOLD = 100        # Summarize after 100 messages
-MAX_RECENT_MESSAGES = 30      # Full capacity for 30B
+MAX_RECENT_MESSAGES = 30       # Ceiling; actual limit set by _get_max_messages() per model
 
 # Token budget per request (FOR 30B MODEL)
-MAX_REQUEST_TOKENS = 12000     # Use more of the 8192 context
+MAX_REQUEST_TOKENS = 12000     # Ceiling; trimmed to model's safe_context per request
 
 # Search result limits
 MAX_SEARCH_RESULTS = 5       # More search results
@@ -199,335 +199,6 @@ class ASCIIArtGenerator:
         }
         return arts.get(mood, arts['neutral'])
         
-class MCPClient:
-    """Client for Grace's custom MCP SearXNG server"""
-    
-    def __init__(self, server_command: str, logger):
-        self.server_command = server_command
-        self.logger = logger
-        self.process = None
-
-    def start(self):
-        """Start MCP server process"""
-        try:
-            self.process = subprocess.Popen(
-                [self.server_command],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            )
-            
-            # Wait a moment for server to start
-            import time
-            time.sleep(1)
-            
-            if self.process.poll() is None:
-                self.logger.info("✅ MCP server started")
-                return True
-            else:
-                self.logger.error(f"❌ MCP server failed to start")
-                return False
-                
-        except FileNotFoundError:
-            self.logger.error(f"❌ MCP server not found: {self.server_command}")
-            self.logger.error("   Install it: cd ~/AGi/mcp_server/searxng-mcp-server && sudo npm link")
-            return False
-        except Exception as e:
-            self.logger.error(f"❌ MCP server start failed: {e}")
-            return False
-    
-    def search_web(self, query: str, num_results: int = 10) -> list:
-        """
-        Search web with full content extraction
-        
-        Returns list of results with full_content field
-        """
-        if not self.process or self.process.poll() is not None:
-            return []
-        
-        try:
-            request = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {
-                    "name": "search_web",
-                    "arguments": {
-                        "query": query,
-                        "num_results": min(num_results, 20),
-                        "fetch_content": True
-                    }
-                }
-            }
-            
-            # Send request
-            self.process.stdin.write(json.dumps(request) + '\n')
-            self.process.stdin.flush()
-            
-            # Read response (with timeout)
-            import select
-            
-            timeout = 30
-            start_time = time.time()
-            response_line = ""
-            
-            while time.time() - start_time < timeout:
-                # Check if data available
-                if select.select([self.process.stdout], [], [], 1)[0]:
-                    line = self.process.stdout.readline()
-                    if line:
-                        try:
-                            response = json.loads(line)
-                            if response.get('id') == 1:
-                                return self._parse_response(response)
-                        except json.JSONDecodeError:
-                            # Skip non-JSON lines (debug output)
-                            continue
-            
-            self.logger.error("MCP search timeout")
-            return []
-            
-        except Exception as e:
-            self.logger.error(f"MCP search error: {e}")
-            return []
-    
-    def _parse_response(self, response: dict) -> list:
-        """Parse MCP response into results list (FIXED)"""
-        try:
-            if 'result' not in response:
-                self.logger.error("No 'result' in MCP response")
-                return []
-            
-            content = response['result'].get('content', [])
-            if not content:
-                self.logger.error("No 'content' in MCP result")
-                return []
-            
-            text = content[0].get('text', '')
-            if not text:
-                self.logger.error("Empty text in MCP content")
-                return []
-            
-            # Parse the markdown-formatted results
-            results = []
-            current_result = {}
-            in_content = False
-            content_lines = []
-            
-            for line in text.split('\n'):
-                line = line.strip()
-                
-                # New result starts with ## [number]
-                if line.startswith('## [') and ']' in line:
-                    # Save previous result
-                    if current_result and 'title' in current_result:
-                        if content_lines:
-                            current_result['full_content'] = '\n'.join(content_lines)
-                            current_result['has_full_content'] = True
-                        else:
-                            current_result['full_content'] = ""
-                            current_result['has_full_content'] = False
-                        
-                        # Ensure all required fields exist
-                        current_result.setdefault('url', '')
-                        current_result.setdefault('snippet', '')
-                        current_result.setdefault('engine', 'unknown')
-                        
-                        results.append(current_result)
-                    
-                    # Start new result
-                    parts = line.split(']', 1)
-                    number = parts[0].replace('## [', '').strip()
-                    title = parts[1].strip() if len(parts) > 1 else 'No title'
-                    current_result = {
-                        'number': len(results) + 1,
-                        'title': title,
-                        'url': '',
-                        'snippet': '',
-                        'engine': 'unknown',
-                        'full_content': '',
-                        'has_full_content': False
-                    }
-                    in_content = False
-                    content_lines = []
-                
-                elif line.startswith('**URL:**'):
-                    current_result['url'] = line.replace('**URL:**', '').strip()
-                
-                elif line.startswith('**Snippet:**'):
-                    current_result['snippet'] = line.replace('**Snippet:**', '').strip()
-                
-                elif line.startswith('**Source:**'):
-                    current_result['engine'] = line.replace('**Source:**', '').strip()
-                
-                elif line.startswith('**Full Content:**'):
-                    in_content = True
-                
-                elif line == '---':
-                    in_content = False
-                
-                elif in_content and line:
-                    content_lines.append(line)
-            
-            # Don't forget last result
-            if current_result and 'title' in current_result:
-                if content_lines:
-                    current_result['full_content'] = '\n'.join(content_lines)
-                    current_result['has_full_content'] = True
-                else:
-                    current_result['full_content'] = ""
-                    current_result['has_full_content'] = False
-                
-                # Ensure all required fields
-                current_result.setdefault('url', '')
-                current_result.setdefault('snippet', '')
-                current_result.setdefault('engine', 'unknown')
-                
-                results.append(current_result)
-            
-            self.logger.info(f"Parsed {len(results)} results from MCP response")
-            return results
-            
-        except Exception as e:
-            self.logger.error(f"Failed to parse MCP response: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return []
-    
-    def stop(self):
-        """Stop MCP server"""
-        if self.process:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except:
-                self.process.kill()
-            self.logger.info("🛑 MCP server stopped")
-
-class NatureSkillsClient:
-    """
-    Client for Nature Exploration Skills MCP Server
-    Uses native Ollama tool calling
-    """
-    
-    def __init__(self, server_path: str, logger):
-        self.server_path = server_path
-        self.logger = logger
-        self.process = None
-        self.tools_schema = []
-    
-    def start(self) -> bool:
-        """Start skills MCP server"""
-        try:
-            self.process = subprocess.Popen(
-                ["python3", self.server_path],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            )
-            
-            time.sleep(1)
-            
-            if self.process.poll() is None:
-                # Get list of tools
-                self._fetch_tools()
-                self.logger.info(f"✅ Nature skills server started ({len(self.tools_schema)} tools)")
-                return True
-            else:
-                self.logger.error("❌ Skills server failed to start")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"❌ Skills server error: {e}")
-            return False
-    
-    def _fetch_tools(self):
-        """Fetch available tools from MCP server"""
-        try:
-            request = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/list"
-            }
-            
-            self.process.stdin.write(json.dumps(request) + '\n')
-            self.process.stdin.flush()
-            
-            # Read response
-            import select
-            if select.select([self.process.stdout], [], [], 5)[0]:
-                line = self.process.stdout.readline()
-                response = json.loads(line)
-                
-                if 'result' in response:
-                    tools = response['result'].get('tools', [])
-                    # Convert MCP tools to Ollama format
-                    self.tools_schema = [
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": tool['name'],
-                                "description": tool['description'],
-                                "parameters": tool['inputSchema']
-                            }
-                        }
-                        for tool in tools
-                    ]
-                    self.logger.info(f"Loaded {len(self.tools_schema)} tools")
-        except Exception as e:
-            self.logger.error(f"Failed to fetch tools: {e}")
-    
-    def call_tool(self, name: str, arguments: dict) -> str:
-        """Call a tool and get result"""
-        try:
-            request = {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {
-                    "name": name,
-                    "arguments": arguments
-                }
-            }
-            
-            self.process.stdin.write(json.dumps(request) + '\n')
-            self.process.stdin.flush()
-            
-            # Read response with timeout
-            import select
-            if select.select([self.process.stdout], [], [], 10)[0]:
-                line = self.process.stdout.readline()
-                response = json.loads(line)
-                
-                if 'result' in response:
-                    content = response['result'].get('content', [])
-                    if content:
-                        return content[0].get('text', 'No result')
-            
-            return "Tool execution timeout"
-            
-        except Exception as e:
-            self.logger.error(f"Tool call error: {e}")
-            return f"Error: {str(e)}"
-    
-    def get_tools_for_ollama(self) -> list:
-        """Get tools in Ollama format"""
-        return self.tools_schema
-    
-    def stop(self):
-        """Stop skills server"""
-        if self.process:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except:
-                self.process.kill()
-            self.logger.info("🛑 Skills server stopped")
-
 # RAG via EmbeddingGemma (Ollama) — no HuggingFace, no numpy, no torch
 # Run: ollama pull embeddinggemma:300m-qat-q4_0
 from scs.simple_sqlite_rag import SimpleSQLiteRAG as SQLiteVectorRAG
@@ -863,16 +534,8 @@ class CNSBridge(Node):
     
     def __init__(self):
         super().__init__('cns_bridge')
-        # MCP Search Client (NEW)
         self.mcp_client = None
-        self.use_mcp = USE_MCP_SEARCH
-        if self.use_mcp:
-            self.mcp_client = MCPClient(MCP_SERVER_COMMAND, self.get_logger())
-            if self.mcp_client.start():
-                self.get_logger().info("✅ MCP search enabled (full content)")
-            else:
-                self.get_logger().warn("⚠️  MCP start failed, using API fallback")
-                self.use_mcp = False
+        self.use_mcp = False   # igniter owns the MCP process; we use SearXNG HTTP API directly
 
         # SQLite Vector RAG (EmbeddingGemma via Ollama)
         self.use_rag = True
@@ -908,18 +571,10 @@ class CNSBridge(Node):
             ollama_base_url=OLLAMA_BASE_URL
         )
         
-        # Nature Skills Server (NEW)
         self.skills_client = None
-        self.use_skills = True
-        if self.use_skills:
-            skills_server_path = str(Path.home() / "AGi" / "mcp_server" / "skills_server" / "nature_skills_server.py")
-            self.skills_client = NatureSkillsClient(skills_server_path, self.get_logger())
-            if self.skills_client.start():
-                self.get_logger().info("✅ Nature exploration skills enabled")
-            else:
-                self.get_logger().warn("⚠️  Skills server failed, disabling skills")
-                self.use_skills = False                
-                
+        self.use_skills = False   # igniter owns the skills process
+        self.get_logger().info("ℹ️  Skills managed by igniter (not started here)")
+                  
         # ═══════════════════════════════════════════════════
         # THREAD SAFETY
         # ═══════════════════════════════════════════════════
@@ -1149,8 +804,8 @@ class CNSBridge(Node):
         
         if any(x in model_lower for x in ["2b", "3b", "4b"]):
             return SAFE_CONTEXT_SIZES["2b-4b"]
-        elif "7b" in model_lower:
-            return SAFE_CONTEXT_SIZES["7b"]
+        elif any(x in model_lower for x in ["7b", "8b"]):
+            return SAFE_CONTEXT_SIZES["7b-8b"
         else:
             return SAFE_CONTEXT_SIZES["13b+"]
 
@@ -2372,62 +2027,29 @@ Your answer:"""
         return False
 
     def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS):
-        """
-        Search web with MCP (full content) or API fallback (snippets)
-        """
+        """Search via SearXNG HTTP API directly (MCP managed by igniter)"""
         if not self.search_enabled:
             return None
-        
-        # DEBUG: Log the actual query being sent
-        self.get_logger().info(f"📝 Search query type: {type(query)}, value: {query[:100]}")
-        
-        # Clean the query if it's malformed
+    
+        # Clean query if malformed JSON arrived
         if isinstance(query, str) and query.startswith('{'):
             try:
-                # If query is JSON, extract the text field
                 query_json = json.loads(query)
                 if 'text' in query_json:
                     query = query_json['text']
                     self.get_logger().warn(f"⚠️  Extracted query from JSON: {query}")
             except:
                 pass
-        
-        # Try MCP first
-        if self.use_mcp and self.mcp_client:
-            try:
-                results = self.mcp_client.search_web(query, num_results)
-                
-                if results:
-                    self.get_logger().info(
-                        f"🔍 MCP Search: '{query}' → {len(results)} results with full content"
-                    )
-                    return results
-                else:
-                    self.get_logger().warn("MCP returned no results, trying API")
-            except Exception as e:
-                self.get_logger().error(f"MCP search error: {e}")
-                import traceback
-                self.get_logger().error(traceback.format_exc())
-        
-        # Fallback to API
-        return self._web_search_api(query, num_results)
-
-    def _web_search_api(self, query: str, num_results: int):
-        """Original API search (fallback)"""
+    
         try:
             response = requests.get(
                 f"{self.searxng_url}/search",
-                params={
-                    "q": query,
-                    "format": "json",
-                    "categories": "general"
-                },
+                params={"q": query, "format": "json", "categories": "general"},
                 timeout=10
             )
             response.raise_for_status()
-            
+    
             results = response.json().get('results', [])[:num_results]
-            
             formatted = []
             for i, r in enumerate(results, 1):
                 formatted.append({
@@ -2438,12 +2060,12 @@ Your answer:"""
                     "full_content": "",
                     "has_full_content": False
                 })
-            
-            self.get_logger().info(f"🔍 API Search: '{query}' → {len(formatted)} results (snippets only)")
+    
+            self.get_logger().info(f"🔍 Search: '{query}' → {len(formatted)} results")
             return formatted
-            
+    
         except Exception as e:
-            self.get_logger().error(f"API search failed: {e}")
+            self.get_logger().error(f"Search failed: {e}")
             return None
 
     # ═══════════════════════════════════════════════════════
@@ -2528,12 +2150,13 @@ Latest reflection:
     def _increment_message_count(self):
         with self._message_count_lock:
             self.today_message_count += 1
-            # Persist so restarts don't lose count
-            count_file = Path.home() / '.grace_today_count.json'
-            count_file.write_text(json.dumps({
-                'date': date.today().isoformat(),
-                'count': self.today_message_count
-            }))
+            count = self.today_message_count   # grab value while locked
+        # Write to disk outside the lock
+        count_file = Path.home() / '.grace_today_count.json'
+        count_file.write_text(json.dumps({
+            'date': date.today().isoformat(),
+            'count': count
+        }))
 
     # ═══════════════════════════════════════════════════════
     # ROS CALLBACKS
@@ -2990,14 +2613,6 @@ FACTUAL RULE: Only state facts from search results. Never fabricate.
 
     def shutdown(self):
         """Graceful shutdown with cleanup"""
-        # Stop MCP server
-        if self.use_mcp and self.mcp_client:
-            self.mcp_client.stop()
-
-        # Stop skills server
-        if self.use_skills and self.skills_client:
-            self.skills_client.stop()
-
         self.get_logger().info("=" * 60)
         self.get_logger().info("GRACE - SHUTDOWN SEQUENCE")
         self.get_logger().info("=" * 60)
@@ -3054,7 +2669,7 @@ def main(args=None):
     node = CNSBridge()
     
     # Use MultiThreadedExecutor for concurrent processing
-    executor = MultiThreadedExecutor()
+    executor = SingleThreadedExecutor()
     executor.add_node(node)
     
     try:
