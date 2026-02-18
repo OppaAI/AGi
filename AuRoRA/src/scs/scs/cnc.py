@@ -73,7 +73,7 @@ except ImportError:
 # ═══════════════════════════════════════════════════════
 
 # Model configuration
-GCE = "ministral-3:3b-instruct-2512-q4_K_M"
+GCE = "huihui_ai/qwen3-vl-abliterated:4b-instruct-q4_K_M"
 
 # File paths
 CHAT_HISTORY_FILE = '.chat_history.json'
@@ -89,10 +89,10 @@ SEARXNG_URL = "http://127.0.0.1:8080"
 SLACK_BOT_TOKEN  = os.getenv('SLACK_BOT_TOKEN', '')
 SLACK_APP_TOKEN  = os.getenv('SLACK_APP_TOKEN', '')       # Socket Mode (two-way chat)
 # Channel routing — set these in .env to match your Slack workspace
-SLACK_CHAT_CHANNEL       = os.getenv('SLACK_CHAT_CHANNEL',       '#chat_with_robot')   # live chat + backup
-SLACK_DAILY_CHANNEL      = os.getenv('SLACK_DAILY_CHANNEL',      '#daily_reflection')  # daily reflection alerts
-SLACK_PROGRESS_CHANNEL   = os.getenv('SLACK_PROGRESS_CHANNEL',   '#project_progress')  # weekly/monthly/quarterly/yearly
-SLACK_ALERTS_CHANNEL     = os.getenv('SLACK_ALERTS_CHANNEL',     '#chat_with_robot')   # system errors → chat channel
+SLACK_CHAT_CHANNEL       = os.getenv('SLACK_CHAT_CHANNEL',       '#chat-with-robot')   # live chat + backup
+SLACK_DAILY_CHANNEL      = os.getenv('SLACK_DAILY_CHANNEL',      '#daily-reflection')  # daily reflection alerts
+SLACK_PROGRESS_CHANNEL   = os.getenv('SLACK_PROGRESS_CHANNEL',   '#project-progress')  # weekly/monthly/quarterly/yearly
+SLACK_ALERTS_CHANNEL     = os.getenv('SLACK_ALERTS_CHANNEL',     '#chat-with-robot')   # system errors → chat channel
 # Legacy fallback so existing send_slack_notification() calls still work
 SLACK_CHANNEL = SLACK_CHAT_CHANNEL
 
@@ -1826,7 +1826,7 @@ class CNSBridge(Node):
                         
                         if blog_result.get('deployed'):
                             self.get_logger().info(f"🚀 Deployed to: {blog_result['url']}")
-                            # Slack → #daily_reflection (short alert only)
+                            # Slack → #daily-reflection (short alert only)
                             if self.slack_enabled:
                                 self.send_slack_notification(
                                     f"🌙 Day {age_days} reflection live → {blog_result['url']}",
@@ -2896,7 +2896,7 @@ Your answer:"""
 
     def send_daily_summary_to_slack(self):
         """
-        End-of-day ping to #daily_reflection.
+        End-of-day ping to #daily-reflection.
         Slack role here: short alert + blog link. Full text lives on Hugo.
         """
         if not self.slack_enabled:
