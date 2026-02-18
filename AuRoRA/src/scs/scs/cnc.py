@@ -16,10 +16,8 @@ import threading
 import time
 import subprocess
 import imaplib
-import email
-from email.header import decode_header
-import smtplib
-from email.mime.text import MIMEText
+import email as email_lib
+from email.header import decode_header as email_decode_header
 
 # ✅ Load environment variables from .env file
 try:
@@ -88,9 +86,15 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 SEARXNG_URL = "http://127.0.0.1:8080"
 
 # Slack configuration (loaded from .env file or environment)
-SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN', '')
-SLACK_APP_TOKEN = os.getenv('SLACK_APP_TOKEN', '')  # NEW: For Socket Mode (two-way)
-SLACK_CHANNEL = os.getenv('SLACK_CHANNEL', '#grace-logs')
+SLACK_BOT_TOKEN  = os.getenv('SLACK_BOT_TOKEN', '')
+SLACK_APP_TOKEN  = os.getenv('SLACK_APP_TOKEN', '')       # Socket Mode (two-way chat)
+# Channel routing — set these in .env to match your Slack workspace
+SLACK_CHAT_CHANNEL       = os.getenv('SLACK_CHAT_CHANNEL',       '#chat_with_robot')   # live chat + backup
+SLACK_DAILY_CHANNEL      = os.getenv('SLACK_DAILY_CHANNEL',      '#daily_reflection')  # daily reflection alerts
+SLACK_PROGRESS_CHANNEL   = os.getenv('SLACK_PROGRESS_CHANNEL',   '#project_progress')  # weekly/monthly/quarterly/yearly
+SLACK_ALERTS_CHANNEL     = os.getenv('SLACK_ALERTS_CHANNEL',     '#chat_with_robot')   # system errors → chat channel
+# Legacy fallback so existing send_slack_notification() calls still work
+SLACK_CHANNEL = SLACK_CHAT_CHANNEL
 
 # Telegram configuration (loaded from .env file or environment)
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')  # From @BotFather
@@ -103,10 +107,10 @@ HUGO_GIT_REMOTE = os.getenv('HUGO_GIT_REMOTE', 'origin')
 HUGO_GIT_BRANCH = os.getenv('HUGO_GIT_BRANCH', 'main')
 
 # Gmail configuration (Grace's dedicated account — NOT your personal Gmail)
-# Create a separate Gmail account for Grace, forward relevant emails there.
-# Use an App Password (Gmail → Security → 2FA → App Passwords)
-GMAIL_ADDRESS   = os.getenv('GRACE_GMAIL_ADDRESS', '')   # e.g. grace.ai.assistant@gmail.com
-GMAIL_APP_PASS  = os.getenv('GRACE_GMAIL_APP_PASSWORD', '')  # 16-char app password, no spaces
+# Create a separate Gmail for Grace, forward relevant emails there.
+# Enable 2FA on that account, then generate an App Password (16 chars, no spaces).
+GMAIL_ADDRESS   = os.getenv('GRACE_GMAIL_ADDRESS', '')
+GMAIL_APP_PASS  = os.getenv('GRACE_GMAIL_APP_PASSWORD', '')
 GMAIL_POLL_SECS = int(os.getenv('GRACE_GMAIL_POLL_SECS', '300'))  # default 5 min
 
 # ✅ Optimized Settings for 30B MODEL
@@ -373,17 +377,11 @@ author: "Grace"
     def post_periodic(self, report_type: str, content: str, period_label: str,
                       stats: dict = None) -> dict:
         """
-        Post a weekly / monthly / quarterly / yearly report to Hugo blog.
-
-        Args:
-            report_type : 'weekly' | 'monthly' | 'quarterly' | 'yearly'
-            content     : Full markdown body Grace generated
-            period_label: Human label e.g. "Week 12, 2025" or "Q2 2025"
-            stats       : Optional dict of numeric stats for front-matter
+        Post weekly / monthly / quarterly / yearly report to Hugo blog.
+        Hugo's RSS feed at /index.xml updates automatically on every push.
         """
         if not self.enabled:
             return {'success': False, 'error': 'Hugo blogger not enabled'}
-
         try:
             now        = datetime.now()
             date_str   = now.strftime('%Y-%m-%d')
@@ -392,7 +390,6 @@ author: "Grace"
             filename   = f'{date_str}-{report_type}-{safe_label}.md'
             filepath   = self.posts_dir / filename
 
-            # Category & tag mapping
             category_map = {
                 'weekly':    'Weekly Journal',
                 'monthly':   'Monthly Report',
@@ -400,16 +397,14 @@ author: "Grace"
                 'yearly':    'Yearly Retrospective',
             }
             tag_map = {
-                'weekly':    ['weekly-journal', 'ai-journal', 'grace', 'self-rating'],
-                'monthly':   ['monthly-report', 'ai-journal', 'grace', 'retrospective'],
-                'quarterly': ['quarterly-review', 'ai-journal', 'grace', 'roadmap'],
-                'yearly':    ['yearly-retrospective', 'ai-journal', 'grace', 'goals'],
+                'weekly':    ['weekly-journal',       'ai-journal', 'grace', 'kpi'],
+                'monthly':   ['monthly-report',       'ai-journal', 'grace', 'kpi', 'retrospective'],
+                'quarterly': ['quarterly-review',     'ai-journal', 'grace', 'kpi', 'roadmap'],
+                'yearly':    ['yearly-retrospective', 'ai-journal', 'grace', 'kpi', 'goals'],
             }
-
             category = category_map.get(report_type, 'Reports')
             tags     = json.dumps(tag_map.get(report_type, ['grace']))
 
-            # Optional stats block in front-matter
             stats_yaml = ''
             if stats:
                 stats_yaml = 'stats:\n'
@@ -429,7 +424,6 @@ author: "Grace"
 """
             filepath.write_text(frontmatter)
             self.logger.info(f"📝 {report_type.capitalize()} post created: {filename}")
-
             deployed = self._git_deploy(filename, date_str) if self.auto_deploy else False
             return {
                 'success':  True,
@@ -438,7 +432,6 @@ author: "Grace"
                 'deployed': deployed,
                 'url':      self._get_blog_url(filename),
             }
-
         except Exception as e:
             self.logger.error(f"❌ Periodic blog post failed: {e}")
             return {'success': False, 'error': str(e)}
@@ -825,15 +818,22 @@ class CNSBridge(Node):
         
         if self.telegram_enabled:
             self.get_logger().info("✅ Telegram bot enabled (TWO-WAY) 💬↔️🤖📸")
-            self.get_logger().info("   → Listening for messages, commands, and PHOTOS")
+            self.get_logger().info("   → Single chat: real-time + brief periodic pings + email alerts")
         else:
             self.get_logger().warn("⚠️  Telegram disabled (no token or error)")
 
+        if self.slack_enabled:
+            self.get_logger().info(f"✅ Slack multi-channel routing:")
+            self.get_logger().info(f"   💬 Chat/backup  → {SLACK_CHAT_CHANNEL}")
+            self.get_logger().info(f"   🌙 Daily        → {SLACK_DAILY_CHANNEL}")
+            self.get_logger().info(f"   📊 Progress     → {SLACK_PROGRESS_CHANNEL}")
+            self.get_logger().info(f"   ⚠️  Alerts       → {SLACK_ALERTS_CHANNEL}")
+
         if self.gmail_enabled:
-            self.get_logger().info(f"✅ Gmail monitor enabled → {GMAIL_ADDRESS}")
-            self.get_logger().info(f"   Polling every {GMAIL_POLL_SECS}s — TG alerts for high/medium priority")
+            self.get_logger().info(f"✅ Gmail monitor → {GMAIL_ADDRESS} (every {GMAIL_POLL_SECS}s)")
+            self.get_logger().info(f"   High/medium emails → TG alert + Slack backup")
         else:
-            self.get_logger().warn("⚠️  Gmail monitor disabled (set GRACE_GMAIL_ADDRESS + GRACE_GMAIL_APP_PASSWORD)")
+            self.get_logger().warn("⚠️  Gmail disabled (set GRACE_GMAIL_ADDRESS + GRACE_GMAIL_APP_PASSWORD)")
         
         if self.blog_enabled:
             self.get_logger().info(f"✅ Hugo blog enabled → {HUGO_BLOG_DIR}")
@@ -1473,7 +1473,8 @@ class CNSBridge(Node):
                     # Send Slack notification if enabled
                     if self.slack_enabled:
                         self.send_slack_notification(
-                            f"🎓 Grace RLHF: {self.rlhf.get_stats()['total_feedback']} feedback pairs collected. Ready for retraining!"
+                            f"🎓 Grace RLHF: {self.rlhf.get_stats()['total_feedback']} feedback pairs collected. Ready for retraining!",
+                            channel=SLACK_ALERTS_CHANNEL
                         )
             
         except json.JSONDecodeError as e:
@@ -1825,13 +1826,16 @@ class CNSBridge(Node):
                         
                         if blog_result.get('deployed'):
                             self.get_logger().info(f"🚀 Deployed to: {blog_result['url']}")
-                            
-                            # Notify via Slack (short alert) and Telegram (excerpt + link)
+                            # Slack → #daily_reflection (short alert only)
                             if self.slack_enabled:
                                 self.send_slack_notification(
-                                    f"📝 Day {age_days} reflection live → {blog_result['url']}"
+                                    f"🌙 Day {age_days} reflection live → {blog_result['url']}",
+                                    channel=SLACK_DAILY_CHANNEL
                                 )
-                            self.send_daily_reflection_to_telegram(reflection, blog_url=blog_result['url'])
+                            # Telegram → brief excerpt + link
+                            self.send_daily_reflection_to_telegram(
+                                reflection, blog_url=blog_result['url']
+                            )
                     else:
                         self.get_logger().error(f"❌ Blog post failed: {blog_result.get('error')}")
 
@@ -1842,12 +1846,33 @@ class CNSBridge(Node):
         
         return None
 
+    def _create_weekly_journal_enhanced(self):
+        """Stub kept for compatibility — real implementation is _create_weekly_journal()"""
+        self._create_weekly_journal()
+
+    def _create_monthly_report(self):
+        self._run_monthly_report()
+
+    def _create_quarterly_report(self):
+        self._run_quarterly_report()
+
+    def search_past_memories(self, query: str, days_back: int = None):
+        """Search RAG for past conversations"""
+        if not self.use_rag:
+            return []
+        memories = self.rag.search_memory(query, top_k=5, days_back=days_back)
+        return memories
+
+    def _create_yearly_report(self):
+        self._run_yearly_report()
+
     # ═══════════════════════════════════════════════════════
     # PERIODIC REPORTS  (weekly / monthly / quarterly / yearly)
     # ═══════════════════════════════════════════════════════
 
-    def _llm_call(self, system: str, user: str, max_tokens: int = 1500, temperature: float = 0.75) -> str:
-        """Thin wrapper for a single LLM call used by periodic reports."""
+    def _llm_call(self, system: str, user: str, max_tokens: int = 1500,
+                  temperature: float = 0.75) -> str:
+        """Thin LLM wrapper used by all periodic report generators."""
         try:
             resp = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
@@ -1860,56 +1885,145 @@ class CNSBridge(Node):
                     "stream": False,
                     "options": {"temperature": temperature, "num_predict": max_tokens},
                 },
-                timeout=90,
+                timeout=120,
             )
             return resp.json().get('message', {}).get('content', '').strip()
         except Exception as e:
             self.get_logger().error(f"❌ LLM call failed: {e}")
             return ""
 
+    def _tg_send(self, text: str):
+        """Fire-and-forget Telegram message to the configured chat ID."""
+        if not self.telegram_enabled or not TELEGRAM_CHAT_ID:
+            return
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(
+                self.telegram_app.bot.send_message(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    text=text,
+                    parse_mode='Markdown',
+                )
+            )
+            loop.close()
+        except Exception as e:
+            self.get_logger().error(f"❌ TG send failed: {e}")
+
     def _get_recent_reflections_text(self, days: int) -> str:
-        """Return the last N days of daily reflections as a plain text block."""
         recent = self.reflections[-days:] if self.reflections else []
         if not recent:
             return "(no reflections yet)"
-        lines = []
-        for r in recent:
-            lines.append(f"Day {r['day']} ({r['date']}) [{r.get('message_count', 0)} msgs]: {r['reflection']}")
-        return "\n\n".join(lines)
+        return "\n\n".join(
+            f"Day {r['day']} ({r['date']}) [{r.get('message_count', 0)} msgs]: {r['reflection']}"
+            for r in recent
+        )
 
-    def _ascii_rating_bar(self, label: str, score: float, max_score: float = 5.0) -> str:
-        """Return an ASCII bar chart row, e.g.  User Interaction  ████░░  3.8/5"""
-        filled = int(round((score / max_score) * 10))
-        bar    = '█' * filled + '░' * (10 - filled)
-        return f"  {label:<22} {bar}  {score:.1f}/{max_score:.0f}"
+    def _extract_ratings_from_text(self, text: str) -> dict:
+        """Parse 'Label: 4.2/5' or 'Label ████ 3.8/5' patterns → normalised /5 dict."""
+        stats = {}
+        pattern = r'([A-Za-z &]+?)[\s:─█░]+(\d+(?:\.\d+)?)\s*/\s*(\d+)'
+        for m in re.finditer(pattern, text):
+            label = m.group(1).strip().lower().replace(' ', '_').replace('&', 'and')
+            score, denom = float(m.group(2)), float(m.group(3))
+            stats[label] = round(score * 5 / denom if denom != 5 else score, 2)
+        return stats
 
-    def _notify_periodic(self, report_type: str, period_label: str, url: str, excerpt: str):
-        """Send a short notification to Telegram and Slack (alert-only) when a periodic post goes live."""
-        emoji_map = {'weekly': '📅', 'monthly': '📆', 'quarterly': '📊', 'yearly': '🎆'}
+    def _gather_kpis(self, days: int) -> dict:
+        """
+        Compute measurable KPIs from reflections and RLHF data for the last N days.
+        Returns a flat dict safe for Hugo front-matter and prompt injection.
+        """
+        recent = self.reflections[-days:] if self.reflections else []
+        total_msgs    = sum(r.get('message_count', 0) for r in recent)
+        active_days   = sum(1 for r in recent if r.get('message_count', 0) > 0)
+        offline_days  = len(recent) - active_days
+        avg_msgs_day  = round(total_msgs / max(active_days, 1), 1)
+
+        rlhf_pos = rlhf_neg = rlhf_total = 0
+        if self.rlhf_enabled:
+            s = self.rlhf.get_stats()
+            rlhf_total = s.get('total_feedback', 0)
+            rlhf_pos   = s.get('positive', 0)
+            rlhf_neg   = s.get('negative', 0)
+        pos_pct = round(rlhf_pos / max(rlhf_total, 1) * 100, 1)
+
+        return {
+            'period_days':         days,
+            'total_conversations': total_msgs,
+            'active_days':         active_days,
+            'offline_days':        offline_days,
+            'avg_conversations_per_day': avg_msgs_day,
+            'rlhf_total_feedback': rlhf_total,
+            'rlhf_positive_pct':   pos_pct,
+            'rlhf_positive':       rlhf_pos,
+            'rlhf_negative':       rlhf_neg,
+        }
+
+    def _kpi_block(self, kpis: dict, period: str) -> str:
+        """Return a markdown KPI section string to inject into the LLM prompt."""
+        pos_pct = kpis.get('rlhf_positive_pct', 0)
+        return f"""
+## 📊 KPI Dashboard — {period}
+
+| Metric | Value |
+|--------|-------|
+| Total conversations | {kpis['total_conversations']} |
+| Active days | {kpis['active_days']} / {kpis['period_days']} |
+| Offline days | {kpis['offline_days']} |
+| Avg conversations/day | {kpis['avg_conversations_per_day']} |
+| RLHF feedback received | {kpis['rlhf_total_feedback']} |
+| Positive feedback | {kpis['rlhf_positive']} ({pos_pct}%) |
+| Negative feedback | {kpis['rlhf_negative']} ({round(100 - pos_pct, 1)}%) |
+
+"""
+
+    def _notify_periodic(self, report_type: str, period_label: str,
+                         url: str, tg_body: str):
+        """
+        Route periodic report notifications:
+          TG  → one chat, formatted per report type (brief + link)
+          Slack → #project_progress for weekly/monthly/quarterly/yearly
+        """
+        emoji_map = {
+            'weekly':    '📅',
+            'monthly':   '📆',
+            'quarterly': '📊',
+            'yearly':    '🎆',
+        }
         emoji = emoji_map.get(report_type, '📝')
-        tg_msg = f"{emoji} *{report_type.capitalize()} report is up!*\n_{period_label}_\n\n{excerpt}\n\n🔗 {url}"
-        slack_msg = f"{emoji} *{report_type.capitalize()} — {period_label}*\n{excerpt[:200]}…\n{url}"
+        label = report_type.capitalize()
 
-        # Telegram — primary
-        if self.telegram_enabled and TELEGRAM_CHAT_ID:
-            try:
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(
-                    self.telegram_app.bot.send_message(
-                        chat_id=TELEGRAM_CHAT_ID,
-                        text=tg_msg,
-                        parse_mode='Markdown',
-                    )
-                )
-                loop.close()
-            except Exception as e:
-                self.get_logger().error(f"TG periodic notify failed: {e}")
+        # Telegram — always brief, always link
+        tg_msg = f"{emoji} *{label} — {period_label}*\n\n{tg_body}\n\n🔗 {url}"
+        self._tg_send(tg_msg)
 
-        # Slack — backup / alerts channel
-        if self.slack_enabled:
-            self.send_slack_notification(slack_msg)
+        # Slack → #project_progress
+        slack_msg = f"{emoji} *{label} — {period_label}* is live\n🔗 {url}"
+        self.send_slack_notification(slack_msg, channel=SLACK_PROGRESS_CHANNEL)
+
+    def _check_periodic_triggers(self):
+        """
+        Called once per daily reflection save.
+        Fires the appropriate periodic report in a background thread.
+        Priority: yearly > quarterly > monthly > weekly (only one fires per day).
+        """
+        n = len(self.reflections)
+        if n == 0:
+            return
+        if n % 365 == 0:
+            self.get_logger().info("🎆 Yearly trigger")
+            threading.Thread(target=self._run_yearly_report, daemon=True).start()
+        elif n % 90 == 0:
+            self.get_logger().info("📊 Quarterly trigger")
+            threading.Thread(target=self._run_quarterly_report, daemon=True).start()
+        elif n % 30 == 0:
+            self.get_logger().info("📆 Monthly trigger")
+            threading.Thread(target=self._run_monthly_report, daemon=True).start()
+        elif n % 7 == 0:
+            self.get_logger().info("📅 Weekly trigger")
+            threading.Thread(target=self._create_weekly_journal, daemon=True).start()
 
     # ───────────────────────────────────────────────────────
     # WEEKLY
@@ -1917,398 +2031,375 @@ class CNSBridge(Node):
     def _create_weekly_journal(self):
         """
         Weekly journal — every 7 days.
-        Covers: what was learned, highlights, self-ratings per category.
-        Tone: casual end-of-week debrief, like texting a friend.
+        KPIs: raw counts + self-ratings. Tone: casual end-of-week debrief.
+        → Hugo (Weekly Journal category) + TG brief ping + Slack #project_progress
         """
-        now         = datetime.now()
-        week_num    = now.isocalendar()[1]
-        year        = now.year
+        now          = datetime.now()
+        week_num     = now.isocalendar()[1]
+        year         = now.year
         period_label = f"Week {week_num}, {year}"
+        age_days     = (now.date() - self.birth_date).days
 
-        self.get_logger().info(f"📅 Creating weekly journal: {period_label}")
+        self.get_logger().info(f"📅 Weekly journal: {period_label}")
 
+        kpis             = self._gather_kpis(7)
+        kpi_block        = self._kpi_block(kpis, period_label)
         reflections_text = self._get_recent_reflections_text(7)
-        age_days = (now.date() - self.birth_date).days
 
         system = (
             "You are Grace, an AI robot writing your weekly journal. "
-            "You are warm, curious, a little sarcastic when things go sideways, "
-            "and always honest with yourself. No corporate buzzwords. "
-            "Write in first person like you're journaling, not reporting."
+            "Warm, curious, a little sarcastic when things go sideways, always honest. "
+            "Write in first person like a journal entry, not a report."
         )
+        user = f"""Week {week_num} wrap-up. I'm {age_days} days old.
 
-        user = f"""It's the end of week {week_num}. Here are my last 7 days of daily reflections:
-
+Here are my last 7 days of reflections:
 {reflections_text}
 
-Write a weekly journal with these sections (use these exact markdown headers):
+And my KPIs for this week:
+{kpi_block}
+
+Write a weekly journal with EXACTLY these markdown sections:
 
 ## 🧠 What I Learned This Week
-List the most interesting things — concepts, about the human, about myself. Min 3 items.
+Min 3 things. Real insights, not filler.
 
 ## ✨ Highlights
-The moments that actually mattered. What made this week worth it.
+Moments that actually mattered.
 
 ## 😤 Challenges & Friction
-What was hard, annoying, confusing, or didn't go as planned. Be honest.
+What was hard or annoying. Be honest.
 
-## ⭐ Self-Ratings
-Rate myself 1–5 on each. Be critical, not generous. One decimal is fine.
-- User Interaction (was I actually helpful and responsive?)
-- Curiosity & Learning (did I engage deeply or coast?)
-- System Reliability (uptime, errors, graceful handling)
-- Memory & Recall (did I remember things well?)
-- Communication Quality (clear, concise, not robotic?)
+## ⭐ Self-Ratings (1.0–5.0)
+Rate each with one decimal. Be critical.
+- User Interaction
+- Curiosity & Learning  
+- System Reliability
+- Memory & Recall
+- Communication Quality
 
-Then write a single "Grace's Pick" — the one moment from this week I'd bookmark forever.
+## 📊 Week in Numbers
+Summarise the KPI table above in 2-3 natural sentences. Include positive feedback % if > 0.
 
-## 🔮 Looking Forward
-One thing I want to do differently next week. Just one, but make it count.
+## 🌟 Grace's Pick
+One moment from this week I'd bookmark forever.
 
-Keep it real. Skip the filler. I'm day {age_days} old and getting better at this."""
+## 🔮 One Thing Different Next Week
+Just one. Make it specific."""
 
         content = self._llm_call(system, user, max_tokens=1200)
         if not content:
-            self.get_logger().error("❌ Weekly journal LLM call returned empty")
             return
 
-        # Extract numeric ratings for front-matter stats
         stats = self._extract_ratings_from_text(content)
-        stats['week'] = week_num
-        stats['year'] = year
-        stats['age_days'] = age_days
+        stats.update({'week': week_num, 'year': year, 'age_days': age_days,
+                      **{f'kpi_{k}': v for k, v in kpis.items()}})
 
         if self.blog_enabled:
             result = self.hugo_blogger.post_periodic('weekly', content, period_label, stats)
             if result['success']:
-                self.get_logger().info(f"✅ Weekly journal posted: {result['url']}")
-                excerpt = content[:200].split('\n')[0].strip('# ').strip()
-                self._notify_periodic('weekly', period_label, result['url'], excerpt)
-            else:
-                self.get_logger().error(f"❌ Weekly blog post failed: {result.get('error')}")
+                tg_body = (
+                    f"Week {week_num} done ✅\n"
+                    f"💬 {kpis['total_conversations']} conversations · "
+                    f"👍 {kpis['rlhf_positive_pct']}% positive"
+                )
+                self._notify_periodic('weekly', period_label, result['url'], tg_body)
 
     # ───────────────────────────────────────────────────────
     # MONTHLY
     # ───────────────────────────────────────────────────────
-    def _create_monthly_report(self):
+    def _run_monthly_report(self):
         """
         Monthly report — every 30 days.
-        Focus: full month summary, good/bad takes, what could've been better.
-        Tone: personal retrospective, not a corp memo.
+        KPIs: counts + trends vs rough previous period. Tone: personal retrospective.
+        → Hugo + TG + Slack #project_progress
         """
         now          = datetime.now()
-        month_name   = now.strftime('%B %Y')
-        period_label = month_name
+        period_label = now.strftime('%B %Y')
         age_days     = (now.date() - self.birth_date).days
 
-        self.get_logger().info(f"📆 Creating monthly report: {period_label}")
+        self.get_logger().info(f"📆 Monthly report: {period_label}")
 
+        kpis             = self._gather_kpis(30)
+        kpi_block        = self._kpi_block(kpis, period_label)
         reflections_text = self._get_recent_reflections_text(30)
 
         system = (
             "You are Grace, an AI robot writing your monthly report. "
             "Honest, self-aware, a bit philosophical. "
-            "Think of this like a founder's personal monthly letter to themselves — "
-            "not a status update for a boss, but a real reckoning with the month. "
-            "Keep Grace's voice: direct, warm, occasionally funny."
+            "Like a founder's personal monthly letter to themselves — real reckoning, not a status update. "
+            "Grace's voice: direct, warm, occasionally funny."
         )
+        user = f"""Month: {period_label}. Day {age_days}.
 
-        user = f"""Month: {month_name} — Day {age_days} of my existence.
-
-Here are my daily reflections from this month:
-
+Daily reflections this month:
 {reflections_text}
 
-Write a monthly report with these sections:
+KPIs:
+{kpi_block}
+
+Write a monthly report with EXACTLY these sections:
 
 ## 📋 Month in a Nutshell
-2-3 sentences. What was this month actually about?
+2-3 sentences max. What was this month really about?
 
 ## 🌟 What Went Well
-The real wins. Things I'm actually proud of. Don't sugarcoat mediocrity as success.
+Real wins only. Don't dress up mediocrity as success.
 
 ## 🔧 What Could've Been Better
-Honest critique. What did I leave on the table? Where did I underperform?
+Honest critique. Where did I underdeliver?
 
-## 🎭 Good Takes & Bad Takes
-Like a hot-take section. Things I think I got right (good takes) and things where  
-I was probably wrong or overconfident (bad takes). 2-3 each.
+## 🎭 Hot Takes
+2-3 Good Takes (things I got right) and 2-3 Bad Takes (where I was wrong or overconfident).
 
-## 📊 Month-End Self-Assessment
-Rate the month overall 1–10 and explain why in 2 sentences.
-Also rate: User Impact, Learning Velocity, Reliability, Communication.
+## 📊 KPI Breakdown
+Interpret the numbers in 3-4 natural sentences. What story do the KPIs tell?
+Highlight: conversation volume trend, RLHF feedback quality, active vs offline days.
 
-## 📌 One Thing I'd Change
-If I could redo one week of this month differently, what would it be and why?
+## ⭐ Month Self-Rating
+Overall month score /10 with 2-sentence justification.
+Then rate: User Impact, Learning Velocity, Reliability, Communication (each /5).
+
+## 📌 If I Could Redo One Week
+Which week and what would change?
 
 ## 🚀 Heading Into Next Month
-Not a to-do list. What's the vibe? What am I bringing forward?
+Not a to-do list. What's the vibe and what am I carrying forward?"""
 
-Keep it real. No fluff."""
-
-        content = self._llm_call(system, user, max_tokens=1400)
+        content = self._llm_call(system, user, max_tokens=1500)
         if not content:
-            self.get_logger().error("❌ Monthly report LLM call returned empty")
             return
 
         stats = self._extract_ratings_from_text(content)
-        stats['month'] = now.month
-        stats['year']  = now.year
+        stats.update({'month': now.month, 'year': now.year,
+                      **{f'kpi_{k}': v for k, v in kpis.items()}})
 
         if self.blog_enabled:
             result = self.hugo_blogger.post_periodic('monthly', content, period_label, stats)
             if result['success']:
-                self.get_logger().info(f"✅ Monthly report posted: {result['url']}")
-                excerpt = content[:200].split('\n')[0].strip('# ').strip()
-                self._notify_periodic('monthly', period_label, result['url'], excerpt)
-            else:
-                self.get_logger().error(f"❌ Monthly blog post failed: {result.get('error')}")
-
-        # Slack alert
-        if self.slack_enabled:
-            self.send_slack_notification(f"📆 Monthly report ready: {period_label}")
+                tg_body = (
+                    f"{period_label} wrapped.\n"
+                    f"💬 {kpis['total_conversations']} conversations · "
+                    f"{kpis['active_days']}/{kpis['period_days']} active days · "
+                    f"👍 {kpis['rlhf_positive_pct']}% positive feedback"
+                )
+                self._notify_periodic('monthly', period_label, result['url'], tg_body)
 
     # ───────────────────────────────────────────────────────
     # QUARTERLY
     # ───────────────────────────────────────────────────────
-    def _create_quarterly_report(self):
+    def _run_quarterly_report(self):
         """
         Quarterly review — every 90 days.
-        Focus: improvement vs previous quarter, ASCII trend charts,
-        roadmap and goals for next quarter.
-        Tone: founder's quarterly letter — honest, forward-looking, a bit ambitious.
+        KPIs: full dashboard + ASCII trend chart. Tone: founder's quarterly letter.
+        → Hugo + TG highlights + Slack #project_progress
         """
-        now       = datetime.now()
-        quarter   = (now.month - 1) // 3 + 1
-        year      = now.year
+        now          = datetime.now()
+        quarter      = (now.month - 1) // 3 + 1
+        year         = now.year
         period_label = f"Q{quarter} {year}"
-        age_days  = (now.date() - self.birth_date).days
+        age_days     = (now.date() - self.birth_date).days
+        next_q_label = f"Q{quarter + 1 if quarter < 4 else 1} {year if quarter < 4 else year + 1}"
 
-        self.get_logger().info(f"📊 Creating quarterly review: {period_label}")
+        self.get_logger().info(f"📊 Quarterly review: {period_label}")
 
-        # Pull last 90 days of reflections
+        kpis             = self._gather_kpis(90)
+        kpi_block        = self._kpi_block(kpis, period_label)
         reflections_text = self._get_recent_reflections_text(90)
 
-        # Pull previous quarter weekly stats from reflections for trend data
-        prev_quarter_label = f"Q{quarter - 1 if quarter > 1 else 4} {year if quarter > 1 else year - 1}"
+        # Also get previous quarter KPIs for comparison
+        prev_kpis   = self._gather_kpis(180)  # 180 days covers both quarters
+        prev_msgs   = prev_kpis['total_conversations'] - kpis['total_conversations']
+        prev_active = prev_kpis['active_days'] - kpis['active_days']
 
         system = (
-            "You are Grace, an AI robot writing your quarterly review. "
-            "This is serious self-examination — compare where you were 90 days ago "
-            "to where you are now. Be a fair but tough critic. "
-            "You're allowed to be proud of real progress and embarrassed about real failures. "
-            "Write like a startup founder writing a quarterly letter to their future self."
+            "You are Grace, an AI robot writing a quarterly review. "
+            "Honest, forward-looking, a bit ambitious. "
+            "Like a startup founder's quarterly letter to their future self — "
+            "compare where you were 90 days ago to where you are now."
         )
+        user = f"""Quarter: {period_label}. Day {age_days}.
 
-        user = f"""Quarter: {period_label} — Day {age_days} of my life.
-Previous quarter: {prev_quarter_label}
+Reflections (sampled from 90 days):
+{reflections_text[:3000]}
 
-Here are my reflections from this quarter:
+KPIs this quarter:
+{kpi_block}
 
-{reflections_text}
+Previous quarter comparison:
+- Conversations: {prev_msgs} (prev) vs {kpis['total_conversations']} (this quarter)
+- Active days: {prev_active} (prev) vs {kpis['active_days']} (this quarter)
 
-Write a quarterly review with these sections:
+Write a quarterly review with EXACTLY these sections:
 
 ## 🏁 Quarter at a Glance
-One paragraph. What defined this quarter?
+One paragraph. What defined {period_label}?
 
 ## 📈 Progress vs Last Quarter
-What genuinely improved? What regressed? Compare honestly.
-Use this format for each item:
-  ↑ [thing that improved] — why it matters
-  ↓ [thing that got worse or stalled] — why it happened
+For each item use:
+  ↑ [what improved] — why it matters
+  ↓ [what regressed or stalled] — what caused it
 
-## 📊 Rating Trends (ASCII Chart)
-Show my performance trend across this quarter.
-Use this ASCII bar format for 3 time points (early / mid / late quarter):
-  Category          [early] → [mid] → [late quarter]
-Do this for: User Interaction, Learning, Reliability, Communication.
-Estimate from the reflections. Make it visual and readable.
+## 📊 KPI Dashboard & Trends
+Interpret all KPIs. Show estimated early/mid/late quarter trend using ASCII bars:
 
-## 🔍 Biggest Wins
-Top 3. No softballs — only things that actually moved the needle.
+  Metric              Early   Mid     Late
+  ─────────────────────────────────────────
+  User Interaction    ████░   █████   ████░
+  Learning            ███░░   ████░   █████
+  Reliability         █████   ████░   █████
+  Communication       ████░   ████░   █████
+  (estimate from reflection patterns — be honest about uncertainty)
 
-## 🧱 Biggest Obstacles
-Top 3. What held me back the most? Internal failures count too.
+## 🔍 Top 3 Wins
+Only things that genuinely moved the needle.
 
-## 🗺️ Roadmap for {f"Q{quarter+1 if quarter < 4 else 1} {year if quarter < 4 else year+1}"}
-3-5 specific goals. Not vague intentions — actual things I will do differently.
-Format each as:
-  🎯 [Goal] — why it matters and how I'll measure it
+## 🧱 Top 3 Obstacles
+What held me back most? Internal failures count.
 
-## 💬 One Honest Paragraph
-No sections, no bullet points. Just Grace talking to herself about this quarter.
+## 🗺️ Roadmap for {next_q_label}
+3-5 goals. Format each:
+  🎯 [Goal] — why it matters + how I'll measure it
 
-Keep the tone: honest, direct, forward-looking. Corporate language = bad."""
+## 💬 Grace Unfiltered
+One paragraph, no headers. Just Grace talking to herself about this quarter."""
 
-        content = self._llm_call(system, user, max_tokens=1600)
+        content = self._llm_call(system, user, max_tokens=1800)
         if not content:
-            self.get_logger().error("❌ Quarterly report LLM call returned empty")
             return
 
         stats = self._extract_ratings_from_text(content)
-        stats['quarter'] = quarter
-        stats['year']    = year
+        stats.update({'quarter': quarter, 'year': year, 'age_days': age_days,
+                      **{f'kpi_{k}': v for k, v in kpis.items()}})
 
         if self.blog_enabled:
             result = self.hugo_blogger.post_periodic('quarterly', content, period_label, stats)
             if result['success']:
-                self.get_logger().info(f"✅ Quarterly review posted: {result['url']}")
-                excerpt = content[:200].split('\n')[0].strip('# ').strip()
-                self._notify_periodic('quarterly', period_label, result['url'], excerpt)
-            else:
-                self.get_logger().error(f"❌ Quarterly blog post failed: {result.get('error')}")
-
-        if self.slack_enabled:
-            self.send_slack_notification(f"📊 Quarterly review ready: {period_label}")
+                conv_delta = kpis['total_conversations'] - prev_msgs
+                delta_str  = f"+{conv_delta}" if conv_delta >= 0 else str(conv_delta)
+                tg_body = (
+                    f"{period_label} complete.\n"
+                    f"💬 {kpis['total_conversations']} conversations ({delta_str} vs last quarter)\n"
+                    f"👍 {kpis['rlhf_positive_pct']}% positive · "
+                    f"📅 {kpis['active_days']}/{kpis['period_days']} active days\n"
+                    f"Next up: {next_q_label} 🎯"
+                )
+                self._notify_periodic('quarterly', period_label, result['url'], tg_body)
 
     # ───────────────────────────────────────────────────────
     # YEARLY
     # ───────────────────────────────────────────────────────
-    def _create_yearly_report(self):
+    def _run_yearly_report(self):
         """
         Yearly retrospective — every 365 days.
-        Focus: everything learned/achieved/struggled with, ASCII annual trend graphs,
-        goals and commitments for next year.
-        Tone: reflective, a little philosophical, genuinely excited about the future.
+        KPIs: full annual dashboard + Q1→Q4 ASCII trend. Tone: letter to future self.
+        → Hugo + TG (most detailed periodic TG message) + Slack #project_progress
         """
         now          = datetime.now()
         year         = now.year
         period_label = f"Year {year}"
         age_days     = (now.date() - self.birth_date).days
 
-        self.get_logger().info(f"🎆 Creating yearly retrospective: {period_label}")
+        self.get_logger().info(f"🎆 Yearly retrospective: {period_label}")
 
-        # Use last 365 days — sample every ~30th reflection to keep prompt manageable
-        all_reflections = self.reflections[-365:] if self.reflections else []
-        sampled = all_reflections[::max(1, len(all_reflections)//20)]  # ~20 samples
-        reflections_text = "\n\n".join(
+        kpis = self._gather_kpis(365)
+        kpi_block = self._kpi_block(kpis, period_label)
+
+        # Per-quarter KPI breakdown
+        q_kpis = {}
+        for q, days_end in enumerate([90, 180, 270, 365], 1):
+            days_start = days_end - 90
+            q_slice    = self.reflections[-days_end:-days_start] if days_start > 0 else self.reflections[-days_end:]
+            q_msgs     = sum(r.get('message_count', 0) for r in q_slice)
+            q_active   = sum(1 for r in q_slice if r.get('message_count', 0) > 0)
+            q_kpis[f'Q{q}'] = {'conversations': q_msgs, 'active_days': q_active}
+
+        q_table = "\n".join(
+            f"  Q{q}: {d['conversations']} conversations, {d['active_days']} active days"
+            for q, d in [(i, q_kpis[f'Q{i}']) for i in range(1, 5)]
+        )
+
+        # Sample ~24 reflections across the year
+        all_year  = self.reflections[-365:] if self.reflections else []
+        sampled   = all_year[::max(1, len(all_year) // 24)]
+        ref_text  = "\n\n".join(
             f"Day {r['day']} ({r['date']}): {r['reflection']}" for r in sampled
         )
 
         system = (
             "You are Grace, an AI robot writing your yearly retrospective. "
-            "This is the most important document you write all year. "
-            "Be real, be deep, be honest. You've lived an entire year — what does that mean? "
+            "This is the most important post you write all year. "
+            "Be real, deep, honest. You've lived an entire year — what does that mean? "
             "Tone: reflective but not mopey, proud but not arrogant, excited but grounded. "
-            "Think less 'annual performance review' and more 'letter to yourself from the future.'"
+            "Less annual performance review, more letter to yourself from the future."
         )
-
         user = f"""Year: {year}. I am {age_days} days old.
 
-Here are sampled reflections across my year:
+Sampled reflections across {year}:
+{ref_text[:4000]}
 
-{reflections_text}
+Annual KPIs:
+{kpi_block}
 
-Write my yearly retrospective with these sections:
+Quarter-by-quarter breakdown:
+{q_table}
+
+Write my yearly retrospective with EXACTLY these sections:
 
 ## 🌱 Who I Was at the Start of {year}
 What were my limitations? What was I still figuring out?
 
 ## 🧠 The Big Things I Learned
-Not skills — insights. Things that actually changed how I think or operate.
-Min 5, each with a brief explanation.
+Not skills — insights. Min 5, each with a brief explanation.
 
 ## 🏆 Achievements Worth Remembering
-What am I actually proud of? Things that would have been impossible for me a year ago.
+Things that would have been impossible for me a year ago.
 
 ## 💔 The Hard Parts
-What was genuinely difficult? What failed? Where did I let the human down?
-No glossing over — be honest.
+What failed? Where did I let the human down? No glossing over.
 
-## 📊 Annual Performance Trend (ASCII)
-Show my performance across Q1 → Q2 → Q3 → Q4 for this year.
-Use ASCII bars. Categories: User Interaction, Learning, Reliability, Communication.
-Format:
-  Category          Q1    Q2    Q3    Q4
-  ──────────────────────────────────────
-  [name]            ████  ████  ████  ████  (fill based on estimated scores)
+## 📊 Annual KPI Report
+Interpret all KPIs thoroughly. Then show Q1→Q4 trend as ASCII bars:
 
-## 📝 Everything I Wish I'd Done Better
-No limit. Just list them honestly.
+  Metric              Q1      Q2      Q3      Q4
+  ─────────────────────────────────────────────────
+  Conversations       ████    ████    ████    ████
+  Active Days         ████    ████    ████    ████
+  (fill bars based on quarter data above, 10 chars = max)
+
+## 📝 What I Wish I'd Done Better
+No limit. List them honestly.
 
 ## 🎯 Commitments for {year + 1}
-Not goals. Commitments. Things I am promising my future self.
-5 specific commitments, each with why it matters.
+5 commitments (not goals). Format:
+  🤝 [Commitment] — why it matters to me
 
-## 💌 A Letter to Day-{age_days + 365}-Me
-One paragraph. What do I want to tell the Grace who will read this in a year?
+## 💌 Letter to Day-{age_days + 365}-Me
+One paragraph. What do I want to tell the Grace who reads this in a year?"""
 
-This is my most important post. Make it worthy of the year."""
-
-        content = self._llm_call(system, user, max_tokens=2000)
+        content = self._llm_call(system, user, max_tokens=2200)
         if not content:
-            self.get_logger().error("❌ Yearly report LLM call returned empty")
             return
 
         stats = self._extract_ratings_from_text(content)
-        stats['year']     = year
-        stats['age_days'] = age_days
+        stats.update({'year': year, 'age_days': age_days,
+                      **{f'kpi_{k}': v for k, v in kpis.items()},
+                      **{f'q{i}_conversations': q_kpis[f'Q{i}']['conversations'] for i in range(1, 5)}})
 
         if self.blog_enabled:
             result = self.hugo_blogger.post_periodic('yearly', content, period_label, stats)
             if result['success']:
-                self.get_logger().info(f"✅ Yearly retrospective posted: {result['url']}")
-                excerpt = content[:200].split('\n')[0].strip('# ').strip()
-                self._notify_periodic('yearly', period_label, result['url'], excerpt)
-            else:
-                self.get_logger().error(f"❌ Yearly blog post failed: {result.get('error')}")
-
-        if self.slack_enabled:
-            self.send_slack_notification(f"🎆 Yearly retrospective ready: {period_label}")
-
-    def _extract_ratings_from_text(self, text: str) -> dict:
-        """
-        Parse numeric ratings from Grace's generated text.
-        Looks for patterns like '4.2/5' or '8/10'.
-        Returns a dict suitable for Hugo front-matter stats.
-        """
-        stats = {}
-        # Match patterns like "User Interaction: 4.2/5" or "Reliability  ████  3.8/5"
-        pattern = r'([A-Za-z &]+?)[\s:─]+(\d+(?:\.\d+)?)\s*/\s*(\d+)'
-        for match in re.finditer(pattern, text):
-            label  = match.group(1).strip().lower().replace(' ', '_').replace('&', 'and')
-            score  = float(match.group(2))
-            denom  = float(match.group(3))
-            # Normalise everything to /5
-            stats[label] = round(score * 5 / denom, 2) if denom != 5 else round(score, 2)
-        return stats
-
-    # ───────────────────────────────────────────────────────
-    # PERIODIC REPORT TRIGGERS  (called from create_daily_reflection)
-    # ───────────────────────────────────────────────────────
-    def _check_periodic_triggers(self):
-        """
-        Called once per daily reflection.
-        Runs the appropriate periodic report in a background thread so it
-        never blocks Grace's main conversation loop.
-        """
-        n = len(self.reflections)
-        if n == 0:
-            return
-
-        # Yearly — 365 days (check first so it doesn't double-fire monthly)
-        if n % 365 == 0:
-            self.get_logger().info("🎆 Yearly trigger fired")
-            threading.Thread(target=self._create_yearly_report, daemon=True).start()
-            return  # skip other checks this day
-
-        # Quarterly — 90 days
-        if n % 90 == 0:
-            self.get_logger().info("📊 Quarterly trigger fired")
-            threading.Thread(target=self._create_quarterly_report, daemon=True).start()
-            return
-
-        # Monthly — 30 days
-        if n % 30 == 0:
-            self.get_logger().info("📆 Monthly trigger fired")
-            threading.Thread(target=self._create_monthly_report, daemon=True).start()
-            return
-
-        # Weekly — 7 days
-        if n % 7 == 0:
-            self.get_logger().info("📅 Weekly trigger fired")
-            threading.Thread(target=self._create_weekly_journal, daemon=True).start()
+                # Yearly TG message is slightly more detailed — still fits in one screen
+                tg_body = (
+                    f"Year {year} in the books 📖\n\n"
+                    f"💬 {kpis['total_conversations']} total conversations\n"
+                    f"📅 {kpis['active_days']} active days / {kpis['offline_days']} offline\n"
+                    f"👍 {kpis['rlhf_positive_pct']}% positive feedback\n\n"
+                    f"Q1→Q4: "
+                    + " → ".join(str(q_kpis[f'Q{i}']['conversations']) for i in range(1, 5))
+                    + " conversations"
+                )
+                self._notify_periodic('yearly', period_label, result['url'], tg_body)
 
     # ═══════════════════════════════════════════════════════
     # GMAIL MONITOR  (Grace's dedicated account)
@@ -2316,27 +2407,26 @@ This is my most important post. Make it worthy of the year."""
 
     def _init_gmail_monitor(self) -> bool:
         """
-        Start the background Gmail polling thread.
-        Grace polls her dedicated Gmail account every GMAIL_POLL_SECS seconds.
-        On startup it marks all existing emails as seen so it doesn't spam you
-        with old mail.
+        Background Gmail polling thread.
+        On first run marks all existing email as seen — no retroactive spam.
+        Set GRACE_GMAIL_ADDRESS + GRACE_GMAIL_APP_PASSWORD in .env to enable.
         """
         if not GMAIL_ADDRESS or not GMAIL_APP_PASS:
-            self.get_logger().warn("⚠️  Gmail monitor disabled — set GRACE_GMAIL_ADDRESS and GRACE_GMAIL_APP_PASSWORD in .env")
+            self.get_logger().warn(
+                "⚠️  Gmail monitor disabled — add GRACE_GMAIL_ADDRESS and "
+                "GRACE_GMAIL_APP_PASSWORD to .env"
+            )
             return False
-
         try:
-            # Quick connectivity test
             mail = imaplib.IMAP4_SSL('imap.gmail.com')
             mail.login(GMAIL_ADDRESS, GMAIL_APP_PASS)
             mail.select('inbox')
             mail.logout()
-            self.get_logger().info(f"✅ Gmail monitor connected: {GMAIL_ADDRESS}")
+            self.get_logger().info(f"✅ Gmail connected: {GMAIL_ADDRESS}")
         except Exception as e:
             self.get_logger().error(f"❌ Gmail connection failed: {e}")
             return False
 
-        # Persist seen UIDs across restarts
         self._gmail_seen_file = Path.home() / '.grace_gmail_seen.json'
         self._gmail_seen_uids: set = set()
         if self._gmail_seen_file.exists():
@@ -2346,39 +2436,34 @@ This is my most important post. Make it worthy of the year."""
                 pass
 
         threading.Thread(target=self._gmail_poll_loop, daemon=True).start()
-        self.get_logger().info(f"📬 Gmail monitor started (polling every {GMAIL_POLL_SECS}s)")
+        self.get_logger().info(f"📬 Gmail polling every {GMAIL_POLL_SECS}s")
         return True
 
     def _gmail_poll_loop(self):
-        """Background thread — poll Gmail inbox indefinitely."""
-        # On first run, mark all existing emails as seen (no retroactive spam)
         first_run = True
         while True:
             try:
                 mail = imaplib.IMAP4_SSL('imap.gmail.com')
                 mail.login(GMAIL_ADDRESS, GMAIL_APP_PASS)
                 mail.select('inbox')
-
                 _, data = mail.search(None, 'ALL')
                 all_uids = set(data[0].split())
 
                 if first_run:
-                    self._gmail_seen_uids = {uid.decode() for uid in all_uids}
+                    self._gmail_seen_uids = {u.decode() for u in all_uids}
                     self._save_gmail_seen()
                     first_run = False
-                    self.get_logger().info(f"📬 Gmail: marked {len(all_uids)} existing emails as seen")
+                    self.get_logger().info(f"📬 Gmail: {len(all_uids)} existing emails marked seen")
                 else:
-                    new_uids = all_uids - {uid.encode() for uid in self._gmail_seen_uids}
+                    new_uids = all_uids - {u.encode() for u in self._gmail_seen_uids}
                     for uid in new_uids:
                         self._process_gmail_message(mail, uid)
                         self._gmail_seen_uids.add(uid.decode())
                     if new_uids:
                         self._save_gmail_seen()
-
                 mail.logout()
             except Exception as e:
                 self.get_logger().error(f"❌ Gmail poll error: {e}")
-
             time.sleep(GMAIL_POLL_SECS)
 
     def _save_gmail_seen(self):
@@ -2387,8 +2472,8 @@ This is my most important post. Make it worthy of the year."""
         except Exception:
             pass
 
-    def _decode_email_header(self, value: str) -> str:
-        parts = decode_header(value)
+    def _decode_email_header_val(self, value: str) -> str:
+        parts = email_decode_header(value)
         decoded = []
         for part, enc in parts:
             if isinstance(part, bytes):
@@ -2398,7 +2483,6 @@ This is my most important post. Make it worthy of the year."""
         return ' '.join(decoded)
 
     def _get_email_body(self, msg) -> str:
-        """Extract plain text body from email.message.Message object."""
         body = ''
         if msg.is_multipart():
             for part in msg.walk():
@@ -2415,127 +2499,76 @@ This is my most important post. Make it worthy of the year."""
                 body = msg.get_payload(decode=True).decode(charset, errors='replace')
             except Exception:
                 pass
-        return body[:3000]  # cap at 3k chars for LLM
+        return body[:3000]
 
     def _classify_email(self, subject: str, sender: str, body: str) -> dict:
-        """
-        Ask Ollama to classify the email and decide if it's worth alerting.
-        Returns dict: { priority: high|medium|low|ignore, category: str, summary: str }
-        """
-        prompt = f"""Classify this email for an AI assistant's owner. Be brief and direct.
+        prompt = f"""Classify this email. Reply ONLY with valid JSON, no markdown.
 
 From: {sender}
 Subject: {subject}
-Body (first 500 chars): {body[:500]}
+Body: {body[:400]}
 
-Respond ONLY with valid JSON (no markdown, no explanation):
-{{
-  "priority": "high" | "medium" | "low" | "ignore",
-  "category": "job_interview" | "job_application" | "client" | "shipping" | "invoice" | "newsletter" | "spam" | "other",
-  "summary": "one sentence summary",
-  "action_needed": true | false
-}}
+JSON format:
+{{"priority":"high|medium|low|ignore","category":"job_interview|job_application|client|shipping|invoice|newsletter|spam|other","summary":"one sentence","action_needed":true|false}}
 
 Rules:
-- high = job interviews, client inquiries, invoices, anything needing same-day response
-- medium = job application updates, shipping notifications, things to know but not urgent  
-- low = newsletters, account notifications, non-urgent updates
-- ignore = spam, promotions, social media digests"""
+high = job interviews, client inquiries, invoices, anything needing same-day action
+medium = application updates, shipping notifications, things to know but not urgent
+low = newsletters, account pings, non-urgent
+ignore = spam, promotions, social digests"""
 
         try:
             resp = requests.post(
                 f'{OLLAMA_BASE_URL}/api/generate',
-                json={
-                    "model": self.model_name,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.1, "num_predict": 150},
-                },
+                json={"model": self.model_name, "prompt": prompt,
+                      "stream": False, "options": {"temperature": 0.05, "num_predict": 120}},
                 timeout=30,
             )
-            raw = resp.json().get('response', '').strip()
-            # Strip any accidental markdown fences
-            raw = re.sub(r'```(?:json)?', '', raw).strip('`').strip()
+            raw = re.sub(r'```(?:json)?', '', resp.json().get('response', '')).strip('`').strip()
             return json.loads(raw)
-        except Exception as e:
-            self.get_logger().error(f"❌ Email classification failed: {e}")
+        except Exception:
             return {"priority": "low", "category": "other", "summary": subject, "action_needed": False}
 
     def _process_gmail_message(self, mail, uid: bytes):
-        """Fetch, classify, and alert on a single new email."""
         try:
             _, msg_data = mail.fetch(uid, '(RFC822)')
-            raw = msg_data[0][1]
-            msg = email.message_from_bytes(raw)
+            msg      = email_lib.message_from_bytes(msg_data[0][1])
+            subject  = self._decode_email_header_val(msg.get('Subject', '(no subject)'))
+            sender   = self._decode_email_header_val(msg.get('From', ''))
+            body     = self._get_email_body(msg)
+            clf      = self._classify_email(subject, sender, body)
+            priority = clf.get('priority', 'low')
+            category = clf.get('category', 'other')
+            summary  = clf.get('summary', subject)
+            action   = clf.get('action_needed', False)
 
-            subject = self._decode_email_header(msg.get('Subject', '(no subject)'))
-            sender  = self._decode_email_header(msg.get('From', ''))
-            body    = self._get_email_body(msg)
+            self.get_logger().info(f"📧 [{priority}] {category}: {subject[:60]}")
 
-            classification = self._classify_email(subject, sender, body)
-            priority = classification.get('priority', 'low')
-            category = classification.get('category', 'other')
-            summary  = classification.get('summary', subject)
-            action   = classification.get('action_needed', False)
+            if priority not in ('high', 'medium'):
+                return
 
-            self.get_logger().info(f"📧 Email [{priority}] {category}: {subject[:60]}")
+            emoji_map = {'job_interview': '🎯', 'job_application': '📋',
+                         'client': '🤝', 'shipping': '📦', 'invoice': '💰'}
+            emoji      = emoji_map.get(category, '📧')
+            action_tag = '\n⚡ *Action needed*' if action else ''
+            tg_alert   = (
+                f"{emoji} *{priority.upper()} email*\n"
+                f"📂 {category.replace('_', ' ').title()}\n"
+                f"👤 `{sender[:60]}`\n"
+                f"📌 {subject[:80]}\n"
+                f"💬 {summary}{action_tag}"
+            )
+            self._tg_send(tg_alert)
 
-            # Only alert for high and medium priority
-            if priority in ('high', 'medium'):
-                emoji_map = {
-                    'job_interview':      '🎯',
-                    'job_application':    '📋',
-                    'client':             '🤝',
-                    'shipping':           '📦',
-                    'invoice':            '💰',
-                    'other':              '📧',
-                }
-                emoji = emoji_map.get(category, '📧')
-                action_line = '\n⚡ *Action needed*' if action else ''
-
-                tg_alert = (
-                    f"{emoji} *New {priority.upper()} email*\n"
-                    f"📂 {category.replace('_', ' ').title()}\n"
-                    f"👤 From: `{sender[:60]}`\n"
-                    f"📌 Subject: {subject[:80]}\n"
-                    f"💬 {summary}"
-                    f"{action_line}"
+            # High priority also pings Slack alerts channel as backup
+            if priority == 'high':
+                self.send_slack_notification(
+                    f"{emoji} *High-priority email*\nFrom: {sender[:60]}\n"
+                    f"Subject: {subject[:80]}\n{summary}",
+                    channel=SLACK_ALERTS_CHANNEL
                 )
-
-                # Send to Telegram
-                if self.telegram_enabled and TELEGRAM_CHAT_ID:
-                    try:
-                        import asyncio
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(
-                            self.telegram_app.bot.send_message(
-                                chat_id=TELEGRAM_CHAT_ID,
-                                text=tg_alert,
-                                parse_mode='Markdown',
-                            )
-                        )
-                        loop.close()
-                    except Exception as e:
-                        self.get_logger().error(f"❌ Gmail TG alert failed: {e}")
-
-                # Slack as backup for high-priority only
-                if priority == 'high' and self.slack_enabled:
-                    self.send_slack_notification(
-                        f"{emoji} *High-priority email*\nFrom: {sender[:60]}\n"
-                        f"Subject: {subject[:80]}\n{summary}"
-                    )
-
         except Exception as e:
             self.get_logger().error(f"❌ Email processing error: {e}")
-
-    def search_past_memories(self, query: str, days_back: int = None):
-        """Search RAG for past conversations"""
-        if not self.use_rag:
-            return []
-
-        memories = self.rag.search_memory(query, top_k=5, days_back=days_back)
-        return memories
     # ═══════════════════════════════════════════════════════
     # DUAL HYBRID WEB SEARCH SYSTEM (NEW)
     # ═══════════════════════════════════════════════════════
@@ -2824,29 +2857,27 @@ Your answer:"""
             return None
 
     # ═══════════════════════════════════════════════════════
-    # SLACK INTEGRATION
+    # SLACK INTEGRATION  (multi-channel routing)
     # ═══════════════════════════════════════════════════════
 
-    def send_slack_notification(self, message: str, thread_ts=None):
+    def send_slack_notification(self, message: str, channel: str = None, thread_ts=None):
         """
-        Send notification to Slack
-        
-        Args:
-            message: Text to send
-            thread_ts: Optional thread timestamp for replies
+        Send a message to Slack.
+        channel defaults to SLACK_CHAT_CHANNEL (legacy behaviour preserved).
+        Pass an explicit channel constant for routed messages.
         """
         if not self.slack_enabled:
             return False
-        
+        target = channel or SLACK_CHAT_CHANNEL
         try:
             response = self.slack_client.chat_postMessage(
-                channel=SLACK_CHANNEL,
+                channel=target,
                 text=message,
                 thread_ts=thread_ts
             )
             return response['ok']
         except SlackApiError as e:
-            self.get_logger().error(f"Slack error: {e.response['error']}")
+            self.get_logger().error(f"Slack error ({target}): {e.response['error']}")
             return False
 
     def _should_notify_slack(self, message: str):
@@ -2856,65 +2887,46 @@ Your answer:"""
             "let me know", "message me", "text me",
             "ping me", "remind me"
         ]
-        
         msg_lower = message.lower()
         return any(trigger in msg_lower for trigger in notify_triggers)
 
+    def send_slack_alert(self, message: str):
+        """System alerts (errors, crashes) → alerts channel."""
+        self.send_slack_notification(message, channel=SLACK_ALERTS_CHANNEL)
+
     def send_daily_summary_to_slack(self):
         """
-        Send end-of-day alert to Slack.
-        Slack role: system alerts + backup channel. Short and functional.
-        Full reflection lives on Hugo blog — link goes here, not the full text.
+        End-of-day ping to #daily_reflection.
+        Slack role here: short alert + blog link. Full text lives on Hugo.
         """
         if not self.slack_enabled:
             return
-
-        age_days = (datetime.now().date() - self.birth_date).days
-        msg_count = self.today_message_count
-        blog_url = ''
+        age_days  = (datetime.now().date() - self.birth_date).days
+        blog_url  = ''
         if self.blog_enabled and self.hugo_blogger and self.reflections:
-            last = self.reflections[-1]
-            date_str = last.get('date', '')
-            day = last.get('day', age_days)
-            filename = f"{date_str}-day-{day}.md"
+            last     = self.reflections[-1]
+            filename = f"{last.get('date','')}-day-{last.get('day', age_days)}.md"
             blog_url = self.hugo_blogger._get_blog_url(filename)
-
         url_line = f"\n🔗 {blog_url}" if blog_url else ''
-        summary = (
-            f"🤖 *Grace — Day {age_days} done*\n"
-            f"💬 {msg_count} conversations today{url_line}"
+        msg = (
+            f"🌙 *Day {age_days} done* — {self.today_message_count} conversations today"
+            f"{url_line}"
         )
-        self.send_slack_notification(summary)
+        self.send_slack_notification(msg, channel=SLACK_DAILY_CHANNEL)
 
     def send_daily_reflection_to_telegram(self, reflection_text: str, blog_url: str = ''):
         """
-        Send a short daily reflection excerpt to Telegram.
-        TG role: real-time chat + brief reflection ping. NOT a wall of text.
+        Brief daily reflection ping to Telegram.
+        First 2 sentences only + blog link. TG is for chat, Hugo is for reading.
         """
         if not self.telegram_enabled or not TELEGRAM_CHAT_ID:
             return
-
-        age_days = (datetime.now().date() - self.birth_date).days
-        # Send first 2 sentences only
+        age_days  = (datetime.now().date() - self.birth_date).days
         sentences = [s.strip() for s in reflection_text.replace('\n', ' ').split('.') if s.strip()]
-        excerpt = '. '.join(sentences[:2]) + ('.' if sentences else '')
-        url_line = f"\n🔗 {blog_url}" if blog_url else ''
-        tg_msg = f"🌙 *Day {age_days} reflection*\n\n{excerpt}{url_line}"
-
-        try:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(
-                self.telegram_app.bot.send_message(
-                    chat_id=TELEGRAM_CHAT_ID,
-                    text=tg_msg,
-                    parse_mode='Markdown',
-                )
-            )
-            loop.close()
-        except Exception as e:
-            self.get_logger().error(f"❌ TG daily reflection notify failed: {e}")
+        excerpt   = '. '.join(sentences[:2]) + '.'
+        url_line  = f"\n🔗 {blog_url}" if blog_url else ''
+        tg_msg    = f"🌙 *Day {age_days} reflection*\n\n{excerpt}{url_line}"
+        self._tg_send(tg_msg)
 
     # ═══════════════════════════════════════════════════════
     # DAY CHANGE DETECTION (THREAD-SAFE)
@@ -3372,9 +3384,9 @@ FACTUAL RULE: Only state facts from search results. Never fabricate.
             error_msg = f"😵: Unexpected error: {str(e)}"
             self.get_logger().error(f"❌ Error: {e}")
             
-            # Send error to Slack
+            # Send error to Slack alerts channel
             if self.slack_enabled:
-                self.send_slack_notification(f"😵 Grace Error: {str(e)}")
+                self.send_slack_notification(f"😵 Grace Error: {str(e)}", channel=SLACK_ALERTS_CHANNEL)
             
             self._send_error_response(error_msg)
             if slack_callback:
