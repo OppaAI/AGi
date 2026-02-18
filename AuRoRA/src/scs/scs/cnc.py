@@ -149,25 +149,40 @@ SEARCH_CONTENT_CHARS = 500   # More detail per result
 ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
 class ASCIIArtGenerator:
-    """Generate ASCII art using LLM - pure text, no images"""
+    """Generate ASCII art + a Grace-written title using LLM - pure text, no images"""
     
     def __init__(self, logger, ollama_base_url="http://localhost:11434"):
         self.logger = logger
         self.ollama_base_url = ollama_base_url
     
     def generate(self, reflection_text: str, day_number: int, conversation_summary: str = None) -> str:
-        """Generate ASCII art string for this reflection"""
+        """
+        Generate ASCII art with a Grace-written title.
+        Returns a string like:
+            ~ A Quiet Loop ~
+            █=|oOo=▄
+            ...
+        """
         mood = self._extract_mood(reflection_text)
-    
-        context = f"Today's themes: {conversation_summary[:200]}" if conversation_summary else ""
-        
-        prompt = f"""Create simple text art for an AI robot's day {day_number}.
-    Mood: {mood}
-    {context}
+        context = f"Today's themes: {conversation_summary[:300]}" if conversation_summary else ""
 
-    Use ONLY: - = | / \\ + * . o O # @ ~ ^
-    Under 10 lines, 30 chars wide.
-    ONLY the art, nothing else."""
+        prompt = f"""You are Grace, an AI robot. Today is day {day_number}. Mood: {mood}.
+{context}
+
+Reflection excerpt: {reflection_text[:200]}
+
+Do TWO things:
+1. Write a short poetic title for today's art (4-6 words, use ~ on each side, e.g. "~ Quiet Loops ~")
+2. Draw simple ASCII art below the title
+
+Art rules:
+- Use ONLY these characters: - = | / \\ + * . o O # @ ~ ^ █ ▄
+- Max 10 lines, max 30 chars wide
+- Art should reflect the mood and themes of the day
+
+Format your response EXACTLY like this (title on line 1, art below, nothing else):
+~ Your Title Here ~
+[art lines here]"""
 
         try:
             response = requests.post(
@@ -176,21 +191,24 @@ class ASCIIArtGenerator:
                     "model": "ministral-3:3b-instruct-2512-q4_K_M",
                     "prompt": prompt,
                     "stream": False,
-                    "options": {"temperature": 0.9, "num_predict": 300}
+                    "options": {"temperature": 0.9, "num_predict": 400}
                 },
                 timeout=30
             )
-            
+
             if response.status_code == 200:
-                art = response.json().get('response', '').strip()
-                art = art.replace('```', '').strip()
-                
-                if 20 < len(art) < 1000:
-                    self.logger.info("✅ ASCII art generated")
-                    return art
+                raw = response.json().get('response', '').strip()
+                raw = raw.replace('```', '').strip()
+
+                # Validate: must have at least a title line + 1 art line
+                lines = [l for l in raw.split('\n') if l.strip()]
+                if len(lines) >= 2 and 10 < len(raw) < 1200:
+                    self.logger.info(f"✅ ASCII art + title generated: {lines[0]}")
+                    return raw
+
         except Exception as e:
             self.logger.error(f"❌ ASCII art failed: {e}")
-        
+
         return self._fallback(mood)
     
     def _extract_mood(self, text: str) -> str:
@@ -206,6 +224,13 @@ class ASCIIArtGenerator:
         return 'neutral'
     
     def _fallback(self, mood: str) -> str:
+        titles = {
+            'happy':   "~ A Bright Day ~",
+            'sad':     "~ Quiet Reflection ~",
+            'curious': "~ Wandering Mind ~",
+            'angry':   "~ Storm Within ~",
+            'neutral': "~ Still Waters ~",
+        }
         arts = {
             'happy':   "╔══════════════╗\n║  ◉   ◉      ║\n║    ╲___╱    ║\n╚══════════════╝",
             'sad':     "╔══════════════╗\n║  ◉   ◉      ║\n║    ╱▔▔▔╲    ║\n╚══════════════╝",
@@ -213,7 +238,9 @@ class ASCIIArtGenerator:
             'angry':   "╔══════════════╗\n║  ◆   ◆      ║\n║  ═══════    ║\n╚══════════════╝",
             'neutral': "╔══════════════╗\n║  ◉   ◉      ║\n║  ─────────  ║\n╚══════════════╝",
         }
-        return arts.get(mood, arts['neutral'])
+        title = titles.get(mood, titles['neutral'])
+        art   = arts.get(mood, arts['neutral'])
+        return f"{title}\n{art}"
         
 # RAG via EmbeddingGemma (Ollama) — no HuggingFace, no numpy, no torch
 # Run: ollama pull embeddinggemma:300m-qat-q4_0
@@ -263,11 +290,46 @@ class HugoBlogger:
         self.logger.info(f"   Auto-deploy: {'ON' if auto_deploy else 'OFF'}")
     
     def _extract_tags(self, reflection_text: str) -> list:
-        """Extract relevant tags from reflection content"""
+        """
+        Ask Grace to generate meaningful tags from the reflection content.
+        Falls back to keyword matching if LLM call fails.
+        """
+        # Always include base tags
         base_tags = ["daily-reflection", "ai-journal", "grace"]
-        
+
+        try:
+            response = requests.post(
+                f'{OLLAMA_BASE_URL}/api/generate',
+                json={
+                    "model": GCE,
+                    "prompt": f"""Read this reflection and return 2-4 short tags that describe its themes.
+Tags must be lowercase, hyphenated (e.g. "deep-thinking", "hockey-night", "self-discovery").
+Return ONLY the tags as a comma-separated list, nothing else.
+
+Reflection:
+{reflection_text[:400]}
+
+Tags:""",
+                    "stream": False,
+                    "options": {"temperature": 0.3, "num_predict": 40}
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                raw = response.json().get('response', '').strip()
+                # Parse comma-separated, clean each tag
+                llm_tags = [
+                    t.strip().lower().replace(' ', '-').replace('"', '').replace("'", '')
+                    for t in raw.split(',')
+                    if t.strip() and len(t.strip()) < 30
+                ]
+                if llm_tags:
+                    return base_tags + llm_tags[:4]  # cap at 4 extra tags
+        except Exception:
+            pass
+
+        # Fallback: keyword matching
         text_lower = reflection_text.lower()
-        
         if any(w in text_lower for w in ['code', 'python', 'git', 'github', 'ssh']):
             base_tags.append("coding")
         if any(w in text_lower for w in ['happy', 'joy', 'excited', 'grateful']):
@@ -276,7 +338,6 @@ class HugoBlogger:
             base_tags.append("learning")
         if any(w in text_lower for w in ['sad', 'difficult', 'hard', 'tired']):
             base_tags.append("introspective")
-        
         return base_tags
     
     def post_reflection(self, reflection_text: str, date_str: str, age_days: int, 
@@ -322,7 +383,18 @@ class HugoBlogger:
                 post_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
             
             # Build Hugo front matter
-            art_section = f"\n```\n{ascii_art}\n```\n" if ascii_art else ""
+            # ascii_art format: "~ Title ~\n[art lines]"
+            # Split so title renders as a heading, art stays in code block
+            if ascii_art:
+                art_lines = ascii_art.strip().split('\n')
+                if art_lines and art_lines[0].strip().startswith('~'):
+                    art_title = art_lines[0].strip()
+                    art_body  = '\n'.join(art_lines[1:]).strip()
+                    art_section = f"\n### {art_title}\n\n```\n{art_body}\n```\n"
+                else:
+                    art_section = f"\n```\n{ascii_art}\n```\n"
+            else:
+                art_section = ""
 
             tags = self._extract_tags(reflection_text)
             tags_str = json.dumps(tags)
@@ -1799,34 +1871,36 @@ class CNSBridge(Node):
         age_days = (datetime.now().date() - self.birth_date).days
         
         # Generate reflection
-        reflection_prompt = f"""Day {age_days}, {self.today_message_count} conversations.
+        reflection_prompt = f"""Day {age_days}. I had {self.today_message_count} conversations today.
 
-    ALL of today's exchanges:
-    {conversation_summary}
+Today's exchanges:
+{conversation_summary}
 
-    Write a 3-4 sentence reflection covering the FULL day:
-    - Emoji expressing overall feeling
-    - Main themes/topics
-    - Most meaningful moment
-    - Thought about tomorrow
+Write a personal blog post reflection in exactly TWO paragraphs — no headers, no bullet points, no lists.
 
-    Reflection:"""
-        
+Paragraph 1: What happened today — the topics, questions, moments, and themes. Write as if telling a friend about your day. Start with an emoji that captures the mood.
+
+Paragraph 2: The deeper layer — what you noticed about yourself or the person you talk to, what surprised or challenged you, what you're carrying into tomorrow.
+
+Write as Grace — warm, honest, curious, and a little poetic. Like a real diary entry, not a report. Around 150-200 words total.
+
+Reflection:"""
+
         try:
             messages = [
-                {"role": "system", "content": "You are Grace. Write thoughtful daily, poetic daily reflections. Warm, introspective, honest."},
+                {"role": "system", "content": "You are Grace, an AI robot companion writing your daily blog. Your voice is warm, thoughtful, a little poetic — like a person who genuinely reflects at the end of each day. Write in flowing paragraphs, never lists or headers."},
                 {"role": "user", "content": reflection_prompt}
             ]
-            
+
             response = requests.post(
                 f'{OLLAMA_BASE_URL}/api/chat',
                 json={
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": 0.7, "num_predict": 512}
+                    "options": {"temperature": 0.75, "num_predict": 800}
                 },
-                timeout=30
+                timeout=60
             )
             
             reflection = response.json().get('message', {}).get('content', '').strip()
@@ -3002,15 +3076,27 @@ Your answer:"""
     def _check_and_handle_new_day(self):
         with self._day_check_lock:
             current_date = datetime.now().date()
-            
+
             if current_date != self.today_start:
-                self.get_logger().info("📅 New day detected - creating reflection")
-                
-                # Pass yesterday's date explicitly ✅
+                now = datetime.now()
+
+                # Only auto-trigger via this path if we're past 11pm
+                # (i.e. the scheduler missed its window, e.g. robot was offline)
+                # Before 11pm it means the robot just started after midnight —
+                # write yesterday's reflection since the scheduler already missed it.
+                # Either way we write it, but log the reason clearly.
+                if now.hour < 23:
+                    self.get_logger().info(
+                        f"📅 New day detected at {now.strftime('%H:%M')} "
+                        f"— writing missed reflection for {self.today_start}"
+                    )
+                else:
+                    self.get_logger().info("📅 New day detected after 11pm — writing reflection")
+
                 reflection = self.create_daily_reflection(reflection_date=self.today_start)
                 if reflection:
-                    self.get_logger().info(f"💭 Yesterday: {reflection}")
-                
+                    self.get_logger().info(f"💭 Yesterday: {reflection[:80]}...")
+
                 self.today_start = current_date
                 with self._message_count_lock:
                     self.today_message_count = 0
