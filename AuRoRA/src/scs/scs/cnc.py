@@ -1735,11 +1735,34 @@ class CNSBridge(Node):
         age_days = (reflection_date - self.birth_date).days
         date_str = reflection_date.isoformat()
         
-        # Get ALL messages from today (from RAG window)
+        # Get ALL messages from today — merge RAG + JSON history so
+        # the reflection is never empty just because RAG missed some messages.
+        rag_messages = []
         if self.use_rag:
-            all_today_messages = self.rag.get_full_day_messages(date_str)
+            rag_messages = self.rag.get_full_day_messages(date_str) or []
+
+        # Always pull from JSON history as well (reliable on-disk source)
+        json_today = [
+            m for m in self.chat_history
+            if m.get('timestamp', '').startswith(date_str)
+               or not m.get('timestamp')  # legacy entries without timestamp
+        ]
+        # If timestamps are missing, fall back to the last day's slice from chat_history
+        if not json_today:
+            json_today = self.chat_history[-(MAX_MESSAGES_PER_DAY):]
+
+        # Merge: prefer RAG when it has data, fill gaps from JSON
+        if rag_messages:
+            # De-duplicate by content string (keep order)
+            seen = {m.get('content', ''): True for m in rag_messages}
+            for m in json_today:
+                if m.get('content', '') not in seen:
+                    rag_messages.append(m)
+                    seen[m.get('content', '')] = True
+            all_today_messages = rag_messages
         else:
-            all_today_messages = self.get_recent_messages()
+            # RAG empty — use JSON history only
+            all_today_messages = json_today if json_today else self.get_recent_messages()
         
         # Scrub sensitive data BEFORE building summary
         all_today_messages = self._scrub_messages_for_reflection(all_today_messages)
@@ -2785,7 +2808,7 @@ Your answer:"""
         falling back to direct SearXNG HTTP API (snippets only) if the
         proxy is unavailable.
 
-        Proxy:   POST http://127.0.0.1:11435/search  → full page content
+        Proxy:   POST http://127.0.0.1:51622/search  → full page content
         Fallback: GET  http://127.0.0.1:8080/search  → snippets only
         """
         if not self.search_enabled:
@@ -2804,7 +2827,7 @@ Your answer:"""
         # ── Try 1: MCP proxy (full-content results) ──────────────────────
         try:
             response = requests.post(
-                "http://127.0.0.1:11435/search",
+                "http://127.0.0.1:51622/search",
                 json={"query": query, "num_results": num_results},
                 timeout=35,   # slightly longer than proxy's own 30s MCP timeout
             )
@@ -3086,6 +3109,23 @@ FACTUAL RULE: Only state facts from search results. Never fabricate.
                     })
                     self.get_logger().debug("📖 Loaded reflection context")
             
+            # ─────────────────────────────────────────────
+            # ADD CONVERSATION HISTORY (context memory fix)
+            # Insert recent turns BEFORE search results so the
+            # LLM always knows what was discussed previously.
+            # ─────────────────────────────────────────────
+            history_messages = self.get_recent_messages()
+            # Exclude the user message we just appended (it will be added below)
+            history_for_context = [m for m in history_messages if not (
+                m.get('role') == 'user' and m.get('content') == prompt
+            )]
+            # Add up to max_recent_messages turns, skipping image payloads
+            for hist_msg in history_for_context[-(self.max_recent_messages):]:
+                if hist_msg.get('has_image'):
+                    messages.append({"role": hist_msg['role'], "content": "[image]"})
+                else:
+                    messages.append({"role": hist_msg['role'], "content": hist_msg.get('content', '')})
+
             # Add search results if available
             if search_results:
                 search_items = []
