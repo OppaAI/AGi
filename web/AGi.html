@@ -1695,7 +1695,301 @@
                 transform: translate(-50%, -50%) scale(0.8) translateY(-100px);
             }
         }
-    </style>
+    
+        /* MODERN CHAT INPUT */
+        .chat-input-wrapper {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .chat-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            padding: 5px;
+            flex: 1;
+        }
+
+        .chat-input-container:focus-within {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+
+        .input-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            padding: 0;
+        }
+
+        .plus-btn {
+            color: #00ff88;
+            font-size: 1.4em;
+            font-weight: 400;
+            line-height: 1;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .plus-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(1.1);
+            border-color: rgba(0, 255, 136, 0.5);
+        }
+
+        .globe-btn {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .globe-btn:hover {
+            background: rgba(255, 105, 180, 0.1);
+            transform: scale(1.1);
+        }
+
+        .globe-btn.active {
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.15);
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 10px 5px;
+            border: none;
+            background: transparent;
+            color: #00ff88;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            min-width: 0;
+        }
+
+        #userInput::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        .plus-menu {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 10px;
+            transform: scale(0);
+            transform-origin: bottom left;
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 100;
+        }
+
+        .plus-menu.show {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* MOBILE - Status with connection indicator */
+        @media screen and (max-width: 768px) {
+            html, body {
+                height: 100%;
+                overflow: hidden;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                height: 100vh;
+                max-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                padding: 5px 10px;
+                padding-bottom: 60px; /* Space for fixed input */
+                box-sizing: border-box;
+            }
+
+            .robot-container { display: none !important; }
+
+            /* Title at very top */
+            h1 {
+                font-size: 1em !important;
+                margin: 0 0 5px 0 !important;
+                padding: 0;
+                flex-shrink: 0;
+            }
+
+            /* Hide subtitle */
+            .subtitle { display: none !important; }
+
+            /* Status with emotion (left) and connection (right) */
+            .mini-status {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 5px 12px;
+                margin: 0 auto 5px;
+                color: #ff69b4;
+                background: rgba(10, 10, 20, 0.9);
+                border-radius: 15px;
+                border: 1px solid rgba(0, 255, 136, 0.3);
+                max-width: 95%;
+                font-size: 0.85em;
+                flex-shrink: 0;
+            }
+
+            .mini-status .status-left {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .mini-status .status-emoji { 
+                font-size: 1.2em; 
+            }
+
+            .mini-status .status-right {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 0.8em;
+            }
+
+            .mini-status .conn-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #00ff88;
+                box-shadow: 0 0 6px #00ff88;
+                flex-shrink: 0;
+            }
+
+            .mini-status.offline .conn-dot {
+                background: #ff6b6b;
+                box-shadow: 0 0 6px #ff6b6b;
+            }
+
+            .mini-status.offline {
+                border-color: rgba(255, 107, 107, 0.3);
+            }
+
+            /* Chat fills space */
+            .chat-container {
+                flex: 1;
+                overflow-y: auto;
+                margin: 0;
+                padding: 5px;
+                min-height: 0;
+            }
+
+            /* Fixed input at very bottom */
+            .chat-input-wrapper {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 5px 10px;
+                padding-bottom: max(5px, env(safe-area-inset-bottom));
+                background: rgba(10, 10, 20, 0.98);
+                border-top: 1px solid rgba(0, 255, 136, 0.2);
+                z-index: 1000;
+                box-sizing: border-box;
+                margin: 0;
+            }
+
+            .chat-input-row { 
+                gap: 6px; 
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .chat-input-container { 
+                padding: 3px 5px; 
+                gap: 4px; 
+                flex: 1;
+                min-width: 0;
+                border-radius: 20px;
+            }
+
+            .input-btn { 
+                width: 34px; 
+                height: 34px; 
+                min-width: 34px;
+                min-height: 34px;
+            }
+
+            .plus-btn { 
+                font-size: 1.2em; 
+                background: rgba(0, 255, 136, 0.15);
+                border: 1px solid rgba(0, 255, 136, 0.4);
+            }
+
+            .globe-btn { 
+                font-size: 0.95em; 
+            }
+
+            #userInput {
+                padding: 6px 4px;
+                font-size: 16px;
+                min-width: 0;
+            }
+
+            /* Send button with centered arrow */
+            .send-btn {
+                width: 38px;
+                height: 38px;
+                min-width: 38px;
+                min-height: 38px;
+                padding: 0;
+                border-radius: 50%;
+                font-size: 0;
+                position: relative;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .send-btn::after {
+                content: "↑";
+                font-size: 18px;
+                color: white;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -55%);
+                line-height: 1;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Hide RL feedback */
+            .rl-feedback-text { display: none !important; }
+        }
+
+        .mini-status { display: none; }
+</style>
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -1711,6 +2005,17 @@
     <div class="container">
         <h1>✨ Chat with Grace ✨</h1>
         <p class="subtitle">Your Cute AI Companion 💕</p>
+
+        <div class="mini-status" id="miniStatus">
+            <div class="status-left">
+                <span class="status-emoji" id="statusEmoji">🤖</span>
+                <span id="miniStatusText">Grace is here!</span>
+            </div>
+            <div class="status-right">
+                <span class="conn-dot" id="connDot"></span>
+                <span id="connText">Online</span>
+            </div>
+        </div>
         
         <div class="status-badge">
             <span class="status-dot" id="statusDot"></span>
@@ -1774,37 +2079,29 @@
         </div>
         
         <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
-        <div class="input-area">
-            <!-- SINGLE + BUTTON WITH DROPDOWN -->
-            <div style="position: relative;">
-                <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">
-                    +
-                </button>
-                <div class="plus-menu" id="plusMenu">
-                    <label class="plus-menu-item">
-                        <span>📁</span>
-                        <span>Upload Image</span>
-                        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
-                    </label>
-                    <label class="plus-menu-item">
-                        <span>📷</span>
-                        <span>Take Photo</span>
-                        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
-                    </label>
+        <!-- MODERN CHAT INPUT -->
+        <div class="chat-input-wrapper">
+            <div class="chat-input-row">
+                <div class="chat-input-container">
+                    <button class="input-btn plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">+</button>
+                    <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+                    <button class="input-btn globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">🌐</button>
                 </div>
+                <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
             </div>
-            
-            <!-- GLOBE BUTTON FOR WEB SEARCH -->
-            <button class="globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">
-                🌐
-            </button>
-            
-            <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
-            
-            <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
-        </div>
-        
-        <!-- RL FEEDBACK INSTRUCTION TEXT -->
+            <div class="plus-menu" id="plusMenu">
+                <label class="plus-menu-item">
+                    <span>📁</span>
+                    <span>Upload Image</span>
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+                <label class="plus-menu-item">
+                    <span>📷</span>
+                    <span>Take Photo</span>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+            </div>
+        </div><!-- RL FEEDBACK INSTRUCTION TEXT -->
         <div class="rl-feedback-text">
             <span class="thumb-up">👍</span> Pet head for good response
             <span style="color: rgba(0,255,136,0.4);">|</span>
@@ -2828,6 +3125,37 @@
         
         // Initial state
         setEmotion('happy');
+        
+        // Test functions
+        window.testEmotion = function(emotion) {
+            const testEmojis = {
+                'happy': '😊',
+                'sad': '😢',
+                'angry': '😠',
+                'surprised': '😮',
+                'thinking': '🤔',
+                'loving': '❤️',
+                'petted': '💖',
+                'poked': '😢'
+            };
+            setEmotion(emotion, testEmojis[emotion]);
+        };
+        
+        window.testPet = function() {
+            const fakeEvent = { clientX: null, clientY: null };
+            handlePet(fakeEvent);
+        };
+        
+        window.testPoke = function() {
+            const fakeEvent = { clientX: null, clientY: null, target: { id: 'pokeZoneLeft' } };
+            handlePoke(fakeEvent);
+        };
+        
+        window.toggleWebSearch = toggleWebSearch;
+    </script>
+</body>
+</html>
+
         
         // Test functions
         window.testEmotion = function(emotion) {
