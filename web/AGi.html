@@ -1726,7 +1726,7 @@
                 <div class="cheek-poke-zone right" id="pokeZoneRight" title="Poke for bad response"></div>
                 
                 <div class="pet-counter" id="petCounter">Reward: 0</div>
-                <div class="poke-counter" id="pokeCounter">Reward: 0</div>
+                <div class="poke-counter" id="pokeCounter">Penalties: 0</div>
                 <div class="emotion-indicator" id="emotionIndicator">😊</div>
                 <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
                 
@@ -2118,7 +2118,7 @@
             showRewardFeedback(-1, intensity);
             
             // Update counter
-            pokeCounter.textContent = `Reward: ${pokeCount}`;
+            pokeCounter.textContent = `Penalties: ${pokeCount}`;
             pokeCounter.classList.add('show');
             
             // Show thumb down animation

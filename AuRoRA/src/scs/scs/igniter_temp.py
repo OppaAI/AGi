@@ -11,7 +11,7 @@ Startup sequence:
     4. Nature Skills MCP Server: Outdoor/nature exploration tools
     5. ROS2 Bridge: Connects all components
 
-Note: Web interface served by Nginx (systemd service - no startup needed)
+Note: Web interface served by Caddy (systemd service - no startup needed)
 """
 # System modules
 from enum import Enum
@@ -230,7 +230,7 @@ class MCPSearchProxy:
 class ServerManager:
     """
     Manages external servers (ROS Bridge, MCP, Skills) for the robot.
-    Web interface served by Nginx (systemd - always on, not managed here).
+    Web interface served by Caddy (systemd - always on, not managed here).
     Starts all servers in parallel and polls for readiness instead of sleeping.
     """
     # How long to poll for each server before giving up (seconds)
@@ -555,7 +555,7 @@ class Igniter(Node):
         self.eee.info(f"SearXNG MCP Server:        {'✅ RUNNING' if results.get('mcp')       else '❌ FAILED'}")
         self.eee.info(f"Nature Skills MCP Server:  {'✅ RUNNING' if results.get('skills')    else '❌ FAILED'}")
         self.eee.info(f"MCP Search Proxy (HTTP):   will start after MCP confirmed running")
-        self.eee.info(f"Web Interface (Nginx):     ✅ systemd service (always on)")
+        self.eee.info(f"Web Interface (Caddy):     ✅ systemd service (always on)")
         self.eee.info("=" * 60)
 
         if results.get('rosbridge'):
