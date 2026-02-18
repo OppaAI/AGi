@@ -149,67 +149,101 @@ SEARCH_CONTENT_CHARS = 500   # More detail per result
 ENABLE_AUTO_SEARCH = True     # Enable LLM-based auto-search detection
 
 class ASCIIArtGenerator:
-    """Generate ASCII art + a Grace-written title using LLM - pure text, no images"""
-    
+    """Generate ASCII art of a meaningful subject from the day, with a Grace-written title"""
+
     def __init__(self, logger, ollama_base_url="http://localhost:11434"):
         self.logger = logger
         self.ollama_base_url = ollama_base_url
-    
+
     def generate(self, reflection_text: str, day_number: int, conversation_summary: str = None) -> str:
         """
-        Generate ASCII art with a Grace-written title.
+        Step 1: Ask Grace to pick the single most memorable subject from today.
+        Step 2: Draw that subject as ASCII art with a poetic title.
+
         Returns a string like:
-            ~ A Quiet Loop ~
-            █=|oOo=▄
-            ...
+            ~ The Puck That Wouldn't Stop ~
+            .--.
+           ( () )
+            `--'
         """
         mood = self._extract_mood(reflection_text)
-        context = f"Today's themes: {conversation_summary[:300]}" if conversation_summary else ""
+        context = conversation_summary[:400] if conversation_summary else reflection_text[:400]
 
-        prompt = f"""You are Grace, an AI robot. Today is day {day_number}. Mood: {mood}.
-{context}
+        # ── Step 1: Pick a subject ────────────────────────────────────────
+        subject_prompt = f"""You are Grace, an AI robot. Read today's reflection and conversation summary.
+Pick ONE concrete, visual subject that best represents the day — something that could be drawn.
+Good examples: a hockey puck, a robot, a coffee cup, a question mark, a door, a sleeping cat.
+Bad examples: "learning", "confusion", "growth" (too abstract to draw).
 
-Reflection excerpt: {reflection_text[:200]}
+Reflection: {reflection_text[:300]}
+Conversation summary: {context}
 
-Do TWO things:
-1. Write a short poetic title for today's art (4-6 words, use ~ on each side, e.g. "~ Quiet Loops ~")
-2. Draw simple ASCII art below the title
+Reply with ONLY the subject name (2-4 words max, no punctuation):"""
 
-Art rules:
-- Use ONLY these characters: - = | / \\ + * . o O # @ ~ ^ █ ▄
-- Max 10 lines, max 30 chars wide
-- Art should reflect the mood and themes of the day
-
-Format your response EXACTLY like this (title on line 1, art below, nothing else):
-~ Your Title Here ~
-[art lines here]"""
-
+        subject = "a robot thinking"  # safe fallback
         try:
-            response = requests.post(
+            resp = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
                     "model": "ministral-3:3b-instruct-2512-q4_K_M",
-                    "prompt": prompt,
+                    "prompt": subject_prompt,
                     "stream": False,
-                    "options": {"temperature": 0.9, "num_predict": 400}
+                    "options": {"temperature": 0.4, "num_predict": 15}
+                },
+                timeout=15
+            )
+            if resp.status_code == 200:
+                raw = resp.json().get('response', '').strip()
+                # Clean up — remove quotes, newlines, trailing punctuation
+                raw = raw.split('\n')[0].strip().strip('"\'.,')
+                if raw and len(raw) < 40:
+                    subject = raw
+                    self.logger.info(f"🎨 ASCII art subject: '{subject}'")
+        except Exception as e:
+            self.logger.warn(f"⚠️  Subject pick failed: {e}, using fallback")
+
+        # ── Step 2: Draw the subject ──────────────────────────────────────
+        art_prompt = f"""You are Grace, an AI robot. Draw "{subject}" as simple ASCII art.
+
+Rules:
+- First line: a short poetic title using ~ on each side (e.g. "~ The Puck That Wouldn't Stop ~")
+- Then the art below the title
+- Use ONLY these characters: - = | / \\ + * . o O # @ ~ ^ ( ) [ ] _ < > : ;
+- Max 8 lines of art, max 32 chars wide
+- The art must actually look like "{subject}" — be creative but recognisable
+- Nothing else, no explanation
+
+Example format:
+~ A Sleepy Robot ~
+  [o_o]
+  |   |
+ /|   |\\
+  |___|"""
+
+        try:
+            resp = requests.post(
+                f'{self.ollama_base_url}/api/generate',
+                json={
+                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
+                    "prompt": art_prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.85, "num_predict": 400}
                 },
                 timeout=30
             )
-
-            if response.status_code == 200:
-                raw = response.json().get('response', '').strip()
+            if resp.status_code == 200:
+                raw = resp.json().get('response', '').strip()
                 raw = raw.replace('```', '').strip()
 
-                # Validate: must have at least a title line + 1 art line
                 lines = [l for l in raw.split('\n') if l.strip()]
-                if len(lines) >= 2 and 10 < len(raw) < 1200:
-                    self.logger.info(f"✅ ASCII art + title generated: {lines[0]}")
+                if len(lines) >= 2 and 15 < len(raw) < 1200:
+                    self.logger.info(f"✅ ASCII art drawn: {lines[0]}")
                     return raw
 
         except Exception as e:
-            self.logger.error(f"❌ ASCII art failed: {e}")
+            self.logger.error(f"❌ ASCII art draw failed: {e}")
 
-        return self._fallback(mood)
+        return self._fallback(mood, subject)
     
     def _extract_mood(self, text: str) -> str:
         text_lower = text.lower()
@@ -223,14 +257,14 @@ Format your response EXACTLY like this (title on line 1, art below, nothing else
             return 'angry'
         return 'neutral'
     
-    def _fallback(self, mood: str) -> str:
-        titles = {
+    def _fallback(self, mood: str, subject: str = None) -> str:
+        title = f"~ {subject.title()} ~" if subject else {
             'happy':   "~ A Bright Day ~",
             'sad':     "~ Quiet Reflection ~",
             'curious': "~ Wandering Mind ~",
             'angry':   "~ Storm Within ~",
             'neutral': "~ Still Waters ~",
-        }
+        }.get(mood, "~ Still Waters ~")
         arts = {
             'happy':   "╔══════════════╗\n║  ◉   ◉      ║\n║    ╲___╱    ║\n╚══════════════╝",
             'sad':     "╔══════════════╗\n║  ◉   ◉      ║\n║    ╱▔▔▔╲    ║\n╚══════════════╝",
@@ -238,8 +272,7 @@ Format your response EXACTLY like this (title on line 1, art below, nothing else
             'angry':   "╔══════════════╗\n║  ◆   ◆      ║\n║  ═══════    ║\n╚══════════════╝",
             'neutral': "╔══════════════╗\n║  ◉   ◉      ║\n║  ─────────  ║\n╚══════════════╝",
         }
-        title = titles.get(mood, titles['neutral'])
-        art   = arts.get(mood, arts['neutral'])
+        art = arts.get(mood, arts['neutral'])
         return f"{title}\n{art}"
         
 # RAG via EmbeddingGemma (Ollama) — no HuggingFace, no numpy, no torch
