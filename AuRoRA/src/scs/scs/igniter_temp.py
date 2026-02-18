@@ -15,11 +15,14 @@ Note: Web interface served by Nginx (systemd service - no startup needed)
 """
 # System modules
 from enum import Enum
+import json
+import select
 import signal
 import subprocess
 import sys
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import os
 
@@ -40,6 +43,188 @@ class StateOfModule(str, Enum):
     RUN = "RUN"
     DEGRADED = "DEGRADED"
     OFF = "OFF"
+
+
+class MCPSearchProxy:
+    """
+    Thin HTTP proxy that sits in front of the igniter-owned MCP process.
+
+    cnc.py calls  POST http://127.0.0.1:51622/search  {"query": "...", "num_results": 5}
+    This class forwards the request over the existing mcp_process stdin/stdout
+    JSON-RPC channel and returns full-content results as JSON.
+
+    Why HTTP and not direct stdin/stdout sharing?
+    - The mcp_process belongs to igniter; passing the raw Popen handle into
+      cnc would create a shared-mutable-state nightmare across two ROS nodes.
+    - A local loopback HTTP call costs ~0.2 ms — negligible vs a web search.
+    - cnc.web_search() stays a simple requests.post(), easy to test/mock.
+    """
+
+    PORT = 51622
+    REQUEST_TIMEOUT = 30   # seconds to wait for MCP response
+
+    def __init__(self, logger):
+        self.logger = logger
+        self._mcp_process = None          # set by attach() once igniter starts MCP
+        self._mcp_lock = threading.Lock() # serialize stdin/stdout access
+        self._server: HTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    def attach(self, mcp_process) -> bool:
+        """Point the proxy at igniter's already-running MCP process."""
+        if mcp_process is None or mcp_process.poll() is not None:
+            self.logger.error("❌ MCPSearchProxy: MCP process is dead or None — cannot attach")
+            return False
+        self._mcp_process = mcp_process
+        self.logger.info("✅ MCPSearchProxy: attached to MCP process")
+        return True
+
+    def start(self):
+        """Start the HTTP listener in a daemon thread."""
+        proxy_ref = self   # captured by handler class below
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if self.path != "/search":
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    body   = json.loads(self.rfile.read(length))
+                    query       = body.get("query", "")
+                    num_results = int(body.get("num_results", 5))
+                    results = proxy_ref._search(query, num_results)
+                    payload = json.dumps(results).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                except Exception as e:
+                    proxy_ref.logger.error(f"MCPSearchProxy handler error: {e}")
+                    self.send_response(500)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass  # silence HTTP access log — already logged at search level
+
+        self._server = HTTPServer(("127.0.0.1", self.PORT), Handler)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever, daemon=True, name="mcp-proxy"
+        )
+        self._thread.start()
+        self.logger.info(f"✅ MCPSearchProxy listening on http://127.0.0.1:{self.PORT}/search")
+
+    def stop(self):
+        if self._server:
+            self._server.shutdown()
+            self.logger.info("🛑 MCPSearchProxy stopped")
+
+    # ------------------------------------------------------------------ #
+    #  Internal: talk to the MCP process over JSON-RPC stdin/stdout       #
+    # ------------------------------------------------------------------ #
+    def _search(self, query: str, num_results: int) -> list:
+        with self._mcp_lock:
+            if self._mcp_process is None or self._mcp_process.poll() is not None:
+                self.logger.error("MCPSearchProxy: MCP process gone during search")
+                return []
+            try:
+                request = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_web",
+                        "arguments": {
+                            "query": query,
+                            "num_results": min(num_results, 20),
+                            "fetch_content": True,
+                        },
+                    },
+                }
+                self._mcp_process.stdin.write(json.dumps(request) + "\n")
+                self._mcp_process.stdin.flush()
+
+                deadline = time.monotonic() + self.REQUEST_TIMEOUT
+                while time.monotonic() < deadline:
+                    ready = select.select(
+                        [self._mcp_process.stdout], [], [],
+                        deadline - time.monotonic()
+                    )[0]
+                    if not ready:
+                        break
+                    line = self._mcp_process.stdout.readline()
+                    if not line:
+                        break
+                    try:
+                        response = json.loads(line)
+                        if response.get("id") == 1:
+                            return self._parse(response)
+                    except json.JSONDecodeError:
+                        continue  # skip non-JSON debug lines
+
+                self.logger.error("MCPSearchProxy: MCP search timed out")
+                return []
+
+            except Exception as e:
+                self.logger.error(f"MCPSearchProxy._search error: {e}")
+                return []
+
+    def _parse(self, response: dict) -> list:
+        """Parse the MCP markdown-formatted response into a results list."""
+        try:
+            content = response.get("result", {}).get("content", [])
+            if not content:
+                return []
+            text = content[0].get("text", "")
+
+            results, current, content_lines, in_content = [], {}, [], False
+
+            def _save(cur, lines):
+                if cur and "title" in cur:
+                    cur["full_content"]     = "\n".join(lines)
+                    cur["has_full_content"] = bool(lines)
+                    cur.setdefault("url", "")
+                    cur.setdefault("snippet", "")
+                    cur.setdefault("engine", "unknown")
+                    results.append(cur)
+
+            for line in text.split("\n"):
+                line = line.strip()
+                if line.startswith("## [") and "]" in line:
+                    _save(current, content_lines)
+                    parts = line.split("]", 1)
+                    current = {
+                        "number":           len(results) + 1,
+                        "title":            parts[1].strip() if len(parts) > 1 else "No title",
+                        "url":              "",
+                        "snippet":          "",
+                        "engine":           "unknown",
+                        "full_content":     "",
+                        "has_full_content": False,
+                    }
+                    content_lines, in_content = [], False
+                elif line.startswith("**URL:**"):
+                    current["url"]     = line.replace("**URL:**", "").strip()
+                elif line.startswith("**Snippet:**"):
+                    current["snippet"] = line.replace("**Snippet:**", "").strip()
+                elif line.startswith("**Source:**"):
+                    current["engine"]  = line.replace("**Source:**", "").strip()
+                elif line.startswith("**Full Content:**"):
+                    in_content = True
+                elif line == "---":
+                    in_content = False
+                elif in_content and line:
+                    content_lines.append(line)
+
+            _save(current, content_lines)
+            self.logger.info(f"MCPSearchProxy: parsed {len(results)} results")
+            return results
+
+        except Exception as e:
+            self.logger.error(f"MCPSearchProxy._parse error: {e}")
+            return []
 
 
 class ServerManager:
@@ -345,6 +530,14 @@ class Igniter(Node):
         self.server_manager = ServerManager(self.eee)
         self._start_servers()
 
+        # MCP full-content search proxy — exposes mcp_process over HTTP
+        # so cnc.py can get full-page results without owning the process.
+        self.mcp_proxy = MCPSearchProxy(self.eee)
+        if self.server_manager.mcp_process and self.mcp_proxy.attach(self.server_manager.mcp_process):
+            self.mcp_proxy.start()
+        else:
+            self.eee.warning("⚠️  MCPSearchProxy not started (MCP server unavailable)")
+
         # Health check every 30 seconds
         self._health_timer = self.create_timer(30.0, self._health_check)
 
@@ -361,6 +554,7 @@ class Igniter(Node):
         self.eee.info(f"ROS Bridge (WebSocket):    {'✅ RUNNING' if results.get('rosbridge') else '❌ FAILED'}")
         self.eee.info(f"SearXNG MCP Server:        {'✅ RUNNING' if results.get('mcp')       else '❌ FAILED'}")
         self.eee.info(f"Nature Skills MCP Server:  {'✅ RUNNING' if results.get('skills')    else '❌ FAILED'}")
+        self.eee.info(f"MCP Search Proxy (HTTP):   will start after MCP confirmed running")
         self.eee.info(f"Web Interface (Nginx):     ✅ systemd service (always on)")
         self.eee.info("=" * 60)
 
@@ -388,6 +582,8 @@ class Igniter(Node):
         self.eee.info("=" * 60)
         self.eee.info("SHUTDOWN SEQUENCE")
         self.eee.info("=" * 60)
+        # Stop HTTP proxy before killing the MCP process it wraps
+        self.mcp_proxy.stop()
         self.server_manager.stop_all()
         print("[SHUTDOWN] calling EEEAggregator.shutdown() with 1s timeout")
         eee_thread = threading.Thread(target=EEEAggregator.shutdown, daemon=True)
