@@ -346,7 +346,7 @@ class Igniter(Node):
         self._start_servers()
 
         # Health check every 30 seconds
-        self.create_timer(30.0, self._health_check)
+        self._health_timer = self.create_timer(30.0, self._health_check)
 
     def _start_servers(self):
         self.eee.info("=" * 60)
@@ -376,8 +376,13 @@ class Igniter(Node):
 
     def _health_check(self):
         health = self.server_manager.check_health()
+        # Only warn — don't restart, that's out of scope here
         if not health['rosbridge']:
             self.eee.warning("⚠️  ROS Bridge is down - web interface will not work!")
+        # Cancel timer if everything is permanently dead (optional but clean)
+        if not any(health.values()):
+            self.eee.warning("⚠️  All servers down - stopping health check timer")
+            self._health_timer.cancel()   # store timer ref: self._health_timer = self.create_timer(...)
 
     def shutdown(self):
         self.eee.info("=" * 60)
@@ -404,7 +409,7 @@ def main(args=None):
     bridge_node  = EEEROSBridge()
     igniter_node = Igniter()
     
-    executor = MultiThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(bridge_node)
     executor.add_node(igniter_node)
 
