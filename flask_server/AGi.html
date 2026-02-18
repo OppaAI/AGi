@@ -830,10 +830,10 @@
         
         .heart {
             position: absolute;
-            top: 25px;
-            left: 35px;
-            width: 30px;
-            height: 27px;
+            top: 40px;
+            left: 43px;
+            width: 14px;
+            height: 12px;
             background: #ff69b4;
             transform: rotate(-45deg);
             animation: heartbeat 1.5s ease-in-out infinite;
@@ -843,20 +843,20 @@
         .heart::before,
         .heart::after {
             content: '';
-            width: 30px;
-            height: 27px;
+            width: 14px;
+            height: 12px;
             position: absolute;
             background: #ff69b4;
             border-radius: 50%;
         }
         
         .heart::before {
-            top: -15px;
+            top: -7px;
             left: 0;
         }
         
         .heart::after {
-            left: 15px;
+            left: 7px;
             top: 0;
         }
         
@@ -1696,6 +1696,7 @@
             }
         }
     </style>
+<base target="_blank">
 </head>
 <body>
     <div class="cyber-bg" id="cyberBg">
@@ -2103,11 +2104,10 @@
             
             if (isStreaming) return;
             
+            // Allow poking even in offline mode for feedback fun
             if (!latestResponseId) {
-                speechBubble.textContent = 'No response to rate yet! 💭';
-                speechBubble.classList.add('show');
-                setTimeout(() => speechBubble.classList.remove('show'), 2000);
-                return;
+                // Just show the poke animation without sending RL reward
+                console.log('Poke in offline mode - no RL reward sent');
             }
             
             negativeRewardCount++;
