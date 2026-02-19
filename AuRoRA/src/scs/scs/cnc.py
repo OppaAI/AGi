@@ -1931,7 +1931,7 @@ Reflection:"""
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": 0.75, "num_predict": 800}
+                    "options": {"temperature": 0.75, "num_predict": 800, "num_keep": 64}
                 },
                 timeout=60
             )
@@ -2030,7 +2030,7 @@ Reflection:"""
                         {"role": "user",   "content": user},
                     ],
                     "stream": False,
-                    "options": {"temperature": temperature, "num_predict": max_tokens},
+                    "options": {"temperature": temperature, "num_predict": max_tokens, "num_keep": 64},
                 },
                 timeout=120,
             )
@@ -3370,11 +3370,12 @@ FACTUAL RULE: Only state facts from search results. Never fabricate.
             
             base_options = {
                 "num_ctx": self.safe_context,
-                "temperature": 0.70,
+                "num_keep": 64,
+                "temperature": 0.75,
                 "num_predict": 150,
                 "top_p": 0.9,
                 "top_k": 50,
-                "repeat_penalty": 1.3,
+                "repeat_penalty": 1.1,
                 "stop": ["\n\n---", "\n\nUser:", "\n\nHuman:", "###"]
             }
 
