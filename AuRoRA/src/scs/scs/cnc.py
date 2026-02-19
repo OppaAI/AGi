@@ -185,7 +185,7 @@ Reply with ONLY the subject name (2-4 words max, no punctuation):"""
             resp = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
-                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
+                    "model": GCE,
                     "prompt": subject_prompt,
                     "stream": False,
                     "options": {"temperature": 0.4, "num_predict": 15}
@@ -224,7 +224,7 @@ Example format:
             resp = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
-                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
+                    "model": GCE,
                     "prompt": art_prompt,
                     "stream": False,
                     "options": {"temperature": 0.85, "num_predict": 400}
@@ -1931,7 +1931,8 @@ Reflection:"""
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": 0.75, "num_predict": 800, "num_keep": 64}
+                    "options": {"temperature": 0.75, "num_predict": 800, "num_keep": 64},
+                    "keep_alive": -1
                 },
                 timeout=60
             )
@@ -2031,6 +2032,7 @@ Reflection:"""
                     ],
                     "stream": False,
                     "options": {"temperature": temperature, "num_predict": max_tokens, "num_keep": 64},
+                    "keep_alive": -1
                 },
                 timeout=120,
             )
@@ -2668,7 +2670,7 @@ ignore = spam, promotions, social digests"""
             resp = requests.post(
                 f'{OLLAMA_BASE_URL}/api/generate',
                 json={"model": self.model_name, "prompt": prompt,
-                      "stream": False, "options": {"temperature": 0.05, "num_predict": 120}},
+                      "stream": False, "options": {"temperature": 0.05, "num_predict": 120},"keep_alive": -1},
                 timeout=30,
             )
             raw = re.sub(r'```(?:json)?', '', resp.json().get('response', '')).strip('`').strip()
@@ -2835,8 +2837,9 @@ Your answer:"""
                     "options": {
                         "temperature": 0.1,
                         "num_predict": 20,  # Increased for context-aware queries
-                        "num_ctx": 1024
-                    }
+                        "num_ctx": self.safe_context
+                    },
+                    "keep_alive": -1
                 },
                 timeout=10  # Slightly longer timeout
             )
