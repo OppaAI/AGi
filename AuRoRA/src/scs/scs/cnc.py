@@ -82,12 +82,8 @@ REFLECTIONS_FILE = '.daily_reflections.json'
 # Ollama configuration
 OLLAMA_BASE_URL = "http://localhost:11434"
 
-# Ollama Cloud web search API (replaces SearXNG)
-# Get free API key: https://ollama.com/settings/keys
-# Add to .env: OLLAMA_API_KEY=your-key-here
-OLLAMA_API_KEY  = os.getenv('OLLAMA_API_KEY', '')
-OLLAMA_SEARCH_URL = "https://ollama.com/api/web_search"
-OLLAMA_FETCH_URL  = "https://ollama.com/api/web_fetch"
+# Web search via SearXNG (local) + MCP proxy (full content)
+SEARXNG_URL = "http://127.0.0.1:8080"
 
 # Slack configuration (loaded from .env file or environment)
 SLACK_BOT_TOKEN  = os.getenv('SLACK_BOT_TOKEN', '')
@@ -185,7 +181,7 @@ Reply with ONLY the subject name (2-4 words max, no punctuation):"""
             resp = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
-                    "model": GCE,
+                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
                     "prompt": subject_prompt,
                     "stream": False,
                     "options": {"temperature": 0.4, "num_predict": 15}
@@ -224,7 +220,7 @@ Example format:
             resp = requests.post(
                 f'{self.ollama_base_url}/api/generate',
                 json={
-                    "model": GCE,
+                    "model": "ministral-3:3b-instruct-2512-q4_K_M",
                     "prompt": art_prompt,
                     "stream": False,
                     "options": {"temperature": 0.85, "num_predict": 400}
@@ -726,18 +722,7 @@ class CNSBridge(Node):
             try:
                 rag_db_path = str(Path.home() / "AGi" / "grace_memory.db")
                 self.rag = SQLiteVectorRAG(rag_db_path, self.get_logger(), OLLAMA_BASE_URL)
-                self.get_logger().info("✅ SQLite Vector RAG initialized (EmbeddingGemma)")
-
-                # One-time migration from old DB (renames old file after, so only runs once)
-                old_db_path = Path.home() / "AGi" / "grace_memory_old.db"
-                if old_db_path.exists():
-                    self.get_logger().info("🔄 Old RAG DB detected — migrating to EmbeddingGemma…")
-                    result = self.rag.migrate_from_old_db(str(old_db_path))
-                    self.get_logger().info(
-                        f"Migration: {result['migrated']} migrated, "
-                        f"{result['skipped']} skipped, {result['failed']} failed"
-                    )
-                    old_db_path.rename(old_db_path.with_suffix('.migrated'))
+                self.get_logger().info("✅ SQLite Vector RAG initialized (embeddinggemma-300m / CPU)")
 
             except Exception as e:
                 self.get_logger().error(f"❌ RAG init failed: {e}")
@@ -825,8 +810,9 @@ class CNSBridge(Node):
         # EXTERNAL SERVICES
         # ═══════════════════════════════════════════════════
         
-        # Web search (Ollama Cloud API — replaces SearXNG)
-        self.search_enabled = self._check_ollama_search_available()
+        # Web search (SearXNG)
+        self.searxng_url = SEARXNG_URL
+        self.search_enabled = self._check_searxng_available()
         
         # Slack (one-way notifications)
         self.slack_client = None
@@ -907,12 +893,13 @@ class CNSBridge(Node):
         self.get_logger().info("✅ Image processing enabled (VLM ready + Telegram photos)")
         
         if self.search_enabled:
-            self.get_logger().info("✅ Web search enabled (Ollama Cloud API — DUAL HYBRID MODE)")
+            self.get_logger().info("✅ Web search enabled (DUAL HYBRID MODE)")
             self.get_logger().info("   → Method 1: Keyword triggers")
             self.get_logger().info(f"   → Method 2: LLM auto-detection ({'ON' if ENABLE_AUTO_SEARCH else 'OFF'})")
-            self.get_logger().info("   → search: snippet  |  fetch: full page content")
+            self.get_logger().info("   → Source 1: MCP proxy (full content)")
+            self.get_logger().info("   → Source 2: SearXNG HTTP fallback (snippets)")
         else:
-            self.get_logger().warn("⚠️  Web search disabled (set OLLAMA_API_KEY in .env)")
+            self.get_logger().warn("⚠️  Web search disabled (SearXNG unavailable)")
         
         if self.slack_enabled:
             self.get_logger().info(f"✅ Slack notifications enabled → {SLACK_CHANNEL}")
@@ -1109,33 +1096,17 @@ class CNSBridge(Node):
             self._save_reflections_file()
             self.get_logger().info(f"✅ Created {days_missed} placeholder reflections")
 
-    def _check_ollama_search_available(self):
-        """Check if Ollama Cloud web search API is configured and reachable."""
-        if not OLLAMA_API_KEY:
-            self.get_logger().warn(
-                "⚠️  OLLAMA_API_KEY not set — web search disabled.\n"
-                "   Get a free key: https://ollama.com/settings/keys\n"
-                "   Add to .env:    OLLAMA_API_KEY=your-key-here"
-            )
-            return False
+    def _check_searxng_available(self):
+        """Check if SearXNG is running"""
         try:
-            # Lightweight probe: search with 1 result, short timeout
-            resp = requests.post(
-                OLLAMA_SEARCH_URL,
-                headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"},
-                json={"query": "test", "max_results": 1},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                self.get_logger().info("✅ Ollama Cloud web search API reachable")
-                return True
-            elif resp.status_code == 401:
-                self.get_logger().error("❌ Ollama API key invalid (401 Unauthorized)")
-            else:
-                self.get_logger().warn(f"⚠️  Ollama search probe returned HTTP {resp.status_code}")
-            return False
+            response = requests.get(self.searxng_url, timeout=5)
+            # Accept 200 (OK) or 403 (Forbidden but alive)
+            is_available = response.status_code in [200, 403]
+            if is_available:
+                self.get_logger().info(f"✅ SearXNG reachable (HTTP {response.status_code})")
+            return is_available
         except requests.exceptions.RequestException as e:
-            self.get_logger().error(f"❌ Ollama search API unreachable: {e}")
+            self.get_logger().error(f"SearXNG check failed: {e}")
             return False
 
     def _init_slack(self):
@@ -1931,8 +1902,7 @@ Reflection:"""
                     "model": self.model_name,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": 0.75, "num_predict": 800, "num_keep": 64},
-                    "keep_alive": -1
+                    "options": {"temperature": 0.75, "num_predict": 800, "num_keep": 64}
                 },
                 timeout=60
             )
@@ -2032,7 +2002,6 @@ Reflection:"""
                     ],
                     "stream": False,
                     "options": {"temperature": temperature, "num_predict": max_tokens, "num_keep": 64},
-                    "keep_alive": -1
                 },
                 timeout=120,
             )
@@ -2670,7 +2639,7 @@ ignore = spam, promotions, social digests"""
             resp = requests.post(
                 f'{OLLAMA_BASE_URL}/api/generate',
                 json={"model": self.model_name, "prompt": prompt,
-                      "stream": False, "options": {"temperature": 0.05, "num_predict": 120},"keep_alive": -1},
+                      "stream": False, "options": {"temperature": 0.05, "num_predict": 120}},
                 timeout=30,
             )
             raw = re.sub(r'```(?:json)?', '', resp.json().get('response', '')).strip('`').strip()
@@ -2761,101 +2730,83 @@ ignore = spam, promotions, social digests"""
     
     def should_search_auto(self, user_message: str, conversation_context: list = None):
         """
-        METHOD 2: LLM-based auto-detection WITH CONTEXT (INTELLIGENT)
-        
-        Considers conversation history for context-aware search queries
+        Context-aware search detection — pure keyword logic, no LLM call.
+
+        Handles follow-up queries by inspecting recent conversation history.
+        Example: "how about Scottie Barnes?" after discussing Raptors score
+                 → detected as sports follow-up → returns contextual search query.
         """
         if not self.search_enabled or not ENABLE_AUTO_SEARCH:
             return False
-        
-        # Skip if already detected by keywords
+
+        # Already handled by keyword detection
         if self.should_search_keywords(user_message):
             return False
-        
-        try:
-            # Build context from recent conversation
-            context_text = ""
-            if conversation_context and len(conversation_context) > 0:
-                recent = conversation_context[-6:]  # Last 3 turns
-                context_lines = []
-                for msg in recent:
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')[:100]
-                    if not msg.get('has_image'):
-                        context_lines.append(f"{role}: {content}")
-                
-                if context_lines:
-                    context_text = f"""
 
-Previous conversation:
-{chr(10).join(context_lines)}
-"""
-            
-            decision_prompt = f"""Analyze this conversation:
-{context_text}
+        msg_lower = user_message.lower().strip()
 
-Current user question:
-"{user_message}"
+        # ── Sports follow-up detection ────────────────────────────────────
+        # "how about X?" / "what about X?" after a sports query → search X in that context
+        sports_followup_patterns = [
+            'how about', 'what about', 'and him', 'and her', 'what about',
+            'how did he', 'how did she', 'how did they', 'his stats', 'her stats',
+        ]
+        if conversation_context and any(p in msg_lower for p in sports_followup_patterns):
+            # Look back for sports context in recent history
+            sports_keywords = ['score', 'game', 'stats', 'nba', 'nhl', 'nfl', 'mlb',
+                               'raptors', 'basketball', 'hockey', 'football', 'soccer',
+                               'points', 'goals', 'assists', 'wins', 'playoff']
+            for hist_msg in reversed(conversation_context[-6:]):
+                hist_content = hist_msg.get('content', '').lower()
+                if any(kw in hist_content for kw in sports_keywords):
+                    # Extract the subject being asked about
+                    subject = user_message
+                    for prefix in ['how about ', 'what about ', 'and ']:
+                        if msg_lower.startswith(prefix):
+                            subject = user_message[len(prefix):].strip()
+                            break
+                    # Find what sport/team was being discussed
+                    sport_context = next(
+                        (kw for kw in sports_keywords if kw in hist_content), 'game'
+                    )
+                    query = f"{subject} stats {sport_context} today"
+                    self.get_logger().info(f"🤖 Sports follow-up detected → '{query}'")
+                    return query
 
-Does this require CURRENT web search? Consider conversation context!
+        # ── General follow-up on searchable topic ────────────────────────
+        # Vague pronouns after a web-search response → re-search with context
+        vague_followups = ['what else', 'tell me more', 'and then', 'what happened next',
+                           'more about that', 'more details']
+        if conversation_context and any(p in msg_lower for p in vague_followups):
+            # Check if previous response came from web search (look for URLs or [1] citations)
+            for hist_msg in reversed(conversation_context[-4:]):
+                if hist_msg.get('role') == 'assistant':
+                    hist_content = hist_msg.get('content', '')
+                    if 'http' in hist_content or '[1]' in hist_content or '[2]' in hist_content:
+                        # Find original user query for context
+                        for h in reversed(conversation_context[-6:]):
+                            if h.get('role') == 'user' and h.get('content', '') != user_message:
+                                prev_query = h.get('content', '')
+                                query = f"{prev_query} more details"
+                                self.get_logger().info(f"🤖 Follow-up search → '{query}'")
+                                return query
+                        break
 
-IMPORTANT:
-- If follow-up (e.g. "how about X?" after discussing Y), search for X IN CONTEXT OF Y
-- Include previous entities in search query
-- Example: "How about Scottie Barnes?" after "Raptors score?" → search "Scottie Barnes stats Raptors game"
+        # ── Real-time data triggers not caught by keyword search ──────────
+        realtime_patterns = [
+            ('stock', ['price', 'trading', 'market', 'shares']),
+            ('crypto', ['price', 'btc', 'eth', 'bitcoin', 'ethereum']),
+            ('score', ['final', 'result', 'win', 'lose', 'beat']),
+            ('election', ['result', 'winner', 'vote', 'poll']),
+            ('today', ['happen', 'news', 'update', 'announce']),
+            ('now', ['happen', 'going on', 'situation']),
+        ]
+        for anchor, companions in realtime_patterns:
+            if anchor in msg_lower and any(c in msg_lower for c in companions):
+                self.get_logger().info(f"🤖 Real-time pattern detected: '{user_message[:50]}'")
+                return user_message
 
-YES if:
-- Events after January 2025
-- Real-time data (weather, stocks, news, scores)
-- Recent events/"today/now/latest"
-- Follow-up needing current data
-
-NO if:
-- Personal conversation
-- Technical explanation
-- General knowledge pre-2025
-- About Grace herself
-
-Format:
-SEARCH: <query with context>
-OR
-NO SEARCH
-
-Example:
-Previous: "What's the Raptors score?"
-Current: "How about Scottie Barnes?"
-→ SEARCH: Scottie Barnes stats Toronto Raptors game today
-
-Your answer:"""
-
-            response = requests.post(
-                f'{OLLAMA_BASE_URL}/api/generate',
-                json={
-                    "model": self.model_name,
-                    "prompt": decision_prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.1,
-                        "num_predict": 20,  # Increased for context-aware queries
-                        "num_ctx": self.safe_context
-                    },
-                    "keep_alive": -1
-                },
-                timeout=10  # Slightly longer timeout
-            )
-            
-            decision = response.json().get('response', '').strip()
-            
-            if decision.startswith('SEARCH:'):
-                query = decision.replace('SEARCH:', '').strip()
-                self.get_logger().info(f"🤖 Context-aware search: '{query}'")
-                return query  # Return the query string
-            
-        except Exception as e:
-            self.get_logger().debug(f"Auto-search check failed: {e}")
-        
         return False
-
     def should_use_skills(self, message: str):
         """
         Detect if query should use nature skills instead of web search
@@ -2931,20 +2882,17 @@ Your answer:"""
 
     def web_search(self, query: str, num_results: int = MAX_SEARCH_RESULTS, fetch_content: bool = False):
         """
-        Search the web using Ollama Cloud API.
+        Search via MCP proxy (full content) with SearXNG direct API fallback (snippets).
 
-        Step 1 (always):  POST https://ollama.com/api/web_search  → snippets
-        Step 2 (optional): POST https://ollama.com/api/web_fetch  → full page content
-                           Only triggered when fetch_content=True AND snippet
-                           looks insufficient (short or no content).
+        Try 1: POST http://127.0.0.1:51622/search  → full page content (igniter MCP proxy)
+        Try 2: GET  http://127.0.0.1:8080/search   → snippets only (SearXNG HTTP API)
 
-        Returns a list of result dicts compatible with the rest of the code:
-            {number, title, url, snippet, full_content, has_full_content}
+        Returns list of dicts: {number, title, url, snippet, full_content, has_full_content}
         """
         if not self.search_enabled:
             return None
 
-        # Clean malformed JSON queries (defensive — keeps old behaviour)
+        # Clean malformed JSON queries
         if isinstance(query, str) and query.startswith('{'):
             try:
                 query_json = json.loads(query)
@@ -2954,89 +2902,59 @@ Your answer:"""
             except Exception:
                 pass
 
-        headers = {
-            "Authorization": f"Bearer {OLLAMA_API_KEY}",
-            "Content-Type":  "application/json",
-        }
-
-        # ── Step 1: Web search (snippets) ────────────────────────────────
+        # ── Try 1: MCP proxy (full-content results) ──────────────────────
         try:
-            resp = requests.post(
-                OLLAMA_SEARCH_URL,
-                headers=headers,
-                json={"query": query, "max_results": min(num_results, 10)},
-                timeout=15,
+            response = requests.post(
+                "http://127.0.0.1:51622/search",
+                json={"query": query, "num_results": num_results},
+                timeout=35,
             )
-            resp.raise_for_status()
-            raw_results = resp.json().get("results", [])
-        except requests.exceptions.Timeout:
-            self.get_logger().error("❌ Ollama web_search timed out")
-            return None
-        except Exception as e:
-            self.get_logger().error(f"❌ Ollama web_search error: {e}")
-            return None
-
-        if not raw_results:
-            self.get_logger().warn(f"⚠️  Ollama web_search returned no results for: {query}")
-            return None
-
-        # Normalise to internal format
-        formatted = []
-        for i, r in enumerate(raw_results, 1):
-            formatted.append({
-                "number":           i,
-                "title":            r.get("title", ""),
-                "url":              r.get("url", ""),
-                "snippet":          r.get("content", "")[:SEARCH_CONTENT_CHARS],
-                "full_content":     "",
-                "has_full_content": False,
-            })
-
-        self.get_logger().info(
-            f"🔍 Ollama search (snippet): '{query}' → {len(formatted)} results"
-        )
-
-        # ── Step 2: Web fetch (full content) — only when needed ──────────
-        # Fetch the first result when:
-        #   a) caller explicitly requests it, OR
-        #   b) auto-mode: snippet is very short (< 200 chars) suggesting thin content
-        SNIPPET_SHORT_THRESHOLD = 200
-        should_fetch = fetch_content or (
-            formatted and len(formatted[0]["snippet"]) < SNIPPET_SHORT_THRESHOLD
-        )
-
-        if should_fetch and formatted:
-            top_url = formatted[0]["url"]
-            try:
-                fetch_resp = requests.post(
-                    OLLAMA_FETCH_URL,
-                    headers=headers,
-                    json={"url": top_url},
-                    timeout=20,
-                )
-                if fetch_resp.status_code == 200:
-                    fetch_data = fetch_resp.json()
-                    full_text  = fetch_data.get("content", "")
-                    if full_text:
-                        # Cap at ~3000 chars to protect context window on 4B model
-                        formatted[0]["full_content"]     = full_text[:3000]
-                        formatted[0]["has_full_content"] = True
-                        self.get_logger().info(
-                            f"📄 Ollama web_fetch: {top_url[:60]}… ({len(full_text)} chars)"
-                        )
-                else:
-                    self.get_logger().warn(
-                        f"⚠️  Ollama web_fetch HTTP {fetch_resp.status_code} for {top_url}"
+            if response.status_code == 200:
+                results = response.json()
+                if results:
+                    self.get_logger().info(
+                        f"🔍 MCP Search (full content): '{query}' → {len(results)} results"
                     )
-            except Exception as e:
-                self.get_logger().warn(f"⚠️  Ollama web_fetch failed ({e}), using snippet only")
+                    return results
+                self.get_logger().warn("MCP proxy returned empty results, trying SearXNG")
+            else:
+                self.get_logger().warn(
+                    f"MCP proxy returned HTTP {response.status_code}, trying SearXNG"
+                )
+        except requests.exceptions.ConnectionError:
+            self.get_logger().warn("MCP proxy not reachable, falling back to SearXNG")
+        except Exception as e:
+            self.get_logger().error(f"MCP proxy error: {e}, falling back to SearXNG")
 
-        return formatted
+        # ── Try 2: Direct SearXNG HTTP API (snippets) ────────────────────
+        try:
+            response = requests.get(
+                f"{self.searxng_url}/search",
+                params={"q": query, "format": "json", "categories": "general"},
+                timeout=10,
+            )
+            response.raise_for_status()
 
-    # ═══════════════════════════════════════════════════════
-    # SLACK INTEGRATION  (multi-channel routing)
-    # ═══════════════════════════════════════════════════════
+            results = response.json().get('results', [])[:num_results]
+            formatted = []
+            for i, r in enumerate(results, 1):
+                formatted.append({
+                    "number":           i,
+                    "title":            r.get('title', ''),
+                    "url":              r.get('url', ''),
+                    "snippet":          r.get('content', '')[:SEARCH_CONTENT_CHARS],
+                    "full_content":     "",
+                    "has_full_content": False,
+                })
 
+            self.get_logger().info(
+                f"🔍 SearXNG (snippets): '{query}' → {len(formatted)} results"
+            )
+            return formatted
+
+        except Exception as e:
+            self.get_logger().error(f"❌ SearXNG search failed: {e}")
+            return None
     def send_slack_notification(self, message: str, channel: str = None, thread_ts=None):
         """
         Send a message to Slack.
