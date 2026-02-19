@@ -1,15 +1,19 @@
 """
-SimpleSQLiteRAG — Grace's RAG memory backend (EmbeddingGemma via Ollama)
+SimpleSQLiteRAG — Grace's RAG memory backend (EmbeddingGemma via sentence-transformers)
 
-Replaces the old sentence_transformers / numpy implementation with a pure
-requests-based approach using EmbeddingGemma:300m-qat-q4_0 via Ollama.
+Changed from Ollama-based embeddings to sentence-transformers with google/embeddinggemma-300m.
+No Ollama dependency for embeddings — runs on CPU, zero GPU memory impact.
 
-Key changes vs old version:
-  - No sentence_transformers, no numpy, no torch
-  - Embeddings generated via Ollama HTTP API (embeddinggemma:300m-qat-q4_0)
-  - Pure Python cosine similarity (~200MB model vs ~90MB MiniLM, much better quality)
-  - Same public API — cnc.py needs zero changes beyond removing the old imports
-  - Includes migrate_from_old_db() to preserve all old memories by re-embedding them
+Key changes vs Ollama version:
+  - Uses sentence-transformers + google/embeddinggemma-300m (runs on CPU)
+  - No Ollama dependency for embeddings
+  - Same public API — cnc.py needs zero changes
+  - Falls back to keyword search if model unavailable
+  - Same cosine similarity, same SQLite schema
+
+Install:
+    pip3 install sentence-transformers --break-system-packages
+    # Model auto-downloads on first run to ~/.cache/huggingface/
 
 Memory architecture:
   ┌─────────────────────────────────────────────────┐
@@ -26,95 +30,91 @@ Usage:
     from scs.simple_sqlite_rag import SimpleSQLiteRAG
 
     rag = SimpleSQLiteRAG("/path/to/grace_memory.db", logger)
-
-    # (Optional) one-time migration from old DB:
-    rag.migrate_from_old_db("/path/to/old_grace_memory.db")
 """
 
 import sqlite3
 import json
 import math
 import time
-import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
 
 # ─── Embedding model config ───────────────────────────────────────────────────
-EMBEDDING_MODEL   = "embeddinggemma:300m-qat-q4_0"
-EMBEDDING_DIM     = 2048          # embeddinggemma output dimension
-OLLAMA_EMBED_URL  = "http://localhost:11434/api/embed"
-EMBED_TIMEOUT     = 15            # seconds per request
-EMBED_RETRY       = 2             # retries on failure
+EMBEDDING_MODEL = "google/embeddinggemma-300m-qat-q4_0-unquantized"
+EMBEDDING_DIM   = 768          # all embeddinggemma-300m variants output 768 dims
+# NOTE: activations do NOT support float16 — always runs in float32
+# NOTE: QAT q4_0 version uses sub-200MB RAM — ideal for Jetson CPU
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class OllamaEmbedder:
+class SentenceTransformerEmbedder:
     """
-    Thin wrapper around Ollama /api/embed.
-    Handles retry logic and in-process caching.
+    Wrapper around sentence-transformers using google/embeddinggemma-300m.
+    Runs on CPU — zero GPU memory impact, no Ollama dependency.
     """
 
-    def __init__(self, ollama_base_url: str, logger):
-        self.url    = ollama_base_url.rstrip("/") + "/api/embed"
-        self.logger = logger
+    def __init__(self, logger):
+        self.logger     = logger
+        self._model     = None
+        self._available = None
         self._cache: dict[str, list[float]] = {}
-        self._available: bool | None = None
+
+    # ------------------------------------------------------------------
+    def _load_model(self):
+        if self._model is not None:
+            return True
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.logger.info(f"⏳ Loading {EMBEDDING_MODEL} (CPU)…")
+            self._model = SentenceTransformer(EMBEDDING_MODEL)
+            self.logger.info(f"✅ {EMBEDDING_MODEL} loaded on CPU")
+            self._available = True
+            return True
+        except ImportError:
+            self.logger.warn(
+                "⚠️  sentence-transformers not installed.\n"
+                "   Run: pip3 install sentence-transformers --break-system-packages"
+            )
+            self._available = False
+            return False
+        except Exception as exc:
+            self.logger.warn(f"⚠️  Failed to load {EMBEDDING_MODEL}: {exc}")
+            self._available = False
+            return False
 
     # ------------------------------------------------------------------
     def is_available(self) -> bool:
         if self._available is not None:
             return self._available
-        try:
-            r = requests.post(
-                self.url,
-                json={"model": EMBEDDING_MODEL, "input": "ping"},
-                timeout=10,
-            )
-            self._available = (r.status_code == 200)
-        except Exception:
-            self._available = False
-
-        if self._available:
-            self.logger.info(f"✅ EmbeddingGemma ready ({EMBEDDING_MODEL})")
-        else:
-            self.logger.warn(
-                f"⚠️  EmbeddingGemma not reachable at {self.url}. "
-                f"Run: ollama pull {EMBEDDING_MODEL}"
-            )
-        return self._available
+        return self._load_model()
 
     # ------------------------------------------------------------------
-    def encode(self, text: str) -> list[float]:
+    def encode(self, text: str, is_query: bool = False) -> list[float]:
         """
         Return embedding vector. Returns [] on failure so callers degrade
         gracefully (falls back to keyword search).
+
+        Uses encode_query() for search queries and encode_document() for
+        documents/memories — embeddinggemma is optimized for this distinction.
         """
-        if not self.is_available():
+        if not self._load_model():
             return []
 
-        cache_key = text[:300]
+        cache_key = f"{'q' if is_query else 'd'}:{text[:300]}"
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        for attempt in range(EMBED_RETRY + 1):
-            try:
-                r = requests.post(
-                    self.url,
-                    json={"model": EMBEDDING_MODEL, "input": text},
-                    timeout=EMBED_TIMEOUT,
-                )
-                if r.status_code == 200:
-                    vec = r.json().get("embeddings", [[]])[0]
-                    if vec:
-                        self._cache[cache_key] = vec
-                        return vec
-            except Exception as exc:
-                if attempt < EMBED_RETRY:
-                    time.sleep(1)
-                else:
-                    self.logger.debug(f"Embed failed after {EMBED_RETRY} retries: {exc}")
-        return []
+        try:
+            if is_query:
+                vec = self._model.encode_query(text).tolist()
+            else:
+                vec = self._model.encode_document(text).tolist()
+            self._cache[cache_key] = vec
+            return vec
+        except Exception as exc:
+            self.logger.debug(f"Embed failed: {exc}")
+            return []
 
 
 # ─── Pure-Python cosine similarity ───────────────────────────────────────────
@@ -122,9 +122,9 @@ class OllamaEmbedder:
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot  = sum(x * y for x, y in zip(a, b))
-    na   = math.sqrt(sum(x * x for x in a))
-    nb   = math.sqrt(sum(x * x for x in b))
+    dot = sum(x * y for x, y in zip(a, b))
+    na  = math.sqrt(sum(x * x for x in a))
+    nb  = math.sqrt(sum(x * x for x in b))
     return dot / (na * nb) if na and nb else 0.0
 
 
@@ -132,19 +132,17 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 class SimpleSQLiteRAG:
     """
-    Grace's vector memory — same public API as the old sentence_transformers
-    version, but powered by EmbeddingGemma via Ollama.
-
-    The SQLite schema is identical to the old version so existing .db files
-    can be migrated (see migrate_from_old_db()).
+    Grace's vector memory — same public API as the Ollama version,
+    powered by google/embeddinggemma-300m via sentence-transformers on CPU.
     """
 
     def __init__(self, db_path: str, logger, ollama_base_url: str = "http://localhost:11434"):
-        self.logger   = logger
-        self.db_path  = db_path
+        self.logger  = logger
+        self.db_path = db_path
+        # ollama_base_url kept for API compatibility — not used for embeddings anymore
 
-        # Embedder
-        self.embedder = OllamaEmbedder(ollama_base_url, logger)
+        # Embedder (CPU, no Ollama needed)
+        self.embedder = SentenceTransformerEmbedder(logger)
 
         # SQLite
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -152,11 +150,11 @@ class SimpleSQLiteRAG:
         self._init_tables()
 
         # 7-day rolling window (in-memory)
-        self.daily_messages:  dict[str, list] = {}
-        self.weekly_journals:  list = []
+        self.daily_messages:    dict[str, list] = {}
+        self.weekly_journals:   list = []
         self.monthly_summaries: list = []
 
-        self.logger.info("✅ SimpleSQLiteRAG (EmbeddingGemma) initialized")
+        self.logger.info("✅ SimpleSQLiteRAG (embeddinggemma-300m / CPU) initialized")
 
     # ══════════════════════════════════════════════════════════════════════
     # SCHEMA
@@ -250,9 +248,8 @@ class SimpleSQLiteRAG:
                     lines.append(f"{role}: {content}")
             full_text = "\n".join(lines)
 
-            # Embed the day's text
             self.logger.info(f"🔢 Embedding {date_str} ({len(messages)} msgs)…")
-            vec = self.embedder.encode(full_text[:4000])   # cap at 4K chars
+            vec = self.embedder.encode(full_text[:4000], is_query=False)
             embedding_json = json.dumps(vec) if vec else "[]"
 
             cur = self.conn.execute(
@@ -289,7 +286,7 @@ class SimpleSQLiteRAG:
         Returns list of dicts: {date, text, summary, message_count, similarity}
         """
         try:
-            query_vec = self.embedder.encode(query)
+            query_vec = self.embedder.encode(query, is_query=True)
             if not query_vec:
                 return self._fallback_keyword_search(query, top_k, days_back)
 
@@ -458,108 +455,67 @@ class SimpleSQLiteRAG:
         return stats
 
     # ══════════════════════════════════════════════════════════════════════
-    # MIGRATION  — one-time, run once, safe to call again (idempotent)
+    # MIGRATION — re-embed existing DB to sentence-transformers dim 768
+    # Run manually when ready: rag.rebuild_embeddings()
     # ══════════════════════════════════════════════════════════════════════
 
-    def migrate_from_old_db(self, old_db_path: str) -> dict:
+    def rebuild_embeddings(self) -> dict:
         """
-        Re-embed all daily_archives rows from the old SQLite DB
-        (which used all-MiniLM-L6-v2 / numpy) into THIS DB using EmbeddingGemma.
+        Re-embed all daily_archives rows already in THIS DB using
+        sentence-transformers / embeddinggemma-300m (dim 768).
 
-        Safe to call multiple times — rows already present in this DB are skipped.
+        Replaces old vectors (dim 2048 from Ollama embeddinggemma) with
+        new vectors (dim 768) so semantic search works correctly.
 
-        Returns: {"migrated": N, "skipped": N, "failed": N}
+        Safe to call multiple times — already-correct rows are re-embedded
+        (idempotent, just overwrites with same result).
+
+        Call this once after switching from Ollama embedder to sentence-transformers:
+            from scs.simple_sqlite_rag import SimpleSQLiteRAG
+            rag = SimpleSQLiteRAG("/path/to/grace_memory.db", logger)
+            result = rag.rebuild_embeddings()
+
+        Returns: {"rebuilt": N, "failed": N, "total": N}
         """
-        old_path = Path(old_db_path)
-        if not old_path.exists():
-            self.logger.warn(f"⚠️  Old DB not found: {old_db_path} — nothing to migrate")
-            return {"migrated": 0, "skipped": 0, "failed": 0}
+        self.logger.info("🔄 Rebuilding all embeddings → sentence-transformers dim 768…")
 
-        self.logger.info(f"🔄 Migrating memory from {old_db_path} → EmbeddingGemma…")
+        rows = self.conn.execute(
+            "SELECT da.id, da.date, da.full_text FROM daily_archives da ORDER BY da.date"
+        ).fetchall()
 
-        migrated = skipped = failed = 0
+        total   = len(rows)
+        rebuilt = failed = 0
 
-        try:
-            old_conn = sqlite3.connect(old_db_path)
-            old_conn.row_factory = sqlite3.Row
+        self.logger.info(f"   Found {total} archived days to re-embed")
 
-            rows = old_conn.execute(
-                "SELECT date, message_count, full_text, summary FROM daily_archives ORDER BY date"
-            ).fetchall()
+        for row in rows:
+            archive_id = row["id"]
+            date_str   = row["date"]
+            full_text  = row["full_text"] or ""
 
-            self.logger.info(f"   Found {len(rows)} archived days to migrate")
+            vec = self.embedder.encode(full_text[:4000], is_query=False)
+            if not vec:
+                self.logger.warn(f"   ⚠️  Could not embed {date_str} — skipping")
+                failed += 1
+                continue
 
-            for row in rows:
-                date_str = row["date"]
+            try:
+                self.conn.execute(
+                    """INSERT OR REPLACE INTO memory_vectors (archive_id, embedding)
+                       VALUES (?, ?)""",
+                    [archive_id, json.dumps(vec)],
+                )
+                self.conn.commit()
+                rebuilt += 1
+                self.logger.info(f"   ✅ Re-embedded {date_str}")
+            except Exception as exc:
+                self.conn.rollback()
+                self.logger.error(f"   ❌ Failed {date_str}: {exc}")
+                failed += 1
 
-                # Skip if already in new DB
-                exists = self.conn.execute(
-                    "SELECT 1 FROM daily_archives WHERE date = ?", [date_str]
-                ).fetchone()
-                if exists:
-                    skipped += 1
-                    continue
-
-                full_text = row["full_text"] or ""
-                summary   = row["summary"]   or ""
-
-                # Re-embed with EmbeddingGemma
-                vec = self.embedder.encode(full_text[:4000])
-                if not vec:
-                    self.logger.warn(f"   ⚠️  Could not embed {date_str} — embedder unavailable")
-                    failed += 1
-                    continue
-
-                try:
-                    cur = self.conn.execute(
-                        """INSERT OR REPLACE INTO daily_archives
-                               (date, message_count, full_text, summary)
-                           VALUES (?, ?, ?, ?)""",
-                        [date_str, row["message_count"], full_text, summary],
-                    )
-                    archive_id = cur.lastrowid
-
-                    self.conn.execute(
-                        """INSERT OR REPLACE INTO memory_vectors (archive_id, embedding)
-                           VALUES (?, ?)""",
-                        [archive_id, json.dumps(vec)],
-                    )
-                    self.conn.commit()
-                    migrated += 1
-                    self.logger.info(f"   ✅ Migrated {date_str}")
-
-                except Exception as exc:
-                    self.conn.rollback()
-                    self.logger.error(f"   ❌ Failed to migrate {date_str}: {exc}")
-                    failed += 1
-
-            # Also migrate weekly_journals and periodic_summaries (no re-embedding needed)
-            for table in ("weekly_journals", "periodic_summaries"):
-                try:
-                    old_rows = old_conn.execute(f"SELECT * FROM {table}").fetchall()
-                    for r in old_rows:
-                        cols = r.keys()
-                        placeholders = ", ".join("?" for _ in cols)
-                        vals = [r[c] for c in cols]
-                        self.conn.execute(
-                            f"INSERT OR IGNORE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})",
-                            vals,
-                        )
-                    self.conn.commit()
-                    self.logger.info(f"   ✅ Copied {len(old_rows)} rows from {table}")
-                except Exception as exc:
-                    self.logger.warn(f"   ⚠️  Could not migrate {table}: {exc}")
-
-            old_conn.close()
-
-        except Exception as exc:
-            self.logger.error(f"❌ Migration failed: {exc}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-
-        result = {"migrated": migrated, "skipped": skipped, "failed": failed}
+        result = {"rebuilt": rebuilt, "failed": failed, "total": total}
         self.logger.info(
-            f"🏁 Migration done — migrated: {migrated}, skipped: {skipped}, failed: {failed}"
+            f"🏁 Rebuild done — rebuilt: {rebuilt}, failed: {failed}, total: {total}"
         )
         return result
 
