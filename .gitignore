@@ -30,5 +30,3 @@ node_modules/
 
 # Secret files
 .env
-docs/log/latest
-docs/log/latest_build
