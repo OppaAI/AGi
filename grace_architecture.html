@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRACE Memory Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #020408;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #e0e0e0;
+    padding: 32px 24px;
+  }
+  .header { text-align: center; margin-bottom: 40px; }
+  .header .subtitle {
+    font-size: 11px; letter-spacing: 6px; color: #7c3aed;
+    margin-bottom: 8px; text-transform: uppercase;
+  }
+  .header h1 {
+    font-size: 28px; font-weight: 900;
+    background: linear-gradient(135deg, #00fff0, #7c3aed, #f59e0b);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: 2px;
+  }
+  .header .acronym {
+    font-size: 11px; color: #444; margin-top: 6px; letter-spacing: 3px;
+  }
+  .tabs {
+    display: flex; justify-content: center; gap: 8px; margin-bottom: 32px;
+  }
+  .tab {
+    background: transparent; border: 1px solid #333; color: #666;
+    padding: 6px 18px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    font-family: 'Courier New', monospace; transition: all 0.2s;
+  }
+  .tab.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+  .tab:hover:not(.active) { border-color: #555; color: #999; }
+  .panel { display: none; max-width: 700px; margin: 0 auto; }
+  .panel.active { display: block; }
+  .hint {
+    font-size: 11px; color: #444; text-align: center;
+    margin-bottom: 24px; letter-spacing: 2px;
+  }
+
+  /* Memory layers */
+  .layer-card {
+    border: 1px solid #1a1a2e; border-radius: 8px;
+    padding: 16px 20px; cursor: pointer;
+    background: #0a0a14; transition: all 0.3s; margin-bottom: 0;
+  }
+  .layer-card:hover { background: #0d0d1a; }
+  .layer-card.expanded { background: #0d0d1a; }
+  .layer-inner { display: flex; align-items: center; gap: 16px; }
+  .layer-badge {
+    width: 48px; height: 48px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900; flex-shrink: 0;
+    transition: box-shadow 0.3s;
+  }
+  .layer-info { flex: 1; }
+  .layer-title {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .layer-name { font-size: 14px; font-weight: 700; color: #fff; }
+  .layer-bio { font-size: 10px; color: #555; letter-spacing: 1px; }
+  .layer-desc { font-size: 11px; color: #555; margin-top: 4px; }
+  .layer-stats { text-align: right; flex-shrink: 0; }
+  .layer-capacity { font-size: 10px; letter-spacing: 1px; }
+  .layer-storage { font-size: 10px; color: #444; margin-top: 2px; }
+  .layer-detail {
+    display: none; margin-top: 16px; padding-top: 16px;
+    grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+  }
+  .layer-card.expanded .layer-detail { display: grid; }
+  .detail-label {
+    font-size: 9px; color: #555; letter-spacing: 2px; margin-bottom: 4px;
+  }
+  .detail-value { font-size: 12px; }
+
+  /* Arrows */
+  .arrow-block {
+    display: flex; flex-direction: column; align-items: center; padding: 8px 0;
+  }
+  .arrow-label { font-size: 10px; color: #333; letter-spacing: 2px; margin-bottom: 2px; }
+  .arrow-icon { color: #333; font-size: 16px; }
+  .arrow-detail { font-size: 9px; color: #2a2a3e; letter-spacing: 1px; margin-top: 2px; }
+
+  /* Retrieval */
+  .context-window {
+    border: 1px solid #1a1a2e; border-radius: 8px;
+    padding: 20px; margin-bottom: 24px; background: #0a0a14;
+  }
+  .cw-title {
+    font-size: 10px; color: #555; letter-spacing: 3px; margin-bottom: 16px;
+  }
+  .cw-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; margin-bottom: 6px;
+    border-radius: 0 4px 4px 0;
+  }
+  .cw-label { font-size: 12px; color: #ccc; }
+  .cw-tokens { font-size: 10px; }
+  .cw-total {
+    display: flex; justify-content: flex-end;
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid #1a1a2e;
+    font-size: 11px; color: #7c3aed;
+  }
+  .pipeline-title {
+    font-size: 10px; color: #444; letter-spacing: 3px; margin-bottom: 16px;
+  }
+  .pipeline-step {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 16px; border: 1px solid #1a1a2e;
+    border-radius: 6px; margin-bottom: 8px; background: #0a0a14;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .step-info { flex: 1; }
+  .step-name { font-size: 13px; color: #fff; font-weight: 700; }
+  .step-detail { font-size: 11px; color: #555; margin-top: 2px; }
+  .step-ms { font-size: 11px; font-family: monospace; }
+
+  /* Consolidation */
+  .consol-item { display: flex; gap: 16px; margin-bottom: 16px; }
+  .consol-left {
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .consol-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; border: 2px solid;
+  }
+  .consol-line {
+    width: 1px; flex: 1; background: #1a1a2e; margin: 4px 0;
+  }
+  .consol-body { padding-top: 6px; padding-bottom: 16px; }
+  .consol-time {
+    font-size: 10px; letter-spacing: 2px; margin-bottom: 4px;
+  }
+  .consol-title { font-size: 14px; color: #fff; font-weight: 700; margin-bottom: 4px; }
+  .consol-desc { font-size: 12px; color: #666; line-height: 1.6; }
+
+  .footer {
+    text-align: center; margin-top: 48px;
+    font-size: 10px; color: #222; letter-spacing: 3px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="subtitle">Amazing Grace Infrastructure</div>
+  <h1>GRACE Memory Architecture</h1>
+  <div class="acronym">GENERATIVE · REASONING · AGENTIC · COGNITIVE · EDGE</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('memory')">Memory</button>
+  <button class="tab" onclick="showTab('retrieval')">Retrieval</button>
+  <button class="tab" onclick="showTab('consolidation')">Consolidation</button>
+</div>
+
+<!-- MEMORY PANEL -->
+<div id="panel-memory" class="panel active">
+  <div class="hint">CLICK A LAYER TO INSPECT</div>
+
+  <!-- WM -->
+  <div class="layer-card" onclick="toggleLayer(this)" style="border-color:#1a1a2e;">
+    <div class="layer-inner">
+      <div class="layer-badge" style="background:#00fff015;border:2px solid #00fff0;color:#00fff0;">WM</div>
+      <div class="layer-info">
+        <div class="layer-title">
+          <span class="layer-name">Working Memory</span>
+          <span class="layer-bio">/ Prefrontal Cortex</span>
+        </div>
+        <div class="layer-desc">Active conversation context. Constantly replaced. Never persisted.</div>
+      </div>
+      <div class="layer-stats">
+        <div class="layer-capacity" style="color:#00fff0;">7 ± 2 turns</div>
+        <div class="layer-storage">RAM only</div>
+      </div>
+    </div>
+    <div class="layer-detail" style="border-top:1px solid #00fff033;">
+      <div><div class="detail-label">STORAGE</div><div class="detail-value" style="color:#00fff0;">Python list (RAM)</div></div>
+      <div><div class="detail-label">CAPACITY</div><div class="detail-value" style="color:#00fff0;">7 ± 2 turns</div></div>
+      <div><div class="detail-label">PERSISTENCE</div><div class="detail-value" style="color:#00fff0;">Session only</div></div>
+    </div>
+  </div>
+
+  <div class="arrow-block">
+    <div class="arrow-label">TURN SLIDES OUT OF WM</div>
+    <div class="arrow-icon">↓</div>
+    <div class="arrow-detail">Raw turn appended to SQLite em_buffer (atomic write)</div>
+  </div>
+
+  <!-- EM -->
+  <div class="layer-card" onclick="toggleLayer(this)" style="border-color:#1a1a2e;">
+    <div class="layer-inner">
+      <div class="layer-badge" style="background:#00d4ff15;border:2px solid #00d4ff;color:#00d4ff;">EM</div>
+      <div class="layer-info">
+        <div class="layer-title">
+          <span class="layer-name">Episodic Memory</span>
+          <span class="layer-bio">/ Hippocampus</span>
+        </div>
+        <div class="layer-desc">Accumulates turns sliding out of WM. Survives crashes via SQLite. Consolidated end of day.</div>
+      </div>
+      <div class="layer-stats">
+        <div class="layer-capacity" style="color:#00d4ff;">Full day</div>
+        <div class="layer-storage">SQLite em_buffer</div>
+      </div>
+    </div>
+    <div class="layer-detail" style="border-top:1px solid #00d4ff33;">
+      <div><div class="detail-label">STORAGE</div><div class="detail-value" style="color:#00d4ff;">SQLite em_buffer table</div></div>
+      <div><div class="detail-label">CAPACITY</div><div class="detail-value" style="color:#00d4ff;">Full day accumulation</div></div>
+      <div><div class="detail-label">PERSISTENCE</div><div class="detail-value" style="color:#00d4ff;">Cleared after consolidation</div></div>
+    </div>
+  </div>
+
+  <div class="arrow-block">
+    <div class="arrow-label">END OF DAY / SHUTDOWN</div>
+    <div class="arrow-icon">↓</div>
+    <div class="arrow-detail">Cosmos summarizes EM → daily reflection + embeddinggemma → vector</div>
+  </div>
+
+  <!-- SM -->
+  <div class="layer-card" onclick="toggleLayer(this)" style="border-color:#1a1a2e;">
+    <div class="layer-inner">
+      <div class="layer-badge" style="background:#7c3aed15;border:2px solid #7c3aed;color:#7c3aed;">SM</div>
+      <div class="layer-info">
+        <div class="layer-title">
+          <span class="layer-name">Semantic Memory</span>
+          <span class="layer-bio">/ Neocortex</span>
+        </div>
+        <div class="layer-desc">Daily reflections, facts, embeddings. RAG semantic search. Permanent.</div>
+      </div>
+      <div class="layer-stats">
+        <div class="layer-capacity" style="color:#7c3aed;">Unlimited</div>
+        <div class="layer-storage">SQLite + Vectors</div>
+      </div>
+    </div>
+    <div class="layer-detail" style="border-top:1px solid #7c3aed33;">
+      <div><div class="detail-label">STORAGE</div><div class="detail-value" style="color:#7c3aed;">SQLite + embeddinggemma-300m</div></div>
+      <div><div class="detail-label">CAPACITY</div><div class="detail-value" style="color:#7c3aed;">Unlimited, 20+ years</div></div>
+      <div><div class="detail-label">PERSISTENCE</div><div class="detail-value" style="color:#7c3aed;">Permanent</div></div>
+    </div>
+  </div>
+
+  <div class="arrow-block">
+    <div class="arrow-label">SKILL / TASK DETECTED</div>
+    <div class="arrow-icon">↓</div>
+    <div class="arrow-detail">Procedural pattern extracted — Phase 2 agentic</div>
+  </div>
+
+  <!-- PM -->
+  <div class="layer-card" onclick="toggleLayer(this)" style="border-color:#1a1a2e;">
+    <div class="layer-inner">
+      <div class="layer-badge" style="background:#f59e0b15;border:2px solid #f59e0b;color:#f59e0b;">PM</div>
+      <div class="layer-info">
+        <div class="layer-title">
+          <span class="layer-name">Procedural Memory</span>
+          <span class="layer-bio">/ Cerebellum · Basal Ganglia</span>
+        </div>
+        <div class="layer-desc">How to do things. Mission patterns. Agentic task procedures. Phase 2.</div>
+      </div>
+      <div class="layer-stats">
+        <div class="layer-capacity" style="color:#f59e0b;">Skills & tasks</div>
+        <div class="layer-storage">SQLite + YAML</div>
+      </div>
+    </div>
+    <div class="layer-detail" style="border-top:1px solid #f59e0b33;">
+      <div><div class="detail-label">STORAGE</div><div class="detail-value" style="color:#f59e0b;">SQLite + YAML configs</div></div>
+      <div><div class="detail-label">CAPACITY</div><div class="detail-value" style="color:#f59e0b;">Skills & procedures</div></div>
+      <div><div class="detail-label">PERSISTENCE</div><div class="detail-value" style="color:#f59e0b;">Permanent</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- RETRIEVAL PANEL -->
+<div id="panel-retrieval" class="panel">
+  <div class="hint">CONTEXT ASSEMBLY — EVERY TURN</div>
+
+  <div class="context-window">
+    <div class="cw-title">COSMOS CONTEXT WINDOW</div>
+    <div class="cw-row" style="border-left:3px solid #333;background:#33333308;">
+      <span class="cw-label">System Prompt — Grace identity</span>
+      <span class="cw-tokens" style="color:#555;">~200 tokens</span>
+    </div>
+    <div class="cw-row" style="border-left:3px solid #7c3aed;background:#7c3aed08;">
+      <span class="cw-label">SM — Top 5 relevant facts (RAG)</span>
+      <span class="cw-tokens" style="color:#7c3aed;">~300 tokens</span>
+    </div>
+    <div class="cw-row" style="border-left:3px solid #5b21b6;background:#5b21b608;">
+      <span class="cw-label">SM — Last 3 days reflections</span>
+      <span class="cw-tokens" style="color:#5b21b6;">~200 tokens</span>
+    </div>
+    <div class="cw-row" style="border-left:3px solid #00d4ff;background:#00d4ff08;">
+      <span class="cw-label">EM — Today summary (if &gt; 20 turns)</span>
+      <span class="cw-tokens" style="color:#00d4ff;">~200 tokens</span>
+    </div>
+    <div class="cw-row" style="border-left:3px solid #00fff0;background:#00fff008;">
+      <span class="cw-label">WM — Last 7±2 turns</span>
+      <span class="cw-tokens" style="color:#00fff0;">~500 tokens</span>
+    </div>
+    <div class="cw-row" style="border-left:3px solid #10b981;background:#10b98108;">
+      <span class="cw-label">User Input</span>
+      <span class="cw-tokens" style="color:#10b981;">variable</span>
+    </div>
+    <div class="cw-total">Total ~1,400 tokens</div>
+  </div>
+
+  <div class="pipeline-title">RETRIEVAL PIPELINE</div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#00fff020;border:1px solid #00fff0;color:#00fff0;">1</div>
+    <div class="step-info">
+      <div class="step-name">WM</div>
+      <div class="step-detail">Always — instant RAM lookup</div>
+    </div>
+    <div class="step-ms" style="color:#00fff0;">~0ms</div>
+  </div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#00d4ff20;border:1px solid #00d4ff;color:#00d4ff;">2</div>
+    <div class="step-info">
+      <div class="step-name">SM Reflections</div>
+      <div class="step-detail">Always — last 3 days cached in RAM</div>
+    </div>
+    <div class="step-ms" style="color:#00d4ff;">~1ms</div>
+  </div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#7c3aed20;border:1px solid #7c3aed;color:#7c3aed;">3</div>
+    <div class="step-info">
+      <div class="step-name">SQLite Keyword Search</div>
+      <div class="step-detail">Always — fast exact match on SM</div>
+    </div>
+    <div class="step-ms" style="color:#7c3aed;">~5ms</div>
+  </div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#f59e0b20;border:1px solid #f59e0b;color:#f59e0b;">4</div>
+    <div class="step-info">
+      <div class="step-name">RAG Semantic Search</div>
+      <div class="step-detail">If keyword search finds nothing OR memory trigger words detected</div>
+    </div>
+    <div class="step-ms" style="color:#f59e0b;">~200ms</div>
+  </div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#10b98120;border:1px solid #10b981;color:#10b981;">5</div>
+    <div class="step-info">
+      <div class="step-name">EM Today Summary</div>
+      <div class="step-detail">If today &gt; 20 turns — Cosmos summary injected into context</div>
+    </div>
+    <div class="step-ms" style="color:#10b981;">~1ms</div>
+  </div>
+</div>
+
+<!-- CONSOLIDATION PANEL -->
+<div id="panel-consolidation" class="panel">
+  <div class="hint">DAILY MEMORY CONSOLIDATION</div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#00fff015;border-color:#00fff0;">⟳</div>
+      <div class="consol-line"></div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#00fff0;">ALL DAY</div>
+      <div class="consol-title">WM → EM accumulation</div>
+      <div class="consol-desc">Every turn sliding out of WM is atomically written to SQLite em_buffer. Survives crashes by design.</div>
+    </div>
+  </div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#00d4ff15;border-color:#00d4ff;">✓</div>
+      <div class="consol-line"></div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#00d4ff;">EVERY 30 MIN IDLE</div>
+      <div class="consol-title">EM checkpoint</div>
+      <div class="consol-desc">em_buffer already in SQLite — no extra action needed. Crash safe by design.</div>
+    </div>
+  </div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#7c3aed15;border-color:#7c3aed;">🧠</div>
+      <div class="consol-line"></div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#7c3aed;">END OF DAY</div>
+      <div class="consol-title">Cosmos consolidation</div>
+      <div class="consol-desc">Cosmos reads full em_buffer → extracts useful facts → discards noise → writes daily reflection to SM.</div>
+    </div>
+  </div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#5b21b615;border-color:#5b21b6;">⊕</div>
+      <div class="consol-line"></div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#5b21b6;">AFTER CONSOLIDATION</div>
+      <div class="consol-title">embeddinggemma encodes</div>
+      <div class="consol-desc">Day's full text embedded via google/embeddinggemma-300m on CPU (~200MB RAM). Vector stored in SQLite.</div>
+    </div>
+  </div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#10b98115;border-color:#10b981;">✗</div>
+      <div class="consol-line"></div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#10b981;">AFTER EMBEDDING</div>
+      <div class="consol-title">em_buffer cleared</div>
+      <div class="consol-desc">DELETE WHERE date = yesterday. Clean slate for new day. SM entry permanent.</div>
+    </div>
+  </div>
+
+  <div class="consol-item">
+    <div class="consol-left">
+      <div class="consol-icon" style="background:#f59e0b15;border-color:#f59e0b;">⚡</div>
+    </div>
+    <div class="consol-body">
+      <div class="consol-time" style="color:#f59e0b;">ON CRASH / NEXT BOOT</div>
+      <div class="consol-title">Igniter checks em_buffer</div>
+      <div class="consol-desc">If unprocessed rows exist → consolidate before starting. No memory lost even after sudden shutdown.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">GRACE · AMAZING GRACE INFRASTRUCTURE · AGi-ROS · AuRoRA</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleLayer(card) {
+  const colors = { WM: '#00fff0', EM: '#00d4ff', SM: '#7c3aed', PM: '#f59e0b' };
+  const badge = card.querySelector('.layer-badge');
+  const name = badge.textContent.trim();
+  const color = colors[name];
+  const isExpanded = card.classList.contains('expanded');
+
+  document.querySelectorAll('.layer-card').forEach(c => {
+    c.classList.remove('expanded');
+    const b = c.querySelector('.layer-badge').textContent.trim();
+    const col = colors[b];
+    c.style.borderColor = '#1a1a2e';
+    c.style.boxShadow = 'none';
+    c.style.background = '#0a0a14';
+    c.querySelector('.layer-badge').style.boxShadow = 'none';
+  });
+
+  if (!isExpanded) {
+    card.classList.add('expanded');
+    card.style.borderColor = color;
+    card.style.boxShadow = `0 0 20px ${color}44`;
+    card.style.background = color + '08';
+    badge.style.boxShadow = `0 0 20px ${color}, 0 0 40px ${color}88`;
+  }
+}
+</script>
+</body>
+</html>
