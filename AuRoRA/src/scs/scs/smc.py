@@ -1,35 +1,16 @@
 """
-SimpleSQLiteRAG — Grace's RAG memory backend (EmbeddingGemma via sentence-transformers)
-
-Changed from Ollama-based embeddings to sentence-transformers with google/embeddinggemma-300m.
-No Ollama dependency for embeddings — runs on CPU, zero GPU memory impact.
-
-Key changes vs Ollama version:
-  - Uses sentence-transformers + google/embeddinggemma-300m (runs on CPU)
-  - No Ollama dependency for embeddings
-  - Same public API — cnc.py needs zero changes
-  - Falls back to keyword search if model unavailable
-  - Same cosine similarity, same SQLite schema
+AGi — SMC (Semantic Memory Cortex)
+================================
+Semantic Memory Cortex — permanent vector memory for the CNS.
+- SQLite vector storage via embeddinggemma-300m on CPU
+- 7-day rolling window (in-memory)
+- Daily archival with semantic embeddings
+- RAG semantic search (cosine similarity)
+- Weekly journals and periodic reports
+- em_buffer table for crash-safe episodic accumulation
 
 Install:
     pip3 install sentence-transformers --break-system-packages
-    # Model auto-downloads on first run to ~/.cache/huggingface/
-
-Memory architecture:
-  ┌─────────────────────────────────────────────────┐
-  │  7-day rolling window  (in-memory dict)         │
-  │  → full message objects, instant retrieval      │
-  ├─────────────────────────────────────────────────┤
-  │  SQLite archive  (on-disk)                      │
-  │  → daily_archives: full text + reflection       │
-  │  → memory_vectors: JSON embedding arrays        │
-  │  → weekly_journals, periodic_summaries          │
-  └─────────────────────────────────────────────────┘
-
-Usage:
-    from scs.simple_sqlite_rag import SimpleSQLiteRAG
-
-    rag = SimpleSQLiteRAG("/path/to/grace_memory.db", logger)
 """
 
 import sqlite3
@@ -93,7 +74,7 @@ class SentenceTransformerEmbedder:
     def encode(self, text: str, is_query: bool = False) -> list[float]:
         """
         Return embedding vector. Returns [] on failure so callers degrade
-        gracefully (falls back to keyword search).
+        falls back to keyword search on failure.
 
         Uses encode_query() for search queries and encode_document() for
         documents/memories — embeddinggemma is optimized for this distinction.
@@ -130,16 +111,15 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-class SimpleSQLiteRAG:
+class SMC:
     """
-    Grace's vector memory — same public API as the Ollama version,
-    powered by google/embeddinggemma-300m via sentence-transformers on CPU.
+    Semantic Memory Cortex — permanent vector memory.
+    Powered by google/embeddinggemma-300m via sentence-transformers on CPU.
     """
 
-    def __init__(self, db_path: str, logger, ollama_base_url: str = "http://localhost:11434"):
+    def __init__(self, db_path: str, logger):
         self.logger  = logger
         self.db_path = db_path
-        # ollama_base_url kept for API compatibility — not used for embeddings anymore
 
         # Embedder (CPU, no Ollama needed)
         self.embedder = SentenceTransformerEmbedder(logger)
@@ -154,7 +134,7 @@ class SimpleSQLiteRAG:
         self.weekly_journals:   list = []
         self.monthly_summaries: list = []
 
-        self.logger.info("✅ SimpleSQLiteRAG (embeddinggemma-300m / CPU) initialized")
+        self.logger.info("✅ SMC (embeddinggemma-300m / CPU) initialized")
 
     # ══════════════════════════════════════════════════════════════════════
     # SCHEMA
@@ -162,6 +142,18 @@ class SimpleSQLiteRAG:
 
     def _init_tables(self):
         self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS em_buffer (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT    NOT NULL,
+                role      TEXT    NOT NULL,
+                content   TEXT    NOT NULL,
+                date      TEXT    NOT NULL,
+                processed BOOLEAN DEFAULT FALSE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_em_buffer_date
+                ON em_buffer(date);
+
             CREATE TABLE IF NOT EXISTS daily_archives (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 date          TEXT    NOT NULL,
@@ -471,8 +463,8 @@ class SimpleSQLiteRAG:
         (idempotent, just overwrites with same result).
 
         Call this once after switching from Ollama embedder to sentence-transformers:
-            from scs.simple_sqlite_rag import SimpleSQLiteRAG
-            rag = SimpleSQLiteRAG("/path/to/grace_memory.db", logger)
+            from smc import SMC
+            smc = SMC("/path/to/memory.db", logger)
             result = rag.rebuild_embeddings()
 
         Returns: {"rebuilt": N, "failed": N, "total": N}
@@ -520,10 +512,60 @@ class SimpleSQLiteRAG:
         return result
 
     # ══════════════════════════════════════════════════════════════════════
+    # EM BUFFER — crash-safe episodic accumulation
+    # ══════════════════════════════════════════════════════════════════════
+
+    def em_buffer_append(self, role: str, content: str, date_str: str):
+        """Atomically write a turn to em_buffer. Survives crashes."""
+        from datetime import datetime as _dt
+        try:
+            self.conn.execute(
+                "INSERT INTO em_buffer (timestamp, role, content, date) VALUES (?, ?, ?, ?)",
+                [_dt.now().isoformat(), role, content[:2000], date_str],
+            )
+            self.conn.commit()
+        except Exception as e:
+            self.logger.warning(f"em_buffer append failed: {e}")
+
+    def em_buffer_get_day(self, date_str: str) -> list:
+        """Get all unprocessed turns for a given date."""
+        try:
+            rows = self.conn.execute(
+                "SELECT role, content, timestamp FROM em_buffer WHERE date = ? AND processed = FALSE ORDER BY id",
+                [date_str],
+            ).fetchall()
+            return [{"role": r["role"], "content": r["content"], "timestamp": r["timestamp"]} for r in rows]
+        except Exception as e:
+            self.logger.warning(f"em_buffer get failed: {e}")
+            return []
+
+    def em_buffer_clear_day(self, date_str: str):
+        """Clear processed em_buffer entries for a date."""
+        try:
+            self.conn.execute(
+                "DELETE FROM em_buffer WHERE date = ?", [date_str]
+            )
+            self.conn.commit()
+            self.logger.info(f"🧹 em_buffer cleared for {date_str}")
+        except Exception as e:
+            self.logger.warning(f"em_buffer clear failed: {e}")
+
+    def em_buffer_has_unprocessed(self) -> list[str]:
+        """Return list of dates with unprocessed em_buffer rows."""
+        try:
+            rows = self.conn.execute(
+                "SELECT DISTINCT date FROM em_buffer WHERE processed = FALSE ORDER BY date"
+            ).fetchall()
+            return [r["date"] for r in rows]
+        except Exception as e:
+            self.logger.warning(f"em_buffer check failed: {e}")
+            return []
+
+    # ══════════════════════════════════════════════════════════════════════
     # CLEANUP
     # ══════════════════════════════════════════════════════════════════════
 
     def close(self):
         if self.conn:
             self.conn.close()
-            self.logger.info("🗄️  RAG database closed")
+            self.logger.info("🗄️  SMC database closed")

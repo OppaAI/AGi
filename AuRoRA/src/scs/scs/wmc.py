@@ -1,7 +1,9 @@
 """
-AuRoRA — Memory System
-=======================
-- Chat history (JSON on disk + RAG window)
+AGi — WMC (Working Memory Cortex)
+=================================
+Manages active working memory for the CNS node.
+- WM: Working memory (7±2 turns) via RAG window
+- EM: Episodic buffer (today's full log) via SQLite em_buffer
 - Daily reflections
 - Token management / context trimming
 - Sensitive data scrubbing
@@ -18,6 +20,7 @@ from typing import Optional
 from config import (
     CHAT_HISTORY_FILE,
     REFLECTIONS_FILE,
+    COUNT_FILE,
     MAX_HISTORY_STORAGE,
     MAX_MESSAGES_PER_DAY,
     MAX_RECENT_MESSAGES,
@@ -25,12 +28,12 @@ from config import (
     MAX_REQUEST_TOKENS,
 )
 
-log = logging.getLogger("aurora.memory")
+log = logging.getLogger("cns.wmc")
 
 
-class Memory:
+class WMC:
     """
-    Manages all persistent memory for Grace.
+    Manages active working memory for the CNS node.
     Instantiate once and pass to CNSNode.
     """
 
@@ -53,7 +56,7 @@ class Memory:
         self._day_check_lock    = threading.Lock()
 
         # Restore today's count across restarts
-        count_file = Path.home() / ".grace_today_count.json"
+        count_file = Path.home() / COUNT_FILE
         if count_file.exists():
             try:
                 saved = json.loads(count_file.read_text())
@@ -155,7 +158,7 @@ class Memory:
             self.today_message_count += 1
             count = self.today_message_count
         try:
-            (Path.home() / ".grace_today_count.json").write_text(
+            (Path.home() / COUNT_FILE).write_text(
                 json.dumps({"date": date.today().isoformat(), "count": count})
             )
         except Exception:

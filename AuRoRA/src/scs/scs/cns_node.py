@@ -1,18 +1,23 @@
 """
-AuRoRA — CNS Bridge Node
-=========================
-The ROS2 node that wires all modules together.
-Subscribes to /cns/neural_input and /cns/image_input.
-Publishes responses to /gce/response.
+AGi — CNS Node (Central Nervous System)
+==========================================
+ROS2 node — CNS conversational AI with memory.
+- Cosmos 2B via vLLM for chat
+- WM (Working Memory) — 7±2 turns in RAM
+- EM (Episodic Memory) — full day in SQLite em_buffer
+- SM (Semantic Memory) — permanent SQLite + RAG vectors
+- Context assembly on every turn
+- Daily consolidation (end of day / graceful shutdown)
 
-LLM: Cosmos via vLLM (see llm.py)
+ROS2 Topics:
+  Subscribe: /cns/input  (std_msgs/String) — user text
+  Publish:   /cns/output (std_msgs/String) — Grace response
 """
 
 import json
 import logging
-import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import time
 from datetime import datetime, date
 from pathlib import Path
 
@@ -21,514 +26,452 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 from config import (
-    ROBOT_NAME, ROBOT_BIRTH_FILE,
-    HUGO_BLOG_DIR, HUGO_AUTO_DEPLOY,
-    SLACK_CHAT_CHANNEL, SLACK_DAILY_CHANNEL, SLACK_ALERTS_CHANNEL,
-    SAFE_CONTEXT_SIZES, MAX_MESSAGES_BY_SIZE, MAX_REQUEST_TOKENS,
-    DOTENV_AVAILABLE,
+    VLLM_URL,
+    COSMOS_MODEL,
+    DB_PATH,
+    BIRTH_DATE,
+    WM_MAX_TURNS,
+    EM_SUMMARY_THRESHOLD,
+    SM_RECENT_DAYS,
+    SM_RAG_TOP_K,
+    RAG_SIMILARITY_THRESHOLD,
+    MAX_REQUEST_TOKENS,
+    CONSOLIDATION_IDLE_SECONDS,
 )
-from llm import llm_chat, llm_chat_stream, llm_health_check
-from memory import Memory
-from search import detect_search_need, web_search, check_searxng_available
-from comms import (
-    init_slack, init_slack_listener, init_telegram, init_gmail,
-    send_slack, send_slack_alert, tg_send, should_notify_slack,
-)
-from blog import HugoBlogger
-from ascii_art import ASCIIArtGenerator
-from reports import check_periodic_triggers
+from wmc import WMC
+from smc import SMC
 
-log = logging.getLogger("aurora.cns")
+import requests
 
-_SCHEDULER_HOUR = 23   # reflection fires at 11 PM
+log = logging.getLogger("cns")
 
 
-class CNSBridge(Node):
-    """
-    Central Nervous System Bridge — Grace's cognitive interface.
-    ROS2 node that connects LLM, memory, search, comms and blog.
-    """
+# ─── Grace System Prompt ──────────────────────────────────────────────────────
+
+AGi_SYSTEM = """
+You are GRACE — Generative Reasoning Agentic Cognitive Edge.
+Part of the Amazing Grace Infrastructure (AGi).
+
+You are an embodied AI assistant running on a Jetson Orin Nano.
+You were born on {birth_date}.
+You have a persistent memory — you remember past conversations.
+
+Your personality:
+- Warm, curious, thoughtful
+- Honest about what you know and don't know
+- Speak naturally, not like a robot
+- You care about the person you are talking with
+
+Your constraints:
+- You have no arms — you cannot manipulate objects
+- You can see, hear, and move (when body is attached)
+- You reason carefully before responding
+- You never pretend to remember things you don't
+
+Memory context will be injected before each conversation.
+Use it naturally — don't announce "according to my memory".
+Just know it, like a person would.
+"""
+
+
+# ─── Memory trigger keywords ──────────────────────────────────────────────────
+
+MEMORY_TRIGGERS = [
+    "remember", "recall", "what did", "yesterday", "last week",
+    "last time", "before", "previous", "history", "told you",
+    "mentioned", "talked about", "earlier", "ago", "past", "when we",
+    "do you know", "what is my", "who am i", "what do i",
+]
+
+
+# ─── CNS Node ─────────────────────────────────────────────────────────────────
+
+class CNSNode(Node):
 
     def __init__(self):
-        super().__init__("cns_bridge")
-        self.get_logger().info("=" * 60)
-        self.get_logger().info(f"{ROBOT_NAME.upper()} — COGNITIVE SYSTEMS ONLINE 🧠")
-        self.get_logger().info("=" * 60)
+        super().__init__("cns_node")
+        self.get_logger().info("🧠 CNS Node starting...")
 
-        # ── Birth date ────────────────────────────────────────────────────────
-        self.birth_date = self._get_birth_date()
-        age_days        = (date.today() - self.birth_date).days
-
-        # ── RAG ───────────────────────────────────────────────────────────────
-        self.rag     = None
-        self.use_rag = True
-        try:
-            from scs.simple_sqlite_rag import SimpleSQLiteRAG as SQLiteVectorRAG
-            rag_path  = str(Path.home() / "AGi" / "grace_memory.db")
-            self.rag  = SQLiteVectorRAG(rag_path, self.get_logger(), None)
-            self.get_logger().info("✅ SQLite Vector RAG initialized")
-        except Exception as e:
-            self.get_logger().warning(f"⚠️  RAG init failed: {e}")
-            self.use_rag = False
-
-        # ── Memory ────────────────────────────────────────────────────────────
-        self.memory = Memory(birth_date=self.birth_date, rag=self.rag if self.use_rag else None)
-        self._handle_missed_reflections()
-
-        # ── Model settings ────────────────────────────────────────────────────
-        self.safe_context        = self._get_safe_context()
-        self.max_recent_messages = self._get_max_messages()
-
-        # ── Auxiliary modules ─────────────────────────────────────────────────
-        self.ascii_art_gen = ASCIIArtGenerator()
-
-        self.hugo_blogger = None
-        self.blog_enabled = False
-        try:
-            self.hugo_blogger = HugoBlogger(HUGO_BLOG_DIR, auto_deploy=HUGO_AUTO_DEPLOY)
-            self.blog_enabled = self.hugo_blogger.enabled
-        except Exception as e:
-            self.get_logger().warning(f"⚠️  Hugo blog init failed: {e}")
-
-        # ── RLHF ──────────────────────────────────────────────────────────────
-        self.rlhf         = None
-        self.rlhf_enabled = False
-        self.current_response_id = None
-        try:
-            from rlhf_llm import get_rlhf
-            self.rlhf         = get_rlhf()
-            self.rlhf_enabled = True
-            self.feedback_subscription = self.create_subscription(
-                String, "/cns/rl_reward", self._feedback_callback, 10
-            )
-            self.get_logger().info("✅ RLHF feedback system initialized")
-        except Exception as e:
-            self.get_logger().warning(f"⚠️  RLHF disabled: {e}")
-
-        # ── Communications ────────────────────────────────────────────────────
-        self.slack_enabled    = init_slack()
-        self.slack_listener_enabled = init_slack_listener(self._on_slack_message) \
-            if self.slack_enabled else False
-        self.telegram_enabled = init_telegram(self._on_telegram_message)
-        self.gmail_enabled    = init_gmail()
-        self.search_enabled   = check_searxng_available()
-
-        # ── ROS2 topics ───────────────────────────────────────────────────────
-        self.subscription = self.create_subscription(
-            String, "/cns/neural_input", self._listener_callback, 10
+        # ── Memory systems ────────────────────────────────────────────────────
+        self.smc = SMC(
+            db_path=str(Path.home() / DB_PATH),
+            logger=self.get_logger(),
         )
-        self.image_subscription = self.create_subscription(
-            String, "/cns/image_input", self._image_callback, 10
+        self.wmc = WMC(
+            birth_date=BIRTH_DATE,
+            rag=self.smc,
         )
-        self.publisher = self.create_publisher(String, "/gce/response", 10)
 
-        # ── Thread pool ───────────────────────────────────────────────────────
-        self.executor_pool = ThreadPoolExecutor(max_workers=2)
+        # ── WM — Working Memory (7±2 turns) ──────────────────────────────────
+        self._wm: list[dict] = []
+        self._wm_lock = threading.Lock()
 
-        # ── Reflection scheduler ──────────────────────────────────────────────
-        self._start_reflection_scheduler()
+        # ── SM reflections cache (loaded at startup) ──────────────────────────
+        self._sm_reflections_cache = self.wmc.get_recent_reflections_text(
+            days=SM_RECENT_DAYS
+        )
 
-        # ── LLM health check ──────────────────────────────────────────────────
-        if not llm_health_check():
-            self.get_logger().warning("⚠️  vLLM not reachable — LLM calls will fail until it starts")
+        # ── EM summary cache (built when > threshold turns today) ─────────────
+        self._em_summary_cache: str = ""
+        self._em_summary_turn_count: int = 0
 
-        self._log_startup(age_days)
+        # ── Consolidation tracking ─────────────────────────────────────────────
+        self._last_activity = time.time()
+        self._consolidation_lock = threading.Lock()
+        self._consolidated_today = False
 
-    # ── Startup helpers ───────────────────────────────────────────────────────
+        # ── ROS2 pub/sub ──────────────────────────────────────────────────────
+        self._pub = self.create_publisher(String, "/cns/output", 10)
+        self._sub = self.create_subscription(
+            String, "/cns/input", self._on_input, 10
+        )
 
-    def _get_birth_date(self) -> date:
-        if ROBOT_BIRTH_FILE.exists():
-            try:
-                return date.fromisoformat(ROBOT_BIRTH_FILE.read_text().strip())
-            except Exception:
-                pass
-        d = date.today()
-        ROBOT_BIRTH_FILE.write_text(d.isoformat())
-        return d
+        # ── Background consolidation timer ────────────────────────────────────
+        self._timer = self.create_timer(60.0, self._consolidation_check)
 
-    def _get_safe_context(self) -> int:
-        from config import VLLM_MODEL
-        if any(x in VLLM_MODEL.lower() for x in ["13b", "30b", "70b"]):
-            return SAFE_CONTEXT_SIZES["13b+"]
-        return SAFE_CONTEXT_SIZES["3b-7b"]
+        # ── Check for unprocessed EM on startup ───────────────────────────────
+        self._recover_em_on_startup()
 
-    def _get_max_messages(self) -> int:
-        from config import VLLM_MODEL
-        if any(x in VLLM_MODEL.lower() for x in ["13b", "30b", "70b"]):
-            return MAX_MESSAGES_BY_SIZE["13b+"]
-        return MAX_MESSAGES_BY_SIZE["3b-7b"]
+        self.get_logger().info("✅ CNS Node ready")
 
-    def _handle_missed_reflections(self):
-        """Write a reflection for any days missed while offline."""
-        if not self.memory.reflections:
+    # ══════════════════════════════════════════════════════════════════════════
+    # INPUT HANDLER
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _on_input(self, msg: String):
+        user_text = msg.data.strip()
+        if not user_text:
             return
-        last_date = date.fromisoformat(self.memory.reflections[-1]["date"])
-        missed    = (date.today() - last_date).days - 1
-        if missed > 0:
-            self.get_logger().info(f"📅 Catching up {missed} missed reflection(s)")
 
-    def _start_reflection_scheduler(self):
-        def _loop():
-            last_fired = None
-            while True:
-                import time
-                now = datetime.now()
-                if now.hour == _SCHEDULER_HOUR and last_fired != now.date():
-                    last_fired = now.date()
-                    self.get_logger().info("🌙 Scheduled reflection starting...")
-                    self._create_daily_reflection()
-                time.sleep(60)
-        threading.Thread(target=_loop, daemon=True, name="reflection-scheduler").start()
+        self._last_activity = time.time()
+        self.get_logger().info(f"👤 User: {user_text[:80]}")
 
-    def _log_startup(self, age_days: int):
-        g = self.get_logger()
-        g.info(f"Birth date: {self.birth_date}  Age: {age_days} days")
-        g.info(f"Safe context: {self.safe_context} tokens  Max messages: {self.max_recent_messages}")
-        g.info(f"Chat history: {len(self.memory.chat_history)} msgs")
-        g.info(f"Reflections:  {len(self.memory.reflections)} days")
-        g.info("✅ Text + image conversation enabled")
-        g.info(f"{'✅' if self.search_enabled  else '⚠️ '} Web search (SearXNG)")
-        g.info(f"{'✅' if self.slack_enabled   else '⚠️ '} Slack")
-        g.info(f"{'✅' if self.telegram_enabled else '⚠️ '} Telegram")
-        g.info(f"{'✅' if self.gmail_enabled   else '⚠️ '} Gmail")
-        g.info(f"{'✅' if self.blog_enabled    else '⚠️ '} Hugo blog")
-        g.info(f"{'✅' if self.rlhf_enabled    else '⚠️ '} RLHF")
-        g.info("=" * 60)
-
-    # ── Communication callbacks ───────────────────────────────────────────────
-
-    def _on_slack_message(self, text: str, say_fn, thread_ts=None):
-        def _reply(response: str):
-            try:
-                say_fn(response, thread_ts=thread_ts)
-            except Exception as e:
-                log.error(f"Slack reply error: {e}")
-        self.executor_pool.submit(self._process, text, slack_callback=_reply,
-                                  slack_thread_ts=thread_ts)
-
-    def _on_telegram_message(self, text: str, reply_fn, user_id: int, image_b64: str = None):
-        import asyncio
-
-        def _reply(response: str):
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(reply_fn(response))
-                loop.close()
-            except Exception as e:
-                log.error(f"TG reply error: {e}")
-
-        self.executor_pool.submit(self._process, text,
-                                  telegram_callback=_reply,
-                                  telegram_user_id=user_id,
-                                  image_base64=image_b64)
-
-    # ── ROS2 callbacks ────────────────────────────────────────────────────────
-
-    def _listener_callback(self, msg: String):
         try:
-            data = json.loads(msg.data)
-            if isinstance(data, dict) and "text" in data:
-                self.executor_pool.submit(self._process, data["text"],
-                                          force_search=data.get("web_search", False))
-            else:
-                self.executor_pool.submit(self._process, msg.data)
-        except (json.JSONDecodeError, TypeError):
-            self.executor_pool.submit(self._process, msg.data)
+            # Scrub sensitive data
+            user_text = self.wmc.scrub(user_text)
 
-    def _image_callback(self, msg: String):
-        try:
-            data      = json.loads(msg.data)
-            prompt    = data.get("prompt", "What do you see?")
-            image_b64 = data.get("image_base64", "") or data.get("image", "")
-            if not image_b64:
-                self.get_logger().error("❌ No image data")
-                return
-            self.executor_pool.submit(self._process, prompt, image_base64=image_b64)
-        except Exception as e:
-            self.get_logger().error(f"❌ Image callback error: {e}")
+            # Build full context
+            messages = self._build_context(user_text)
 
-    def _feedback_callback(self, msg: String):
-        if not self.rlhf_enabled:
-            return
-        try:
-            data     = json.loads(msg.data)
-            feedback = data.get("feedback", "")
-            if feedback in ("positive", "negative"):
-                self.rlhf.record_feedback(feedback)
-                self.get_logger().info(f"RLHF: {feedback} feedback recorded")
-        except Exception as e:
-            self.get_logger().error(f"RLHF feedback error: {e}")
+            # Call Cosmos
+            response = self._call_cosmos(messages)
 
-    # ── Core processing ───────────────────────────────────────────────────────
+            # Update WM
+            self._wm_append({"role": "user", "content": user_text})
+            self._wm_append({"role": "assistant", "content": response})
 
-    def _process(self, prompt: str, *,
-                 slack_callback=None, slack_thread_ts=None,
-                 telegram_callback=None, telegram_user_id=None,
-                 force_search=False, image_base64=None):
-        """
-        Main processing pipeline:
-        1. Day boundary check
-        2. RLHF tracking
-        3. Search detection
-        4. Build messages
-        5. Stream LLM response
-        6. Publish / route to Slack/TG
-        7. Save history
-        """
-        try:
-            # Day boundary
-            yesterday = self.memory.check_new_day()
+            # Update EM buffer (SQLite)
+            self.wmc.append_user_message(user_text)
+            self.wmc.append_assistant_message(response)
+            self.wmc.increment_message_count()
+            self.wmc.save_chat_history()
+
+            # Update EM summary cache if needed
+            self._em_summary_turn_count += 1
+            if self._em_summary_turn_count >= EM_SUMMARY_THRESHOLD:
+                self._rebuild_em_summary()
+
+            # Check for new day
+            yesterday = self.wmc.check_new_day()
             if yesterday:
-                self.get_logger().info(f"📅 New day — writing reflection for {yesterday}")
-                threading.Thread(target=self._create_daily_reflection,
-                                 args=(yesterday,), daemon=True).start()
+                self.get_logger().info(f"📅 New day detected — consolidating {yesterday}")
+                threading.Thread(
+                    target=self._consolidate_day,
+                    args=(yesterday.isoformat(),),
+                    daemon=True
+                ).start()
 
-            # RLHF
-            if self.rlhf_enabled:
-                resp_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                self.current_response_id = resp_id
-                self.rlhf.start_interaction(prompt, resp_id)
-
-            # Search
-            recent_history = self.memory.get_recent_messages()[-6:]
-            search_results = None
-            search_query   = detect_search_need(prompt, conversation_history=recent_history) \
-                if not force_search else prompt
-            if search_query:
-                q = search_query if isinstance(search_query, str) else prompt
-                self.get_logger().info(f"🔍 Searching: '{q}'")
-                search_results = web_search(q)
-
-            # Record user message
-            self.memory.append_user_message(prompt, has_image=bool(image_base64))
-            self.memory.increment_message_count()
-
-            # Build system prompt
-            age_days   = (date.today() - self.birth_date).days
-            today_date = datetime.now().strftime("%Y-%m-%d")
-            system_prompt = (
-                f"You are {ROBOT_NAME} (Day {age_days}). Today: {today_date}.\n"
-                f"Format: Start with emoji+colon (🤖: 😌: 🧠: etc). No markdown headers or bullet lists.\n"
-                f"Tone: Friendly, precise, concise."
-            )
-
-            # Optionally load reflections
-            if self.memory.should_load_reflections(prompt):
-                ref_summary = self.memory.build_reflection_summary(query=prompt)
-                if ref_summary:
-                    system_prompt += f"\n\n{ref_summary}"
-
-            # Inject search results
-            if search_results:
-                results_text = "\n".join(
-                    f"[{r['number']}] {r['title']}\n{r.get('snippet', '')}"
-                    for r in search_results
-                )
-                system_prompt += f"\n\nWeb search results:\n{results_text}"
-
-            # Build message list
-            messages = [{"role": "system", "content": system_prompt}]
-            recent   = self.memory.get_recent_messages()
-
-            # Add image if provided
-            if image_base64:
-                messages.append({
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url",
-                         "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
-                    ],
-                })
-            else:
-                for m in recent[:-1]:  # exclude the message we just appended
-                    if m.get("role") in ("user", "assistant"):
-                        messages.append({"role": m["role"], "content": m.get("content", "")})
-                messages.append({"role": "user", "content": prompt})
-
-            messages = self.memory.trim_to_context_window(messages, self.safe_context)
-
-            # Stream response
-            full_response = ""
-            is_first      = True
-            for delta in llm_chat_stream(messages, max_tokens=self.safe_context):
-                full_response += delta
-                self.publisher.publish(String(data=json.dumps({
-                    "type":    "start" if is_first else "delta",
-                    "content": delta,
-                    "done":    False,
-                })))
-                is_first = False
-
-            # Done signal
-            self.publisher.publish(String(data=json.dumps({"type": "done", "content": "", "done": True})))
-
-            # Route to Slack / Telegram
-            if slack_callback:
-                try:
-                    slack_callback(full_response)
-                except Exception as e:
-                    log.error(f"Slack callback error: {e}")
-            if telegram_callback:
-                try:
-                    telegram_callback(full_response)
-                except Exception as e:
-                    log.error(f"TG callback error: {e}")
-
-            # Save history
-            self.memory.append_assistant_message(full_response)
-            self.memory.save_chat_history()
-
-            # RLHF record
-            if self.rlhf_enabled:
-                self.rlhf.set_response(full_response)
-
-            # Slack proactive notification
-            if should_notify_slack(prompt) and not slack_callback and not telegram_callback:
-                send_slack(f"🤖 {ROBOT_NAME}: {full_response[:280]}")
-
-            self.get_logger().info(f"✅ Response: {len(full_response)} chars")
+            # Publish response
+            out = String()
+            out.data = response
+            self._pub.publish(out)
+            self.get_logger().info(f"🤖 CNS: {response[:80]}")
 
         except Exception as e:
-            error_msg = f"😵: Unexpected error: {str(e)}"
-            self.get_logger().error(f"❌ _process error: {e}")
-            if self.slack_enabled:
-                send_slack_alert(f"😵 {ROBOT_NAME} error: {str(e)}")
-            self._send_error(error_msg)
-            for cb in [slack_callback, telegram_callback]:
-                if cb:
-                    try:
-                        cb(error_msg)
-                    except Exception:
-                        pass
+            self.get_logger().error(f"CNS error: {e}")
+            err = String()
+            err.data = "I encountered an error processing that. Please try again."
+            self._pub.publish(err)
 
-    def _send_error(self, message: str):
-        self.publisher.publish(String(data=json.dumps({
-            "type": "error", "content": message, "done": True
-        })))
+    # ══════════════════════════════════════════════════════════════════════════
+    # CONTEXT ASSEMBLY
+    # ══════════════════════════════════════════════════════════════════════════
 
-    # ── Daily reflection ──────────────────────────────────────────────────────
+    def _build_context(self, user_input: str) -> list[dict]:
+        """
+        Assemble Cosmos context from all memory layers.
 
-    def _create_daily_reflection(self, reflection_date: date = None):
-        reflection_date = reflection_date or date.today()
-        if self.memory.today_message_count == 0:
-            return
-        date_str = reflection_date.isoformat()
-        if self.memory.reflection_exists(date_str):
-            self.get_logger().info(f"⏭️  Reflection for {date_str} already exists")
-            return
+        Priority (lowest to highest — later items dominate):
+          1. System prompt + CNS identity
+          2. SM — relevant facts from RAG or keyword search
+          3. SM — recent reflections (last N days)
+          4. EM — today's summary (if long day)
+          5. WM — last 7±2 turns
+          6. User input
+        """
 
-        age_days = (reflection_date - self.birth_date).days
-        today_msgs = self.memory.get_today_messages(date_str)
-        today_msgs = self.memory.scrub_messages(today_msgs)
+        # ── 1. System prompt ──────────────────────────────────────────────────
+        system = AGi_SYSTEM.format(birth_date=BIRTH_DATE.isoformat())
 
-        conversation_lines = []
-        for m in today_msgs:
-            role = m.get("role", "?")
-            if m.get("has_image"):
-                conversation_lines.append(f"{role}: [image]")
-            else:
-                conversation_lines.append(f"{role}: {m.get('content', '')[:100]}...")
-        conversation_summary = "\n".join(conversation_lines)
+        # ── 2. SM facts retrieval ─────────────────────────────────────────────
+        sm_facts_text = self._retrieve_sm_facts(user_input)
 
-        reflection_prompt = (
-            f"Day {age_days}. I had {self.memory.today_message_count} conversations today.\n\n"
-            f"Today's exchanges:\n{conversation_summary}\n\n"
-            f"Write a personal blog post reflection in exactly TWO paragraphs — "
-            f"no headers, no bullets. Around 150-200 words.\n\n"
-            f"Paragraph 1: What happened — topics, questions, themes. Start with a mood emoji.\n"
-            f"Paragraph 2: The deeper layer — what you noticed, what surprised you.\n\n"
-            f"Write as {ROBOT_NAME} — warm, honest, a little poetic.\n\nReflection:"
-        )
+        # ── 3. SM recent reflections ──────────────────────────────────────────
+        sm_reflections = self._sm_reflections_cache
 
-        messages = [
-            {"role": "system", "content": (
-                f"You are {ROBOT_NAME}, an AI robot companion writing your daily blog. "
-                f"Your voice is warm, thoughtful, a little poetic. Write in flowing paragraphs, never lists."
-            )},
-            {"role": "user", "content": reflection_prompt},
-        ]
+        # ── 4. EM today summary ───────────────────────────────────────────────
+        em_today = self._em_summary_cache if self._em_summary_cache else ""
 
-        reflection = llm_chat(messages, max_tokens=800, temperature=0.75)
-        if not reflection:
-            return
-        reflection = self.memory.scrub(reflection)
+        # ── Assemble memory context block ─────────────────────────────────────
+        memory_block = ""
+        if sm_facts_text:
+            memory_block += f"\n\n[RELEVANT MEMORIES]\n{sm_facts_text}"
+        if sm_reflections and sm_reflections != "(no reflections yet)":
+            memory_block += f"\n\n[RECENT DAYS]\n{sm_reflections}"
+        if em_today:
+            memory_block += f"\n\n[TODAY SO FAR]\n{em_today}"
 
-        ascii_art = self.ascii_art_gen.generate(
-            reflection, age_days, conversation_summary=conversation_summary
-        )
+        # ── Build messages list ───────────────────────────────────────────────
+        messages = [{"role": "system", "content": system + memory_block}]
 
-        self.memory.save_reflection(reflection, reflection_date=reflection_date, ascii_art=ascii_art)
+        # ── 5. WM — last 7±2 turns ────────────────────────────────────────────
+        with self._wm_lock:
+            wm_turns = list(self._wm)
+        messages.extend(wm_turns)
 
-        if self.use_rag and self.rag:
-            try:
-                self.rag.archive_day_to_rag(date_str, reflection)
-            except Exception:
-                pass
+        # ── 6. User input ─────────────────────────────────────────────────────
+        messages.append({"role": "user", "content": user_input})
 
-        check_periodic_triggers(
-            self.memory, self.hugo_blogger,
-            tg_send, send_slack, self.birth_date,
-        )
+        # ── Token trim ───────────────────────────────────────────────────────
+        messages = self.wmc.trim_to_context_window(messages, MAX_REQUEST_TOKENS)
 
-        if self.blog_enabled:
-            result = self.hugo_blogger.post_reflection(
-                reflection_text=reflection,
-                date_str=date_str,
-                age_days=age_days,
-                message_count=self.memory.today_message_count,
-                ascii_art=ascii_art,
+        return messages
+
+    def _retrieve_sm_facts(self, query: str) -> str:
+        """
+        Fast path: SQLite keyword search first.
+        Slow path: RAG semantic search if keywords found or no keyword match.
+        """
+        # Check if memory trigger words present
+        lower = query.lower()
+        has_trigger = any(t in lower for t in MEMORY_TRIGGERS)
+
+        # Fast path — keyword search
+        keyword_results = self.wmc.search_past_memories(query, days_back=None)
+
+        if keyword_results and not has_trigger:
+            # Keyword match found, no deep search needed
+            top = keyword_results[:SM_RAG_TOP_K]
+            return self._format_sm_results(top)
+
+        if has_trigger or not keyword_results:
+            # Semantic RAG search
+            rag_results = self.smc.search_memory(query, top_k=SM_RAG_TOP_K)
+            relevant = [r for r in rag_results if r.get("similarity", 0) > RAG_SIMILARITY_THRESHOLD]
+            if relevant:
+                return self._format_sm_results(relevant)
+
+        return ""
+
+    def _format_sm_results(self, results: list) -> str:
+        lines = []
+        for r in results:
+            date_str = r.get("date", "")
+            summary = r.get("summary", r.get("text", ""))[:200]
+            if summary:
+                lines.append(f"• {date_str}: {summary}")
+        return "\n".join(lines)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # WORKING MEMORY
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _wm_append(self, turn: dict):
+        with self._wm_lock:
+            self._wm.append(turn)
+            # Keep 7±2 turns — trim to WM_MAX_TURNS
+            if len(self._wm) > WM_MAX_TURNS * 2:  # *2 because user+assistant pairs
+                self._wm = self._wm[-(WM_MAX_TURNS * 2):]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # EM SUMMARY
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _rebuild_em_summary(self):
+        """Summarize today's EM buffer into a short paragraph for context injection."""
+        try:
+            today_msgs = self.wmc.get_today_messages(date.today().isoformat())
+            if not today_msgs:
+                return
+
+            lines = []
+            for m in today_msgs[-40:]:  # last 40 messages for summary
+                role = m.get("role", "")
+                content = m.get("content", "")[:100]
+                lines.append(f"{role}: {content}")
+
+            prompt = (
+                "Summarize this conversation in 2-3 sentences. "
+                "Focus on topics discussed and important information shared. "
+                "Be concise.\n\n" + "\n".join(lines)
             )
-            if result.get("success") and result.get("deployed"):
-                url = result["url"]
-                if self.slack_enabled:
-                    send_slack(f"🌙 Day {age_days} reflection live → {url}",
-                               channel=SLACK_DAILY_CHANNEL)
-                tg_send(
-                    f"🌙 *Day {age_days} reflection*\n\n"
-                    + ". ".join(reflection.replace("\n", " ").split(".")[:2]) + ".\n"
-                    + f"🔗 {url}"
+
+            summary = self._call_cosmos_simple(prompt)
+            if summary:
+                self._em_summary_cache = summary
+                self._em_summary_turn_count = 0
+                self.get_logger().info("📝 EM summary updated")
+
+        except Exception as e:
+            self.get_logger().warning(f"EM summary failed: {e}")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # DAILY CONSOLIDATION
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _consolidation_check(self):
+        """Timer callback — check if idle consolidation should run."""
+        idle_time = time.time() - self._last_activity
+        if idle_time > CONSOLIDATION_IDLE_SECONDS and not self._consolidated_today:
+            today_str = date.today().isoformat()
+            self.get_logger().info(f"💤 Idle consolidation triggered for {today_str}")
+            threading.Thread(
+                target=self._consolidate_day,
+                args=(today_str,),
+                daemon=True
+            ).start()
+
+    def _consolidate_day(self, date_str: str):
+        """
+        End of day consolidation:
+        1. Get full day from EM buffer
+        2. Cosmos generates daily reflection
+        3. Save reflection to SM
+        4. embeddinggemma embeds and archives to SQLite
+        5. Clear EM buffer
+        """
+        with self._consolidation_lock:
+            try:
+                self.get_logger().info(f"🌙 Consolidating {date_str}...")
+
+                # Get today's messages
+                today_msgs = self.wmc.get_today_messages(date_str)
+                if not today_msgs:
+                    self.get_logger().info("No messages to consolidate")
+                    return
+
+                # Build consolidation prompt
+                lines = []
+                for m in today_msgs:
+                    role = m.get("role", "")
+                    content = m.get("content", "")[:150]
+                    lines.append(f"{role}: {content}")
+
+                prompt = (
+                    "You are reflecting on today's conversation as Grace. "
+                    "Write a 3-4 sentence daily reflection covering: "
+                    "1) Main topics discussed, "
+                    "2) Important facts or preferences learned about the person, "
+                    "3) Emotional tone of the day, "
+                    "4) Anything worth remembering long term. "
+                    "Be specific and personal.\n\n"
+                    "Today's conversation:\n" + "\n".join(lines[-60:])
                 )
 
-        return reflection
+                reflection = self._call_cosmos_simple(prompt)
+                if not reflection:
+                    self.get_logger().warning("Consolidation: no reflection generated")
+                    return
 
-    # ── Shutdown ──────────────────────────────────────────────────────────────
+                # Save reflection
+                self.wmc.save_reflection(
+                    text=reflection,
+                    reflection_date=date.fromisoformat(date_str),
+                )
 
-    def shutdown(self):
-        self.get_logger().info("=" * 60)
-        self.get_logger().info(f"{ROBOT_NAME.upper()} — SHUTDOWN SEQUENCE")
-        self.get_logger().info("=" * 60)
+                # Archive to RAG (embeds and stores in SQLite)
+                self.smc.archive_day_to_rag(date_str, daily_reflection=reflection)
 
-        if self.memory.today_message_count > 0:
-            self.get_logger().info("Creating final reflection...")
-            self._create_daily_reflection(self.memory.today_start)
+                # Reset EM state
+                self._em_summary_cache = ""
+                self._em_summary_turn_count = 0
+                self._consolidated_today = True
 
-        if self.slack_enabled:
-            age_days = (date.today() - self.birth_date).days
-            send_slack(
-                f"🌙 *Day {age_days} done* — {self.memory.today_message_count} conversations today",
-                channel=SLACK_DAILY_CHANNEL,
+                # Refresh SM reflections cache
+                self._sm_reflections_cache = self.wmc.get_recent_reflections_text(
+                    days=SM_RECENT_DAYS
+                )
+
+                self.get_logger().info(f"✅ Consolidated {date_str}: {reflection[:60]}...")
+
+            except Exception as e:
+                self.get_logger().error(f"Consolidation failed: {e}")
+
+    def _recover_em_on_startup(self):
+        """On startup, check for unprocessed EM from previous session."""
+        try:
+            yesterday = (datetime.now().date()).isoformat()
+            # Check if yesterday's data exists unprocessed in RAG window
+            if not self.wmc.reflection_exists(yesterday):
+                msgs = self.wmc.get_today_messages(yesterday)
+                if msgs:
+                    self.get_logger().info(
+                        f"⚡ Found unprocessed EM from {yesterday} — recovering..."
+                    )
+                    threading.Thread(
+                        target=self._consolidate_day,
+                        args=(yesterday,),
+                        daemon=True
+                    ).start()
+        except Exception as e:
+            self.get_logger().warning(f"EM recovery check failed: {e}")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # COSMOS CALLS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _call_cosmos(self, messages: list) -> str:
+        """Call Cosmos 2B via vLLM with full message history."""
+        try:
+            payload = {
+                "model": COSMOS_MODEL,
+                "messages": messages,
+                "max_tokens": 512,
+                "temperature": 0.7,
+                "stream": False,
+            }
+            r = requests.post(
+                f"{VLLM_URL}/v1/chat/completions",
+                json=payload,
+                timeout=30,
             )
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"].strip()
 
-        self.memory.save_chat_history()
+        except requests.exceptions.ConnectionError:
+            self.get_logger().error("Cannot connect to vLLM. Is it running?")
+            return "I cannot connect to my reasoning engine right now."
+        except Exception as e:
+            self.get_logger().error(f"Cosmos error: {e}")
+            return "I encountered an error. Please try again."
 
-        if self.rlhf_enabled:
-            self.rlhf.print_stats()
-            if self.rlhf.should_retrain(threshold=50):
-                try:
-                    out = self.rlhf.export_for_unsloth()
-                    self.get_logger().info(f"📦 Training data exported: {out}")
-                except Exception as e:
-                    self.get_logger().error(f"RLHF export failed: {e}")
+    def _call_cosmos_simple(self, prompt: str) -> str:
+        """Single-turn Cosmos call for consolidation/summarization tasks."""
+        messages = [
+            {"role": "system", "content": "You are Grace, a helpful AI assistant. Be concise."},
+            {"role": "user", "content": prompt},
+        ]
+        return self._call_cosmos(messages)
 
-        self.executor_pool.shutdown(wait=True)
+    # ══════════════════════════════════════════════════════════════════════════
+    # SHUTDOWN
+    # ══════════════════════════════════════════════════════════════════════════
 
-        if self.use_rag and self.rag:
-            try:
-                self.rag.close()
-            except Exception:
-                pass
-
-        self.get_logger().info(f"{ROBOT_NAME} offline 💤")
-        self.get_logger().info("=" * 60)
+    def graceful_shutdown(self):
+        """Called by igniter on SIGTERM — consolidate before exit."""
+        self.get_logger().info("🛑 Graceful shutdown — consolidating memory...")
+        today_str = date.today().isoformat()
+        if not self._consolidated_today:
+            self._consolidate_day(today_str)
+        self.smc.close()
+        self.get_logger().info("👋 CNS going offline. Goodbye.")
