@@ -46,8 +46,8 @@ VLLM_TIMEOUT    = 60.0                            # seconds before giving up
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── ROS2 topics ───────────────────────────────────────────────────────────────
-TOPIC_INPUT    = "/aurora/grace/input"
-TOPIC_RESPONSE = "/aurora/grace/response"
+TOPIC_INPUT    = "/cns/neural_input"
+TOPIC_RESPONSE = "/gce/response"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── GRACE personality ─────────────────────────────────────────────────────────
