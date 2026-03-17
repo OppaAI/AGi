@@ -1,2 +1,4 @@
 httpx
 sentence-transformers
+Pillow
+numpy<2
