@@ -198,11 +198,16 @@ class CNC(Node):
         Returns the full concatenated response string.
         """
         payload = {
-            "model":       VLLM_MODEL,
-            "messages":    messages,
-            "max_tokens":  VLLM_MAX_TOKENS,
-            "temperature": VLLM_TEMP,
-            "stream":      True,
+           "model":              VLLM_MODEL,
+           "messages":           messages,
+           "max_tokens":         VLLM_MAX_TOKENS,
+           "temperature":        0.7,    # creativity vs consistency
+           "top_p":              0.9,    # nucleus sampling
+           "top_k":              40,     # top-k sampling
+           "repetition_penalty": 1.15,   # penalize repeating phrases
+           "frequency_penalty":  0.1,    # penalize frequent tokens
+           "presence_penalty":   0.1,    # penalize already-mentioned topics
+           "stream":             True,
         }
 
         full_response = ""
