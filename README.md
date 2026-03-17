@@ -189,7 +189,7 @@ cd ~/AGi/AuRoRA
 
 # 2. Install deps
 rosdep install --from-paths src --ignore-src -r -y
-pip3 install httpx sentence-transformers Pillow "numpy<2" --break-system-packages
+pip3 install -r requirements.txt --break-system-packages
 
 # 3. Build
 colcon build --packages-select scs
