@@ -2,6 +2,7 @@ devel/
 install/
 log/
 build/
+test/
 bin/
 lib/
 msg_gen/
