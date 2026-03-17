@@ -1,12 +1,22 @@
 # AGi — Autonomous General Intelligence
 
 **AuRoRA** · Autonomous Robot with Reasoning Architecture  
-**Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada  
-**License:** GPL-3.0-only
+**Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
+
+[![Repo](https://img.shields.io/badge/Repo-OppaAI%2FAGi-76B900)](https://github.com/OppaAI/AGi)
+![Status](https://img.shields.io/badge/Status-experimental-orange.svg)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
+
+![ARM](https://img.shields.io/badge/ARM64-aarch64-0091BD?logo=arm)
+![LLM](https://img.shields.io/badge/Model-Cosmos%20Reason2%202B-76B900?logo=nvidia)
+![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
+![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
+
+For more comprehensive doucmentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
 
 ---
 
-A clean-slate rebuild of my autonomous robot project, starting from first principles.  
+A clean-slate rebuild of my autonomous robot project, starting from first principles.
 After building [ERIC](https://github.com/OppaAI/eric) for the NVIDIA Cosmos Cookoff 2026, I learned what I would do differently — proper ROS2 architecture from day one, a biologically-inspired memory system, and a foundation that can grow into full autonomy.
 
 The goal: build an autonomous ground robot that can explore nature with me, powered by on-device AI with no cloud dependency.
@@ -19,7 +29,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 |---|---|
 | SBC | Jetson Orin Nano Super 8GB |
 | Robot | Waveshare UGV Beast (tracked) |
-| LiDAR | YDLIDAR D500 360° |
+| LiDAR | YDLIDAR D500 360 |
 | Depth Camera | OAK-D Lite (stereo + YOLO) |
 | Pan-tilt + Webcam | USB |
 | Storage | 1TB NVMe |
@@ -58,45 +68,60 @@ AGi/
 ## Roadmap
 
 ### Phase 1 — Chatbot with Memory
+
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | 🟢 In Progress |
 | M2 | + Semantic Memory (SMC) + 11pm daily reflection | ⬜ Planned |
 | M3 | + Procedural Memory (PMC) | ⬜ Planned |
 
-### Phase 2 — Hardware / Autonomy
+### Phase 2 — Voice Output
+
 | Milestone | Description | Status |
 |---|---|---|
-| M4 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
-| M5 | Navigation + SLAM | ⬜ Planned |
-| M6 | Agentic mission execution | ⬜ Planned |
+| M4 | TTS on robot — Piper CPU streaming | ⬜ Planned |
+| M5 | TTS in web GUI — browser audio playback | ⬜ Planned |
+
+### Phase 3 — Multimodal Input
+
+| Milestone | Description | Status |
+|---|---|---|
+| M6 | Image input — camera + vision | ⬜ Planned |
+| M7 | ASR — on-device speech to text | ⬜ Planned |
+| M8 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
+
+### Phase 4 — Hardware / Autonomy
+
+| Milestone | Description | Status |
+|---|---|---|
+| M9 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
+| M10 | Navigation + SLAM | ⬜ Planned |
+| M11 | Agentic mission execution | ⬜ Planned |
 
 ---
 
-## Memory Architecture
-
-GRACE's memory is modelled on the human brain — four cortices, each serving a distinct role, coordinated by the MCC.
+## Architecture
 
 ```mermaid
 flowchart TD
-    GUI["GUI — AGi.html\nrosbridge ws://jetson:9090"]
-    ROS_IN["/cns/neural_input"]
-    ROS_OUT["/gce/response"]
+    GUI[GUI - AGi.html]
+    IN[cns/neural_input]
+    OUT[gce/response]
 
-    subgraph SCS["SCS — Semantic Cognitive System"]
-        CNC["CNC\nCentral Neural Core\nROS2 node · asyncio"]
-        MCC["MCC\nMemory Coordination Core"]
-        WMC["WMC\nWorking Memory Cortex\ndeque · 1400 tokens"]
-        EMC["EMC\nEpisodic Memory Cortex\nforever · SQLite"]
-        BUF["em_buffer\ncrash-safe intake"]
+    subgraph SCS[Semantic Cognitive System]
+        CNC[CNC - Central Neural Core]
+        MCC[MCC - Memory Coordination Core]
+        WMC[WMC - Working Memory Cortex]
+        EMC[EMC - Episodic Memory Cortex]
+        BUF[em_buffer - crash-safe intake]
     end
 
-    COSMOS["Cosmos Reason2 2B\nvLLM · localhost:8000"]
-    DB[("emc.db\nSQLite WAL")]
-    EMBED["embeddinggemma-300m\nCPU · 768-dim"]
+    COSMOS[Cosmos Reason2 2B - vLLM]
+    DB[(emc.db - SQLite)]
+    EMBED[embeddinggemma-300m - CPU]
 
-    GUI -->|user message| ROS_IN
-    ROS_IN --> CNC
+    GUI -->|user message| IN
+    IN --> CNC
     CNC --> MCC
     MCC --> WMC
     MCC --> EMC
@@ -105,54 +130,51 @@ flowchart TD
     EMBED --> EMC
     EMC --- DB
     MCC -->|context window| CNC
-    CNC -->|POST stream| COSMOS
+    CNC -->|stream request| COSMOS
     COSMOS -->|SSE tokens| CNC
-    CNC -->|publish chunks| ROS_OUT
-    ROS_OUT --> GUI
+    CNC -->|chunks| OUT
+    OUT --> GUI
 ```
 
 ---
 
 ## Conversation Sequence
 
-A single conversation turn — from user input to GRACE's response.
-
 ```mermaid
 sequenceDiagram
-    participant GUI as GUI
-    participant CNC as CNC
-    participant MCC as MCC
-    participant WMC as WMC
-    participant EMC as EMC
+    participant GUI
+    participant CNC
+    participant MCC
+    participant WMC
+    participant EMC
     participant COSMOS as Cosmos vLLM
 
     GUI->>CNC: /cns/neural_input
     activate CNC
 
-    CNC->>MCC: add_turn("user", msg)
-    MCC->>WMC: add_turn()
-    WMC-->>MCC: evicted turns (if full)
-    MCC-->>EMC: buffer_append(evicted) [async]
+    CNC->>MCC: add_turn user
+    MCC->>WMC: add_turn
+    WMC-->>MCC: evicted turns
+    MCC-->>EMC: buffer_append async
 
-    CNC->>MCC: build_context(user_input)
+    CNC->>MCC: build_context
     par concurrent
-        MCC->>WMC: get_turns()
+        MCC->>WMC: get_turns
         WMC-->>MCC: active turns
     and
-        MCC->>EMC: search(query, top_k=3)
-        EMC-->>MCC: relevant past episodes
+        MCC->>EMC: search top-k
+        EMC-->>MCC: past episodes
     end
-    MCC-->>CNC: messages[] with memory context
+    MCC-->>CNC: messages with context
 
-    CNC->>COSMOS: POST /v1/chat/completions stream=true
-    loop streaming tokens
+    CNC->>COSMOS: POST stream
+    loop tokens
         COSMOS-->>CNC: token
-        CNC-->>GUI: /gce/response {type: start/delta}
+        CNC-->>GUI: start / delta
     end
-    COSMOS-->>CNC: DONE
-    CNC-->>GUI: /gce/response {type: done}
+    CNC-->>GUI: done
 
-    CNC->>MCC: add_turn("assistant", response)
+    CNC->>MCC: add_turn assistant
     deactivate CNC
 ```
 
@@ -175,7 +197,7 @@ source install/setup.bash
 
 # 4. Start Cosmos vLLM
 bash launch/cosmos.sh
-# Wait ~3 minutes for: "Application startup complete"
+# Wait ~3 min for: Application startup complete
 
 # 5. Start GRACE
 ros2 run scs cnc
@@ -184,9 +206,8 @@ ros2 run scs cnc
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
 # 7. Open GUI
-# Serve AGi.html from Jetson:
 python3 -m http.server 9413 --directory src/scs/scs
-# Open in browser: http://<jetson-ip>:9413/AGi.html
+# Open: http://<jetson-ip>:9413/AGi.html
 ```
 
 ---
