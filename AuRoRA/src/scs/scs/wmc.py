@@ -6,62 +6,67 @@ AuRoRA · Semantic Cognitive System (SCS)
 Active conversation context for GRACE.
 Mirrors human working memory — fast, limited capacity, current focus only.
 
-Capacity: token-counted, stays under chunk_capacity to fit LLM context window with room for system prompt + GRACE personality + EMC context injection.
+Capacity: chunk-counted, stays under chunk capacity to fit LLM context window with room for system prompt + GRACE personality + EMC context injection.
 Overflow:  oldest event segments pushed to MCC → EMC buffer (async)
 
 Miller's Law: 7±2 chunks — chunk capacity and event segment count are monitored in hybrid
 to ensure optimal context window construction for LLM inference while maintaining conversation coherence.
 """
 
-from collections import deque
-from datetime import datetime
-from typing import Optional
+from datetime import datetime            # (TODO) replace with hrs.blc when BioLogic Clock is built
+from collections import deque            # for use in memory management
 
-
-# ── Token budget ──────────────────────────────────────────────────────────────
+# ── Chunk Capacity / Event Segment Limit ──────────────────────────────────────────────────────────────
 # LLM: max_model_len = 2048 (cosmos.sh)
 # Reserve ~30% for system prompt + GRACE personality + EMC context injection
 
-# (TODO) add MAX_TURN = 7 for better 7+/-2 Miller's law
-# (TODO) put this chunk_capacity and MAX_TURN to mcc.yaml
-chunk_capacity = 1400   # tokens reserved for raw conversation event segments
-# (TODO) put this CHARS_PER_TOKEN to hrs/hrs/hrp.py (homeostatic regulation system/parameters)
-CHARS_PER_TOKEN   = 4      # rough English approximation (1 token ≈ 4 chars)
+# (TODO) add MAX_CHUNK = 7 for better 7+/-2 Miller's law
+# (TODO) put this chunk_capacity and MAX_CHUNK to mcc.yaml
+chunk_capacity = 1440   # chunks reserved for raw conversation event segments
+
+# Retrieve the chunk size from homeostatic regulation system
+# Fallback to default if HRS cannot be called
+try:                                        # attempt to reach HRS
+    from hrs.hrp import UNITS_PER_CHUNK     # retrieve chunk size from HRS
+except ImportError:                         # if error cannot reach HRS
+    UNITS_PER_CHUNK = 4                     # fallback default value of 4
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _estimate_chunks_in_content(content: str) -> int:
+    """
+    Roughly estimate how much chunks in the inputed content.
+    Args:
+        content
+    Returns:
+    """
+    return max(1, len(content) // UNITS_PER_CHUNK)    # return 1 chunk if not enough to be 1 chunk, otherwise divide the content by the chunk size
 
-def _estimate_tokens(text: str) -> int:
-    """Rough token estimate: 1 token ≈ 4 English characters."""
-    return max(1, len(text) // CHARS_PER_TOKEN)
-
-
-def _event_segment_tokens(event_segment: dict) -> int:
-    """Estimate tokens for a single conversation event segment."""
+def _event_segment_chunks(event_segment: dict) -> int:
+    """Estimate chunks for a single conversation event segment."""
     content = event_segment.get("content", "")
     # Add small overhead per event segment for role label + formatting
-    return _estimate_tokens(content) + 4
-
+    return _estimate_chunks(content) + 4
 
 class WMC:
     """
     Working Memory Cortex.
 
     Maintains the active conversation window sent to LLM on every event segment.
-    Oldest event segments are evicted when the token budget is exceeded and returned
+    Oldest event segments are evicted when the chunk capacity is exceeded and returned
     to MCC for async forwarding to EMC.
 
     Thread-safety: NOT thread-safe by design — only CNC/MCC touches WMC,
     always from the asyncio event loop.
     """
 
-    def __init__(self, logger, token_budget: int = chunk_capacity):
+    def __init__(self, logger, chunk_capacity: int = chunk_capacity):
         self.logger       = logger
-        self.token_budget = token_budget
-        self._turns: deque[dict] = deque()
-        self._used_tokens: int   = 0
+        self.chunk_capacity = chunk_capacity
+        self._event_segments: deque[dict] = deque()
+        self._active_chunks: int   = 0
 
         self.logger.info(
-            f"✅ WMC initialised — token budget: {self.token_budget} tokens"
+            f"✅ WMC initialised — chunk capacity: {self.chunk_capacity} chunks"
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -85,26 +90,26 @@ class WMC:
             "content":   content,
             "timestamp": datetime.now().isoformat(),
         }
-        event_segment_cost = _event_segment_tokens(event_segment)
+        event_segment_load = _event_segment_chunks(event_segment)
 
         # Evict oldest event segments until new event segment fits
         evicted: list[dict] = []
-        while self._turns and (self._used_tokens + event_segment_cost > self.token_budget):
-            oldest = self._turns.popleft()
-            self._used_tokens -= _event_segment_tokens(oldest)
+        while self._event_segments and (self._active_chunks + event_segment_load > self.chunk_capacity):
+            oldest = self._event_segments.popleft()
+            self._active_chunks -= _event_segment_chunks(oldest)
             evicted.append(oldest)
             self.logger.debug(
                 f"WMC evict → EMC: [{oldest['role']}] "
                 f"{oldest['content'][:40]}…"
             )
 
-        self._turns.append(event_segment)
-        self._used_tokens += event_segment_cost
+        self._event_segments.append(event_segment)
+        self._active_chunks += event_segment_load
 
         self.logger.debug(
             f"WMC + event segment [{role}] | "
-            f"event segments={len(self._turns)} | "
-            f"tokens={self._used_tokens}/{self.token_budget} | "
+            f"event segments={len(self._event_segments)} | "
+            f"chunks={self._active_chunks}/{self.chunk_capacity} | "
             f"evicted={len(evicted)}"
         )
 
@@ -118,22 +123,22 @@ class WMC:
         """
         return [
             {"role": t["role"], "content": t["content"]}
-            for t in self._turns
+            for t in self._event_segments
         ]
 
     def peek_last(self, n: int = 1) -> list[dict]:
         """Return the last N event segments (most recent) with timestamps."""
-        event_segments = list(self._turns)
+        event_segments = list(self._event_segments)
         return event_segments[-n:] if n <= len(event_segments) else event_segments
 
-    def token_usage(self) -> dict:
-        """Return current token usage stats."""
+    def chunk_usage(self) -> dict:
+        """Return current chunk usage stats."""
         return {
-            "used":    self._used_tokens,
-            "budget":  self.token_budget,
-            "free":    self.token_budget - self._used_tokens,
-            "event_segments":   len(self._turns),
-            "percent": round(self._used_tokens / self.token_budget * 100, 1),
+            "used":    self._active_chunks,
+            "capacity":  self.chunk_capacity,
+            "free":    self.chunk_capacity - self._active_chunks,
+            "event_segments":   len(self._event_segments),
+            "percent": round(self._active_chunks / self.chunk_capacity * 100, 1),
         }
 
     def clear(self):
@@ -142,21 +147,21 @@ class WMC:
         Called at conversation end or on explicit reset.
         Does NOT evict to EMC — caller is responsible for saving if needed.
         """
-        count = len(self._turns)
-        self._turns.clear()
-        self._used_tokens = 0
+        count = len(self._event_segments)
+        self._event_segments.clear()
+        self._active_chunks = 0
         self.logger.info(f"🧹 WMC cleared ({count} event segments discarded)")
 
     def is_empty(self) -> bool:
-        return len(self._turns) == 0
+        return len(self._event_segments) == 0
 
     def __len__(self) -> int:
-        return len(self._turns)
+        return len(self._event_segments)
 
     def __repr__(self) -> str:
-        u = self.token_usage()
+        u = self.chunk_usage()
         return (
             f"WMC(event_segments={u['event_segments']}, "
-            f"tokens={u['used']}/{u['budget']} "
+            f"chunks={u['used']}/{u['capacity']} "
             f"[{u['percent']}%])"
         )
