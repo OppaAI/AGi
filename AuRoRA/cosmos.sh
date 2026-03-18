@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 docker stop cosmos-reason2-2b 2>/dev/null
 docker rm   cosmos-reason2-2b 2>/dev/null
 
