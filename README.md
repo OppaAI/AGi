@@ -12,7 +12,7 @@
 ![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
 ![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
 
-For more comprehensive doucmentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
+For more comprehensive documentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
 
 ---
 
