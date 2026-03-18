@@ -34,12 +34,15 @@ except ImportError:                         # if error cannot reach HRS
 
 def _estimate_chunks_in_content(content: str) -> int:
     """
-    Roughly estimate how much chunks in the inputed content.
+    Roughly estimate the number of chunks in the given content.
+
     Args:
-        content
+        content (str): Text to estimate chunks for
+
     Returns:
+        int: Number of chunks, minimum 1
     """
-    return max(1, len(content) // UNITS_PER_CHUNK)    # return 1 chunk if not enough to be 1 chunk, otherwise divide the content by the chunk size
+    return max(1, len(content) // UNITS_PER_CHUNK)            # minimum 1 chunk even empty content, otherwise break the content into chunks
 
 def _event_segment_chunks(event_segment: dict) -> int:
     """Estimate chunks for a single conversation event segment."""
