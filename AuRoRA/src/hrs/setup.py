@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'scs'
+package_name = 'hrs'
 
 setup(
     name=package_name,
@@ -24,7 +24,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'cnc = scs.cnc:main',
         ],
     },
 )

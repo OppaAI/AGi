@@ -3,7 +3,7 @@
 
 <package format="3">
   <!-- Basic package information -->
-  <name>scs</name>
+  <name>hrs</name>
   <version>0.0.0</version>
   <description>Semantic Cognitive System for AGi</description>
   
