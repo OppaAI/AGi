@@ -169,7 +169,10 @@ class CNC(Node):
             memory_context = await self.mcc.build_context(user_input)
 
             # 3. Assemble messages for Cosmos
-            messages = [{"role": "system", "content": GRACE_SYSTEM_PROMPT}]
+            system_prompt = GRACE_SYSTEM_PROMPT.format(
+                date=datetime.now().strftime("%Y-%m-%d")
+            )
+            messages = [{"role": "system", "content": system_prompt}]
             messages.extend(memory_context)
             messages.append({"role": "user", "content": user_input})
 
