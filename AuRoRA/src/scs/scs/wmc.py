@@ -21,7 +21,11 @@ from typing import Optional
 # ── Token budget ──────────────────────────────────────────────────────────────
 # Cosmos Reason2 2B: max_model_len = 2048 (cosmos.sh)
 # Reserve ~30% for system prompt + GRACE personality + EMC context injection
+
+# (TODO) add MAX_TURN = 7 for better 7+/-2 Miller's law
+# (TODO) put this WMC_TOKEN_BUDGET and MAX_TURN to mcc.yaml
 WMC_TOKEN_BUDGET  = 1400   # tokens reserved for raw conversation turns
+# (TODO) put this CHARS_PER_TOKEN to hrs/hrs/hrp.py (homeostatic regulation system/parameters)
 CHARS_PER_TOKEN   = 4      # rough English approximation (1 token ≈ 4 chars)
 # ─────────────────────────────────────────────────────────────────────────────
 
