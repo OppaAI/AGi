@@ -3,10 +3,10 @@ WMC — Working Memory Cortex
 ============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Active conversation context for GRACE.
+Active conversation context for the robot.
 Mirrors human working memory — fast, limited capacity, current focus only.
 
-Capacity: utterance-counted, stays under utterance capacity to fit LLM context window with room for system prompt + GRACE personality + EMC context injection.
+Capacity: utterance-counted, stays under utterance capacity to fit LLM context window with room for system prompt + robot personality + EMC context injection.
 Overflow: oldest utterances pushed to MCC → EMC buffer (async)
 
 Miller's Law: 7±2 utterances — both utterance count and chunk capacity are enforced
@@ -17,7 +17,7 @@ while maintaining conversation coherence.
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque            # For use in memory management
 
-# Reserve ~30% for system prompt + GRACE personality + EMC context injection
+# Reserve ~30% for system prompt + robot personality + EMC context injection
 
 # Retrieve the chunk size and utterance overhead from homeostatic regulation system parameters (HRS.HRP) for dynamic configuration of WMC based on LLM context window and hardware constraints
 # Fallback to default if HRS cannot be called
