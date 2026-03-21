@@ -72,35 +72,63 @@ AGi/
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | 🟢 In Progress |
-| M2a | + Semantic Memory (SMC) + nightly reflection | ⬜ Planned |
-| M2b | + Forgetting + conflict resolution | ⬜ Planned |
-| M3 | + Procedural Memory (PMC) | ⬜ Planned |
+| M2a | EMC maturity — forgetting + importance scoring | ⬜ Planned |
+| M2b | Semantic Memory (SMC) basics — distillation + structure | ⬜ Planned |
+| M2c | SMC maturity — graph structure + anchoring + decay | ⬜ Planned |
+| M3 | Procedural Memory (PMC) | ⬜ Planned |
  
 ### M1 — Chatbot + WMC + EMC
 - PMT lifecycle with hybrid chunk/slot eviction (Miller's Law 7±2)
-- Async embedding worker via embeddinggemma (evaluate performance at M2)
+- Async embedding worker via embeddinggemma (evaluate performance at M2a)
+- Embeddinggemma anchor vector relevance scoring — discard trivial PMTs before EMC buffer
 - Semantic search with cosine similarity
 - SQLite WAL episodic storage — no expiry, 1TB NVMe
-- Conflict/versioning columns in EMC schema (prep for M2b)
+- Conflict/versioning columns in EMC schema (prep for M2b): `conflict`, `superseded_by`, `valid_from`, `valid_until`
+- Importance columns in EMC schema (prep for M2a): `memory_strength`, `last_recalled_at`, `recall_count`, `novelty_score`
  
-### M2a — SMC + Nightly Reflection
-- Semantic Memory Cortex — distilled long-term facts
-- 11pm Cosmos reflection pipeline — novel vs routine day detection
+### M2a — EMC Maturity
+- Decision: keep async embedding per-segment or move to 11pm batch (based on M1 data)
+- 3-dimension importance scoring:
+    - Dimension 1 — SMC similarity (personal fact anchoring)
+    - Dimension 2 — novelty score via embeddinggemma (novel = important, duplicate = expendable)
+    - Dimension 3 — content signals (length, questions, named entities, significance markers)
+- Ebbinghaus forgetting curve: R = e^(−t/S), S set by importance score, +1 on each recall
+- Duplicate/similarity clustering — cosine > 0.85 = merge candidates
+- Daily reflection (11pm) — fast sweep:
+    - Calculate R for all episodes
+    - Cluster and merge duplicates → distil to SMC
+    - Delete low importance + high decay episodes
+- Weekly assessment (Sunday) — deep sweep via Cosmos:
+    - Full importance scoring across all EMC
+    - Resolve pending conflicts
+    - Generate memory health report for OppaAI review
+- Memory dumps to `~/.aurora/memory_dumps/daily/` and `weekly/`
+- Evaluate anchor vector PMT filtering accuracy — upgrade to fine-tuned Qwen3 0.6B if insufficient
+ 
+### M2b — SMC Basics
+- SMC structure decision — flat key-value vs triples vs graph
+- Distillation pipeline — EMC episodes → Cosmos → SMC facts
+- 11pm nightly reflection — novel vs routine day detection
 - Recursive summary update: Mi = LLM(Hi, Mi-1)
-- Trivial PMT filter before EMC buffer
-- Decision: keep async embedding or move to 11pm batch based on M1 data
- 
-### M2b — Forgetting + Conflict Resolution
-- Ebbinghaus forgetting curve: R = e^(−t/S), S increments on recall
+- SMC fact update — when facts change, old fact versioned not deleted
 - Conflict detection during conversation — GRACE asks to clarify
 - `_pending_conflict` flag in MCC for turn-spanning conflict state
 - Memory versioning — `valid_from`, `valid_until`, `superseded_by`
+- SMC feeds back into WMC context injection via MCC
+ 
+### M2c — SMC Maturity
+- SMC as knowledge graph — entities + relationships + triples
+- SMC anchors EMC importance scoring (personal facts never decay)
+- SMC fact decay — do facts ever expire? policy decision
+- Cross-layer search — query spans WMC + EMC + SMC simultaneously
 - Dynamic WMC capacity via HRS reading VCS vitals
+- Fine-tuned Qwen3 0.6B memory gating classifier if embeddinggemma insufficient
  
 ### M3 — Procedural Memory (PMC)
 - YAML-based skill storage
 - Skill ingestion pipeline
 - Sandboxed skill execution
+- PMC + SMC interaction design
  
 ---
  
@@ -184,7 +212,7 @@ AGi/
 | M16 | Test-time training — self-evolution | ⬜ Planned |
  
 ### M14 — Graph-RAG
-- SMC as knowledge graph — entities + relationships
+- SMC as full knowledge graph — entities + relationships
 - Tree-based hierarchical search (HAT) for large SMC
 - Multiple search strategies combined
  
