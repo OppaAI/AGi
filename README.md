@@ -67,36 +67,134 @@ AGi/
 
 ## Roadmap
 
-### Phase 1 — Chatbot with Memory
-
+## Phase 1 — Chatbot with Memory
+ 
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | 🟢 In Progress |
-| M2 | + Semantic Memory (SMC) + 11pm daily reflection | ⬜ Planned |
+| M2a | + Semantic Memory (SMC) + nightly reflection | ⬜ Planned |
+| M2b | + Forgetting + conflict resolution | ⬜ Planned |
 | M3 | + Procedural Memory (PMC) | ⬜ Planned |
-
-### Phase 2 — Voice Output
-
+ 
+### M1 — Chatbot + WMC + EMC
+- PMT lifecycle with hybrid chunk/slot eviction (Miller's Law 7±2)
+- Async embedding worker via embeddinggemma (evaluate performance at M2)
+- Semantic search with cosine similarity
+- SQLite WAL episodic storage — no expiry, 1TB NVMe
+- Conflict/versioning columns in EMC schema (prep for M2b)
+ 
+### M2a — SMC + Nightly Reflection
+- Semantic Memory Cortex — distilled long-term facts
+- 11pm Cosmos reflection pipeline — novel vs routine day detection
+- Recursive summary update: Mi = LLM(Hi, Mi-1)
+- Trivial PMT filter before EMC buffer
+- Decision: keep async embedding or move to 11pm batch based on M1 data
+ 
+### M2b — Forgetting + Conflict Resolution
+- Ebbinghaus forgetting curve: R = e^(−t/S), S increments on recall
+- Conflict detection during conversation — GRACE asks to clarify
+- `_pending_conflict` flag in MCC for turn-spanning conflict state
+- Memory versioning — `valid_from`, `valid_until`, `superseded_by`
+- Dynamic WMC capacity via HRS reading VCS vitals
+ 
+### M3 — Procedural Memory (PMC)
+- YAML-based skill storage
+- Skill ingestion pipeline
+- Sandboxed skill execution
+ 
+---
+ 
+## Phase 2 — Voice
+ 
 | Milestone | Description | Status |
 |---|---|---|
 | M4 | TTS on robot — Piper CPU streaming | ⬜ Planned |
 | M5 | TTS in web GUI — browser audio playback | ⬜ Planned |
-
-### Phase 3 — Multimodal Input
-
+ 
+### M4 — TTS on Robot
+- Piper CPU streaming on Jetson
+ 
+### M5 — TTS in Web GUI
+- Browser audio playback
+ 
+---
+ 
+## Phase 3 — Multimodal + Knowledge
+ 
 | Milestone | Description | Status |
 |---|---|---|
-| M6 | Image input — camera + vision | ⬜ Planned |
+| M6 | Image input — camera + Cosmos vision | ⬜ Planned |
 | M7 | ASR — on-device speech to text | ⬜ Planned |
-| M8 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
-
-### Phase 4 — Hardware / Autonomy
-
+| M8 | Knowledge ingestion — RAG + PDF/docs | ⬜ Planned |
+| M9 | Agentic web search + crawling | ⬜ Planned |
+| M10 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
+ 
+### M6 — Image Input + Visuospatial Memory
+- OAK-D frames → Cosmos Vision → text description → visuospatial PMT
+- WMC visuospatial sketchpad slot (Cowan 4±1)
+- Episodic buffer integrating phonological + visuospatial PMTs
+ 
+### M7 — ASR
+- Whisper on-device speech to text
+ 
+### M8 — Knowledge Ingestion (RAG)
+- Passive RAG — PDF/doc → embeddinggemma → SMC directly
+- Conflict report UI for ingested knowledge
+- Ingestion conflict resolution workflow
+ 
+### M9 — Agentic Web Search
+- AIVA LLM as web agent
+- Active RAG — search → summarise → SMC
+- Multiple search combining semantic + keyword + SQL
+ 
+### M10 — Messaging
+- Gmail, Slack, Telegram integration
+ 
+---
+ 
+## Phase 4 — Hardware + Autonomy
+ 
 | Milestone | Description | Status |
 |---|---|---|
-| M9 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
-| M10 | Navigation + SLAM | ⬜ Planned |
-| M11 | Agentic mission execution | ⬜ Planned |
+| M11 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
+| M12 | Navigation + SLAM | ⬜ Planned |
+| M13 | Agentic mission execution | ⬜ Planned |
+ 
+### M11 — Motors + Sensors
+- LiDAR → text description → visuospatial PMT
+- OAK-D depth + object detection integration
+- Sensor fusion into episodic buffer
+ 
+### M12 — Navigation + SLAM
+- Nav2 + Isaac ROS
+- Spatial memory in SMC — home layout, familiar routes
+ 
+### M13 — Agentic Mission Execution
+- Mission planning via PMC skills
+- Igniter node for ordered startup and health checks
+ 
+---
+ 
+## Phase 5 — Deep Learning
+ 
+| Milestone | Description | Status |
+|---|---|---|
+| M14 | Graph-RAG — SMC as knowledge graph | ⬜ Planned |
+| M15 | LoRA fine-tuning — permanent learning | ⬜ Planned |
+| M16 | Test-time training — self-evolution | ⬜ Planned |
+ 
+### M14 — Graph-RAG
+- SMC as knowledge graph — entities + relationships
+- Tree-based hierarchical search (HAT) for large SMC
+- Multiple search strategies combined
+ 
+### M15 — LoRA Fine-tuning
+- Bake frequently accessed SMC knowledge into Cosmos weights
+- GRACE learns permanently, not just retrieves
+ 
+### M16 — Test-Time Training
+- Adapt Cosmos weights during inference from new context
+- Self-evolution milestone
 
 ---
 
