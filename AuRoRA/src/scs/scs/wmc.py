@@ -13,7 +13,7 @@ Terminology:
     Chunk      - unit of measurement for LLM context window size (~4 characters)
 
 Lifecycle of a PMT:
-    Induction → Filling → Sustaining → Decaying → Evicting
+    Induction → Filling → Sustaining → Receding → Evicting
 
 Capacity:
     Phonological limit — constrained by Miller's Law (7±2 PMTs), tunable via config
@@ -66,7 +66,7 @@ class WorkingMemoryCortex:
     Working Memory Cortex.
 
     Maintains the active conversation window sent to LLM on every PMT.
-    Decaying PMT schema are evicted when the global chunk limit or PMT slot limit is exceeded,
+    Receding PMT schema are evicted when the global chunk limit or PMT slot limit is exceeded,
     and returned to MCC for async forwarding to EMC.
 
     Thread-safety: Single-threaded by design — protected by CNC._busy flag.
@@ -132,41 +132,41 @@ class WorkingMemoryCortex:
         Returns:
             list[dict]: list of evicted PMTs [{role, content, timestamp}]
         """
-        pmt = {                                          # Combine the elements of induced PMT into one register for filling
-            "role":      role,                           # Register the role label of PMT
-            "content":   content,                        # Register the content of the PMT
-            "timestamp": datetime.now().isoformat(),     # Register the inducing time of the PMT
+        induced_pmt = {                                # Combine the elements of induced PMT into one register for filling
+            "role":      role,                         # Register the role label of PMT
+            "content":   content,                      # Register the content of the PMT
+            "timestamp": datetime.now().isoformat(),   # Register the inducing time of the PMT
         }
-        pmt_chunks = _estimate_chunk_count(pmt)     # Calculate how many chunks in the PMT to be induced
+        induced_pmt_chunks = _estimate_chunk_count(induced_pmt)    # Calculate how many chunks in the PMT to be induced
 
-        # Evict decaying PMT schema until induced PMT fits or the limit of PMT slot is reached
+        # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
         # And then fill the induced PMT, to keep working memory always within the capacities
-        evicted_pmt_slot: list[dict] = []                         # Set up buffer for holding decaying memory
+        evicted_pmt_slot: list[dict] = []                         # Set up buffer for holding receding memory
         
         while self._pmt_slot and (                                                # Evict loop when the working memory is not empty, and one of the following condition is met
             self._sustained_chunks + pmt_chunks > self.global_chunk_limit         # - Global chunk limit exceeded after filling of the induced PMT, or
             or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # - PMT schema exceeds the limit of PMT slot (ie. Miller's Law 7±2, tunable)
         ):
-            evicted_pmt = self._pmt_slot.popleft()                                # Evict the decaying PMT from the working memory 
+            evicted_pmt = self._pmt_slot.popleft()                                # Evict the receding PMT from the working memory 
             evicted_pmt_slot.append(evicted_pmt)                                  # Fill the evicted PMT to the evicted slot
             evicted_chunks = _estimate_chunk_count(evicted_pmt)                   # Calculate the chunk size of the evicted PMT
             self._sustained_chunks -= evicted_chunks                              # Update the chunk size of the working memory
-            self.logger.debug(                                                    # Log the eviction of the decaying PMT
+            self.logger.debug(                                                    # Log the eviction of the receding PMT
                 f"WMC evict → EMC: [{evicted_pmt['role']}] "
                 f"size={evicted_chunks} chunks"
             )
 
-        self._pmt_slot.append(pmt)                # Fill in the induced PMT into working memory
-        self._sustained_chunks += pmt_chunks      # Update the chunk size of the working memory
+        self._pmt_slot.append(induced_pmt)                # Fill in the induced PMT into working memory
+        self._sustained_chunks += induced_pmt_chunks      # Update the chunk size of the working memory
 
-        self.logger.debug(                        # Log the filling and eviction for development/troubleshooting
+        self.logger.debug(                                # Log the filling and eviction for development/troubleshooting
             f"WMC filled [{role}] | "
             f"sustained={len(self._pmt_slot)} | "
             f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
             f"evicted={len(evicted_pmt_slot)}"
         )
 
-        return evicted_pmt_slot                    # Return the list of evicted PMT schema back to MCC
+        return evicted_pmt_slot                            # Return the list of evicted PMT schema back to MCC
 
     def recall_pmt_schema(self) -> list[dict]:
         """
