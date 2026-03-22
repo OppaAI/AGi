@@ -47,6 +47,8 @@ VLLM_TIMEOUT    = 60.0                            # seconds before giving up
 
 # ── ROS2 topics ───────────────────────────────────────────────────────────────
 TOPIC_INPUT    = "/cns/neural_input"
+TOPIC_IMAGE    = "/cns/image_input"
+TOPIC_REWARD   = "/cns/rl_reward"
 TOPIC_RESPONSE = "/gce/response"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -111,15 +113,24 @@ class CNC(Node):
         )
 
         # ── ROS2 topics ───────────────────────────────────────────
-        self._sub = self.create_subscription(
+        self._sub_input = self.create_subscription(
             String, TOPIC_INPUT, self._on_input, 10
         )
+        self._sub_image = self.create_subscription(
+            String, TOPIC_IMAGE, self._on_image, 10
+        )
+        self._sub_reward = self.create_subscription(
+            String, TOPIC_REWARD, self._on_reward, 10
+        )
+        
         self._pub = self.create_publisher(String, TOPIC_RESPONSE, 10)
 
         # ── Busy flag — one request at a time ─────────────────────
         self._busy = False
 
         self.get_logger().info(f"✅ Subscribed  : {TOPIC_INPUT}")
+        self.get_logger().info(f"✅ Subscribed  : {TOPIC_IMAGE}")
+        self.get_logger().info(f"✅ Subscribed  : {TOPIC_REWARD}")
         self.get_logger().info(f"✅ Publishing  : {TOPIC_RESPONSE}")
         self.get_logger().info(f"✅ vLLM        : {VLLM_BASE_URL}")
         self.get_logger().info(f"✅ Model       : {VLLM_MODEL}")
@@ -147,6 +158,24 @@ class CNC(Node):
         asyncio.run_coroutine_threadsafe(
             self._handle(user_input), self._loop
         )
+
+    def _on_image(self, msg: String):
+        """Callback for image input. Integrates visual context into memory."""
+        img_info = msg.data.strip()
+        if img_info:
+            self.get_logger().info(f"📸 Image Input: {img_info[:80]}")
+            asyncio.run_coroutine_threadsafe(
+                self.mcc.add_turn("system", f"Visual Context: {img_info}"), self._loop
+            )
+
+    def _on_reward(self, msg: String):
+        """Callback for RL reward. Used to fine-tune future responses."""
+        reward_info = msg.data.strip()
+        if reward_info:
+            self.get_logger().info(f"💎 RL Reward Received: {reward_info}")
+            asyncio.run_coroutine_threadsafe(
+                self.mcc.add_turn("system", f"Reinforcement Learning Signal: {reward_info}"), self._loop
+            )
 
     # ── Async pipeline ────────────────────────────────────────────────────────
 
