@@ -55,11 +55,11 @@ def _estimate_chunk_count(pmt: dict) -> int:
     Returns:
         int: Number of chunks, including overhead for role label and formatting
     """
-    role = pmt.get("role", "")                                        # Retrieve role label from PMT. 
-    content = pmt.get("content", "")                                  # Retrieve content from PMT.
-    role_chunk_count = len(role) // UNITS_PER_CHUNK                   # Calculate chunks for role label
-    content_chunk_count = max(1, len(content) // UNITS_PER_CHUNK)     # Calculate chunks for content, minimum 1 chunk even for empty content
-    return role_chunk_count + content_chunk_count + PMT_OVERHEAD      # Return total chunk count (role label + content + overhead)
+    role = pmt.get("role", "")                                                              # Retrieve role label from PMT. 
+    content = pmt.get("content", "")                                                        # Retrieve content from PMT.
+    role_chunk_count = (len(role) + UNITS_PER_CHUNK - 1 ) // UNITS_PER_CHUNK                # Calculate chunks for role label
+    content_chunk_count = max(1, (len(content) + UNITS_PER_CHUNK - 1 ) // UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
+    return role_chunk_count + content_chunk_count + PMT_OVERHEAD                            # Return total chunk count (role label + content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -111,11 +111,16 @@ class WorkingMemoryCortex:
         return len(self._pmt_slot)                    # Return the number of PMTs in the sustained PMT schema
 
     def __repr__(self) -> str:
-        pmt_schema_stats = self.pmt_schema_stats      # Retrieve the status of the sustained PMT schema
-        return (                                      # Return the string representation of the PMT schema status for debugging and logging purposes
-            f"WorkingMemoryCortex(pmts={pmt_schema_stats['pmt_count']}, "
-            f"chunks={pmt_schema_stats['sustained_chunks']}/{pmt_schema_stats['global_chunk_limit']} "
-            f"[{pmt_schema_stats['load_percent']}%])"
+        """
+        Return string representation of WMC state for debugging.
+
+        Returns:
+            str: String representation of WMC state
+        """
+        return (                                      # Return string representation of WMC state for debugging
+            f"WorkingMemoryCortex(pmts={len(self._pmt_slot)}, "
+            f"chunks={self._sustained_chunks}/{self.global_chunk_limit} "
+            f"[{round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0}%])"
         )
         
     def fill_pmt(self, role: str, content: str) -> list[dict]:
@@ -132,6 +137,14 @@ class WorkingMemoryCortex:
         Returns:
             list[dict]: list of evicted PMTs [{role, content, timestamp}]
         """
+        # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for role and overhead
+        role_chunk_count = (len(role) + UNITS_PER_CHUNK - 1) // UNITS_PER_CHUNK                 # Calculate chunks for role label to determine remaining capacity for content
+        max_content_chunks = self.global_chunk_limit - PMT_OVERHEAD - role_chunk_count          # Calculate maximum chunks available for content
+        max_content_length = max_content_chunks * UNITS_PER_CHUNK                               # Calculate maximum content length based on remaining chunk capacity
+        if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
+            content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
+            self.logger.warning(f"WMC content truncated to {max_content_length} characters")    # Log the warning of truncation of the content
+        
         induced_pmt = {                                # Combine the elements of induced PMT into one register for filling
             "role":      role,                         # Register the role label of PMT
             "content":   content,                      # Register the content of the PMT
@@ -144,14 +157,14 @@ class WorkingMemoryCortex:
         evicted_pmt_slot: list[dict] = []                         # Set up buffer for holding receding memory
         
         while self._pmt_slot and (                                                # Evict loop when the working memory is not empty, and one of the following condition is met
-            self._sustained_chunks + pmt_chunks > self.global_chunk_limit         # - Global chunk limit exceeded after filling of the induced PMT, or
+            self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit # - Global chunk limit exceeded after filling of the induced PMT, or
             or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # - PMT schema exceeds the limit of PMT slot (ie. Miller's Law 7±2, tunable)
         ):
-            evicted_pmt = self._pmt_slot.popleft()                                # Evict the receding PMT from the working memory 
-            evicted_pmt_slot.append(evicted_pmt)                                  # Fill the evicted PMT to the evicted slot
-            evicted_chunks = _estimate_chunk_count(evicted_pmt)                   # Calculate the chunk size of the evicted PMT
-            self._sustained_chunks -= evicted_chunks                              # Update the chunk size of the working memory
-            self.logger.debug(                                                    # Log the eviction of the receding PMT
+            evicted_pmt = self._pmt_slot.popleft()                                      # Evict the receding PMT from the working memory 
+            evicted_pmt_slot.append(evicted_pmt)                                        # Fill the evicted PMT to the evicted slot
+            evicted_chunks = _estimate_chunk_count(evicted_pmt)                         # Calculate the chunk size of the evicted PMT
+            self._sustained_chunks = max(0, self._sustained_chunks - evicted_chunks)    # Update the chunk size of the working memory, cannot be negative
+            self.logger.debug(                                                          # Log the eviction of the receding PMT
                 f"WMC evict → EMC: [{evicted_pmt['role']}] "
                 f"size={evicted_chunks} chunks"
             )
@@ -183,25 +196,9 @@ class WorkingMemoryCortex:
             for pmt in self._pmt_slot
         ]
 
-    @property
-    def pmt_schema_stats(self) -> dict:
+    def clean_pmt_slot(self) -> list[dict]:
         """
-        Retrieve current memory usage stats.
-
-        Returns:
-            dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
-        """
-        return {                                        # Return the number of PMT and chunk sustaining in the working memory
-            "pmt_count":  len(self._pmt_slot),
-            "sustained_chunks":   self._sustained_chunks,
-            "free_chunks":        self.global_chunk_limit - self._sustained_chunks,
-            "global_chunk_limit": self.global_chunk_limit,
-            "load_percent":       round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
-        }
-
-    def discard_pmt_schema(self) -> list[dict]:
-        """
-        Discard all PMT schema from working memory.
+        Clean the PMT slot of the working memory by discarding all sustained PMT schema.
         Called at conversation end or on explicit reset.
         Does NOT forward to EMC — PMT schema are permanently discarded unless
         caller chooses to save the returned list.
@@ -215,8 +212,32 @@ class WorkingMemoryCortex:
         self.logger.info(                                  # Log the discarding of the PMT schema from working memory
             f"🧹 WMC discarded ({len(discarded_pmt_schema)} PMTs)"
         )
-        return discarded_pmt_schema                        # Return discarded PMT schema to caller
+        return discarded_pmt_schema                        # Return discarded PMT schema to caller for optional saving or forwarding to EMC
+    
+    def assess_pmt_slot(self) -> dict:
+        """
+        Assess the current status of the PMT slot in working memory for logging and monitoring.
 
+        Returns:
+            dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
+        """
+        self._recompute_sustained_chunks()              # Recompute sustained chunks from scratch as source of truth verification
+        return {                                        # Return the number of PMT and chunk sustaining in the working memory
+            "pmt_count":          len(self._pmt_slot),
+            "sustained_chunks":   self._sustained_chunks,
+            "free_chunks":        self.global_chunk_limit - self._sustained_chunks,
+            "global_chunk_limit": self.global_chunk_limit,
+            "load_percent":       round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
+        }
+
+    def _recompute_sustained_chunks(self):
+        """Recompute sustained chunks from scratch as source of truth verification."""
+        self._sustained_chunks = sum(           # Recompute sustained chunks from all PMTs in slot
+            _estimate_chunk_count(pmt) 
+            for pmt in self._pmt_slot
+        )
+
+    @property
     def is_empty(self) -> bool:
         """
         Check if working memory is empty.
