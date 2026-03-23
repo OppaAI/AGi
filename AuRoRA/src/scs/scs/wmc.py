@@ -3,26 +3,53 @@ WMC — Working Memory Cortex
 ============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Active conversation context for the robot.
-Mirrors human working memory — fast, limited capacity, current focus only.
+Active conversation context for GRACE — mirrors human working memory.
+Fast, limited capacity, current focus only.
+
+Responsibilities:
+    - Receive new PMTs from MCC and fill into active buffer (induction → filling)
+    - Sustain PMTs in active buffer for context construction (sustaining)
+    - Evict receding PMTs back to MCC when capacity exceeded (receding → evicting)
+    - Provide sustained PMT schema to MCC for context assembly on each turn (recalling)
+    - Clean PMT slot on conversation end or explicit reset (discarding)
+
+Architecture:
+    Deque-based PMT slot, dual-guard eviction policy:
+        PMT slot  — deque of sustained PMTs, bounded by Miller's Law limit + buffer
+        Chunks    — running count of sustained chunks for capacity management
+
+    Capacity:
+        Phonological limit — Miller's Law (7±2 PMTs), tunable via HRS config
+        Global chunk limit — LLM context window minus system prompt,
+                             GRACE personality, and EMC injection reserve
+
+    Eviction triggers (both checked on every fill):
+        - Sustained chunks + incoming PMT chunks > global chunk limit
+        - PMT slot count >= Miller's Law limit + buffer
+
+    Overflow:
+        - Evicted PMTs returned to MCC → forwarded to EMC buffer (async)
+        - Incoming PMT content truncated to fit global chunk limit before filling
+
+    Thread safety:
+        - Single-threaded by design — protected by CNC._busy flag
+        - No async — all operations are synchronous and in-memory
 
 Terminology:
-    PMT        - phonological memory trace (one conversation turn, user or assistant)
-    PMT schema - phonological memory trace schema (a subset of PMTs)
-    PMT slot   - slot to hold the phonological memory trace (the active buffer holding all PMTs)
-    Chunk      - unit of measurement for LLM context window size (~4 characters)
+    PMT        — phonological memory trace (one conversation turn, user or assistant)
+    PMT schema — a subset of PMTs evicted or recalled together as a group
+    PMT slot   — the active deque buffer holding all sustained PMTs
+    Chunk      — unit of LLM context window size (~4 characters per chunk)
 
-Lifecycle of a PMT:
+Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
-Capacity:
-    Phonological limit — constrained by Miller's Law (7±2 PMTs), tunable via config
-    Global chunk limit — constrained by LLM context window with room for system prompt,
-                         robot personality, and EMC context injection
-
-Overflow: displaced PMTs pushed to MCC → EMC buffer (async)
+Todo:
+    M2 — integrate HRS.BLC for biological clock timestamps
+    M3 — add salience weighting to eviction policy
 """
 
+# System library imports
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque            # For use in memory management
 

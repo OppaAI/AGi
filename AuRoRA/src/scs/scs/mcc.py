@@ -19,33 +19,28 @@ Context window budget (Cosmos Reason2 2B, max_model_len=2048):
     ─────────────────────────────────────────────────────────
     Total                              ~2000 tokens (safe under 2048)
 
-Future milestones:
+Todo:
     M2 — add SMC, 11pm reflection trigger
     M3 — add PMC, procedural skill retrieval
 """
 
-import asyncio
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+# System libraries
+import asyncio              # For concurrent WMC retrieval and EMC search
+from pathlib import Path    # For handling DB file paths
 
-from scs.wmc import WMC
-from scs.emc import EMC
-
-
-# ── Token budget for context assembly ────────────────────────────────────────
-SYSTEM_PROMPT_RESERVE = 300   # tokens reserved for system prompt + personality
-EMC_CONTEXT_RESERVE   = 300   # tokens reserved for injected EMC episodes
-EMC_TOP_K             = 3     # max episodes injected per turn
-EMC_MIN_SIMILARITY    = 0.25  # minimum cosine sim to include an episode
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── DB path ───────────────────────────────────────────────────────────────────
-DEFAULT_DB_PATH = str(Path.home() / ".aurora" / "emc.db")
-# ─────────────────────────────────────────────────────────────────────────────
+# AGi libraries
+from scs.wmc import WorkingMemoryCortex
+from scs.emc import EpisodicMemoryCortex
+from hrs.hrp import (
+    SYSTEM_PROMPT_RESERVE,    # tokens reserved for system prompt + personality
+    EMC_CONTEXT_RESERVE,      # tokens reserved for injected EMC episodes
+    EMC_TOP_K,                # max episodes injected per turn
+    EMC_MIN_SIMILARITY,       # minimum cosine sim to include an episode
+    EMC_DB_PATH,              # path to EMC database
+)
 
 
-class MCC:
+class MemoryCoordinationCore:
     """
     Memory Coordination Core.
 
@@ -57,22 +52,22 @@ class MCC:
         mcc.get_stats()
     """
 
-    def __init__(self, logger, db_path: str = DEFAULT_DB_PATH):
-        self.logger = logger
+    def __init__(self, logger, db_path: str = EMC_DB_PATH):
+        self.logger = logger                                                # Retrieve logger from CNC for logging MCC operations
 
         # Ensure DB directory exists
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)             # Create parent directories if they don't exist
 
         # Initialise memory layers
-        self.wmc = WMC(logger=logger)
-        self.emc = EMC(db_path=db_path, logger=logger)
+        self.wmc = WorkingMemoryCortex(logger=logger)                       # Initialize WMC with provided logger
+        self.emc = EpisodicMemoryCortex(db_path=db_path, logger=logger)     # Initialize EMC with provided database path and logger
 
         self.logger.info(
             f"✅ MCC initialised\n"
-            f"   WMC budget : {self.wmc.token_budget} tokens\n"
+            f"   WMC budget : {self.wmc.global_chunk_limit} tokens\n"
             f"   EMC db     : {db_path}\n"
             f"   EMC top-k  : {EMC_TOP_K} episodes per turn\n"
-            f"   Context    : {SYSTEM_PROMPT_RESERVE + EMC_CONTEXT_RESERVE + self.wmc.token_budget} tokens total"
+            f"   Context    : {SYSTEM_PROMPT_RESERVE + EMC_CONTEXT_RESERVE + self.wmc.global_chunk_limit} tokens total"
         )
 
     # ── Core API ──────────────────────────────────────────────────────────────
@@ -186,7 +181,7 @@ class MCC:
 
     def get_stats(self) -> dict:
         """Return combined memory stats for logging and health checks."""
-        wmc_stats = self.wmc.token_usage()
+        wmc_stats = self.wmc.get_stats()
         emc_stats = self.emc.get_stats()
         return {
             "wmc": wmc_stats,
@@ -201,7 +196,7 @@ class MCC:
         self.logger.info(
             f"🧠 Memory stats:\n"
             f"   WMC: {w['turns']} turns | "
-            f"{w['used']}/{w['budget']} tokens ({w['percent']}%)\n"
+            f"{w['used']}/{w['limit']} tokens ({w['percent']}%)\n"
             f"   EMC: {e.get('episodes', 0)} episodes | "
             f"{e.get('buffer_pending', 0)} pending embed | "
             f"{e.get('db_size_mb', 0)} MB"
