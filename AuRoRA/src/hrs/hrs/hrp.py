@@ -50,7 +50,7 @@ class AGi:
 
         class WMC:
             # ── WMC — Working Memory Cortex ───────────────────────────────────────────────
-            UNITS_PER_CHUNK    = 4      # [STATIC]    Number of neural units per chunk
+            UNITS_PER_CHUNK    = 4      # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
             PMT_OVERHEAD       = 4      # [STATIC]    Overhead chunks for each PMT
             PMT_SLOT_LIMIT     = 7      # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
             PMT_SLOT_BUFFER    = 2      # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
