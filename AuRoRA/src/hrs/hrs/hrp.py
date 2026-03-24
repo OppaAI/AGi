@@ -39,9 +39,9 @@ EMC_ENGRAM_GATEWAY   = "..."    # [STATIC]    Engram store gateway — resolved 
 
 # ── WMC — Working Memory Cortex ───────────────────────────────────────────────
 UNITS_PER_CHUNK        = 4      # [STATIC]    Number of neural units per chunk
-PMT_OVERHEAD           = 4      # [STATIC]    Overhead chunks per phonological memory trace
+PMT_OVERHEAD           = 4      # [STATIC]    Overhead chunks for each PMT
 WMC_GLOBAL_CHUNK_LIMIT = (      # [INTRINSIC] Maximum number of chunks WMC can hold
     ...
 )                               # = 1448
 WMC_PMT_SLOT_LIMIT     = 7     # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
-WMC_PMT_SLOT_BUFFER    = 2     # [INTRINSIC] PMT Slot vacancy flexibility (Miller's Law ±2)
+WMC_PMT_SLOT_BUFFER    = 2     # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
