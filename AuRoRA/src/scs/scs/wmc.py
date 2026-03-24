@@ -59,18 +59,18 @@ from collections import deque            # For use in memory management
 # Fallback to default if HRS cannot be called
 try:                                        # Attempt to reach HRS
     from hrs.hrp import (                   # Import parameters from HRS
-        UNITS_PER_CHUNK,                    # Retrieve number of units per chunk
+        UNITS_PER_CHUNK,                    # Retrieve number of neural units per chunk
         PMT_OVERHEAD,                       # Retrieve overhead in chunks for each PMT (for role label and formatting)        
-        DEFAULT_WMC_GLOBAL_CHUNK_LIMIT,     # Retrieve default global chunk limit for WMC, tunable based on LLM context window and hardware constraints
-        DEFAULT_WMC_PMT_SLOT_LIMIT,         # Retrieve default vacancy limit of the PMT slot for WMC
-        DEFAULT_WMC_PMT_SLOT_BUFFER         # Retrieve default buffer of the PMT slot for WMC
+        WMC_GLOBAL_CHUNK_LIMIT,             # Retrieve global chunk limit for WMC, tunable based on LLM context window and hardware constraints
+        WMC_PMT_SLOT_LIMIT,                 # Retrieve PMT slot vacancy for WMC
+        WMC_PMT_SLOT_BUFFER                 # Retrieve PMT slot vacancy flexibility for WMC
     )
 except ImportError:                         # If error cannot reach HRS,
     UNITS_PER_CHUNK = 4                     # Fallback to default value of 4 (based on average token size)
     PMT_OVERHEAD = 4                        # Fallback to default value of 4 (based on normal extra tokens added to conversation turns)
-    DEFAULT_WMC_GLOBAL_CHUNK_LIMIT = 1440   # Fallback to default LLM and hardware limit (tunable based on LLM context window and hardware constraints)
-    DEFAULT_WMC_PMT_SLOT_LIMIT = 7          # Fallback to default value of 7 (based on Miller's Law 7±2)
-    DEFAULT_WMC_PMT_SLOT_BUFFER = 2         # Fallback to default value of 2 (based on Miller's Law 7±2)
+    WMC_GLOBAL_CHUNK_LIMIT = 1440           # Fallback to default LLM and hardware limit (tunable based on LLM context window and hardware constraints)
+    WMC_PMT_SLOT_LIMIT = 7                  # Fallback to default value of 7 (based on Miller's Law 7±2)
+    WMC_PMT_SLOT_BUFFER = 2                 # Fallback to default value of 2 (based on Miller's Law 7±2)
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
@@ -102,9 +102,9 @@ class WorkingMemoryCortex:
     """
 
     def __init__(self, logger, 
-                global_chunk_limit: int = DEFAULT_WMC_GLOBAL_CHUNK_LIMIT, 
-                pmt_slot_limit: int = DEFAULT_WMC_PMT_SLOT_LIMIT,
-                pmt_slot_buffer: int = DEFAULT_WMC_PMT_SLOT_BUFFER
+                global_chunk_limit: int = WMC_GLOBAL_CHUNK_LIMIT, 
+                pmt_slot_limit: int = WMC_PMT_SLOT_LIMIT,
+                pmt_slot_buffer: int = WMC_PMT_SLOT_BUFFER
                 ):
         """
         Initialize the WMC with global chunk limit and PMT slot limit.
