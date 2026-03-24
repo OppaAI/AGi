@@ -49,15 +49,13 @@ Todo:
     M3 — add salience weighting to eviction policy
 """
 
-# System library imports
+# System library
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque            # For use in memory management
 
-# Retrieve the chunk size and overhead of PMT from homeostatic regulation system parameters (HRS.HRP) for dynamic configuration of WMC
-# Fallback to default if HRS cannot be called
-try:                                         # Attempt to reach HRS
-    from hrs.hrp import AGi                  # Import AGi parameter namespace
-    WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
+# AGi library
+from hrs.hrp import AGi                  # Import AGi parameter namespace
+WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
