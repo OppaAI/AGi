@@ -38,21 +38,15 @@ Todo:
 """
 
 # System libraries
-import asyncio              # For concurrent WMC retrieval and EMC search
-from pathlib import Path    # For handling gateway to the engrams
+import asyncio                          # For concurrent WMC retrieval and EMC search
+from pathlib import Path                # For handling gateway to the engrams
 
 # AGi libraries
 from scs.wmc import WorkingMemoryCortex
 from scs.emc import EpisodicMemoryCortex
-from hrs.hrp import (
-    CNS_COGNITIVE_RESERVE,    # Cortical capacity reserved for identity and cognition
-    EMC_RECALL_RESERVE,       # Cortical capacity reserved for episodic recall
-    EMC_RECALL_DEPTH,         # Maximum number of engrams surfaced per turn
-    EMC_RECALL_THRESHOLD,     # Minimum synaptic similarity to surface an engram
-    AGi_ENTITY_GATEWAY,       # Entry point for all the interactions with AGi's core systems
-    CNS_NEURAL_GATEWAY,       # Neural gateway endpoint for inter-cortical communication
-    EMC_ENGRAM_COMPLEX,       # Engram complex where episodic memories are stored
-)
+from hrs.hrp import AGi
+EMC = AGi.CNS.WMC                        # Alias EMC parameter class for concise access
+WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
 
 class MemoryCoordinationCore:
     """
@@ -66,22 +60,27 @@ class MemoryCoordinationCore:
         mcc.get_stats()
     """
 
-    def __init__(self, logger, engram_complex: str = EMC_ENGRAM_COMPLEX):
+    def __init__(self, logger):
         self.logger = logger                                                # Retrieve logger from CNC for logging MCC operations
 
         # Ensure DB directory exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
-        engram_gateway = Path.home() / AGi_ENTITY_GATEWAY / CNS_NEURAL_GATEWAY / engram_complex    # Construct the gateway towards engram complex
-        Path(engram_gateway).parent.mkdir(parents=True, exist_ok=True)                             # Generate the gateway if not already exists
+        self.engram_gateway = (                                             # Construct the gateway towards engram complex
+            Path.home() / 
+            AGi.Static.ENTITY_GATEWAY / 
+            AGi.CNS.Static.NEURAL_GATEWAY / 
+            AGi.CNS.Static.ENGRAM_COMPLEX
+        )
+        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialise memory layers
-        self.wmc = WorkingMemoryCortex(logger=logger)                       # Initialize WMC with provided logger
-        self.emc = EpisodicMemoryCortex(engram_gateway=engram_gateway, logger=logger)     # Initialize EMC with provided database path and logger
+        self.wmc = WorkingMemoryCortex(logger=logger)                                        # Initialize WMC with provided logger
+        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)   # Initialize EMC with provided database path and logger
 
         self.logger.info(
             f"✅ MCC initialised\n"
             f"   WMC budget : {self.wmc.global_chunk_limit} tokens\n"
-            f"   EMC db     : {db_path}\n"
+            f"   EMC db     : {engram_gateway}\n"
             f"   EMC top-k  : {EMC_TOP_K} episodes per turn\n"
             f"   Context    : {SYSTEM_PROMPT_RESERVE + EMC_CONTEXT_RESERVE + self.wmc.global_chunk_limit} tokens total"
         )
