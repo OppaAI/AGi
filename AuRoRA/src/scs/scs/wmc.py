@@ -58,13 +58,6 @@ from collections import deque            # For use in memory management
 try:                                         # Attempt to reach HRS
     from hrs.hrp import AGi                  # Import AGi parameter namespace
     WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
-except ImportError:                          # If error cannot reach HRS,
-    class WMC:
-        UNITS_PER_CHUNK = 4                  # Fallback to default value of 4 (based on average token size)
-        PMT_OVERHEAD = 4                     # Fallback to default value of 4 (based on normal extra tokens added to each PMT)
-        GLOBAL_CHUNK_LIMIT = 1440            # Fallback to default LLM and hardware limit (tunable based on LLM context window and hardware constraints)
-        PMT_SLOT_LIMIT = 7                   # Fallback to default value of 7 (based on Miller's Law 7±2)
-        PMT_SLOT_BUFFER = 2                  # Fallback to default value of 2 (based on Miller's Law 7±2)
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
