@@ -9,36 +9,50 @@ CNC never touches WMC or EMC directly, only calls MCC.
 Responsibilities:
     - Route new turns to WMC
     - Forward WMC overflow → EMC buffer (async, non-blocking)
-    - Build context window for Cosmos (WMC turns + EMC search results)
-    - Token budget management across the full context
+    - Build context window for Cosmos (WMC turns + EMC recalled engrams)
+    - Manage cortical capacity across the full context
 
-Context window budget (Cosmos Reason2 2B, max_model_len=2048):
-    System prompt + GRACE personality  ~300 tokens  (reserved)
-    EMC injected context               ~300 tokens  (reserved)
-    WMC active turns                   ~1400 tokens (WMC budget)
-    ─────────────────────────────────────────────────────────
-    Total                              ~2000 tokens (safe under 2048)
+Architecture:
+    MCC mirrors the human prefrontal cortex — the brain's active workspace
+    where working memory and episodic recall share the same conscious space.
+
+    WMC and EMC operate independently but converge in build_context() into
+    a single unified context window sent to Cosmos — exactly as fresh thoughts
+    and recalled memories both surface into the same prefrontal awareness.
+    Cosmos cannot distinguish a recent WMC turn from a recalled EMC engram —
+    they are all just active cognition.
+
+    Cortical capacity budget:
+        System prompt + robot identity  →  CNS_COGNITIVE_RESERVE
+        EMC recalled engrams            →  EMC_RECALL_RESERVE
+        WMC active turns                →  WMC_GLOBAL_CHUNK_LIMIT
+        ─────────────────────────────────────────────────────────────────────
+        Total                           →  CNS_CORTICAL_CAPACITY
 
 Todo:
+    M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
+         EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
+         WMC's chunk limit
     M2 — add SMC, 11pm reflection trigger
     M3 — add PMC, procedural skill retrieval
 """
 
 # System libraries
 import asyncio              # For concurrent WMC retrieval and EMC search
-from pathlib import Path    # For handling DB file paths
+from pathlib import Path    # For handling gateway to the engrams
 
 # AGi libraries
 from scs.wmc import WorkingMemoryCortex
 from scs.emc import EpisodicMemoryCortex
 from hrs.hrp import (
-    SYSTEM_PROMPT_RESERVE,    # tokens reserved for system prompt + personality
-    EMC_CONTEXT_RESERVE,      # tokens reserved for injected EMC episodes
-    EMC_TOP_K,                # max episodes injected per turn
-    EMC_MIN_SIMILARITY,       # minimum cosine sim to include an episode
-    EMC_DB_PATH,              # path to EMC database
+    CNS_COGNITIVE_RESERVE,    # Cortical capacity reserved for identity and cognition
+    EMC_RECALL_RESERVE,       # Cortical capacity reserved for episodic recall
+    EMC_RECALL_DEPTH,         # Maximum number of engrams surfaced per turn
+    EMC_RECALL_THRESHOLD,     # Minimum synaptic similarity to surface an engram
+    AGi_ENTITY_GATEWAY,       # Entry point for all the interactions with AGi's core systems
+    CNS_NEURAL_GATEWAY,       # Neural gateway endpoint for inter-cortical communication
+    EMC_ENGRAM_COMPLEX,       # Engram complex where episodic memories are stored
 )
-
 
 class MemoryCoordinationCore:
     """
@@ -52,15 +66,17 @@ class MemoryCoordinationCore:
         mcc.get_stats()
     """
 
-    def __init__(self, logger, db_path: str = EMC_DB_PATH):
+    def __init__(self, logger, engram_complex: str = EMC_ENGRAM_COMPLEX):
         self.logger = logger                                                # Retrieve logger from CNC for logging MCC operations
 
         # Ensure DB directory exists
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)             # Create parent directories if they don't exist
+        # TODO: HRS milestone — move path construction to hrs.py entity gateway
+        engram_gateway = Path.home() / AGi_ENTITY_GATEWAY / CNS_NEURAL_GATEWAY / engram_complex    # Construct the gateway towards engram complex
+        Path(engram_gateway).parent.mkdir(parents=True, exist_ok=True)                             # Generate the gateway if not already exists
 
         # Initialise memory layers
         self.wmc = WorkingMemoryCortex(logger=logger)                       # Initialize WMC with provided logger
-        self.emc = EpisodicMemoryCortex(db_path=db_path, logger=logger)     # Initialize EMC with provided database path and logger
+        self.emc = EpisodicMemoryCortex(engram_gateway=engram_gateway, logger=logger)     # Initialize EMC with provided database path and logger
 
         self.logger.info(
             f"✅ MCC initialised\n"
