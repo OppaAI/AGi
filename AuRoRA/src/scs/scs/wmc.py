@@ -49,11 +49,11 @@ Todo:
     M3 — add salience weighting to eviction policy
 """
 
-# System library
+# System libraries
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque            # For use in memory management
 
-# AGi library
+# AGi libraries
 from hrs.hrp import AGi                  # Import AGi parameter namespace
 WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
 
