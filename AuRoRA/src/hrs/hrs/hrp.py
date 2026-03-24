@@ -1,26 +1,47 @@
 """
 HRP — Homeostatic Regulation Parameters
-=======================================
+========================================
 AuRoRA · Homeostatic Regulation System (HRS)
 
-Shared constants for the robot's cognitive architecture —
-single source of truth for all parameters across the robot's systems.
+Single source of truth for all cognitive architecture parameters
+across the robot's systems.
+
+Architecture:
+    Three-tier constant hierarchy by ownership and mutability:
+
+    [STATIC]    — Frozen in code. Hardware and architecture ceilings.
+                  Admin only. Never changes at runtime.
+                  Lives here in hrp.py permanently.
+
+    [INTRINSIC] — GRACE's self-tuning cognitive parameters.
+                  Adaptive — GRACE may update these over time via hrs.py.
+                  Future home: root/{robot_id}/hrp.yaml
+
+    [EXTRINSIC] — Per-user preferences shaping GRACE's behaviour.
+                  Relational — one set per user, loaded at session start.
+                  Future home: root/Users/{user_id}/hrp.yaml
+
+Todo:
+    HRS milestone — build hrs.py startup loader to replace [INTRINSIC]
+                    and [EXTRINSIC] constants with runtime YAML loading.
+                    hrp.py retains [STATIC] constants only.
 """
 
-# System libraries
-from pathlib import Path    # For handling DB file paths
+# ── CNS — Central Nervous System ──────────────────────────────────────────────
+CNS_CORTICAL_CAPACITY = 2048    # [STATIC]    Total neural capacity of the active cognitive core
+CNS_COGNITIVE_RESERVE = 300     # [INTRINSIC] Cortical capacity reserved for identity and cognition
 
-# Memory system parameters
-# Memory Coordination Core parameters
-SYSTEM_PROMPT_RESERVE = 300   # tokens reserved for system prompt + personality
-EMC_CONTEXT_RESERVE   = 300   # tokens reserved for injected EMC episodes
-EMC_TOP_K             = 3     # max episodes injected per turn
-EMC_MIN_SIMILARITY    = 0.25  # minimum cosine sim to include an episode
-EMC_DB_PATH           = str(Path.home() / ".aurora" / "emc.db")
+# ── EMC — Episodic Memory Cortex ──────────────────────────────────────────────
+EMC_RECALL_RESERVE   = 300      # [INTRINSIC] Cortical capacity reserved for episodic recall
+EMC_RECALL_DEPTH     = 3        # [INTRINSIC] Maximum number of engrams surfaced per turn
+EMC_RECALL_THRESHOLD = 0.25     # [INTRINSIC] Minimum synaptic similarity to surface an engram
+EMC_ENGRAM_GATEWAY   = "..."    # [STATIC]    Engram store gateway — resolved at runtime by MCC
 
-# Working Memory Cortex parameters
-UNITS_PER_CHUNK                = 4     # Rough English approximation (1 chunk ≈ 4 character units)
-PMT_OVERHEAD                   = 4     # Overhead chunks per PMT (role label + chat template formatting)
-DEFAULT_WMC_GLOBAL_CHUNK_LIMIT = 1440  # Global chunk limit for WMC (tunable based on LLM context window)
-DEFAULT_WMC_PMT_SLOT_LIMIT     = 7     # PMT slot limit for WMC (Miller's Law centre point 7±2)
-DEFAULT_WMC_PMT_SLOT_BUFFER    = 2     # PMT slot buffer for WMC (Miller's Law ±2 flexibility)
+# ── WMC — Working Memory Cortex ───────────────────────────────────────────────
+UNITS_PER_CHUNK        = 4      # [STATIC]    Number of neural units per chunk
+PMT_OVERHEAD           = 4      # [STATIC]    Overhead chunks per phonological memory trace
+WMC_GLOBAL_CHUNK_LIMIT = (      # [INTRINSIC] Maximum number of chunks WMC can hold
+    ...
+)                               # = 1448
+WMC_PMT_SLOT_LIMIT     = 7     # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
+WMC_PMT_SLOT_BUFFER    = 2     # [INTRINSIC] PMT Slot vacancy flexibility (Miller's Law ±2)
