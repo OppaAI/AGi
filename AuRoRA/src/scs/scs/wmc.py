@@ -53,24 +53,18 @@ Todo:
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque            # For use in memory management
 
-# Reserve ~30% for system prompt + robot personality + EMC context injection
-
 # Retrieve the chunk size and overhead of PMT from homeostatic regulation system parameters (HRS.HRP) for dynamic configuration of WMC
 # Fallback to default if HRS cannot be called
-try:                                        # Attempt to reach HRS
-    from hrs.hrp import (                   # Import parameters from HRS
-        UNITS_PER_CHUNK,                    # Retrieve number of neural units per chunk
-        PMT_OVERHEAD,                       # Retrieve overhead in chunks for each PMT (for role label and formatting)        
-        WMC_GLOBAL_CHUNK_LIMIT,             # Retrieve global chunk limit for WMC, tunable based on LLM context window and hardware constraints
-        WMC_PMT_SLOT_LIMIT,                 # Retrieve PMT slot vacancy for WMC
-        WMC_PMT_SLOT_BUFFER                 # Retrieve PMT slot vacancy flexibility for WMC
-    )
-except ImportError:                         # If error cannot reach HRS,
-    UNITS_PER_CHUNK = 4                     # Fallback to default value of 4 (based on average token size)
-    PMT_OVERHEAD = 4                        # Fallback to default value of 4 (based on normal extra tokens added to conversation turns)
-    WMC_GLOBAL_CHUNK_LIMIT = 1440           # Fallback to default LLM and hardware limit (tunable based on LLM context window and hardware constraints)
-    WMC_PMT_SLOT_LIMIT = 7                  # Fallback to default value of 7 (based on Miller's Law 7±2)
-    WMC_PMT_SLOT_BUFFER = 2                 # Fallback to default value of 2 (based on Miller's Law 7±2)
+try:                                         # Attempt to reach HRS
+    from hrs.hrp import AGi                  # Import AGi parameter namespace
+    WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
+except ImportError:                          # If error cannot reach HRS,
+    class WMC:
+        UNITS_PER_CHUNK = 4                  # Fallback to default value of 4 (based on average token size)
+        PMT_OVERHEAD = 4                     # Fallback to default value of 4 (based on normal extra tokens added to each PMT)
+        GLOBAL_CHUNK_LIMIT = 1440            # Fallback to default LLM and hardware limit (tunable based on LLM context window and hardware constraints)
+        PMT_SLOT_LIMIT = 7                   # Fallback to default value of 7 (based on Miller's Law 7±2)
+        PMT_SLOT_BUFFER = 2                  # Fallback to default value of 2 (based on Miller's Law 7±2)
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
@@ -82,11 +76,11 @@ def _estimate_chunk_count(pmt: dict) -> int:
     Returns:
         int: Number of chunks, including overhead for role label and formatting
     """
-    role = pmt.get("role", "")                                                              # Retrieve role label from PMT. 
-    content = pmt.get("content", "")                                                        # Retrieve content from PMT.
-    role_chunk_count = (len(role) + UNITS_PER_CHUNK - 1 ) // UNITS_PER_CHUNK                # Calculate chunks for role label
-    content_chunk_count = max(1, (len(content) + UNITS_PER_CHUNK - 1 ) // UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
-    return role_chunk_count + content_chunk_count + PMT_OVERHEAD                            # Return total chunk count (role label + content + overhead)
+    role = pmt.get("role", "")                                                                      # Retrieve role label from PMT. 
+    content = pmt.get("content", "")                                                                # Retrieve content from PMT.
+    role_chunk_count = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK                # Calculate chunks for role label
+    content_chunk_count = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
+    return role_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                # Return total chunk count (role label + content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -102,9 +96,9 @@ class WorkingMemoryCortex:
     """
 
     def __init__(self, logger, 
-                global_chunk_limit: int = WMC_GLOBAL_CHUNK_LIMIT, 
-                pmt_slot_limit: int = WMC_PMT_SLOT_LIMIT,
-                pmt_slot_buffer: int = WMC_PMT_SLOT_BUFFER
+                global_chunk_limit: int = WMC.GLOBAL_CHUNK_LIMIT, 
+                pmt_slot_limit: int = WMC.PMT_SLOT_LIMIT,
+                pmt_slot_buffer: int = WMC.PMT_SLOT_BUFFER
                 ):
         """
         Initialize the WMC with global chunk limit and PMT slot limit.
@@ -165,9 +159,9 @@ class WorkingMemoryCortex:
             list[dict]: list of evicted PMTs [{role, content, timestamp}]
         """
         # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for role and overhead
-        role_chunk_count = (len(role) + UNITS_PER_CHUNK - 1) // UNITS_PER_CHUNK                 # Calculate chunks for role label to determine remaining capacity for content
-        max_content_chunks = self.global_chunk_limit - PMT_OVERHEAD - role_chunk_count          # Calculate maximum chunks available for content
-        max_content_length = max_content_chunks * UNITS_PER_CHUNK                               # Calculate maximum content length based on remaining chunk capacity
+        role_chunk_count = (len(role) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK         # Calculate chunks for role label to determine remaining capacity for content
+        max_content_chunks = self.global_chunk_limit - WMC.PMT_OVERHEAD - role_chunk_count      # Calculate maximum chunks available for content
+        max_content_length = max_content_chunks * WMC.UNITS_PER_CHUNK                           # Calculate maximum content length based on remaining chunk capacity
         if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
             content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
             self.logger.warning(f"WMC content truncated to {max_content_length} characters")    # Log the warning of truncation of the content
