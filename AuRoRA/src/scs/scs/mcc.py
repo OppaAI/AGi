@@ -104,7 +104,7 @@ class MemoryCoordinationCore:
         # Forward evicted turns to EMC buffer
         # Run in executor so it never blocks the asyncio event loop
         if evicted:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None, self._forward_to_emc_buffer, evicted
             )
