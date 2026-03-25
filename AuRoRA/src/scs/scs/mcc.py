@@ -45,44 +45,51 @@ from pathlib import Path                # For handling gateway to the engrams
 from scs.wmc import WorkingMemoryCortex
 from scs.emc import EpisodicMemoryCortex
 from hrs.hrp import AGi
-EMC = AGi.CNS.WMC                        # Alias EMC parameter class for concise access
-WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
+CNS = AGi.CNS                            # Alias CNS parameter class for concise access
 
 class MemoryCoordinationCore:
     """
-    Memory Coordination Core.
+    Memory Coordination Core — the thalamus of the CNS.
 
-    Instantiated once by CNC at startup.
-    All memory operations go through MCC — CNC calls:
+    Central relay between CNC and the memory organs (WMC, EMC).
+    Instantiated once by CNC at startup. All memory operations go
+    through MCC — CNC never touches WMC or EMC directly.
 
+    Access:
+        MCC reads AGi.CNS.* constants from hrp.py directly.
+        MCC accesses WMC and EMC constants through their instances only —
+        never via hrp.py directly.
+
+    CNC interface:
         await mcc.add_turn(role, content)
         context = await mcc.build_context(user_input)
-        mcc.get_stats()
+        mcc.log_stats()
+        mcc.close()
     """
 
     def __init__(self, logger):
         self.logger = logger                                                # Retrieve logger from CNC for logging MCC operations
 
-        # Ensure DB directory exists
+        # Ensure engram gateway exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
         self.engram_gateway = (                                             # Construct the gateway towards engram complex
             Path.home() / 
-            AGi.Static.ENTITY_GATEWAY / 
-            AGi.CNS.Static.NEURAL_GATEWAY / 
-            AGi.CNS.Static.ENGRAM_COMPLEX
+            AGi.ENTITY_GATEWAY / 
+            CNS.NEURAL_GATEWAY / 
+            CNS.ENGRAM_COMPLEX
         )
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
-        # Initialise memory layers
+        # Initialize memory cortex layers
         self.wmc = WorkingMemoryCortex(logger=logger)                                        # Initialize WMC with provided logger
-        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)   # Initialize EMC with provided database path and logger
+        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)   # Initialize EMC with provided gateway to engram complex and logger
 
+        wmc_stats = self.wmc.assess_pmt_slot()
+        emc_stats = self.emc.get_stats()
         self.logger.info(
-            f"✅ MCC initialised\n"
-            f"   WMC budget : {self.wmc.global_chunk_limit} tokens\n"
-            f"   EMC db     : {engram_gateway}\n"
-            f"   EMC top-k  : {EMC_TOP_K} episodes per turn\n"
-            f"   Context    : {SYSTEM_PROMPT_RESERVE + EMC_CONTEXT_RESERVE + self.wmc.global_chunk_limit} tokens total"
+            f"✅ MCC initialized\n"
+            f"   WMC connected ✅ — {wmc_stats['pmt_slot_limit']} PMT slots\n"
+            f"   EMC connected ✅ — {emc_stats.get('episodes', 0)} engrams stored"
         )
 
     # ── Core API ──────────────────────────────────────────────────────────────
