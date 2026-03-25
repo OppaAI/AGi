@@ -11,7 +11,7 @@ Responsibilities:
     - Sustain PMTs in active buffer for context construction (sustaining)
     - Evict receding PMTs back to MCC when capacity exceeded (receding → evicting)
     - Provide sustained PMT schema to MCC for context assembly on each turn (recalling)
-    - Clean PMT slot on conversation end or explicit reset (discarding)
+    - Clean PMT slot on conversation end or explicit reset (forgetting)
 
 Architecture:
     Deque-based PMT slot, dual-guard eviction policy:
@@ -39,7 +39,7 @@ Terminology:
     PMT        — phonological memory trace (one conversation turn, user or assistant)
     PMT schema — a subset of PMTs evicted or recalled together as a group
     PMT slot   — the active deque buffer holding all sustained PMTs
-    Chunk      — unit of LLM context window size (~4 characters per chunk)
+    Chunk      — unit of LLM context window size (~4 neural units per chunk)
 
 Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
@@ -108,7 +108,7 @@ class WorkingMemoryCortex:
         self._sustained_chunks: int = 0                     # Start with empty working memory with no sustained chunks
 
         self.logger.info(                                   # Log entry on WMC initialization with configured capacities
-            f"✅ WorkingMemoryCortex initialised — "
+            f"✅ WorkingMemoryCortex initialized — "
             f"global chunk limit: {self.global_chunk_limit} | "
             f"PMT slot limit: {self.pmt_slot_limit} (based on Miller's Law 7±2)"
         )
@@ -155,7 +155,7 @@ class WorkingMemoryCortex:
         max_content_length = max_content_chunks * WMC.UNITS_PER_CHUNK                           # Calculate maximum content length based on remaining chunk capacity
         if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
             content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
-            self.logger.warning(f"WMC content truncated to {max_content_length} characters")    # Log the warning of truncation of the content
+            self.logger.warning(f"WMC content truncated to {max_content_chunks} chunks")        # Log the warning of truncation of the content
         
         induced_pmt = {                                # Combine the elements of induced PMT into one register for filling
             "role":      role,                         # Register the role label of PMT
@@ -210,21 +210,21 @@ class WorkingMemoryCortex:
 
     def clean_pmt_slot(self) -> list[dict]:
         """
-        Clean the PMT slot of the working memory by discarding all sustained PMT schema.
+        Clean the PMT slot of the working memory by forgetting all sustained PMT schema.
         Called at conversation end or on explicit reset.
-        Does NOT forward to EMC — PMT schema are permanently discarded unless
+        Does NOT forward to EMC — PMT schema are permanently forgotten unless
         caller chooses to save the returned list.
 
         Returns:
-            list[dict]: List of discarded PMTs [{role, content, timestamp}]
+            list[dict]: List of forgotten PMTs [{role, content, timestamp}]
         """
-        discarded_pmt_schema = list(self._pmt_slot)        # Capture PMT schema before discarding, Safe — single-threaded access guaranteed by CNC._busy flag
+        forgotten_pmt_schema = list(self._pmt_slot)        # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
         self._pmt_slot.clear()                             # Wipe out working memory
         self._sustained_chunks = 0                         # Zero out sustained chunk count
-        self.logger.info(                                  # Log the discarding of the PMT schema from working memory
-            f"🧹 WMC discarded ({len(discarded_pmt_schema)} PMTs)"
+        self.logger.info(                                  # Log the forgetting of the PMT schema from working memory
+            f"🧹 WMC forgotten ({len(forgotten_pmt_schema)} PMTs)"
         )
-        return discarded_pmt_schema                        # Return discarded PMT schema to caller for optional saving or forwarding to EMC
+        return forgotten_pmt_schema                        # Return forgotten PMT schema to caller for optional saving or forwarding to EMC
     
     def assess_pmt_slot(self) -> dict:
         """
@@ -234,12 +234,14 @@ class WorkingMemoryCortex:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
         """
         self._recompute_sustained_chunks()              # Recompute sustained chunks from scratch as source of truth verification
-        return {                                        # Return the number of PMT and chunk sustaining in the working memory
-            "pmt_count":          len(self._pmt_slot),
-            "sustained_chunks":   self._sustained_chunks,
-            "free_chunks":        self.global_chunk_limit - self._sustained_chunks,
-            "global_chunk_limit": self.global_chunk_limit,
-            "load_percent":       round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
+        return {                                        # Return the occupancy of PMT and chunk sustaining in the working memory
+            "pmt_count"          : len(self._pmt_slot),
+            "pmt_slot_limit"     : self.pmt_slot_limit,
+            "slot_occupancy"     : round(len(self._pmt_slot) / self.pmt_slot_limit * 100, 1) if self.pmt_slot_limit > 0 else 0.0,
+            "sustained_chunks"   : self._sustained_chunks,
+            "free_chunks"        : self.global_chunk_limit - self._sustained_chunks,
+            "global_chunk_limit" : self.global_chunk_limit,
+            "chunk_occupancy"    : round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
         }
 
     def _recompute_sustained_chunks(self):
