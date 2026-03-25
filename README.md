@@ -223,7 +223,16 @@ AGi/
 ### M16 — Test-Time Training
 - Adapt Cosmos weights during inference from new context
 - Self-evolution milestone
+---
 
+## Cognitive Development Phases
+
+| Phase | Capability | Milestone |
+|---|---|---|
+| Phase 1 — Memory | "I can remember" | M1 WMC + EMC |
+| Phase 2 — Salience | "I know what matters" | M2 EMC maturity + HRS |
+| Phase 3 — Cognition | "I have inner state" | M2 SMC + reflection |
+| Phase 4 — Consciousness | "I continuously exist" | M5+ global workspace |
 ---
 
 ## Architecture
