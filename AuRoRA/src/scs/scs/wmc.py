@@ -107,10 +107,9 @@ class WorkingMemoryCortex:
         self._pmt_slot: deque[dict] = deque()               # Set up slot for holding the phonological memory
         self._sustained_chunks: int = 0                     # Start with empty working memory with no sustained chunks
 
-        self.logger.info(                                   # Log entry on WMC initialization with configured capacities
-            f"✅ WorkingMemoryCortex initialized — "
-            f"global chunk limit: {self.global_chunk_limit} | "
-            f"PMT slot limit: {self.pmt_slot_limit} (based on Miller's Law 7±2)"
+        self.logger.info(                                   # Log entry on WMC initialization with configured capacity
+            f"   [Working Memory Cortex]  ONLINE ✅ — "
+            f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
     def __len__(self) -> int:

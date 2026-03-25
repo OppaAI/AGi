@@ -33,6 +33,7 @@ Todo:
     M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
          EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
          WMC's chunk limit
+    M2 — WMC/EMC health check
     M2 — add SMC, 11pm reflection trigger
     M3 — add PMC, procedural skill retrieval
 """
@@ -68,11 +69,11 @@ class MemoryCoordinationCore:
     """
 
     def __init__(self, logger):
-        self.logger = logger                                                # Retrieve logger from CNC for logging MCC operations
+        self.logger = logger            # Retrieve logger from CNC for logging MCC operations
 
         # Ensure engram gateway exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
-        self.engram_gateway = (                                             # Construct the gateway towards engram complex
+        self.engram_gateway = (         # Construct the gateway towards engram complex
             Path.home() / 
             AGi.ENTITY_GATEWAY / 
             CNS.NEURAL_GATEWAY / 
@@ -81,18 +82,10 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialize memory cortex layers
-        self.wmc = WorkingMemoryCortex(logger=logger)                                        # Initialize WMC with provided logger
-        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)   # Initialize EMC with provided gateway to engram complex and logger
-
-        wmc_stats = self.wmc.assess_pmt_slot()
-        emc_stats = self.emc.get_stats()
-        self.logger.info(
-            f"✅ MCC initialized\n"
-            f"   WMC connected ✅ — {wmc_stats['pmt_slot_limit']} PMT slots\n"
-            f"   EMC connected ✅ — {emc_stats.get('episodes', 0)} engrams stored"
-        )
-
-    # ── Core API ──────────────────────────────────────────────────────────────
+        self.logger.info("🔄 Activating Memory Coordination Core...")                       # Log entry on MCC activation
+        self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
+        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
+        self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
     async def add_turn(self, role: str, content: str):
         """
@@ -106,7 +99,7 @@ class MemoryCoordinationCore:
             content: Message text
         """
         # Push to WMC — returns evicted turns synchronously (fast, in-memory)
-        evicted = self.wmc.add_turn(role, content)
+        evicted = self.wmc.fill_pmt(role, content)
 
         # Forward evicted turns to EMC buffer
         # Run in executor so it never blocks the asyncio event loop
