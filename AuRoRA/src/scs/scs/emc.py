@@ -22,7 +22,9 @@ Retrieval:  Top-K semantic search over all episodes
 Buffer:     em_buffer table — crash-safe per-turn raw storage
             Async worker embeds buffer rows → episodes table
             Buffer rows deleted after successful embedding
-
+Lifecycle:
+    Binding → Encoding → Consolidation → Storing → Retrieval → Reinstatement
+    
 Daily flow:
     During day  → WMC evicts → em_buffer → async embed → episodes
     At 11pm     → MCC triggers reflection → SMC distils LTM (future M2)
