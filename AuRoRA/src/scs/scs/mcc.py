@@ -87,43 +87,43 @@ class MemoryCoordinationCore:
         self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def add_turn(self, role: str, content: str):
+    async def bind_pmt(self, role: str, content: str):
         """
         Add a new conversation turn to memory.
 
-        1. Push turn to WMC
-        2. Forward any evicted turns to EMC buffer (non-blocking)
+        1. Fill induced PMT to WMC
+        2. Bind any evicted PMTs to EMC buffer (non-blocking)
 
         Args:
             role:    "user" or "assistant"
             content: Message text
         """
-        # Push to WMC — returns evicted turns synchronously (fast, in-memory)
-        evicted = self.wmc.fill_pmt(role, content)
+        # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
+        evicted_PMTs = self.wmc.fill_pmt(role, content)
 
-        # Forward evicted turns to EMC buffer
+        # Bind evicted PMTs to EMC buffer
         # Run in executor so it never blocks the asyncio event loop
         if evicted:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
-                None, self._forward_to_emc_buffer, evicted
+                None, self._bind_to_emc_buffer, evicted
             )
             self.logger.debug(
-                f"MCC forwarded {len(evicted)} evicted turn(s) → EMC buffer"
+                f"MCC binded {len(evicted)} evicted PMT(s) → EMC buffer"
             )
 
-    def _forward_to_emc_buffer(self, turns: list[dict]):
+    def _bind_to_emc_buffer(self, pmts: list[dict]):
         """
-        Write evicted WMC turns to EMC buffer.
+        Bind evicted PMTs to EMC buffer.
         Runs in thread pool — never blocks asyncio loop.
         """
-        for turn in turns:
+        for pmt in pmts:
             self.emc.buffer_append(
-                role    = turn["role"],
-                content = turn["content"],
+                role    = pmt["role"],
+                content = pmt["content"],
             )
 
-    async def build_context(self, user_input: str) -> list[dict]:
+    async def retrieve_ful_moemory(self, user_input: str) -> list[dict]:
         """
         Build the full context window to send to Cosmos.
 
