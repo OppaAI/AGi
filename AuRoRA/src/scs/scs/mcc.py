@@ -112,15 +112,22 @@ class MemoryCoordinationCore:
                 f"MCC binded {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
             )
 
-    def _bind_to_emc_buffer(self, pmts: list[dict]):
+    def _bind_to_emc_buffer(self, evicted_pmts: list[dict]) -> None:
         """
         Bind evicted PMTs to EMC buffer.
         Runs in thread pool — never blocks asyncio loop.
+    
+        Args:
+            evicted_pmts: List of evicted PMTs [{role, content, timestamp}]
+    
+        Returns:
+            None
         """
-        for pmt in pmts:
-            self.emc.buffer_append(
-                role    = pmt["role"],
-                content = pmt["content"],
+        for evicted_pmt in evicted_pmts:                # Go through each evicted PMTs
+            self.emc.buffer_append(                     # Bind each evicted PMT into EMC buffer
+                role    = evicted_pmt["role"],
+                content = evicted_pmt["content"],
+                timestamp = evicted_pmt["timestamp"],
             )
 
     async def retrieve_full_memory(self, user_input: str) -> list[dict]:
@@ -194,27 +201,38 @@ class MemoryCoordinationCore:
 
     # ── Utility ───────────────────────────────────────────────────────────────
 
-    def get_stats(self) -> dict:
-        """Return combined memory stats for logging and health checks."""
-        wmc_stats = self.wmc.assess_pmt_schema()
-        emc_stats = self.emc.get_stats()
-        return {
-            "wmc": wmc_stats,
-            "emc": emc_stats,
+    def assess_memory_schema(self) -> dict:
+        """
+        Assess the current stats of all memory cortex layers for logging and health checks.
+    
+        Returns:
+            dict: Combined schema from WMC and EMC cortex layers
+        """
+        wmc_schema = self.wmc.assess_pmt_schema()            # Assess the PMT schema of WMC
+        emc_schema = self.emc.get_stats()                    # Assess the engram complex of EMC
+        return {                                             # return the current stats of all memory cortext layers
+            "wmc": wmc_schema,
+            "emc": emc_schema,
         }
 
-    def log_stats(self):
-        """Log current memory stats at INFO level."""
-        stats = self.get_stats()
-        w = stats["wmc"]
-        e = stats["emc"]
-        self.logger.info(
+    def report_memory_stats(self):
+        """
+        Report current memory cortex stats.
+        Called by CNC after every turn for health monitoring.
+    
+        Todo:
+            GUI — expose via ROS2 topic for real-time memory visualisation
+        """
+        stats = self.assess_memory_schema()                # Assess the current stats of all memory cortex layers
+        wmc = stats["wmc"]                                 # Retrieve current stats of working memory
+        emc = stats["emc"]                                 # Retrieve current stats of episodic memory
+        self.logger.info(                                  # Log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
-            f"   WMC: {w['turns']} turns | "
-            f"{w['used']}/{w['limit']} tokens ({w['percent']}%)\n"
-            f"   EMC: {e.get('episodes', 0)} episodes | "
-            f"{e.get('buffer_pending', 0)} pending embed | "
-            f"{e.get('db_size_mb', 0)} MB"
+            f"   WMC: {wmc['pmt_count']} PMTs | "
+            f"{wmc['sustained_chunks']}/{wmc['global_chunk_limit']} chunks ({wmc['chunk_occupancy']}%)\n"
+            f"   EMC: {emc.get('episodes', 0)} episodes | "
+            f"{emc.get('buffer_pending', 0)} pending embed | "
+            f"{emc.get('db_size_mb', 0)} MB"
         )
 
     def forget_wm(self):
