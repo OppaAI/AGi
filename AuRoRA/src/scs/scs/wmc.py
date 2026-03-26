@@ -243,9 +243,12 @@ class WorkingMemoryCortex:
             "chunk_occupancy"    : round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
         }
 
-    def _introspect_chunk_load (self):
+    def _introspect_chunk_load (self) -> None:
         """
         Introspect the chunk load of sustained PMTs from scratch as source of truth verification.
+        
+        Returns:
+            None
         """
         self._sustained_chunks = sum(           # Introspect the chunk load of sustained PMTs in the slots
             _estimate_chunk_count(pmt) 
