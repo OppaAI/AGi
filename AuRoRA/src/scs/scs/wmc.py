@@ -11,7 +11,7 @@ Responsibilities:
     - Sustain PMTs in active buffer for context construction (sustaining)
     - Evict receding PMTs back to MCC when capacity exceeded (receding → evicting)
     - Provide sustained PMT schema to MCC for context assembly on each turn (recalling)
-    - Clean PMT slot on conversation end or explicit reset (forgetting)
+    - Forget PMT schema on conversation end or explicit reset (forgetting)
 
 Architecture:
     Deque-based PMT slot, dual-guard eviction policy:
@@ -194,7 +194,7 @@ class WorkingMemoryCortex:
 
     def recall_pmt_schema(self) -> list[dict]:
         """
-        Recall sustained PMT schema for context window construction.
+        Recall sustaining PMT schema for context window construction.
         Return PMT schema in ascending chronological order.
         Only includes role + content — timestamp stripped for LLM.
         Timestamps are only used for logging and memory management.
@@ -207,9 +207,9 @@ class WorkingMemoryCortex:
             for pmt in self._pmt_slot
         ]
 
-    def clean_pmt_slot(self) -> list[dict]:
+    def forget_pmt_schema(self) -> list[dict]:
         """
-        Clean the PMT slot of the working memory by forgetting all sustained PMT schema.
+        Forget all sustaining PMT schema in working memory.
         Called at conversation end or on explicit reset.
         Does NOT forward to EMC — PMT schema are permanently forgotten unless
         caller chooses to save the returned list.
@@ -225,9 +225,9 @@ class WorkingMemoryCortex:
         )
         return forgotten_pmt_schema                        # Return forgotten PMT schema to caller for optional saving or forwarding to EMC
     
-    def assess_pmt_slot(self) -> dict:
+    def assess_pmt_schema(self) -> dict:
         """
-        Assess the current status of the PMT slot in working memory for logging and monitoring.
+        Assess the current status of sustaining PMT schema for logging and monitoring.
 
         Returns:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage

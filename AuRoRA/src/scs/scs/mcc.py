@@ -99,17 +99,17 @@ class MemoryCoordinationCore:
             content: Message text
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_PMTs = self.wmc.fill_pmt(role, content)
+        evicted_pmts = self.wmc.fill_pmt(role, content)
 
         # Bind evicted PMTs to EMC buffer
         # Run in executor so it never blocks the asyncio event loop
-        if evicted:
+        if evicted_pmts:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
-                None, self._bind_to_emc_buffer, evicted
+                None, self._bind_to_emc_buffer, evicted_pmts
             )
             self.logger.debug(
-                f"MCC binded {len(evicted)} evicted PMT(s) → EMC buffer"
+                f"MCC binded {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
             )
 
     def _bind_to_emc_buffer(self, pmts: list[dict]):
@@ -123,7 +123,7 @@ class MemoryCoordinationCore:
                 content = pmt["content"],
             )
 
-    async def retrieve_ful_moemory(self, user_input: str) -> list[dict]:
+    async def retrieve_full_memory(self, user_input: str) -> list[dict]:
         """
         Build the full context window to send to Cosmos.
 
@@ -196,7 +196,7 @@ class MemoryCoordinationCore:
 
     def get_stats(self) -> dict:
         """Return combined memory stats for logging and health checks."""
-        wmc_stats = self.wmc.get_stats()
+        wmc_stats = self.wmc.assess_pmt_schema()
         emc_stats = self.emc.get_stats()
         return {
             "wmc": wmc_stats,
@@ -217,15 +217,19 @@ class MemoryCoordinationCore:
             f"{e.get('db_size_mb', 0)} MB"
         )
 
-    def clear_wmc(self):
+    def forget_wm(self):
         """
-        Clear working memory — called at conversation reset.
+        Forget working memory — called at conversation reset or session end.
         Does NOT clear EMC — episodic memory is permanent.
         """
-        self.wmc.clear()
-        self.logger.info("🧹 WMC cleared via MCC")
+        self.wmc.forget_pmt_schema()                                # Forget all sustaining PMT schema in working memory
+        self.logger.info("🧹 Working memory forgotten")             # Log entry on successful working memory forgetting
 
     def close(self):
-        """Shutdown all memory layers cleanly."""
-        self.emc.close()
-        self.logger.info("🗄️  MCC closed")
+        """
+        Gracefully close MCC and its memory cortex layers.
+        WMC has no persistent resources to close,
+        but EMC may have open file handles to the engram gateway that need to be released.
+        """
+        self.emc.close()                                            # Close the engram gateway
+        self.logger.info("🗄️  MCC shutdown sequence complete")      # Log entry on successful MCC closure
