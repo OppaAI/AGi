@@ -87,9 +87,9 @@ class MemoryCoordinationCore:
         self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def bind_pmt(self, role: str, content: str):
+    async def relay_pmt(self, role: str, content: str):
         """
-        Add a new conversation turn to memory.
+        Relay new PMT to WMC and bind any evicted PMTs to EMC buffer.
 
         1. Fill induced PMT to WMC
         2. Bind any evicted PMTs to EMC buffer (non-blocking)
@@ -99,16 +99,16 @@ class MemoryCoordinationCore:
             content: Message text
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role, content)
+        evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into working memory, and retrieve any evicted PMTs
 
         # Bind evicted PMTs to EMC buffer
-        # Run in executor so it never blocks the asyncio event loop
-        if evicted_pmts:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
+        # Run and forget so it never blocks the asyncio event loop
+        if evicted_pmts:                                                    # If there are any evicted PMTs, bind them to EMC buffer
+            loop = asyncio.get_event_loop()                                 # Get the current event loop
+            loop.run_in_executor(                                           # Run the binding of evicted PMTs to EMC buffer in a separate thread to avoid
                 None, self._bind_to_emc_buffer, evicted_pmts
             )
-            self.logger.debug(
+            self.logger.debug(                                              # Log the binding of evicted PMTs to EMC buffer
                 f"MCC binded {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
             )
 
