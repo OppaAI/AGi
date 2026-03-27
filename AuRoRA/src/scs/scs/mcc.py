@@ -136,41 +136,42 @@ class MemoryCoordinationCore:
                 exc_info=True
             )
             
-    async def retrieve_full_memory(self, user_input: str) -> list[dict]:
+    async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
         """
-        Build the full context window to send to Cosmos.
-
+        Assemble full memory context for the cognitive engine.
         Structure:
-            [WMC turns (chronological)]
-            + [EMC episodes injected as system context (if relevant)]
-
-        EMC search runs concurrently with WMC retrieval — no added latency.
-
+            [WMC PMTs (chronological)]
+            + [EMC episodes injected into memory context (if relevant)]
+        EMC search runs concurrently with WMC PMT retrieval — no added latency.
+        Awaits both before returning — inference requires full memory context.
+        
         Args:
-            user_input: Current user message (used as EMC search query)
-
+            user_prompt: Current user message (used as EMC search query)
         Returns:
-            List of message dicts [{role, content}] ready for Cosmos
+            List of message dicts [{role, content}] ready for inference
         """
-        # Run WMC retrieval and EMC search concurrently
-        loop = asyncio.get_event_loop()
+        
+        # Recall WMC PMTs and search EMC episodes concurrently
+        loop = asyncio.get_running_loop()                                # Access the main neural pathway
 
-        wmc_turns_future = loop.run_in_executor(None, self.wmc.get_turns)
-        emc_results_future = loop.run_in_executor(
-            None, self.emc.search, user_input, EMC_TOP_K
+        wmc_pmts_pending = loop.run_in_executor(                         # Recruit a dormant neural thead — run WMC PMT retrieval on isolated neural pathway
+            None, self.wmc.recall_pmt_schema
+        )
+        emc_episodes_pending = loop.run_in_executor(                     # Recruit another dormant neural thead — run EMC episode search on isolated neural pathway
+            None, self.emc.search, user_prompt, CNS.EMC.RECALL_DEPTH
         )
 
-        wmc_turns, emc_results = await asyncio.gather(
-            wmc_turns_future, emc_results_future
+        wmc_pmts, emc_episodes = await asyncio.gather(                    # Await both pending retrievals — synchronize into active cognition
+            wmc_pmts_pending, emc_episodes_pending
         )
 
-        # Filter EMC results by minimum similarity threshold
+        # Filter EMC episodes by minimum relevance threshold
         relevant_episodes = [
-            ep for ep in emc_results
-            if ep["similarity"] >= EMC_MIN_SIMILARITY
+            episode for episode in emc_episodes
+            if episode["similarity"] >= CNS.EMC.RECALL_THRESHOLD
         ]
 
-        # Build context list
+        # Assemble context list
         context: list[dict] = []
 
         # Inject relevant EMC episodes as a system message
@@ -194,7 +195,7 @@ class MemoryCoordinationCore:
                 f"MCC injected {len(relevant_episodes)} EMC episode(s) into context"
             )
 
-        # Append active WMC turns (chronological)
+        # Append active WMC turns in chronological order
         context.extend(wmc_turns)
 
         self.logger.debug(
