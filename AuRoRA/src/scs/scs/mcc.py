@@ -7,27 +7,27 @@ Single memory interface for CNC — coordinates WMC and EMC.
 CNC never touches WMC or EMC directly, only calls MCC.
 
 Responsibilities:
-    - Route new turns to WMC
-    - Forward WMC overflow → EMC buffer (async, non-blocking)
-    - Build context window for Cosmos (WMC turns + EMC recalled engrams)
-    - Manage cortical capacity across the full context
+    - Fill induced PMTs to WMC
+    - Bind evicted PMTs → EMC buffer (async, non-blocking)
+    - Assemble memory context for cognitive engine (sustained WMC PMTs + recalled EMC episodes)
+    - Manage cortical capacity across the full memory context
 
 Architecture:
     MCC mirrors the human prefrontal cortex — the brain's active workspace
     where working memory and episodic recall share the same conscious space.
 
-    WMC and EMC operate independently but converge in build_context() into
-    a single unified context window sent to Cosmos — exactly as fresh thoughts
+    WMC and EMC operate independently but converge in assemble_memory_context() into
+    a single unified memory context sent to cognitive engine — exactly as fresh thoughts
     and recalled memories both surface into the same prefrontal awareness.
-    Cosmos cannot distinguish a recent WMC turn from a recalled EMC engram —
-    they are all just active cognition.
+    Cognitive engine cannot distinguish a recent sustained  WMC PMTs from a recalled EMC engram —
+    they are all just active cognition context.
 
     Cortical capacity budget:
-        System prompt + robot identity  →  CNS_COGNITIVE_RESERVE
+        Identity and cognition          →  CNS_COGNITIVE_RESERVE
         EMC recalled engrams            →  EMC_RECALL_RESERVE
-        WMC active turns                →  WMC_GLOBAL_CHUNK_LIMIT
+        WMC sustained PMTs              →  WMC_GLOBAL_CHUNK_LIMIT
         ─────────────────────────────────────────────────────────────────────
-        Total                           →  CNS_CORTICAL_CAPACITY
+        Total active cognitive core     →  CNS_CORTICAL_CAPACITY
 
 Todo:
     M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
@@ -39,7 +39,7 @@ Todo:
 """
 
 # System libraries
-import asyncio                          # For concurrent WMC retrieval and EMC search
+import asyncio                          # For concurrent WMC and EMC recall
 from pathlib import Path                # For handling gateway to the engrams
 
 # AGi libraries
@@ -105,10 +105,10 @@ class MemoryCoordinationCore:
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to EMC buffer
             loop = asyncio.get_running_loop()                               # Access the main neural pathway
-            loop.run_in_executor(                                           # Recruit a dormant neural thead — run binding on isolated neural pathway
+            loop.run_in_executor(                                           # Recruit a dormant neural thread — run binding on isolated neural pathway
                 None, self._bind_to_emc_buffer, evicted_pmts
             )
-            self.logger.debug(                                              # Log the binding of evicted PMTs to EMC buffer
+            self.logger.debug(                                              # Log the binding handoff of evicted PMTs to EMC buffer
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
             )
 
@@ -142,26 +142,26 @@ class MemoryCoordinationCore:
         Structure:
             [WMC PMTs (chronological)]
             + [EMC episodes injected into memory context (if relevant)]
-        EMC search runs concurrently with WMC PMT retrieval — no added latency.
+        EMC recall runs concurrently with WMC PMT recall — no added latency.
         Awaits both before returning — inference requires full memory context.
         
         Args:
-            user_prompt: Current user message (used as EMC search query)
+            user_prompt: Current user message (used as EMC recall query)
         Returns:
             List of message dicts [{role, content}] ready for inference
         """
         
-        # Recall WMC PMTs and search EMC episodes concurrently
+        # Recall WMC PMTs and EMC episodes concurrently
         loop = asyncio.get_running_loop()                                # Access the main neural pathway
 
-        wmc_pmts_pending = loop.run_in_executor(                         # Recruit a dormant neural thead — run WMC PMT retrieval on isolated neural pathway
+        wmc_pmts_pending = loop.run_in_executor(                         # Recruit a dormant neural thread — run WMC PMT recall on isolated neural pathway
             None, self.wmc.recall_pmt_schema
         )
-        emc_episodes_pending = loop.run_in_executor(                     # Recruit another dormant neural thead — run EMC episode search on isolated neural pathway
-            None, self.emc.search, user_prompt, CNS.EMC.RECALL_DEPTH
+        emc_episodes_pending = loop.run_in_executor(                     # Recruit another dormant neural thread — run EMC episode recall on isolated neural pathway
+            None, self.emc.recall, user_prompt, CNS.EMC.RECALL_DEPTH
         )
 
-        wmc_pmts, emc_episodes = await asyncio.gather(                    # Await both pending retrievals — synchronize into active cognition
+        wmc_pmts, emc_episodes = await asyncio.gather(                    # Await both pending recalls — synchronize into active cognition
             wmc_pmts_pending, emc_episodes_pending
         )
 
@@ -195,12 +195,12 @@ class MemoryCoordinationCore:
                 f"MCC injected {len(relevant_episodes)} EMC episode(s) into context"
             )
 
-        # Append active WMC turns in chronological order
-        context.extend(wmc_turns)
+        # Append sustained WMC PMTs in chronological order
+        context.extend(wmc_pmts)
 
         self.logger.debug(
             f"MCC context built: "
-            f"{len(wmc_turns)} WMC turns + "
+            f"{len(wmc_pmts)} WMC PMTs + "
             f"{len(relevant_episodes)} EMC episodes"
         )
 
@@ -215,7 +215,7 @@ class MemoryCoordinationCore:
         """
         wmc_schema = self.wmc.assess_pmt_schema()            # Assess the PMT schema of WMC
         emc_schema = self.emc.get_stats()                    # Assess the engram complex of EMC
-        return {                                             # return the current stats of all memory cortext layers
+        return {                                             # Return the current stats of all memory cortex layers
             "wmc": wmc_schema,
             "emc": emc_schema,
         }
