@@ -99,23 +99,23 @@ class MemoryCoordinationCore:
             content: Message text
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into working memory, and retrieve any evicted PMTs
-
+        evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into WMC, collect any evicted PMTs
+            
         # Bind evicted PMTs to EMC buffer
-        # Run and forget so it never blocks the asyncio event loop
-        if evicted_pmts:                                                    # If there are any evicted PMTs, bind them to EMC buffer
-            loop = asyncio.get_event_loop()                                 # Get the current event loop
-            loop.run_in_executor(                                           # Run the binding of evicted PMTs to EMC buffer in a separate thread to avoid
+        # Run and forget — never blocks active cognition
+        if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to EMC buffer
+            loop = asyncio.get_running_loop()                               # Access the main neural pathway
+            loop.run_in_executor(                                           # Recruit a dormant neural thead — run binding on isolated neural pathway
                 None, self._bind_to_emc_buffer, evicted_pmts
             )
             self.logger.debug(                                              # Log the binding of evicted PMTs to EMC buffer
-                f"MCC binded {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
+                f"MCC bound {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
             )
 
     def _bind_to_emc_buffer(self, evicted_pmts: list[dict]) -> None:
         """
-        Bind evicted PMTs to EMC buffer.
-        Runs in thread pool — never blocks asyncio loop.
+        Bind evicted PMTs from WMC into EMC buffer for pending encoding and consolidation.
+        Runs in isolated neural pathway — never blocks active cognition.
     
         Args:
             evicted_pmts: List of evicted PMTs [{role, content, timestamp}]
@@ -123,13 +123,19 @@ class MemoryCoordinationCore:
         Returns:
             None
         """
-        for evicted_pmt in evicted_pmts:                # Go through each evicted PMTs
-            self.emc.buffer_append(                     # Bind each evicted PMT into EMC buffer
-                role    = evicted_pmt["role"],
-                content = evicted_pmt["content"],
-                timestamp = evicted_pmt["timestamp"],
+        try:                                                # Attempt binding evicted PMTs to EMC buffer
+            for evicted_pmt in evicted_pmts:                # Process each evicted PMT
+                self.emc.buffer_append(                     # Bind each evicted PMT into EMC buffer
+                    role    = evicted_pmt["role"],
+                    content = evicted_pmt["content"],
+                    timestamp = evicted_pmt["timestamp"],
+                )
+        except Exception as e:                             # If binding lapse occurs, log and continue
+            self.logger.error(                             # Log the binding lapse
+                f"EMC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
+                exc_info=True
             )
-
+            
     async def retrieve_full_memory(self, user_input: str) -> list[dict]:
         """
         Build the full context window to send to Cosmos.
@@ -198,8 +204,6 @@ class MemoryCoordinationCore:
         )
 
         return context
-
-    # ── Utility ───────────────────────────────────────────────────────────────
 
     def assess_memory_schema(self) -> dict:
         """
