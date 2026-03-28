@@ -29,7 +29,7 @@ Architecture:
         ─────────────────────────────────────────────────────────────────────
         Total active cognitive core     →  CNS_CORTICAL_CAPACITY
 
-Todo:
+TODO:
     M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
          EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
          WMC's chunk limit
@@ -39,14 +39,14 @@ Todo:
 """
 
 # System libraries
-import asyncio                          # For concurrent WMC and EMC recall
-from pathlib import Path                # For handling gateway to the engrams
+import asyncio                              # For concurrent WMC and EMC recall
+from pathlib import Path                    # For handling gateway to the engrams
 
 # AGi libraries
-from scs.wmc import WorkingMemoryCortex
-from scs.emc import EpisodicMemoryCortex
-from hrs.hrp import AGi
-CNS = AGi.CNS                            # Alias CNS parameter class for concise access
+from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex layer of the CNS, responsible for sustaining PMTs in working memory
+from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex layer of the CNS, responsible for recalling relevant episodes from the engram complex
+from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
+CNS = AGi.CNS                               # Channel AGi CNS parameters for direct access in MCC
 
 class MemoryCoordinationCore:
     """
@@ -57,8 +57,8 @@ class MemoryCoordinationCore:
     through MCC — CNC never touches WMC or EMC directly.
 
     Access:
-        MCC reads AGi.CNS.* constants from hrp.py directly.
-        MCC accesses WMC and EMC constants through their instances only —
+        MCC reads AGi.CNS.* parameters from hrp.py directly.
+        MCC accesses WMC and EMC parameters through their instances only —
         never via hrp.py directly.
 
     CNC interface:
@@ -68,7 +68,7 @@ class MemoryCoordinationCore:
         mcc.close()
     """
 
-    def __init__(self, logger):
+    def __init__(self, logger) -> None:
         self.logger = logger            # Retrieve logger from CNC for logging MCC operations
 
         # Ensure engram gateway exists
@@ -87,7 +87,7 @@ class MemoryCoordinationCore:
         self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def relay_pmt(self, role: str, content: str):
+    async def relay_pmt(self, role: str, content: str) -> None:
         """
         Relay new PMT to WMC and bind any evicted PMTs to episodic buffer.
 
@@ -108,7 +108,7 @@ class MemoryCoordinationCore:
             loop.run_in_executor(                                           # Recruit a dormant neural thread — run binding on isolated neural pathway
                 None, self._bind_to_episodic_buffer, evicted_pmts
             )
-            self.logger.debug(                                              # Log the binding handoff of evicted PMTs to episodic buffer
+            self.logger.debug(                                              # Log the binding transition of evicted PMTs to episodic buffer
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
@@ -116,12 +116,9 @@ class MemoryCoordinationCore:
         """
         Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
         Runs in isolated neural pathway — never blocks active cognition.
-    
+
         Args:
             evicted_pmts: List of evicted PMTs [{role, content, timestamp}]
-    
-        Returns:
-            None
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
@@ -176,19 +173,19 @@ class MemoryCoordinationCore:
 
         # Inject relevant EMC episodes as a system message
         if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
-            episode_lines = ["Relevant memories from past conversations:"]
-            for episode in episodic_scaffold:                                # Retrieve content from each recalled episode
-                date_str = episode.get("date", "unknown date")
-                role_str = episode.get("role", "unknown")
-                content  = episode.get("content", "")
-                sim      = episode.get("relevancy", 0.0)
-                episode_lines.append(
-                    f"[{date_str}] {role_str}: {content} (relevance: {sim:.2f})"
+            episode_content = ["Relevant memories from past conversations:"]
+            for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
+                date        = episode.get("date", "unknown date")            # Retrieve the date of the EMC episode
+                role        = episode.get("role", "unknown")                 # Retrieve the role of the EMC episode
+                content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
+                relevancy   = episode.get("relevancy", 0.0)                  # Retrieve the relevancy score of the EMC episode
+                episode_content.append(                                      # Stage the content of EMC episode into the episodic buffer
+                    f"[{date}] {role}: {content} (relevance: {relevancy:.2f})"
                 )
 
             episodic_buffer.append({                                          # Bind the recalled EMC episodes into episodic buffer
                 "role":    "system",
-                "content": "\n".join(episode_lines),
+                "content": "\n".join(episode_content),
             })
 
             self.logger.debug(                                                # Log the number of EMC episodes bound into episodic buffer
@@ -220,35 +217,36 @@ class MemoryCoordinationCore:
             "emc": emc_schema,
         }
 
-    def report_memory_stats(self):
+    def report_memory_stats(self) -> None:
         """
         Report current memory cortex stats.
         Called by CNC after every turn for health monitoring.
-    
-        Todo:
-            GUI — expose via ROS2 topic for real-time memory visualisation
+
+        TODO:
+        - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
+        - GUI — expose via ROS2 topic for real-time memory visualisation
         """
-        stats = self.assess_memory_schema()                # Assess the current stats of all memory cortex layers
-        wmc = stats["wmc"]                                 # Retrieve current stats of working memory
-        emc = stats["emc"]                                 # Retrieve current stats of episodic memory
-        self.logger.info(                                  # Log the current stats of all memory cortex layers 
+        stats = self.assess_memory_schema()                 # Assess the current stats of all memory cortex layers
+        wmc_stats = stats["wmc"]                            # Retrieve current stats of working memory
+        emc_stats = stats["emc"]                            # Retrieve current stats of episodic memory
+        self.logger.info(                                   # Log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
-            f"   WMC: {wmc['pmt_count']} PMTs | "
-            f"{wmc['sustained_chunks']}/{wmc['global_chunk_limit']} chunks ({wmc['chunk_occupancy']}%)\n"
-            f"   EMC: {emc.get('episodes', 0)} episodes | "
-            f"{emc.get('buffer_pending', 0)} pending embed | "
-            f"{emc.get('db_size_mb', 0)} MB"
+            f"   WMC: {wmc_stats['pmt_count']} PMTs | "
+            f"{wmc_stats['sustained_chunks']}/{wmc_stats['global_chunk_limit']} chunks ({wmc_stats['chunk_occupancy']}%)\n"
+            f"   EMC: {emc_stats.get('episodes', 0)} episodes | "
+            f"{emc_stats.get('buffer_pending', 0)} pending embed | "
+            f"{emc_stats.get('db_size_mb', 0)} MB"
         )
 
-    def forget_wm(self):
+    def forget_wm(self) -> None:
         """
         Forget working memory — called at conversation reset or session end.
         Does NOT clear EMC — episodic memory is permanent.
         """
-        self.wmc.forget_pmt_schema()                                # Forget all sustaining PMT schema in working memory
-        self.logger.info("🧹 Working memory forgotten")             # Log entry on successful working memory forgetting
+        self.wmc.forget_pmt_schema()                        # Forget all sustaining PMT schema in working memory
+        self.logger.info("🧹 Working memory forgotten")     # Log entry on successful working memory forgetting
 
-    def close(self):
+    def close(self) -> None:
         """
         Gracefully close MCC and its memory cortex layers.
         WMC has no persistent resources to close,

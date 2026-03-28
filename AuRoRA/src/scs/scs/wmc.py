@@ -90,7 +90,7 @@ class WorkingMemoryCortex:
                 global_chunk_limit: int = WMC.GLOBAL_CHUNK_LIMIT, 
                 pmt_slot_limit: int = WMC.PMT_SLOT_LIMIT,
                 pmt_slot_buffer: int = WMC.PMT_SLOT_BUFFER
-                ):
+                ) -> None:
         """
         Initialize the WMC with global chunk limit and PMT slot limit.
 
@@ -246,9 +246,6 @@ class WorkingMemoryCortex:
     def _introspect_chunk_load (self) -> None:
         """
         Introspect the chunk load of sustained PMTs from scratch as source of truth verification.
-        
-        Returns:
-            None
         """
         self._sustained_chunks = sum(           # Introspect the chunk load of sustained PMTs in the slots
             _estimate_chunk_count(pmt) 
