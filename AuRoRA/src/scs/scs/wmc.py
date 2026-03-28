@@ -44,7 +44,14 @@ Terminology:
 Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
-Todo:
+Public interface:
+    wmc.fill_pmt(role, content) → list[evicted_pmt]
+    wmc.recall_pmt_schema() → list[dict]
+    wmc.forget_pmt_schema() → list[dict]
+    wmc.assess_pmt_schema() → dict
+    wmc.is_empty → bool
+
+TODO:
     M2 — integrate HRS.BLC for biological clock timestamps
     M3 — add salience weighting to eviction policy
 """

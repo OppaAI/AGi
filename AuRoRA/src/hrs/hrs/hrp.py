@@ -21,7 +21,7 @@ Architecture:
                   Relational — one set per user, loaded at session start.
                   Future home: root/Users/{user_id}/hrp.yaml
 
-Todo:
+TODO:
     HRS milestone — build hrs.py startup loader to replace [INTRINSIC]
                     and [EXTRINSIC] constants with runtime YAML loading.
                     hrp.py retains [STATIC] constants only.
