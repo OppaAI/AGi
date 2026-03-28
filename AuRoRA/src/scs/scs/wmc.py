@@ -3,7 +3,7 @@ WMC — Working Memory Cortex
 ============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Active conversation context for GRACE — mirrors human working memory.
+Working memory layer of the CNS — mirrors human working memory.
 Fast, limited capacity, current focus only.
 
 Responsibilities:
@@ -36,10 +36,10 @@ Architecture:
         - No async — all operations are synchronous and in-memory
 
 Terminology:
-    PMT        — phonological memory trace (one conversation turn, user or assistant)
-    PMT schema — a subset of PMTs evicted or recalled together as a group
-    PMT slot   — the active deque buffer holding all sustained PMTs
-    Chunk      — unit of LLM context window size (~4 neural units per chunk)
+    Chunk   — unit of LLM context window size (~4 neural units per chunk)
+    PMT     — phonological memory trace (one conversation turn, user or assistant)
+    Schema  — a subset of PMTs evicted or recalled together as a group
+    Slot    — the active deque buffer holding all sustained PMTs
 
 Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
@@ -61,8 +61,8 @@ from datetime import datetime            # (TODO) Replace with hrs.blc when BioL
 from collections import deque            # For use in memory management
 
 # AGi libraries
-from hrs.hrp import AGi                  # Import AGi parameter namespace
-WMC = AGi.CNS.WMC                        # Alias WMC parameter class for concise access
+from hrs.hrp import AGi                  # Import AGi homeostatic regulation parameters
+WMC = AGi.CNS.WMC                        # Channel for interfacing with Working Memory Cortex (WMC)
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
@@ -117,28 +117,6 @@ class WorkingMemoryCortex:
         self.logger.info(                                   # Log entry on WMC initialization with configured capacity
             f"   [Working Memory Cortex]  ONLINE ✅ — "
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
-        )
-
-    def __len__(self) -> int:
-        """
-        Return number of PMTs in the sustained schema.
-
-        Returns:
-            int: Number of PMTs in the sustained schema
-        """
-        return len(self._pmt_slot)                    # Return the number of PMTs in the sustained PMT schema
-
-    def __repr__(self) -> str:
-        """
-        Return string representation of WMC state for debugging.
-
-        Returns:
-            str: String representation of WMC state
-        """
-        return (                                      # Return string representation of WMC state for debugging
-            f"WorkingMemoryCortex(pmts={len(self._pmt_slot)}, "
-            f"chunks={self._sustained_chunks}/{self.global_chunk_limit} "
-            f"[{round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0}%])"
         )
         
     def fill_pmt(self, role: str, content: str) -> list[dict]:

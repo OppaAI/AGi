@@ -29,6 +29,17 @@ Architecture:
         ─────────────────────────────────────────────────────────────────────
         Total active cognitive core     →  CNS_CORTICAL_CAPACITY
 
+Terminology:
+    Buffer      — temporary staging area for memory traces in transition 
+                (e.g. evicted PMTs from WMC waiting for embedding and consolidation in EMC, or
+                recalled EMC episodes waiting to be injected into memory context)
+    Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
+    Engram      — episodic memory trace (one past episode, user or assistant)
+    PMT         — phonological memory trace (one conversation turn, user or assistant)
+    Scaffold    — temporary staging area for relevant EMC episodes to be injected into memory context
+    Reserve     — cortical capacity reserve for a specific memory function (e.g. EMC_RECALL_RESERVE for recalling relevant EMC episodes)
+    Threshold   — minimum relevancy score for an EMC episode to be injected into memory context
+
 Public interface:
     await mcc.register_memory(role, content)
     context = await mcc.assemble_memory_context(user_prompt)
@@ -53,7 +64,7 @@ from pathlib import Path                    # For handling gateway to the engram
 from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex layer of the CNS, responsible for sustaining PMTs in working memory
 from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex layer of the CNS, responsible for recalling relevant episodes from the engram complex
 from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
-CNS = AGi.CNS                               # Channel AGi CNS parameters for direct access in MCC
+CNS = AGi.CNS                               # Channel for interfacing with Central Nervous System (CNS)
 
 class MemoryCoordinationCore:
     """
@@ -168,7 +179,7 @@ class MemoryCoordinationCore:
         # Pass through memory gate — suppress episodes below relevancy threshold
         episodic_scaffold = [                                                # Set up EMC episodic scaffold to stage the relevant episodes
             episode for episode in emc_episodes                              # Process each of the recalled EMC episodes
-            if episode["relevancy"] >= CNS.EMC.RECALL_THRESHOLD              # Stage the EMC episode if above relevancy threshold
+            if episode["relevancy"] >= CNS.EMC.RELEVANCE_THRESHOLD           # Stage the EMC episode if above relevancy threshold
         ]
 
         # Assemble memory context

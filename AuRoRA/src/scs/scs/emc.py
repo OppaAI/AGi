@@ -3,58 +3,74 @@ EMC — Episodic Memory Cortex
 ==============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Episodic memory for GRACE — "I remember that specific moment."
-Stores individual conversation turns with semantic embeddings, forever.
+Episodic memory layer of the CNS — "I remember that specific moment."
+Stores conversation turns with semantic embeddings, permanently.
 No expiry — 1TB NVMe means GRACE remembers everything.
 
+Responsibilities:
+    - Receive evicted PMTs from MCC into crash-safe buffer (binding)
+    - Encode buffered turns into semantic embeddings (encoding)
+    - Store embedded episodes in SQLite permanently (consolidation)
+    - Search episodes semantically for relevant past context (retrieval)
+    - Inject recalled episodes into MCC memory context (reinstatement)
+
 Architecture:
-    WMC overflow → em_buffer (crash-safe raw intake)
-                 → async embedding → episodes table (searchable)
+    Two-table SQLite design:
+        em_buffer  — crash-safe raw intake from WMC overflow
+        episodes   — embedded, searchable episodic memory (permanent)
 
-Embedding:  google/embeddinggemma-300m-qat-q4_0 via sentence-transformers
-            CPU-only, sub-200MB RAM, zero GPU impact
-Similarity: Pure-Python cosine (no FAISS needed until millions of rows)
-Storage:    SQLite — lightweight, Jetson-friendly, concurrent read/write
+    Embedding:
+        sentence-transformers, CPU-only, zero GPU impact
+        Model configured via EMC.ENCODING_ENGINE constant
 
-Retrieval:  Top-K semantic search over all episodes
-            Used by MCC to inject relevant past context into Cosmos window
+    Similarity:
+        Pure-Python cosine — no FAISS needed until millions of rows
+        Falls back to keyword search if embedder unavailable
 
-Buffer:     em_buffer table — crash-safe per-turn raw storage
-            Async worker embeds buffer rows → episodes table
-            Buffer rows deleted after successful embedding
+    Storage:
+        SQLite WAL mode — Jetson-friendly, concurrent read/write
+
+    Worker:
+        Background thread drains em_buffer → embeds → episodes
+        Runs continuously, sleeps when buffer is empty
+        Never blocks GRACE's active cognition
+
+Terminology:
+    em_buffer  — raw turn intake table (crash-safe, temporary)
+    episodes   — embedded episodic memory table (permanent)
+    engram     — one embedded episode (a specific remembered moment)
+    similarity — cosine distance between query and episode embeddings
+
 Lifecycle:
     Binding → Encoding → Consolidation → Storing → Retrieval → Reinstatement
-    
-Daily flow:
-    During day  → WMC evicts → em_buffer → async embed → episodes
-    At 11pm     → MCC triggers reflection → SMC distils LTM (future M2)
+
+Public interface:
+    emc.buffer_append(role, content, timestamp) → bool
+    emc.recall(query, top_k) → list[dict]
+    emc.get_episodes_for_date(date_str) → list[dict]
+    emc.buffer_pending_count() → int
+    emc.get_stats() → dict
+    emc.cleanup_processed_buffer(keep_days) → None
+    emc.close() → None
+
+TODO:
+    M2 — FAISS index for sub-millisecond search at millions of episodes
+    M2 — date-range filtering exposed through MCC recall interface
+    M2 — SMC distillation trigger at 11pm reflection
 """
 
-import asyncio
-import json
-import math
-import sqlite3
-import threading
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+# System libraries
+import json                     # For serializing engram encodings to JSON
+import math                     # For relevance scoring (cosine similarity) calculation
+import sqlite3                  # For storage of episodic memory and buffer
+import threading                # For background encoding of engrams
+from datetime import datetime   # (TODO) Replace with hrs.blc when BioLogic Clock is built
+from pathlib import Path        # For handling gateway to the engrams
+from typing import Optional     # For validating parameters
 
-
-# ── Embedding model ───────────────────────────────────────────────────────────
-EMBEDDING_MODEL = "google/embeddinggemma-300m-qat-q4_0-unquantized"
-EMBEDDING_DIM   = 768       # embeddinggemma-300m always outputs 768 dims
-# NOTE: QAT q4_0 variant — sub-200MB RAM, CPU-only, float32 activations
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── Search defaults ───────────────────────────────────────────────────────────
-DEFAULT_TOP_K         = 5    # episodes returned per search
-DEFAULT_CONTENT_CHARS = 300  # truncate episode content in search results
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# EMBEDDER
-# ══════════════════════════════════════════════════════════════════════════════
+# AGi libraries
+from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
+EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
 class _Embedder:
     """
@@ -74,10 +90,10 @@ class _Embedder:
             return True
         try:
             from sentence_transformers import SentenceTransformer
-            self.logger.info(f"⏳ Loading {EMBEDDING_MODEL} on CPU…")
-            self._model     = SentenceTransformer(EMBEDDING_MODEL)
+            self.logger.info(f"⏳ Loading {EMC.ENCODING_ENGINE} on CPU…")
+            self._model     = SentenceTransformer(EMC.ENCODING_ENGINE)
             self._available = True
-            self.logger.info(f"✅ {EMBEDDING_MODEL} ready (CPU)")
+            self.logger.info(f"✅ {EMC.ENCODING_ENGINE} ready (CPU)")
             return True
         except ImportError:
             self.logger.warning(
@@ -339,7 +355,7 @@ class EMC:
     def search(
         self,
         query: str,
-        top_k: int = DEFAULT_TOP_K,
+        top_k: int = EMC.RECALL_DEPTH,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
     ) -> list[dict]:
@@ -388,7 +404,7 @@ class EMC:
                     "timestamp":  row["timestamp"],
                     "date":       row["date"],
                     "role":       row["role"],
-                    "content":    row["content"][:DEFAULT_CONTENT_CHARS],
+                    "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                     "similarity": round(sim, 4),
                 })
 
@@ -440,7 +456,7 @@ class EMC:
                     "timestamp":  r["timestamp"],
                     "date":       r["date"],
                     "role":       r["role"],
-                    "content":    r["content"][:DEFAULT_CONTENT_CHARS],
+                    "content":    r["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                     "similarity": 0.0,
                 }
                 for r in rows
@@ -510,7 +526,7 @@ class EMC:
                 "buffer_pending":   buf_row["pending"]  if buf_row else 0,
                 "db_size_mb":       db_size_mb,
                 "embedder_ready":   self._embedder.is_available(),
-                "embedding_model":  EMBEDDING_MODEL,
+                "ENCODING_ENGINE":  ENCODING_ENGINE,
             }
         except Exception as exc:
             self.logger.error(f"EMC get_stats failed: {exc}")

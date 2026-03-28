@@ -31,25 +31,26 @@ TODO:
                   — change constant to ConfigClass
 """
 
-class AGi:
-    # ── AGi — Amazing Grace infrastructure ────────────────────────────────────────
-    ENTITY_GATEWAY = "agi"      # [STATIC] Entry point for all the interactions with AGi's core systems
+class AGi:                              # Amazing Grace infrastructure
+    ENTITY_GATEWAY = "agi"              # [STATIC] Entry point for all the interactions with AGi's core systems
 
-    class CNS:
-        # ── CNS — Central Nervous System ──────────────────────────────────────────────
+    class CNS:                          # Central Nervous System
         CORTICAL_CAPACITY = 2048        # [STATIC]    Total neural capacity of the active cognitive core
         COGNITIVE_RESERVE = 300         # [INTRINSIC] Cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY   = "cns"        # [STATIC]    Neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX   = "engram.db"  # [STATIC]    Engram complex where long-term memories storage
 
-        class EMC:
-            # ── EMC — Episodic Memory Cortex ──────────────────────────────────────────────
-            RECALL_RESERVE   = 300      # [INTRINSIC] Cortical capacity reserved for episodic recall
-            RECALL_DEPTH     = 3        # [INTRINSIC] Maximum number of engrams surfaced per turn
-            RECALL_THRESHOLD = 0.25     # [INTRINSIC] Minimum synaptic similarity to surface an engram
+        class EMC:                      # Episodic Memory Cortex
+            ENCODING_ENGINE     = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
+            ENGRAM_CHUNK_LIMIT  = 75    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
+            ENCODING_DIM        = 768   # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
+                                        # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
 
-        class WMC:
-            # ── WMC — Working Memory Cortex ───────────────────────────────────────────────
+            RECALL_RESERVE      = 300   # [INTRINSIC] Cortical capacity reserved for episodic recall
+            RECALL_DEPTH        = 3     # [INTRINSIC] Maximum number of engrams surfaced per turn
+            RELEVANCE_THRESHOLD = 0.25  # [INTRINSIC] Minimum relevance score for an engram to be surfaced
+
+        class WMC:                      # Working Memory Cortex
             UNITS_PER_CHUNK    = 4      # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
             PMT_OVERHEAD       = 4      # [STATIC]    Overhead chunks for each PMT
             PMT_SLOT_LIMIT     = 7      # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
