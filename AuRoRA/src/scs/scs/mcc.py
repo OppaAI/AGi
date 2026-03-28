@@ -8,8 +8,8 @@ CNC never touches WMC or EMC directly, only calls MCC.
 
 Responsibilities:
     - Fill induced PMTs to WMC
-    - Bind evicted PMTs → EMC buffer (async, non-blocking)
-    - Assemble memory context for cognitive engine (sustained WMC PMTs + recalled EMC episodes)
+    - Bind evicted PMTs → episodic buffer (async, non-blocking)
+    - Assemble memory context into episodic buffer for cognitive engine (sustained WMC PMTs + recalled EMC episodes)
     - Manage cortical capacity across the full memory context
 
 Architecture:
@@ -89,10 +89,10 @@ class MemoryCoordinationCore:
 
     async def relay_pmt(self, role: str, content: str):
         """
-        Relay new PMT to WMC and bind any evicted PMTs to EMC buffer.
+        Relay new PMT to WMC and bind any evicted PMTs to episodic buffer.
 
         1. Fill induced PMT to WMC
-        2. Bind any evicted PMTs to EMC buffer (non-blocking)
+        2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
             role:    "user" or "assistant"
@@ -101,20 +101,20 @@ class MemoryCoordinationCore:
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into WMC, collect any evicted PMTs
             
-        # Bind evicted PMTs to EMC buffer
+        # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
-        if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to EMC buffer
+        if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to episodic buffer
             loop = asyncio.get_running_loop()                               # Access the main neural pathway
             loop.run_in_executor(                                           # Recruit a dormant neural thread — run binding on isolated neural pathway
-                None, self._bind_to_emc_buffer, evicted_pmts
+                None, self._bind_to_episodic_buffer, evicted_pmts
             )
-            self.logger.debug(                                              # Log the binding handoff of evicted PMTs to EMC buffer
-                f"MCC bound {len(evicted_pmts)} evicted PMT(s) → EMC buffer"
+            self.logger.debug(                                              # Log the binding handoff of evicted PMTs to episodic buffer
+                f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
-    def _bind_to_emc_buffer(self, evicted_pmts: list[dict]) -> None:
+    def _bind_to_episodic_buffer(self, evicted_pmts: list[dict]) -> None:
         """
-        Bind evicted PMTs from WMC into EMC buffer for pending encoding and consolidation.
+        Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
         Runs in isolated neural pathway — never blocks active cognition.
     
         Args:
@@ -123,9 +123,9 @@ class MemoryCoordinationCore:
         Returns:
             None
         """
-        try:                                                # Attempt binding evicted PMTs to EMC buffer
+        try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
-                self.emc.buffer_append(                     # Bind each evicted PMT into EMC buffer
+                self.emc.buffer_append(                     # Bind each evicted PMT into episodic buffer
                     role    = evicted_pmt["role"],
                     content = evicted_pmt["content"],
                     timestamp = evicted_pmt["timestamp"],
@@ -152,59 +152,59 @@ class MemoryCoordinationCore:
         """
         
         # Recall WMC PMTs and EMC episodes concurrently
-        loop = asyncio.get_running_loop()                                # Access the main neural pathway
+        loop = asyncio.get_running_loop()                                    # Access the main neural pathway
 
-        wmc_pmts_pending = loop.run_in_executor(                         # Recruit a dormant neural thread — run WMC PMT recall on isolated neural pathway
+        wmc_pmts_pending = loop.run_in_executor(                             # Recruit a dormant neural thread — run WMC PMT recall on isolated neural pathway
             None, self.wmc.recall_pmt_schema
         )
-        emc_episodes_pending = loop.run_in_executor(                     # Recruit another dormant neural thread — run EMC episode recall on isolated neural pathway
+        emc_episodes_pending = loop.run_in_executor(                         # Recruit another dormant neural thread — run EMC episode recall on isolated neural pathway
             None, self.emc.recall, user_prompt, CNS.EMC.RECALL_DEPTH
         )
 
-        wmc_pmts, emc_episodes = await asyncio.gather(                    # Await both pending recalls — synchronize into active cognition
+        wmc_pmts, emc_episodes = await asyncio.gather(                       # Await both pending recalls — synchronize into active cognition
             wmc_pmts_pending, emc_episodes_pending
         )
 
-        # Filter EMC episodes by minimum relevance threshold
-        relevant_episodes = [
-            episode for episode in emc_episodes
-            if episode["similarity"] >= CNS.EMC.RECALL_THRESHOLD
+        # Pass through memory gate — suppress episodes below relevancy threshold
+        episodic_scaffold = [                                                # Set up EMC episodic scaffold to stage the relevant episodes
+            episode for episode in emc_episodes                              # Process each of the recalled EMC episodes
+            if episode["relevancy"] >= CNS.EMC.RECALL_THRESHOLD              # Stage the EMC episode if above relevancy threshold
         ]
 
-        # Assemble context list
-        context: list[dict] = []
+        # Assemble memory context
+        episodic_buffer: list[dict] = []                                     # Set up episodic buffer for holding memory context
 
         # Inject relevant EMC episodes as a system message
-        if relevant_episodes:
+        if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
             episode_lines = ["Relevant memories from past conversations:"]
-            for ep in relevant_episodes:
-                date_str = ep.get("date", "unknown date")
-                role_str = ep.get("role", "unknown")
-                content  = ep.get("content", "")
-                sim      = ep.get("similarity", 0.0)
+            for episode in episodic_scaffold:                                # Retrieve content from each recalled episode
+                date_str = episode.get("date", "unknown date")
+                role_str = episode.get("role", "unknown")
+                content  = episode.get("content", "")
+                sim      = episode.get("relevancy", 0.0)
                 episode_lines.append(
                     f"[{date_str}] {role_str}: {content} (relevance: {sim:.2f})"
                 )
 
-            context.append({
+            episodic_buffer.append({                                          # Bind the recalled EMC episodes into episodic buffer
                 "role":    "system",
                 "content": "\n".join(episode_lines),
             })
 
-            self.logger.debug(
-                f"MCC injected {len(relevant_episodes)} EMC episode(s) into context"
+            self.logger.debug(                                                # Log the number of EMC episodes bound into episodic buffer
+                f"MCC injected {len(episodic_scaffold)} EMC episode(s) into Recall Episodic Buffer"
             )
 
-        # Append sustained WMC PMTs in chronological order
-        context.extend(wmc_pmts)
+        # Bind sustained WMC PMTs in chronological order
+        episodic_buffer.extend(wmc_pmts)                                       # Bind the sustained WMC PMTS into episodic buffer
 
-        self.logger.debug(
-            f"MCC context built: "
+        self.logger.debug(                                                     # Log the recalled memory context (WMC PMTs + recalled EMC episodes)
+            f"MCC memory context recalled: "
             f"{len(wmc_pmts)} WMC PMTs + "
-            f"{len(relevant_episodes)} EMC episodes"
+            f"{len(episodic_scaffold)} EMC episodes"
         )
 
-        return context
+        return episodic_buffer                                                 # Return the memory context staged in episodic buffer
 
     def assess_memory_schema(self) -> dict:
         """
