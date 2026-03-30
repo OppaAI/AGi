@@ -11,7 +11,7 @@ Responsibilities:
     - Receive evicted PMTs from MCC into crash-safe buffer (binding)
     - Encode buffered turns into semantic embeddings (encoding)
     - Store embedded episodes in SQLite permanently (consolidation)
-    - Search episodes semantically for relevant past context (retrieval)
+    - Search episodes semantically for relevant past context (recall)
     - Inject recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
@@ -19,30 +19,31 @@ Architecture:
         em_buffer  — crash-safe raw intake from WMC overflow
         episodes   — embedded, searchable episodic memory (permanent)
 
-    Embedding:
+    Encoding:
         sentence-transformers, CPU-only, zero GPU impact
         Model configured via EMC.ENCODING_ENGINE constant
 
     Similarity:
         Pure-Python cosine — no FAISS needed until millions of rows
-        Falls back to keyword search if embedder unavailable
+        Falls back to keyword search if encoding engine unavailable
 
     Storage:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
     Worker:
-        Background thread drains em_buffer → embeds → episodes
+        Background thread drains em_buffer → encodes → episodes
         Runs continuously, sleeps when buffer is empty
         Never blocks GRACE's active cognition
 
 Terminology:
     em_buffer  — raw turn intake table (crash-safe, temporary)
+    encoding   — semantic embedding of a turn into a vector
     episodes   — embedded episodic memory table (permanent)
     engram     — one embedded episode (a specific remembered moment)
     similarity — cosine distance between query and episode embeddings
 
 Lifecycle:
-    Binding → Encoding → Consolidation → Storing → Retrieval → Reinstatement
+    Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
 
 Public interface:
     emc.buffer_append(role, content, timestamp) → bool
@@ -72,18 +73,19 @@ from typing import Optional     # For validating parameters
 from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
-class _Embedder:
+class _EncodingEngine:
     """
-    CPU-only sentence-transformers wrapper for embeddinggemma-300m.
-    Lazy-loads on first use. Caches recent embeddings to avoid re-encoding
-    identical text (e.g. repeated short phrases).
+    Encoding engine for episodic memory consolidation and recall.
+    Loads at EMC initialization - encoding engine ready before first recall.
+    Primes recent encodings to avoid redundant encoding of identical engrams
+    and to speed up subsequent recall.
     """
 
     def __init__(self, logger):
-        self.logger     = logger
-        self._model     = None
-        self._available: Optional[bool] = None
+        self.logger     = logger                    # Retrieve logger from CNC for logging EMC operations
+        self._core      = None                      # Initialize encoding engine core to verify availability
         self._cache: dict[str, list[float]] = {}
+        self._load()  # Attempt to load immediately to log status, but tolerate failure until encode() is called    
 
     def _load(self) -> bool:
         if self._model is not None:
@@ -92,25 +94,21 @@ class _Embedder:
             from sentence_transformers import SentenceTransformer
             self.logger.info(f"⏳ Loading {EMC.ENCODING_ENGINE} on CPU…")
             self._model     = SentenceTransformer(EMC.ENCODING_ENGINE)
-            self._available = True
             self.logger.info(f"✅ {EMC.ENCODING_ENGINE} ready (CPU)")
             return True
         except ImportError:
             self.logger.warning(
-                "⚠️  sentence-transformers not installed.\n"
-                "   pip3 install sentence-transformers --break-system-packages"
+                "⚠️ Encoding Engine offline - missing inferencing component."
+                "   EMC falling back to mental lexicon access."
+                "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-            self._available = False
             return False
         except Exception as exc:
-            self.logger.warning(f"⚠️  Embedder load failed: {exc}")
-            self._available = False
+            self.logger.warning(f"⚠️ Encoding engine load failed: {exc}")
             return False
 
     def is_available(self) -> bool:
-        if self._available is not None:
-            return self._available
-        return self._load()
+        return self._model is not None
 
     def encode(self, text: str, is_query: bool = False) -> list[float]:
         """
@@ -137,7 +135,7 @@ class _Embedder:
             self._cache[key] = vec
             return vec
         except Exception as exc:
-            self.logger.debug(f"Embed error: {exc}")
+            self.logger.debug(f"Encoding error: {exc}")
             return []
 
 
@@ -174,8 +172,8 @@ class EMC:
         self.logger   = logger
         self.db_path  = db_path
 
-        # Embedder — CPU, lazy-loaded
-        self._embedder = _Embedder(logger)
+        # Encoding engine — CPU, lazy-loaded
+        self._encoding_engine = _EncodingEngine(logger)
 
         # SQLite — WAL mode for concurrent reads during async writes
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -263,22 +261,22 @@ class EMC:
             self.logger.warning(f"EMC buffer_append failed: {exc}")
             return False
 
-    # ── Async worker — buffer → embed → episodes ──────────────────────────────
+    # ── Async worker — buffer → encode → episodes ─────────────────────────────
 
     def _start_worker(self):
-        """Start background embedding worker thread."""
+        """Start background encoding worker thread."""
         self._worker_running = True
         self._worker_thread  = threading.Thread(
-            target=self._embed_worker,
-            name="emc-embed-worker",
+            target=self._encode_worker,
+            name="emc-encode-worker",
             daemon=True,
         )
         self._worker_thread.start()
-        self.logger.info("🔄 EMC embedding worker started")
+        self.logger.info("🔄 EMC encoding worker started")
 
-    def _embed_worker(self):
+    def _encode_worker(self):
         """
-        Background worker — drains em_buffer, embeds, stores in episodes.
+        Background worker — drains em_buffer, encodes, stores in episodes.
         Runs forever, sleeps when buffer is empty.
         Processes one row at a time for stability under Jetson load.
         """
@@ -303,13 +301,13 @@ class EMC:
                     import time; time.sleep(2.0)
                     continue
 
-                # Embed the turn content
-                vec = self._embedder.encode(row["content"], is_query=False)
+                # Encode the turn content
+                vec = self._encoding_engine.encode(row["content"], is_query=False)
 
                 if not vec:
-                    # Embedder unavailable — skip for now, retry later
+                    # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(
-                        f"EMC embed skipped (embedder unavailable): "
+                        f"EMC encode skipped (encoding engine unavailable): "
                         f"buffer id={row['id']}"
                     )
                     import time; time.sleep(5.0)
@@ -339,7 +337,7 @@ class EMC:
                     worker_conn.commit()
 
                 self.logger.debug(
-                    f"EMC embedded → episodes: [{row['role']}] "
+                    f"EMC encoded → episodes: [{row['role']}] "
                     f"{row['content'][:40]}… (date={row['date']})"
                 )
 
@@ -352,7 +350,7 @@ class EMC:
 
     # ── Semantic search (called by MCC) ───────────────────────────────────────
 
-    def search(
+    def recall(
         self,
         query: str,
         top_k: int = EMC.RECALL_DEPTH,
@@ -363,7 +361,7 @@ class EMC:
         Semantic search over all embedded episodes.
         Returns top-K most relevant episodes sorted by cosine similarity.
 
-        Falls back to keyword search if embedder is unavailable.
+        Falls back to keyword search if encoding engine is unavailable.
 
         Args:
             query:     Natural language query
@@ -374,7 +372,7 @@ class EMC:
         Returns:
             List of dicts: {timestamp, date, role, content, similarity}
         """
-        query_vec = self._embedder.encode(query, is_query=True)
+        query_vec = self._encoding_engine.encode(query, is_query=True)
         if not query_vec:
             return self._keyword_search(query, top_k, date_from, date_to)
 
@@ -429,7 +427,7 @@ class EMC:
         date_from: Optional[str],
         date_to: Optional[str],
     ) -> list[dict]:
-        """Fallback keyword search when embedder is unavailable."""
+        """Fallback keyword search when encoding engine is unavailable."""
         words = [w for w in query.lower().split() if len(w) > 3]
         if not words:
             return []
@@ -525,7 +523,7 @@ class EMC:
                 "buffer_total":     buf_row["total"]   if buf_row else 0,
                 "buffer_pending":   buf_row["pending"]  if buf_row else 0,
                 "db_size_mb":       db_size_mb,
-                "embedder_ready":   self._embedder.is_available(),
+                "encoding_engine_ready":   self._encoding_engine.is_available(),
                 "ENCODING_ENGINE":  ENCODING_ENGINE,
             }
         except Exception as exc:
