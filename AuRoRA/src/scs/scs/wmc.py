@@ -58,7 +58,10 @@ TODO:
 
 # System libraries
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
-from collections import deque            # For use in memory management
+from collections import deque
+
+from joblib import Logger
+from sklearn import logger            # For use in memory management
 
 # AGi libraries
 from hrs.hrp import AGi                  # Import AGi homeostatic regulation parameters
@@ -74,11 +77,11 @@ def _estimate_chunk_count(pmt: dict) -> int:
     Returns:
         int: Number of chunks, including overhead for role label and formatting
     """
-    role = pmt.get("role", "")                                                                      # Retrieve role label from PMT. 
-    content = pmt.get("content", "")                                                                # Retrieve content from PMT.
-    role_chunk_count = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK                # Calculate chunks for role label
-    content_chunk_count = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
-    return role_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                # Return total chunk count (role label + content + overhead)
+    role: str = pmt.get("role", "")                                                                      # Retrieve role label from PMT. 
+    content: str = pmt.get("content", "")                                                                # Retrieve content from PMT.
+    role_chunk_count: int = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK                # Calculate chunks for role label
+    content_chunk_count: int = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
+    return role_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                     # Return total chunk count (role label + content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -107,12 +110,12 @@ class WorkingMemoryCortex:
             pmt_slot_limit (int): Maximum number of PMTs WMC can hold (based on Miller's Law 7±2, but can be adjusted as needed)
             pmt_slot_buffer (int): Additional buffer for PMTs beyond Miller's Law limit to allow flexibility if chunks are small (default 2)
         """
-        self.logger                 = logger                # Retrieve logger from CNC for logging WMC operations
-        self.global_chunk_limit     = global_chunk_limit    # Retrieve global chunk limit of from MCC configuration for WMC
-        self.pmt_slot_limit         = pmt_slot_limit        # Retrieve PMT slot limit from MCC configuration for WMC
-        self.pmt_slot_buffer        = pmt_slot_buffer       # Retrieve PMT slot buffer from MCC configuration for WMC
-        self._pmt_slot: deque[dict] = deque()               # Set up slot for holding the phonological memory
-        self._sustained_chunks: int = 0                     # Start with empty working memory with no sustained chunks
+        self.logger                  = logger               # Retrieve logger from CNC for logging WMC operations
+        self.global_chunk_limit: int = global_chunk_limit   # Retrieve global chunk limit of from MCC configuration for WMC
+        self.pmt_slot_limit: int     = pmt_slot_limit       # Retrieve PMT slot limit from MCC configuration for WMC
+        self.pmt_slot_buffer: int    = pmt_slot_buffer      # Retrieve PMT slot buffer from MCC configuration for WMC
+        self._pmt_slot: deque[dict]  = deque()              # Set up slot for holding the phonological memory, Safe — single-threaded access guaranteed by CNC._busy flag
+        self._sustained_chunks: int  = 0                    # Start with empty working memory with no sustained chunks
 
         self.logger.info(                                   # Log entry on WMC initialization with configured capacity
             f"   [Working Memory Cortex]  ONLINE ✅ — "
@@ -134,19 +137,19 @@ class WorkingMemoryCortex:
             list[dict]: list of evicted PMTs [{role, content, timestamp}]
         """
         # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for role and overhead
-        role_chunk_count = (len(role) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK         # Calculate chunks for role label to determine remaining capacity for content
-        max_content_chunks = self.global_chunk_limit - WMC.PMT_OVERHEAD - role_chunk_count      # Calculate maximum chunks available for content
-        max_content_length = max_content_chunks * WMC.UNITS_PER_CHUNK                           # Calculate maximum content length based on remaining chunk capacity
+        role_chunk_count: int   = (len(role) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for role label to determine remaining capacity for content
+        max_content_chunks: int = self.global_chunk_limit - WMC.PMT_OVERHEAD - role_chunk_count # Calculate maximum chunks available for content
+        max_content_length: int = max_content_chunks * WMC.UNITS_PER_CHUNK                      # Calculate maximum content length based on remaining chunk capacity
         if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
             content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
             self.logger.warning(f"WMC content truncated to {max_content_chunks} chunks")        # Log the warning of truncation of the content
         
-        induced_pmt = {                                # Combine the elements of induced PMT into one register for filling
+        induced_pmt: dict = {                          # Combine the elements of induced PMT into one register for filling
             "role":      role,                         # Register the role label of PMT
             "content":   content,                      # Register the content of the PMT
             "timestamp": datetime.now().isoformat(),   # Register the inducing time of the PMT
         }
-        induced_pmt_chunks = _estimate_chunk_count(induced_pmt)    # Calculate how many chunks in the PMT to be induced
+        induced_pmt_chunks: int = _estimate_chunk_count(induced_pmt)    # Calculate how many chunks in the PMT to be induced
 
         # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
         # And then fill the induced PMT, to keep working memory always within the capacities
@@ -156,11 +159,11 @@ class WorkingMemoryCortex:
             self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit # - Global chunk limit exceeded after filling of the induced PMT, or
             or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # - PMT schema exceeds the limit of PMT slot (ie. Miller's Law 7±2, tunable)
         ):
-            evicted_pmt = self._pmt_slot.popleft()                                      # Evict the receding PMT from the working memory 
-            evicted_pmt_slot.append(evicted_pmt)                                        # Fill the evicted PMT to the evicted slot
-            evicted_chunks = _estimate_chunk_count(evicted_pmt)                         # Calculate the chunk size of the evicted PMT
-            self._sustained_chunks = max(0, self._sustained_chunks - evicted_chunks)    # Update the chunk size of the working memory, cannot be negative
-            self.logger.debug(                                                          # Log the eviction of the receding PMT
+            evicted_pmt: dict = self._pmt_slot.popleft()                                    # Evict the receding PMT from the working memory 
+            evicted_pmt_slot.append(evicted_pmt)                                            # Fill the evicted PMT to the evicted slot
+            evicted_chunks: int = _estimate_chunk_count(evicted_pmt)                        # Calculate the chunk size of the evicted PMT
+            self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)   # Update the chunk size of the working memory, cannot be negative
+            self.logger.debug(                                                              # Log the eviction of the receding PMT
                 f"WMC evict → EMC: [{evicted_pmt['role']}] "
                 f"size={evicted_chunks} chunks"
             )
@@ -202,13 +205,13 @@ class WorkingMemoryCortex:
         Returns:
             list[dict]: List of forgotten PMTs [{role, content, timestamp}]
         """
-        forgotten_pmt_schema = list(self._pmt_slot)        # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
-        self._pmt_slot.clear()                             # Wipe out working memory
-        self._sustained_chunks = 0                         # Zero out sustained chunk count
-        self.logger.info(                                  # Log the forgetting of the PMT schema from working memory
+        forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
+        self._pmt_slot.clear()                                      # Wipe out working memory
+        self._sustained_chunks: int = 0                             # Zero out sustained chunk count
+        self.logger.info(                                           # Log the forgetting of the PMT schema from working memory
             f"🧹 WMC forgotten ({len(forgotten_pmt_schema)} PMTs)"
         )
-        return forgotten_pmt_schema                        # Return forgotten PMT schema to caller for optional saving or forwarding to EMC
+        return forgotten_pmt_schema                                 # Return forgotten PMT schema to caller for optional saving or forwarding to EMC
     
     def assess_pmt_schema(self) -> dict:
         """
@@ -232,7 +235,7 @@ class WorkingMemoryCortex:
         """
         Introspect the chunk load of sustained PMTs from scratch as source of truth verification.
         """
-        self._sustained_chunks = sum(           # Introspect the chunk load of sustained PMTs in the slots
+        self._sustained_chunks: int = sum(           # Introspect the chunk load of sustained PMTs in the slots
             _estimate_chunk_count(pmt) 
             for pmt in self._pmt_slot
         )
@@ -245,4 +248,4 @@ class WorkingMemoryCortex:
         Returns:
             bool: True if working memory is empty, False otherwise
         """
-        return len(self._pmt_slot) == 0                    # Return True if working memory is empty, False otherwise
+        return len(self._pmt_slot) == 0               # Return True if working memory is empty, False otherwise

@@ -41,6 +41,7 @@ class AGi:                              # Amazing Grace infrastructure
         ENGRAM_COMPLEX   = "engram.db"  # [STATIC]    Engram complex where long-term memories storage
 
         class EMC:                      # Episodic Memory Cortex
+            ENCODING_CACHE_LIMIT  = 256 # [INTRINSIC] Maximum number of recent encoding vectors to cache for fast retrieval and relevance scoring
             ENCODING_ENGINE     = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
             ENGRAM_CHUNK_LIMIT  = 75    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
             ENCODING_DIM        = 768   # [STATIC]    Dimensionality of the encoding vectors from the encoding engine

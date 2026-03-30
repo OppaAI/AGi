@@ -83,17 +83,17 @@ class _EncodingEngine:
 
     def __init__(self, logger):
         self.logger     = logger                    # Retrieve logger from CNC for logging EMC operations
-        self._core      = None                      # Initialize encoding engine core to verify availability
-        self._cache: dict[str, list[float]] = {}
-        self._load()  # Attempt to load immediately to log status, but tolerate failure until encode() is called    
+        self._core      = None                      # Initialize encoding engine core to hold the engine instance
+        self._cache: dict[str, list[float]] = {}    # Initialize cache for recent encodings to avoid redundant encoding
+        self._load()                                # Load encoding engine at initialization of EMC
 
     def _load(self) -> bool:
-        if self._model is not None:
+        if self._core is not None:
             return True
         try:
             from sentence_transformers import SentenceTransformer
             self.logger.info(f"⏳ Loading {EMC.ENCODING_ENGINE} on CPU…")
-            self._model     = SentenceTransformer(EMC.ENCODING_ENGINE)
+            self._core = SentenceTransformer(EMC.ENCODING_ENGINE)
             self.logger.info(f"✅ {EMC.ENCODING_ENGINE} ready (CPU)")
             return True
         except ImportError:
@@ -104,11 +104,11 @@ class _EncodingEngine:
             )
             return False
         except Exception as exc:
-            self.logger.warning(f"⚠️ Encoding engine load failed: {exc}")
+            self.logger.warning(f"⚠️ Encoding Engine initiation sequence failed: {exc}")
             return False
 
     def is_available(self) -> bool:
-        return self._model is not None
+        return self._core is not None
 
     def encode(self, text: str, is_query: bool = False) -> list[float]:
         """
@@ -125,11 +125,11 @@ class _EncodingEngine:
 
         try:
             if is_query:
-                vec = self._model.encode_query(text).tolist()
+                vec = self._core.encode_query(text).tolist()
             else:
-                vec = self._model.encode_document(text).tolist()
-            # Keep cache small — evict oldest if over 512 entries
-            if len(self._cache) >= 512:
+                vec = self._core.encode_document(text).tolist()
+            # Keep cache small — evict oldest if over the encoding cache limit
+            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:
                 oldest = next(iter(self._cache))
                 del self._cache[oldest]
             self._cache[key] = vec
