@@ -96,7 +96,7 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialize memory cortex layers
-        self.logger.info("🔄 Activating Memory Coordination Core...")                       # Log entry on MCC activation
+        self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
