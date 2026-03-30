@@ -1,4 +1,4 @@
-# AGi — Autonomous General Intelligence
+# AGi — Amazing Grace infrastructure
 
 **AuRoRA** · Autonomous Robot with Reasoning Architecture  
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
