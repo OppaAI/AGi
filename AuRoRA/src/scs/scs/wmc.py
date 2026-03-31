@@ -60,9 +60,6 @@ TODO:
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
 from collections import deque
 
-from joblib import Logger
-from sklearn import logger            # For use in memory management
-
 # AGi libraries
 from hrs.hrp import AGi                  # Import AGi homeostatic regulation parameters
 WMC = AGi.CNS.WMC                        # Channel for interfacing with Working Memory Cortex (WMC)
@@ -105,7 +102,7 @@ class WorkingMemoryCortex:
         Initialize the WMC with global chunk limit and PMT slot limit.
 
         Args:
-            logger (Logger): Logger instance from CNC for logging WMC operations
+            logger: Logger instance from CNC for logging WMC operations
             global_chunk_limit (int): Maximum number of chunks WMC can hold (tunable based on LLM context window and hardware constraints)
             pmt_slot_limit (int): Maximum number of PMTs WMC can hold (based on Miller's Law 7±2, but can be adjusted as needed)
             pmt_slot_buffer (int): Additional buffer for PMTs beyond Miller's Law limit to allow flexibility if chunks are small (default 2)

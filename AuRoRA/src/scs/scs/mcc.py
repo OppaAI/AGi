@@ -109,8 +109,8 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
-            role:    "user" or "assistant"
-            content: Message text
+            role (str): Role label of the PMT ("user" or "assistant")
+            content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into WMC, collect any evicted PMTs
@@ -132,7 +132,7 @@ class MemoryCoordinationCore:
         Runs in isolated neural pathway — never blocks active cognition.
 
         Args:
-            evicted_pmts: List of evicted PMTs [{role, content, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
@@ -157,9 +157,9 @@ class MemoryCoordinationCore:
         Awaits both before returning — inference requires full memory context.
         
         Args:
-            user_prompt: Current user message (used as EMC recall query)
+            user_prompt (str): Current user message (used as EMC recall query)
         Returns:
-            List of message dicts [{role, content}] ready for inference
+            list[dict]: List of message dicts [{role, content}] ready for inference
         """
         
         # Recall WMC PMTs and EMC episodes concurrently

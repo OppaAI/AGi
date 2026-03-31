@@ -76,8 +76,8 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 class _EncodingEngine:
     """
     Encoding engine for episodic memory consolidation and recall.
-    Loads at EMC initialization - encoding engine ready before first recall.
-    Primes recent encodings to avoid redundant encoding of identical engrams
+    Loads at EMC initialization - encoding engine ready for first recall.
+    Primes recent encodings to avoid redundant encoding of identical or similar engrams
     and to speed up subsequent recall.
     """
 
@@ -85,41 +85,57 @@ class _EncodingEngine:
         self.logger     = logger                    # Retrieve logger from CNC for logging EMC operations
         self._core      = None                      # Initialize encoding engine core to hold the engine instance
         self._cache: dict[str, list[float]] = {}    # Initialize cache for recent encodings to avoid redundant encoding
-       
-        try:                                                                        # Attempt to activate encoding engine
-            from sentence_transformers import SentenceTransformer                   # Load inferencer of encoding engine
-            self.logger.info("⏳ Activating Encoding Engine…")                     # Log starting of activation of encoding engine
+
+        try:                                                                        # Attempt to activate the encoding engine
+            from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
+            self.logger.info("⏳ Activating Encoding Engine…")                      # Log the start of encoding engine activation
             self._core = SentenceTransformer(EMC.ENCODING_ENGINE)                   # Activate encoding engine defined in homeostatic Regulation parameters
-            self.logger.info("✅ Encoding Engine activated")                       # Log successful activation of encoding engine
+            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
         except ImportError:                                                         # If missing the inferencer component of encoding engine,
-            self.logger.warning(                                                    # Log the warning of falling back to mental lexicon access instead of semantic encoding
+            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to mental lexicon access
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   EMC falling back to mental lexicon access.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
         except Exception as exc:                                                    # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {exc}")    # Log failure during activation of encoding engine
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {exc}")     # Log the error during activation of encoding engine
 
     @property
     def is_available(self) -> bool:
         """
-        Return the availability of the encoding engine
+        Check if encoding engine is loaded successfully and ready for encoding.
+        This is used by EMC to determine whether to perform semantic encoding and search,
+        or to fall back to keyword search when the engine is unavailable.
 
-        Return:
-            bool: availability of the encoding engine
+        Returns:
+            bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
         """
-        return self._core is not None            # Check if encoding engine is loaded into memory
+        return self._core is not None            # Encoding engine is available if the core was successfully loaded during initialization
 
     def encode(self, text: str, is_query: bool = False) -> list[float]:
         """
-        Encode text to 768-dim vector.
-        Uses encode_query() for search, encode_document() for storage.
-        Returns [] on failure — callers fall back to keyword search.
-        """
-        if not self.is_available:
-            return []
+        Encode the given text into a semantic vector for storage or recall.
+        Uses caching to avoid redundant encoding of identical or similar texts.
+        Caches recent encodings to speed up subsequent recall.
+        If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
+        prompting EMC to fall back to mental lexicon access.
+        
+        Args:
+            text (str): The given text to encode (e.g. PMT content).
+            is_query (bool): Whether the text is a recall query (True) or a PMT to be stored as an episode (False).
+                             This allows for separate caching of query and document encodings, which may have different patterns of repetition.
 
-        key = f"{'q' if is_query else 'd'}:{text[:300]}"
+        Returns:
+            list[float]: The semantic embedding vector for the input text, 
+                         or an empty list if the encoding engine is unavailable.
+        """
+        if not self.is_available:                               # If encoding engine is unavailable,
+            self.logger.debug(                                  # Log the debug message about encoding engine being unavailable
+                "Encoding engine unavailable — falling back to mental lexicon access"
+            )
+            return []                                           # Return empty list to signal that semantic encoding cannot be performed
+
+        key = f"{'q' if is_query else 'd'}:{text[:EMC.ENCODING_KEY_LIMIT]}"
         if key in self._cache:
             return self._cache[key]
 
@@ -524,7 +540,7 @@ class EMC:
                 "buffer_pending":   buf_row["pending"]  if buf_row else 0,
                 "db_size_mb":       db_size_mb,
                 "encoding_engine_ready":   self._encoding_engine.is_available(),
-                "ENCODING_ENGINE":  ENCODING_ENGINE,
+                "ENCODING_ENGINE":  EMC.ENCODING_ENGINE,
             }
         except Exception as exc:
             self.logger.error(f"EMC get_stats failed: {exc}")
@@ -532,7 +548,7 @@ class EMC:
 
     # ── Cleanup ───────────────────────────────────────────────────────────────
 
-    def cleanup_processed_buffer(self, keep_days: int = 1):
+    def cleanup_processed_buffer(self, keep_days: int = 1) -> None:
         """
         Remove processed em_buffer rows older than keep_days.
         Safe to call periodically — processed rows are already in episodes.
@@ -549,8 +565,11 @@ class EMC:
         except Exception as exc:
             self.logger.warning(f"EMC buffer cleanup failed: {exc}")
 
-    def close(self):
-        """Stop worker and close DB connection."""
+    def close(self) -> None:
+        """
+        Gracefully close EMC and the engram gateway.
+        This releases any open engram gateway resources and ensures proper shutdown of the engram complex.
+        """
         self._worker_running = False
         if self._worker_thread:
             self._worker_thread.join(timeout=3.0)
