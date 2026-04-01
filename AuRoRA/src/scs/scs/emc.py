@@ -92,9 +92,9 @@ class _EncodingEngine:
             self._core = SentenceTransformer(EMC.ENCODING_ENGINE)                   # Activate encoding engine defined in homeostatic Regulation parameters
             self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
         except ImportError:                                                         # If missing the inferencer component of encoding engine,
-            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to mental lexicon access
+            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
-                "   EMC falling back to mental lexicon access.\n"
+                "   EMC falling back to lexical retrieval.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
         except Exception as exc:                                                    # If other errors during activation,
@@ -112,67 +112,68 @@ class _EncodingEngine:
         """
         return self._core is not None            # Encoding engine is available if the core was successfully loaded during initialization
 
-    def encode(self, text: str, is_query: bool = False) -> list[float]:
+    def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
-        Encode the given text into a semantic vector for storage or recall.
+        Encode the given memory trace into a semantic vector for storage or recall.
         Uses caching to avoid redundant encoding of identical or similar texts.
         Caches recent encodings to speed up subsequent recall.
         If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting EMC to fall back to mental lexicon access.
+        prompting EMC to fall back to lexical retrieval.
         
         Args:
-            text (str): The given text to encode (e.g. PMT content).
-            is_query (bool): Whether the text is a recall query (True) or a PMT to be stored as an episode (False).
-                             This allows for separate caching of query and document encodings, which may have different patterns of repetition.
+            trace (str): The given memory trace to encode (e.g. PMT content).
+            is_cue (bool): Whether the trace is a recall cue (True) or an episode to be stored(False).
+                             This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
 
         Returns:
-            list[float]: The semantic embedding vector for the input text, 
+            list[float]: The semantic embedding vector for the input trace, 
                          or an empty list if the encoding engine is unavailable.
+                         Empty list signals EMC to fall back to lexical retrieval.
         """
-        if not self.is_available:                               # If encoding engine is unavailable,
-            self.logger.debug(                                  # Log the debug message about encoding engine being unavailable
-                "Encoding engine unavailable — falling back to mental lexicon access"
+        if not self.is_available:                                   # If encoding engine is unavailable,
+            self.logger.debug(                                      # Log the debug message about encoding engine being unavailable
+                "Encoding engine unavailable — falling back to lexical retrieval"
             )
-            return []                                           # Return empty list to signal that semantic encoding cannot be performed
+            return []                                               # Return empty list to signal that semantic encoding cannot be performed
 
-        key = f"{'q' if is_query else 'd'}:{text[:EMC.ENCODING_KEY_LIMIT]}"
-        if key in self._cache:
-            return self._cache[key]
+        imprint = f"{'cue' if is_cue else 'trace'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash for the cache
+        if imprint in self._cache:                                  # If the imprint is already in the cache,
+            return self._cache[imprint]                             # Return the encoded vector in the cache
 
-        try:
-            if is_query:
-                vec = self._core.encode_query(text).tolist()
-            else:
-                vec = self._core.encode_document(text).tolist()
+        try:                                                        # Attempt to encode the trace
+            if is_cue:                                              # If the trace is a cue for memory recall,
+                vec = self._core.encode_query(trace).tolist()       # Encode the cue for memory recall
+            else:                                                   # If the trace is a memory trace to be stored,
+                vec = self._core.encode_document(trace).tolist()    # Encode the memory trace for storage
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:
-                oldest = next(iter(self._cache))
-                del self._cache[oldest]
-            self._cache[key] = vec
+            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:        # If the cache is over the limit,
+                decayed_imprint = next(iter(self._cache))           # Retrieve the decayed imprint (oldest entry)
+                del self._cache[decayed_imprint]                    # Remove the decayed entry from the cache
+            self._cache[imprint] = vec                              # Add the new entry to the cache
             return vec
-        except Exception as exc:
-            self.logger.debug(f"Encoding error: {exc}")
-            return []
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# COSINE SIMILARITY
-# ══════════════════════════════════════════════════════════════════════════════
+        except Exception as exc:                                    # If encoding fails,
+            self.logger.debug(f"Encoding error: {exc}")             # Log the debug message about encoding error
+            return []                                               # Return empty list to signal that semantic encoding cannot be performed
 
 def _cosine(a: list[float], b: list[float]) -> float:
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na  = math.sqrt(sum(x * x for x in a))
-    nb  = math.sqrt(sum(x * x for x in b))
-    return dot / (na * nb) if na and nb else 0.0
+    """
+    Compute relevance score between two vectors.
+    
+    Args:
+        a (list[float]): First vector.
+        b (list[float]): Second vector.
+        
+    Returns:
+        float: Relevance score between the two vectors.
+    """
+    if not a or not b or len(a) != len(b):          # If either vector is empty or they have different lengths,
+        return 0.0                                  # Return 0.0 as similarity cannot be computed
+    dot = sum(x * y for x, y in zip(a, b))          # Compute the dot product of the two vectors
+    na  = math.sqrt(sum(x * x for x in a))          # Compute the norm (magnitude) of the first vector
+    nb  = math.sqrt(sum(x * x for x in b))          # Compute the norm (magnitude) of the second vector
+    return dot / (na * nb) if na and nb else 0.0    # Return the relevance score, or 0.0 if either norm is 0
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# EMC
-# ══════════════════════════════════════════════════════════════════════════════
-
-class EMC:
+class EpisodicMemoryCortex:
     """
     Episodic Memory Cortex.
 
