@@ -41,14 +41,15 @@ class AGi:                              # Amazing Grace infrastructure
         ENGRAM_COMPLEX   = "engram.db"  # [STATIC]    Engram complex where long-term memories storage
 
         class EMC:                      # Episodic Memory Cortex
-            ENCODING_ENGINE     = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
-            ENGRAM_CHUNK_LIMIT  = 75    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
-            ENCODING_DIM        = 768   # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
+            ENCODING_ENGINE      = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
+            ENCODING_CACHE_LIMIT = 256  # [INTRINSIC] Maximum number of recent encoding vectors to cache for fast retrieval and relevance scoring
+            ENCODING_KEY_LIMIT  = 300   # [INTRINSIC] Maximum length of recent encoding keys to cache for fast retrieval and relevance scoring
+            ENCODING_DIM         = 768  # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                         # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
-
-            RECALL_RESERVE      = 300   # [INTRINSIC] Cortical capacity reserved for episodic recall
-            RECALL_DEPTH        = 3     # [INTRINSIC] Maximum number of engrams surfaced per turn
-            RELEVANCE_THRESHOLD = 0.25  # [INTRINSIC] Minimum relevance score for an engram to be surfaced
+            ENGRAM_CHUNK_LIMIT   = 75   # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
+            RECALL_RESERVE       = 300  # [INTRINSIC] Cortical capacity reserved for episodic recall
+            RECALL_DEPTH         = 3    # [INTRINSIC] Maximum number of engrams surfaced per turn
+            RELEVANCE_THRESHOLD  = 0.25 # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                      # Working Memory Cortex
             UNITS_PER_CHUNK    = 4      # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this

@@ -96,7 +96,7 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialize memory cortex layers
-        self.logger.info("🔄 Activating Memory Coordination Core...")                       # Log entry on MCC activation
+        self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
@@ -109,8 +109,8 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
-            role:    "user" or "assistant"
-            content: Message text
+            role (str): Role label of the PMT ("user" or "assistant")
+            content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into WMC, collect any evicted PMTs
@@ -132,7 +132,7 @@ class MemoryCoordinationCore:
         Runs in isolated neural pathway — never blocks active cognition.
 
         Args:
-            evicted_pmts: List of evicted PMTs [{role, content, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
@@ -157,9 +157,9 @@ class MemoryCoordinationCore:
         Awaits both before returning — inference requires full memory context.
         
         Args:
-            user_prompt: Current user message (used as EMC recall query)
+            user_prompt (str): Current user message (used as EMC recall query)
         Returns:
-            List of message dicts [{role, content}] ready for inference
+            list[dict]: List of message dicts [{role, content}] ready for inference
         """
         
         # Recall WMC PMTs and EMC episodes concurrently
