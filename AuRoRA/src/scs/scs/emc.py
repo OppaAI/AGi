@@ -155,24 +155,24 @@ class _EncodingEngine:
             self.logger.debug(f"Encoding error: {exc}")                                 # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-def _cosine(a: list[float], b: list[float]) -> float:
+def _semantic_match(cue: list[float], engram: list[float]) -> float:
     """
-    Compute relevance score between two vectors.
+    Match a recall cue against a stored engram semantically.
 
     Args:
-        a (list[float]): First vector.
-        b (list[float]): Second vector.
-        
+        cue    (list[float]): Encoded recall cue.
+        engram (list[float]): Encoded stored engram.
+    
     Returns:
-        float: Relevance score between the two vectors.
+        float: Semantic similarity score (0.0 – 1.0).
     """
     # TODO: migrate to FAISS when recall set exceeds ~10k vectors
-    if not a or not b or len(a) != len(b):                      # If either vector is empty or they have different lengths,
-        return 0.0                                              # Return 0.0 as similarity cannot be computed
-    dot: float = sum(x * y for x, y in zip(a, b))               # Compute the dot product of the two vectors
-    mag_a: float = math.sqrt(sum(x * x for x in a))             # Compute the norm (magnitude) of the first vector
-    mag_b: float = math.sqrt(sum(x * x for x in b))             # Compute the norm (magnitude) of the second vector
-    return dot / (mag_a * mag_b) if mag_a and mag_b else 0.0    # Return the relevance score, or 0.0 if either norm is 0
+    if not cue or not engram or len(cue) != len(engram):                        # If either vector is empty or they have different lengths,
+        return 0.0                                                              # Return 0.0 as similarity cannot be computed
+    dot:f float       = sum(c * e for c, e in zip(cue, engram))                 # Compute the dot product of the two vectors
+    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                      # Compute the magnitude of the encoded recall cue
+    engram_mag: float = math.sqrt(sum(e * e for e in engram))                   # Compute the magnitude of the encoded stored engram
+    retreturn dot / (cue_mag * engram_mag) if cue_mag and engram_mag else 0.0   # Return the semantic similarity score, or 0.0 if either magnitude is 0
 
 class EpisodicMemoryCortex:
     """
@@ -420,7 +420,7 @@ class EpisodicMemoryCortex:
             scored = []
             for row in rows:
                 stored_vec = json.loads(row["embedding"] or "[]")
-                sim = _cosine(query_vec, stored_vec)
+                sim = _semantic_match(query_vec, stored_vec)
                 scored.append({
                     "timestamp":  row["timestamp"],
                     "date":       row["date"],
