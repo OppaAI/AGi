@@ -245,7 +245,7 @@ class MemoryCoordinationCore:
         emc_stats = stats["emc"]                            # Retrieve current stats of episodic memory
         self.logger.info(                                   # Log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
-            f"   WMC: {wmc_stats['pmt_count']} PMTs | "
+            f"   WMC: {wmc_stats['pmt_count']} PMTs ({wmc_stats['slot_occupancy']}%) | "
             f"{wmc_stats['sustained_chunks']}/{wmc_stats['global_chunk_limit']} chunks ({wmc_stats['chunk_occupancy']}%)\n"
             f"   EMC: {emc_stats.get('episodes', 0)} episodes | "
             f"{emc_stats.get('buffer_pending', 0)} pending embed | "
