@@ -23,7 +23,7 @@ Architecture:
         sentence-transformers, CPU-only, zero GPU impact
         Model configured via EMC.ENCODING_ENGINE constant
 
-    Similarity:
+    Relevancy:
         Pure-Python cosine — no FAISS needed until millions of rows
         Falls back to keyword search if encoding engine unavailable
 
@@ -40,7 +40,7 @@ Terminology:
     encoding   — semantic embedding of a turn into a vector
     episodes   — embedded episodic memory table (permanent)
     engram     — one embedded episode (a specific remembered moment)
-    similarity — cosine distance between query and episode embeddings
+    relevancy  — cosine distance between query and episode embeddings
 
 Lifecycle:
     Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
@@ -62,7 +62,7 @@ TODO:
 
 # System libraries
 import json                     # For serializing engram encodings to JSON
-import math                     # For relevance scoring (cosine similarity) calculation
+import math                     # For relevance scoring (semantic relevancy) calculation
 import sqlite3                  # For storage of episodic memory and buffer
 import threading                # For background encoding of engrams
 from datetime import datetime   # (TODO) Replace with hrs.blc when BioLogic Clock is built
@@ -164,15 +164,15 @@ def _semantic_match(cue: list[float], engram: list[float]) -> float:
         engram (list[float]): Encoded stored engram.
     
     Returns:
-        float: Semantic similarity score (0.0 – 1.0).
+        float: Semantic relevancy score (0.0 – 1.0).
     """
     # TODO: migrate to FAISS when recall set exceeds ~10k vectors
-    if not cue or not engram or len(cue) != len(engram):                        # If either vector is empty or they have different lengths,
-        return 0.0                                                              # Return 0.0 as similarity cannot be computed
-    dot:f float       = sum(c * e for c, e in zip(cue, engram))                 # Compute the dot product of the two vectors
-    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                      # Compute the magnitude of the encoded recall cue
-    engram_mag: float = math.sqrt(sum(e * e for e in engram))                   # Compute the magnitude of the encoded stored engram
-    retreturn dot / (cue_mag * engram_mag) if cue_mag and engram_mag else 0.0   # Return the semantic similarity score, or 0.0 if either magnitude is 0
+    if not cue or not engram or len(cue) != len(engram)                        # If either vector is empty or they have different lengths,
+        return 0.0                                                             # Return 0.0 as relevancy cannot be computed
+    dot: float        = sum(c * e for c, e in zip(cue, engram))                # Compute the dot product of the two vectors
+    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                     # Compute the magnitude of the encoded recall cue
+    engram_mag: float = math.sqrt(sum(e * e for e in engram))                  # Compute the magnitude of the encoded stored engram
+    return dot / (cue_mag * engram_mag) if cue_mag and engram_mag else 0.0     # Return the semantic relevancy score, or 0.0 if either magnitude is 0
 
 class EpisodicMemoryCortex:
     """
@@ -191,12 +191,12 @@ class EpisodicMemoryCortex:
     All em_buffer writes are serialized through SQLite's WAL mode.
     """
 
-    def __init__(self, db_path: str, logger):
-        self.logger   = logger
-        self.db_path  = db_path
+    def __init__(self, logger, engram_gateway: str):
+        self.logger              = logger                                # Retrieve logger from CNC for logging WMC operations
+        self.engram_gateway: str = engram_gateway                        # Retrieve engram gateway passed down from MCC
 
-        # Encoding engine — CPU, lazy-loaded
-        self._encoding_engine = _EncodingEngine(logger)
+        # Encoding engine
+        self._encoding_engine = _EncodingEngine(logger=logger)           # Initialize encoding engine and provide the logger from MCC
 
         # SQLite — WAL mode for concurrent reads during async writes
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -253,7 +253,7 @@ class EpisodicMemoryCortex:
 
     # ── Buffer intake (called by MCC from asyncio loop) ───────────────────────
 
-    def buffer_append(self, role: str, content: str) -> bool:
+    def buffer_append(self, role: str, content: str, timestamp: str) -> bool:
         """
         Atomically write an evicted WMC turn to em_buffer.
         Called by MCC — survives crashes, never blocks the robot.
@@ -265,15 +265,13 @@ class EpisodicMemoryCortex:
         Returns:
             True on success, False on failure
         """
-        now      = datetime.now()
-        date_str = now.date().isoformat()
-        ts       = now.isoformat()
+        date_str = timestamp[:10]
 
         try:
             self.conn.execute(
                 "INSERT INTO em_buffer (timestamp, role, content, date) "
                 "VALUES (?, ?, ?, ?)",
-                [ts, role, content[:2000], date_str],
+                [timestamp, role, content[:2000], date_str],
             )
             self.conn.commit()
             self.logger.debug(
@@ -382,7 +380,7 @@ class EpisodicMemoryCortex:
     ) -> list[dict]:
         """
         Semantic search over all embedded episodes.
-        Returns top-K most relevant episodes sorted by cosine similarity.
+        Returns top-K most relevant episodes sorted by semantic relevancy.
 
         Falls back to keyword search if encoding engine is unavailable.
 
@@ -393,7 +391,7 @@ class EpisodicMemoryCortex:
             date_to:   Optional ISO date string upper bound (inclusive)
 
         Returns:
-            List of dicts: {timestamp, date, role, content, similarity}
+            List of dicts: {timestamp, date, role, content, relevancy}
         """
         query_vec = self._encoding_engine.encode(query, is_query=True)
         if not query_vec:
@@ -426,16 +424,16 @@ class EpisodicMemoryCortex:
                     "date":       row["date"],
                     "role":       row["role"],
                     "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                    "similarity": round(sim, 4),
+                    "relevancy": round(sim, 4),
                 })
 
-            scored.sort(key=lambda x: x["similarity"], reverse=True)
+            scored.sort(key=lambda x: x["relevancy"], reverse=True)
             results = scored[:top_k]
 
             self.logger.debug(
                 f"EMC search '{query[:30]}…' → "
                 f"{len(results)} results "
-                f"(top sim={results[0]['similarity'] if results else 0})"
+                f"(top sim={results[0]['relevancy'] if results else 0})"
             )
             return results
 
@@ -478,7 +476,7 @@ class EpisodicMemoryCortex:
                     "date":       r["date"],
                     "role":       r["role"],
                     "content":    r["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                    "similarity": 0.0,
+                    "relevancy": 0.0,
                 }
                 for r in rows
             ]
