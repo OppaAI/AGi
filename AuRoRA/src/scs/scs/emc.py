@@ -199,27 +199,27 @@ class EpisodicMemoryCortex:
         self._encoding_engine = _EncodingEngine(logger=logger)           # Initialize encoding engine and provide the logger from MCC
 
         # SQLite — WAL mode for concurrent reads during async writes
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL;")
-        self.conn.execute("PRAGMA synchronous=NORMAL;")
-        self.conn.commit()
-        self._init_tables()
+        self.engram = sqlite3.connect(engram_gateway, check_same_thread=False) # Access the engram through the provided gateway
+        self.engram.row_factory = sqlite3.Row                            # Define the structure of query results of the engram
+        self.engram.execute("PRAGMA journal_mode=WAL;")                  # Set up engram to aloow retrieval and storing simultaneously
+        self.engram.execute("PRAGMA synchronous=NORMAL;")                # Balance episodes safety vs storing speed
+        self.engram.commit()                                             # Apply the above parameters into the engram
+        self._init_engram_schema()                                       # Initialize the schema of the engram
 
         # Write lock — only consolidation worker writes to episodes
-        self._write_lock = threading.Lock()
+        self._write_lock = threading.Lock()                              # Ensure only one thread encodes into the engram at a time
 
         # Consolidation worker
-        self._worker_running = False
-        self._worker_thread: Optional[threading.Thread] = None
-        self._start_worker()
+        self._worker_running = False                                     #
+        self._worker_thread: Optional[threading.Thread] = None           #
+        self._start_worker()                                             #
 
-        self.logger.info(f"✅ EMC initialised → {db_path}")
+        self.logger.info(f"✅ EMC initialized → {engram_gateway}")      # Log the successful initialization of the engram
 
     # ── Schema ────────────────────────────────────────────────────────────────
 
-    def _init_tables(self):
-        self.conn.executescript("""
+    def _init_engram_schema(self):
+        self.engram.executescript("""
             -- Raw turn intake from WMC overflow (crash-safe)
             CREATE TABLE IF NOT EXISTS em_buffer (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,7 +249,7 @@ class EpisodicMemoryCortex:
             CREATE INDEX IF NOT EXISTS idx_episodes_role
                 ON episodes(role);
         """)
-        self.conn.commit()
+        self.engram.commit()
 
     # ── Buffer intake (called by MCC from asyncio loop) ───────────────────────
 
@@ -268,12 +268,12 @@ class EpisodicMemoryCortex:
         date_str = timestamp[:10]
 
         try:
-            self.conn.execute(
+            self.engram.execute(
                 "INSERT INTO em_buffer (timestamp, role, content, date) "
                 "VALUES (?, ?, ?, ?)",
                 [timestamp, role, content[:2000], date_str],
             )
-            self.conn.commit()
+            self.engram.commit()
             self.logger.debug(
                 f"EMC buffer ← [{role}] {content[:40]}…"
             )
@@ -411,7 +411,7 @@ class EpisodicMemoryCortex:
             if where:
                 sql += " WHERE " + " AND ".join(where)
 
-            rows = self.conn.execute(sql, params).fetchall()
+            rows = self.engram.execute(sql, params).fetchall()
             if not rows:
                 return []
 
@@ -469,7 +469,7 @@ class EpisodicMemoryCortex:
             f"ORDER BY timestamp DESC LIMIT {top_k}"
         )
         try:
-            rows = self.conn.execute(sql, params).fetchall()
+            rows = self.engram.execute(sql, params).fetchall()
             return [
                 {
                     "timestamp":  r["timestamp"],
@@ -492,7 +492,7 @@ class EpisodicMemoryCortex:
         Used by MCC for 11pm reflection (future M2).
         """
         try:
-            rows = self.conn.execute(
+            rows = self.engram.execute(
                 "SELECT timestamp, role, content FROM episodes "
                 "WHERE date = ? ORDER BY timestamp",
                 [date_str],
@@ -510,7 +510,7 @@ class EpisodicMemoryCortex:
     def buffer_pending_count(self) -> int:
         """Return number of turns waiting to be embedded."""
         try:
-            row = self.conn.execute(
+            row = self.engram.execute(
                 "SELECT COUNT(*) FROM em_buffer WHERE processed = FALSE"
             ).fetchone()
             return row[0] if row else 0
@@ -522,13 +522,13 @@ class EpisodicMemoryCortex:
     def get_stats(self) -> dict:
         """Return EMC health and storage stats."""
         try:
-            ep_row = self.conn.execute(
+            ep_row = self.engram.execute(
                 "SELECT COUNT(*) as total, "
                 "MIN(date) as oldest, MAX(date) as newest "
                 "FROM episodes"
             ).fetchone()
 
-            buf_row = self.conn.execute(
+            buf_row = self.engram.execute(
                 "SELECT COUNT(*) as total, "
                 "SUM(CASE WHEN processed=FALSE THEN 1 ELSE 0 END) as pending "
                 "FROM em_buffer"
@@ -559,13 +559,13 @@ class EpisodicMemoryCortex:
         Safe to call periodically — processed rows are already in episodes.
         """
         try:
-            self.conn.execute(
+            self.engram.execute(
                 "DELETE FROM em_buffer "
                 "WHERE processed = TRUE "
                 "AND date < date('now', ?)",
                 [f"-{keep_days} days"],
             )
-            self.conn.commit()
+            self.engram.commit()
             self.logger.debug("EMC buffer cleanup done")
         except Exception as exc:
             self.logger.warning(f"EMC buffer cleanup failed: {exc}")
@@ -578,6 +578,6 @@ class EpisodicMemoryCortex:
         self._worker_running = False
         if self._worker_thread:
             self._worker_thread.join(timeout=3.0)
-        if self.conn:
-            self.conn.close()
+        if self.engram:
+            self.engram.close()
         self.logger.info("🗄️  EMC closed")
