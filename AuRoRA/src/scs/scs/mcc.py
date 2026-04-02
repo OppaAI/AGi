@@ -98,7 +98,7 @@ class MemoryCoordinationCore:
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
-        self.emc = EpisodicMemoryCortex(engram_gateway=self.engram_gateway, logger=logger)  # Initialize EMC with provided gateway to engram complex and logger
+        self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
     async def register_memory(self, role: str, content: str) -> None:
