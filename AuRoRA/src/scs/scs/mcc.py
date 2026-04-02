@@ -113,7 +113,7 @@ class MemoryCoordinationCore:
             content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role, content)                     # Fill the induced PMT into WMC, collect any evicted PMTs
+        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)        # Fill the induced PMT into WMC, collect any evicted PMTs
             
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
