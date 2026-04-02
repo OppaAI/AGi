@@ -88,9 +88,8 @@ class WorkingMemoryCortex:
     Receding PMT schema are evicted when the global chunk limit or PMT slot limit is exceeded,
     and returned to MCC for async forwarding to EMC.
 
-    Thread-safety: Single-threaded by design — protected by CNC._busy flag.
-    Only one conversation turn is processed at a time, ensuring WMC is
-    always accessed from the asyncio event loop thread only.
+    Thread-safety: Use only one main neural thread by design — protected by CNC._busy flag.
+    Only one PMT is processed at a time, ensuring WMC is always accessed from the main neural thread only.
     """
 
     def __init__(self, logger, 

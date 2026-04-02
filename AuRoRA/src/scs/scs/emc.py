@@ -5,7 +5,7 @@ AuRoRA · Semantic Cognitive System (SCS)
 
 Episodic memory layer of the CNS — "I remember that specific moment."
 Stores conversation turns with semantic embeddings, permanently.
-No expiry — 1TB NVMe means GRACE remembers everything.
+No expiry — 1TB NVMe means the robot remembers everything.
 
 Responsibilities:
     - Receive evicted PMTs from MCC into crash-safe buffer (binding)
@@ -33,7 +33,7 @@ Architecture:
     Worker:
         Background thread drains em_buffer → encodes → episodes
         Runs continuously, sleeps when buffer is empty
-        Never blocks GRACE's active cognition
+        Never blocks the robot's active cognition
 
 Terminology:
     em_buffer  — raw turn intake table (crash-safe, temporary)
@@ -75,7 +75,7 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 
 class _EncodingEngine:
     """
-    Encoding engine for episodic memory consolidation and recall.
+    Encoding engine for semantic encoding of episodic memories for storage and recall.
     Loads at EMC initialization - encoding engine ready for first recall.
     Primes recent encodings to avoid redundant encoding of identical or similar engrams
     and to speed up subsequent recall.
@@ -94,7 +94,7 @@ class _EncodingEngine:
         except ImportError:                                                         # If missing the inferencer component of encoding engine,
             self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
-                "   EMC falling back to lexical retrieval.\n"
+                "   EMC falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
         except Exception as exc:                                                    # If other errors during activation,
@@ -118,7 +118,7 @@ class _EncodingEngine:
         Uses caching to avoid redundant encoding of identical or similar texts.
         Caches recent encodings to speed up subsequent recall.
         If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting EMC to fall back to lexical retrieval.
+        prompting EMC to fall back to lexical recall.
         
         Args:
             trace (str): The given memory trace to encode (e.g. PMT content).
@@ -128,37 +128,37 @@ class _EncodingEngine:
         Returns:
             list[float]: The semantic embedding vector for the input trace, 
                          or an empty list if the encoding engine is unavailable.
-                         Empty list signals EMC to fall back to lexical retrieval.
+                         Empty list signals EMC to fall back to lexical recall.
         """
-        if not self.is_available:                                   # If encoding engine is unavailable,
-            self.logger.debug(                                      # Log the debug message about encoding engine being unavailable
-                "Encoding engine unavailable — falling back to lexical retrieval"
+        if not self.is_available:                                                       # If encoding engine is unavailable,
+            self.logger.debug(                                                          # Log the debug message about encoding engine being unavailable
+                "Encoding engine unavailable — falling back to lexical recall"
             )
-            return []                                               # Return empty list to signal that semantic encoding cannot be performed
+            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-        imprint = f"{'cue' if is_cue else 'trace'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash for the cache
-        if imprint in self._cache:                                  # If the imprint is already in the cache,
-            return self._cache[imprint]                             # Return the encoded vector in the cache
+        imprint = f"{'cue' if is_cue else 'pmt'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash and label the encoding type
+        if imprint in self._cache:                                                      # If the imprint is already in the cache,
+            return self._cache[imprint]                                                 # Return the encoded vector in the cache
 
-        try:                                                        # Attempt to encode the trace
-            if is_cue:                                              # If the trace is a cue for memory recall,
-                vec = self._core.encode_query(trace).tolist()       # Encode the cue for memory recall
-            else:                                                   # If the trace is a memory trace to be stored,
-                vec = self._core.encode_document(trace).tolist()    # Encode the memory trace for storage
+        try:                                                                            # Attempt to encode the trace
+            if is_cue:                                                                  # If the trace is a cue for memory recall,
+                encoded_trace: list[float] = self._core.encode_query(trace).tolist()    # Encode the cue for memory recall
+            else:                                                                       # If the trace is a memory trace to be stored,
+                encoded_trace: list[float] = self._core.encode_document(trace).tolist() # Encode the memory trace for storage
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:        # If the cache is over the limit,
-                decayed_imprint = next(iter(self._cache))           # Retrieve the decayed imprint (oldest entry)
-                del self._cache[decayed_imprint]                    # Remove the decayed entry from the cache
-            self._cache[imprint] = vec                              # Add the new entry to the cache
-            return vec
-        except Exception as exc:                                    # If encoding fails,
-            self.logger.debug(f"Encoding error: {exc}")             # Log the debug message about encoding error
-            return []                                               # Return empty list to signal that semantic encoding cannot be performed
+            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
+                decayed_imprint = next(iter(self._cache))                               # Retrieve the decayed imprint (oldest entry)
+                del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
+            self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
+            return encoded_trace                                                        # Return the encoded vector
+        except Exception as exc:                                                        # If encoding fails,
+            self.logger.debug(f"Encoding error: {exc}")                                 # Log the debug message about encoding error
+            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
 def _cosine(a: list[float], b: list[float]) -> float:
     """
     Compute relevance score between two vectors.
-    
+
     Args:
         a (list[float]): First vector.
         b (list[float]): Second vector.
@@ -166,23 +166,29 @@ def _cosine(a: list[float], b: list[float]) -> float:
     Returns:
         float: Relevance score between the two vectors.
     """
-    if not a or not b or len(a) != len(b):          # If either vector is empty or they have different lengths,
-        return 0.0                                  # Return 0.0 as similarity cannot be computed
-    dot = sum(x * y for x, y in zip(a, b))          # Compute the dot product of the two vectors
-    na  = math.sqrt(sum(x * x for x in a))          # Compute the norm (magnitude) of the first vector
-    nb  = math.sqrt(sum(x * x for x in b))          # Compute the norm (magnitude) of the second vector
-    return dot / (na * nb) if na and nb else 0.0    # Return the relevance score, or 0.0 if either norm is 0
+    # TODO: migrate to FAISS when recall set exceeds ~10k vectors
+    if not a or not b or len(a) != len(b):                      # If either vector is empty or they have different lengths,
+        return 0.0                                              # Return 0.0 as similarity cannot be computed
+    dot: float = sum(x * y for x, y in zip(a, b))               # Compute the dot product of the two vectors
+    mag_a: float = math.sqrt(sum(x * x for x in a))             # Compute the norm (magnitude) of the first vector
+    mag_b: float = math.sqrt(sum(x * x for x in b))             # Compute the norm (magnitude) of the second vector
+    return dot / (mag_a * mag_b) if mag_a and mag_b else 0.0    # Return the relevance score, or 0.0 if either norm is 0
 
 class EpisodicMemoryCortex:
     """
     Episodic Memory Cortex.
+    Receives evicted PMT schema from WMC via MCC, persisting them as
+    retrievable long-term memory. Incoming PMT schemas land in em_buffer first
+    (crash-safe intake), then are encoded and consolidated into episodes.
 
     Two-table SQLite design:
-        em_buffer  — raw turns from WMC overflow (crash-safe intake)
-        episodes   — embedded, searchable episodic memory (permanent)
+        em_buffer  — raw PMT schemas from WMC overflow (crash-safe intake)
+        episodes   — encoded, retrievable episodic memory (permanent)
 
-    The async worker runs in a background thread, draining em_buffer →
-    embedding → episodes continuously without blocking GRACE's responses.
+    The consolidation worker runs in a separate neural thread, draining em_buffer →
+    encoding → episodes continuously without blocking the main neural thread's responses.
+    Thread-safety: Consolidation worker is isolated from the main neural thread.
+    All em_buffer writes are serialized through SQLite's WAL mode.
     """
 
     def __init__(self, db_path: str, logger):
@@ -200,10 +206,10 @@ class EpisodicMemoryCortex:
         self.conn.commit()
         self._init_tables()
 
-        # Write lock — only async worker writes to episodes
+        # Write lock — only consolidation worker writes to episodes
         self._write_lock = threading.Lock()
 
-        # Async worker
+        # Consolidation worker
         self._worker_running = False
         self._worker_thread: Optional[threading.Thread] = None
         self._start_worker()
@@ -228,7 +234,7 @@ class EpisodicMemoryCortex:
             CREATE INDEX IF NOT EXISTS idx_em_buffer_date
                 ON em_buffer(date);
 
-            -- Embedded episodic memory (permanent, searchable)
+            -- Encoded episodic memory (permanent, retrievable)
             CREATE TABLE IF NOT EXISTS episodes (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp  TEXT    NOT NULL,
@@ -250,7 +256,7 @@ class EpisodicMemoryCortex:
     def buffer_append(self, role: str, content: str) -> bool:
         """
         Atomically write an evicted WMC turn to em_buffer.
-        Called by MCC — survives crashes, never blocks GRACE.
+        Called by MCC — survives crashes, never blocks the robot.
 
         Args:
             role:    "user" or "assistant"
