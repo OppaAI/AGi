@@ -99,6 +99,7 @@ class MemoryCoordinationCore:
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
+        self.episodic_buffer = self.emc.episodic_buffer                                     # Bind to shared episodic buffer in EMC for memory coordination
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
     async def register_memory(self, role: str, content: str) -> None:
@@ -183,7 +184,7 @@ class MemoryCoordinationCore:
         ]
 
         # Assemble memory context
-        episodic_buffer: list[dict] = []                                     # Set up episodic buffer for holding memory context
+        self.episodic_buffer.recall_stream.clear()                           # Reset recall stream of episodic buffer before assembling memory context
 
         # Inject relevant EMC episodes as a system message
         if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
