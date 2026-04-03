@@ -147,9 +147,9 @@ class _EncodingEngine:
                 encoded_trace: list[float] = self._core.encode_document(trace).tolist() # Encode the memory trace for storage
             # Keep cache small — evict oldest if over the encoding cache limit
             if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
-                decayed_imprint = next(iter(self._cache))                               # Retrieve the decayed imprint (oldest entry)
+                decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
                 del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
-            self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
+            self._cache[imprint]: list[float] = encoded_trace                           # Add the new entry to the cache
             return encoded_trace                                                        # Return the encoded vector
         except Exception as exc:                                                        # If encoding fails,
             self.logger.debug(f"Encoding error: {exc}")                                 # Log the debug message about encoding error
@@ -191,34 +191,64 @@ class EpisodicMemoryCortex:
     All em_buffer writes are serialized through SQLite's WAL mode.
     """
 
-    def __init__(self, logger, engram_gateway: str):
-        self.logger              = logger                                # Retrieve logger from CNC for logging WMC operations
+    def __init__(self, logger, engram_gateway: str) -> None:
+        """
+        Initialize the Episodic Memory Cortex with a logger and engram gateway.
+        
+        This method sets up the engram for storing episodic memories,
+        initializes the encoding engine, and starts the encode cycle in a
+        background thread.
+        
+        Args:
+            logger              : Logger instance for logging operations
+            engram_gateway (str): Path to the SQLite database file
+        """
+        self.logger              = logger                                # Retrieve logger from CNC for logging EMC operations
         self.engram_gateway: str = engram_gateway                        # Retrieve engram gateway passed down from MCC
 
         # Encoding engine
         self._encoding_engine = _EncodingEngine(logger=logger)           # Initialize encoding engine and provide the logger from MCC
 
         # SQLite — WAL mode for concurrent reads during async writes
-        self.engram = sqlite3.connect(engram_gateway, check_same_thread=False) # Access the engram through the provided gateway
-        self.engram.row_factory = sqlite3.Row                            # Define the structure of query results of the engram
-        self.engram.execute("PRAGMA journal_mode=WAL;")                  # Set up engram to aloow retrieval and storing simultaneously
-        self.engram.execute("PRAGMA synchronous=NORMAL;")                # Balance episodes safety vs storing speed
-        self.engram.commit()                                             # Apply the above parameters into the engram
-        self._init_engram_schema()                                       # Initialize the schema of the engram
+        try:                                                                # Attempt to connect to the engram
+            self.engram = sqlite3.connect(engram_gateway, check_same_thread=False) # Access the engram through the provided gateway
+            self.engram.row_factory = sqlite3.Row                           # Define the structure of query results of the engram
+            self.engram.execute("PRAGMA journal_mode=WAL;")                 # Set up engram to allow retrieval and storing simultaneously
+            self.engram.execute("PRAGMA synchronous=NORMAL;")               # Balance episodes safety vs storing speed
+            self.engram.commit()                                            # Apply the above parameters into the engram
+            self._init_engram_schema()                                      # Initialize the schema of the engram
+        except sqlite3.Error as e:                                          # If failed to connect to the engram
+            self.logger.error(f"❌ Engram connection failed → {e}")         # Log the failure to connect to the engram
+            if hasattr(self, 'engram'):                                     # If engram already exists,
+                self.engram.close()                                         # Close the engram connection
+            raise                                                           # Raise the anomaly to the caller
 
-        # Write lock — only encode cycle writes to episodes
-        self._write_lock = threading.Lock()                              # Ensure only one thread inscribes into the engram at a time
+        try:                                                                # Attempt to initialize the write lock
+            # Write lock — only encode cycle writes to episodes
+            self._write_lock = threading.Lock()                             # Ensure only one thread inscribes into the engram at a time
 
-        # Set up encode cycle
-        self._encoder_running = False                                    # Indicate that encode cycle not yet running
-        self._encoder_thread: Optional[threading.Thread] = None          # Initialize background neural thread
-        self._start_encoder()                                            # Start encode cycle in the background
+            # Set up encode cycle
+            self._encoder_running = False                                   # Indicate that encode cycle not yet running
+            self._encoder_thread: Optional[threading.Thread] = None         # Initialize background neural thread
+            self._start_encoder()                                           # Start encode cycle in the background
+        except RuntimeError as e:                                           # If failed to initialize the encode cycle
+            self.logger.error(f"❌ Encode cycle initialization failed → {e}")   # Log the failure to initialize the encode cycle
+            raise                                                           # Raise the anomaly to the caller
 
-        self.logger.info(f"✅ EMC initialized → {engram_gateway}")      # Log the successful initialization of the engram
+        self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # Log the successful initialization of the engram
 
-    def _init_engram_schema(self):
-        self.engram.executescript("""
-            -- Raw turn intake from WMC overflow (crash-safe)
+    def _init_engram_schema(self) -> None:
+        """
+        Initialize the schema of the engram.
+        This method creates the necessary tables and indexes for storing episodic memories.
+
+        Tables:
+        - em_buffer: Raw PMT intake from WMC overflow (crash-safe)
+        - episodes: Encoded episodic memory (permanent, retrievable)
+        """
+        self.engram.executescript(                                          # Execute SQL script to create the tables and indexes
+            """
+            -- Raw PMT intake from WMC overflow (crash-safe)
             CREATE TABLE IF NOT EXISTS em_buffer (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp  TEXT    NOT NULL,
@@ -239,15 +269,15 @@ class EpisodicMemoryCortex:
                 date       TEXT    NOT NULL,
                 role       TEXT    NOT NULL,
                 content    TEXT    NOT NULL,
-                embedding  TEXT    NOT NULL,   -- JSON float array (768 dims)
+                encoding   TEXT    NOT NULL,   -- JSON float array (768 dims)
                 created_at TEXT    DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_episodes_date
                 ON episodes(date);
             CREATE INDEX IF NOT EXISTS idx_episodes_role
                 ON episodes(role);
-        """)
-        self.engram.commit()
+            """)
+        self.engram.commit()                                                # Commit the changes to the engram
 
     # ── Buffer intake (called by MCC from asyncio loop) ───────────────────────
 
