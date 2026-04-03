@@ -206,17 +206,15 @@ class EpisodicMemoryCortex:
         self.engram.commit()                                             # Apply the above parameters into the engram
         self._init_engram_schema()                                       # Initialize the schema of the engram
 
-        # Write lock — only consolidation worker writes to episodes
-        self._write_lock = threading.Lock()                              # Ensure only one thread encodes into the engram at a time
+        # Write lock — only encode cycle writes to episodes
+        self._write_lock = threading.Lock()                              # Ensure only one thread inscribes into the engram at a time
 
-        # Consolidation worker
-        self._worker_running = False                                     #
-        self._worker_thread: Optional[threading.Thread] = None           #
-        self._start_worker()                                             #
+        # Set up encode cycle
+        self._encoder_running = False                                    # Indicate that encode cycle not yet running
+        self._encoder_thread: Optional[threading.Thread] = None          # Initialize background neural thread
+        self._start_encoder()                                            # Start encode cycle in the background
 
         self.logger.info(f"✅ EMC initialized → {engram_gateway}")      # Log the successful initialization of the engram
-
-    # ── Schema ────────────────────────────────────────────────────────────────
 
     def _init_engram_schema(self):
         self.engram.executescript("""
@@ -295,49 +293,67 @@ class EpisodicMemoryCortex:
         self._worker_thread.start()
         self.logger.info("🔄 EMC encoding worker started")
 
-    def _encode_worker(self):
+    def _encode_cycle(self):
         """
-        Background worker — drains em_buffer, encodes, stores in episodes.
-        Runs forever, sleeps when buffer is empty.
-        Processes one row at a time for stability under Jetson load.
+        Event-driven consolidation — drains em_buffer into episodes.
+        Wakes only when buffer has episodes (sharp-wave ripple pattern).
+        Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
         """
+
         # Worker-local SQLite connection (WAL allows concurrent access)
         worker_conn = sqlite3.connect(self.db_path, check_same_thread=False)
         worker_conn.row_factory = sqlite3.Row
         worker_conn.execute("PRAGMA journal_mode=WAL;")
-
-        self.logger.info("⚙️  EMC worker running…")
-
-        while self._worker_running:
-            try:
-                # Fetch one unprocessed buffer row
+        self.logger.info("⚙️  EMC consolidation cycle running…")
+    
+        while self._consolidation_running:
+            # Rest state — wait for hippocampal activation
+            self._consolidation_event.wait()
+            self._consolidation_event.clear()
+    
+            if not self._consolidation_running:
+                break  # clean exit if stopped while waiting
+    
+            # Snapshot IDs at this moment — one ripple, one defined window
+            snapshot = worker_conn.execute(
+                "SELECT id FROM em_buffer WHERE processed = FALSE ORDER BY id"
+            ).fetchall()
+            snapshot_ids = [row["id"] for row in snapshot]
+    
+            if not snapshot_ids:
+                continue  # spurious wake — go back to rest
+    
+            self.logger.debug(f"EMC ripple → {len(snapshot_ids)} episode(s) in snapshot")
+    
+            # Replay each episode in the snapshot
+            for episode_id in snapshot_ids:
+                if not self._consolidation_running:
+                    break  # respect stop signal mid-ripple
+    
                 row = worker_conn.execute(
-                    "SELECT id, timestamp, role, content, date "
-                    "FROM em_buffer WHERE processed = FALSE "
-                    "ORDER BY id LIMIT 1"
+                    "SELECT id, timestamp, date, role, content "
+                    "FROM em_buffer WHERE id = ?",
+                    [episode_id]
                 ).fetchone()
-
+    
                 if row is None:
-                    # Buffer empty — sleep and check again
-                    import time; time.sleep(2.0)
-                    continue
-
-                # Encode the turn content
+                    continue  # already processed by another path
+    
+                # Encode the episode content
                 vec = self._encoding_engine.encode(row["content"], is_query=False)
-
                 if not vec:
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(
                         f"EMC encode skipped (encoding engine unavailable): "
                         f"buffer id={row['id']}"
                     )
-                    import time; time.sleep(5.0)
+                    # Don't mark processed — retry next ripple
                     continue
-
+    
                 embedding_json = json.dumps(vec)
-
+    
                 with self._write_lock:
-                    # Insert into episodes
+                    # Insert into episodes (engram)
                     worker_conn.execute(
                         "INSERT INTO episodes "
                         "(timestamp, date, role, content, embedding) "
@@ -350,24 +366,20 @@ class EpisodicMemoryCortex:
                             embedding_json,
                         ],
                     )
-                    # Mark buffer row as processed
+                    # Mark buffer episode as processed
                     worker_conn.execute(
                         "UPDATE em_buffer SET processed = TRUE WHERE id = ?",
-                        [row["id"]],
+                        [episode_id]
                     )
                     worker_conn.commit()
-
+    
                 self.logger.debug(
-                    f"EMC encoded → episodes: [{row['role']}] "
+                    f"EMC consolidated → episodes: [{row['role']}] "
                     f"{row['content'][:40]}… (date={row['date']})"
                 )
-
-            except Exception as exc:
-                self.logger.error(f"EMC worker error: {exc}")
-                import time; time.sleep(2.0)
-
+    
         worker_conn.close()
-        self.logger.info("EMC worker stopped")
+        self.logger.info("EMC consolidation cycle stopped")
 
     # ── Semantic search (called by MCC) ───────────────────────────────────────
 
