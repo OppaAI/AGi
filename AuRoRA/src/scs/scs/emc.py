@@ -16,7 +16,7 @@ Responsibilities:
 
 Architecture:
     Two-table SQLite design:
-        em_buffer  — crash-safe raw intake from WMC overflow
+        episodic_buffer  — crash-safe raw intake from WMC overflow
         episodes   — embedded, searchable episodic memory (permanent)
 
     Encoding:
@@ -31,12 +31,12 @@ Architecture:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
     Worker:
-        Background thread drains em_buffer → encodes → episodes
+        Background thread drains episodic_buffer → encodes → episodes
         Runs continuously, sleeps when buffer is empty
         Never blocks the robot's active cognition
 
 Terminology:
-    em_buffer  — raw turn intake table (crash-safe, temporary)
+    episodic_buffer  — raw turn intake table (crash-safe, temporary)
     encoding   — semantic embedding of a turn into a vector
     episodes   — embedded episodic memory table (permanent)
     engram     — one embedded episode (a specific remembered moment)
@@ -167,28 +167,40 @@ def _semantic_match(cue: list[float], engram: list[float]) -> float:
         float: Semantic relevancy score (0.0 – 1.0).
     """
     # TODO: migrate to FAISS when recall set exceeds ~10k vectors
-    if not cue or not engram or len(cue) != len(engram)                        # If either vector is empty or they have different lengths,
+    if not cue or not engram or len(cue) != len(engram):                       # If either vector is empty or they have different lengths,
         return 0.0                                                             # Return 0.0 as relevancy cannot be computed
     dot: float        = sum(c * e for c, e in zip(cue, engram))                # Compute the dot product of the two vectors
     cue_mag: float    = math.sqrt(sum(c * c for c in cue))                     # Compute the magnitude of the encoded recall cue
     engram_mag: float = math.sqrt(sum(e * e for e in engram))                  # Compute the magnitude of the encoded stored engram
     return dot / (cue_mag * engram_mag) if cue_mag and engram_mag else 0.0     # Return the semantic relevancy score, or 0.0 if either magnitude is 0
+    
+@dataclass
+class EpisodicBuffer:
+    """
+    Episodic Buffer — shared workspace between WMC and EMC.
+    Base on the concept of episodic buffer in Baddeley's Model — one buffer, two hippocampal processes.
 
+    intake_stream  — evicted PMTs pending to be encoded into episodic memory
+    recall_stream  — recalled episodes pending to surface into active cognition context
+    """
+    intake_stream: list[dict] = field(default_factory=list)                    # Evicted PMTs pending to be encoded into episodic memory
+    recall_stream: list[dict] = field(default_factory=list)                    # Recalled episodes pending to surface into active cognition context
+    
 class EpisodicMemoryCortex:
     """
     Episodic Memory Cortex.
     Receives evicted PMT schema from WMC via MCC, persisting them as
-    retrievable long-term memory. Incoming PMT schemas land in em_buffer first
+    retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
     (crash-safe intake), then are encoded and consolidated into episodes.
 
     Two-table SQLite design:
-        em_buffer  — raw PMT schemas from WMC overflow (crash-safe intake)
-        episodes   — encoded, retrievable episodic memory (permanent)
+        episodic_buffer  — raw PMT schemas from WMC overflow (crash-safe intake)
+        episodes         — encoded, retrievable episodic memory (permanent)
 
-    The consolidation worker runs in a separate neural thread, draining em_buffer →
+    The consolidation worker runs in a separate neural thread, draining episodic_buffer →
     encoding → episodes continuously without blocking the main neural thread's responses.
     Thread-safety: Consolidation worker is isolated from the main neural thread.
-    All em_buffer writes are serialized through SQLite's WAL mode.
+    All episodic_buffer writes are serialized through SQLite's WAL mode.
     """
 
     def __init__(self, logger, engram_gateway: str) -> None:
@@ -205,9 +217,8 @@ class EpisodicMemoryCortex:
         """
         self.logger              = logger                                # Retrieve logger from CNC for logging EMC operations
         self.engram_gateway: str = engram_gateway                        # Retrieve engram gateway passed down from MCC
-
-        # Encoding engine
-        self._encoding_engine = _EncodingEngine(logger=logger)           # Initialize encoding engine and provide the logger from MCC
+        self.episodic_buffer     = EpisodicBuffer()                      # Initialize episodic buffer — intake and recall streams for active cognition
+        self._encoding_engine    = _EncodingEngine(logger=logger)        # Initialize encoding engine and provide the logger from MCC
 
         # SQLite — WAL mode for concurrent reads during async writes
         try:                                                                # Attempt to connect to the engram
@@ -243,13 +254,12 @@ class EpisodicMemoryCortex:
         This method creates the necessary tables and indexes for storing episodic memories.
 
         Tables:
-        - em_buffer: Raw PMT intake from WMC overflow (crash-safe)
+        - episodic_buffer: Raw PMT intake from WMC overflow (crash-safe)
         - episodes: Encoded episodic memory (permanent, retrievable)
         """
-        self.engram.executescript(                                          # Execute SQL script to create the tables and indexes
-            """
+        self.engram.executescript("""                                       --- Execute SQL script to create the tables and indexes
             -- Raw PMT intake from WMC overflow (crash-safe)
-            CREATE TABLE IF NOT EXISTS em_buffer (
+            CREATE TABLE IF NOT EXISTS episodic_buffer (                          --- 
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp  TEXT    NOT NULL,
                 role       TEXT    NOT NULL,
@@ -257,10 +267,10 @@ class EpisodicMemoryCortex:
                 date       TEXT    NOT NULL,
                 processed  BOOLEAN DEFAULT FALSE
             );
-            CREATE INDEX IF NOT EXISTS idx_em_buffer_processed
-                ON em_buffer(processed);
-            CREATE INDEX IF NOT EXISTS idx_em_buffer_date
-                ON em_buffer(date);
+            CREATE INDEX IF NOT EXISTS idx_episodic_buffer_processed
+                ON episodic_buffer(processed);
+            CREATE INDEX IF NOT EXISTS idx_episodic_buffer_date
+                ON episodic_buffer(date);
 
             -- Encoded episodic memory (permanent, retrievable)
             CREATE TABLE IF NOT EXISTS episodes (
@@ -283,7 +293,7 @@ class EpisodicMemoryCortex:
 
     def buffer_append(self, role: str, content: str, timestamp: str) -> bool:
         """
-        Atomically write an evicted WMC turn to em_buffer.
+        Atomically write an evicted WMC turn to episodic_buffer.
         Called by MCC — survives crashes, never blocks the robot.
 
         Args:
@@ -297,7 +307,7 @@ class EpisodicMemoryCortex:
 
         try:
             self.engram.execute(
-                "INSERT INTO em_buffer (timestamp, role, content, date) "
+                "INSERT INTO episodic_buffer (timestamp, role, content, date) "
                 "VALUES (?, ?, ?, ?)",
                 [timestamp, role, content[:2000], date_str],
             )
@@ -312,26 +322,26 @@ class EpisodicMemoryCortex:
 
     # ── Async worker — buffer → encode → episodes ─────────────────────────────
 
-    def _start_worker(self):
+    def _start_encoder(self):
         """Start background encoding worker thread."""
-        self._worker_running = True
-        self._worker_thread  = threading.Thread(
+        self._encoder_running = True
+        self._encoder_thread  = threading.Thread(
             target=self._encode_worker,
             name="emc-encode-worker",
             daemon=True,
         )
-        self._worker_thread.start()
+        self._encoder_thread.start()
         self.logger.info("🔄 EMC encoding worker started")
 
     def _encode_cycle(self):
         """
-        Event-driven consolidation — drains em_buffer into episodes.
+        Event-driven consolidation — drains episodic_buffer into episodes.
         Wakes only when buffer has episodes (sharp-wave ripple pattern).
         Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
         """
 
         # Worker-local SQLite connection (WAL allows concurrent access)
-        worker_conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        worker_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)
         worker_conn.row_factory = sqlite3.Row
         worker_conn.execute("PRAGMA journal_mode=WAL;")
         self.logger.info("⚙️  EMC consolidation cycle running…")
@@ -346,7 +356,7 @@ class EpisodicMemoryCortex:
     
             # Snapshot IDs at this moment — one ripple, one defined window
             snapshot = worker_conn.execute(
-                "SELECT id FROM em_buffer WHERE processed = FALSE ORDER BY id"
+                "SELECT id FROM episodic_buffer WHERE processed = FALSE ORDER BY id"
             ).fetchall()
             snapshot_ids = [row["id"] for row in snapshot]
     
@@ -362,7 +372,7 @@ class EpisodicMemoryCortex:
     
                 row = worker_conn.execute(
                     "SELECT id, timestamp, date, role, content "
-                    "FROM em_buffer WHERE id = ?",
+                    "FROM episodic_buffer WHERE id = ?",
                     [episode_id]
                 ).fetchone()
     
@@ -370,7 +380,7 @@ class EpisodicMemoryCortex:
                     continue  # already processed by another path
     
                 # Encode the episode content
-                vec = self._encoding_engine.encode(row["content"], is_query=False)
+                vec = self._encoding_engine.encode(row["content"], is_cue=False)
                 if not vec:
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(
@@ -398,7 +408,7 @@ class EpisodicMemoryCortex:
                     )
                     # Mark buffer episode as processed
                     worker_conn.execute(
-                        "UPDATE em_buffer SET processed = TRUE WHERE id = ?",
+                        "UPDATE episodic_buffer SET processed = TRUE WHERE id = ?",
                         [episode_id]
                     )
                     worker_conn.commit()
@@ -435,7 +445,7 @@ class EpisodicMemoryCortex:
         Returns:
             List of dicts: {timestamp, date, role, content, relevancy}
         """
-        query_vec = self._encoding_engine.encode(query, is_query=True)
+        query_vec = self._encoding_engine.encode(query, is_cue=True)
         if not query_vec:
             return self._keyword_search(query, top_k, date_from, date_to)
 
@@ -553,7 +563,7 @@ class EpisodicMemoryCortex:
         """Return number of turns waiting to be embedded."""
         try:
             row = self.engram.execute(
-                "SELECT COUNT(*) FROM em_buffer WHERE processed = FALSE"
+                "SELECT COUNT(*) FROM episodic_buffer WHERE processed = FALSE"
             ).fetchone()
             return row[0] if row else 0
         except Exception:
@@ -573,11 +583,11 @@ class EpisodicMemoryCortex:
             buf_row = self.engram.execute(
                 "SELECT COUNT(*) as total, "
                 "SUM(CASE WHEN processed=FALSE THEN 1 ELSE 0 END) as pending "
-                "FROM em_buffer"
+                "FROM episodic_buffer"
             ).fetchone()
 
-            db_size_mb = round(Path(self.db_path).stat().st_size / 1_048_576, 2) \
-                if Path(self.db_path).exists() else 0.0
+            db_size_mb = round(Path(self.engram_gateway).stat().st_size / 1_048_576, 2) \
+                if Path(self.engram_gateway).exists() else 0.0
 
             return {
                 "episodes":         ep_row["total"]  if ep_row  else 0,
@@ -586,7 +596,7 @@ class EpisodicMemoryCortex:
                 "buffer_total":     buf_row["total"]   if buf_row else 0,
                 "buffer_pending":   buf_row["pending"]  if buf_row else 0,
                 "db_size_mb":       db_size_mb,
-                "encoding_engine_ready":   self._encoding_engine.is_available(),
+                "encoding_engine_ready":   self._encoding_engine.is_available,
                 "ENCODING_ENGINE":  EMC.ENCODING_ENGINE,
             }
         except Exception as exc:
@@ -597,12 +607,12 @@ class EpisodicMemoryCortex:
 
     def cleanup_processed_buffer(self, keep_days: int = 1) -> None:
         """
-        Remove processed em_buffer rows older than keep_days.
+        Remove processed episodic_buffer rows older than keep_days.
         Safe to call periodically — processed rows are already in episodes.
         """
         try:
             self.engram.execute(
-                "DELETE FROM em_buffer "
+                "DELETE FROM episodic_buffer "
                 "WHERE processed = TRUE "
                 "AND date < date('now', ?)",
                 [f"-{keep_days} days"],
@@ -617,9 +627,9 @@ class EpisodicMemoryCortex:
         Gracefully close EMC and the engram gateway.
         This releases any open engram gateway resources and ensures proper shutdown of the engram complex.
         """
-        self._worker_running = False
-        if self._worker_thread:
-            self._worker_thread.join(timeout=3.0)
+        self._encoder_running = False
+        if self._encoder_thread:
+            self._encoder_thread.join(timeout=3.0)
         if self.engram:
             self.engram.close()
         self.logger.info("🗄️  EMC closed")
