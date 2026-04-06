@@ -330,27 +330,28 @@ class EpisodicMemoryCortex:
             self.engram.commit()                                            # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
 
-    # ── Buffer intake (called by MCC from asyncio loop) ───────────────────────
-
-    def buffer_append(self, speaker: str, content: str, timestamp: str) -> bool:
+    def bind_pmt(self, speaker: str, content: str, timestamp: str) -> bool:
         """
-        Atomically write an evicted WMC turn to episodic_buffer.
-        Called by MCC — survives crashes, never blocks the robot.
+        Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
+        and binds it into the episodic buffer for consolidation.
+    
+        Called by MCC asynchronously at the WMC → EMC boundary — crash-safe, non-blocking.
 
         Args:
-            speaker: User ID or assistant ID
-            content: Turn text (truncated to 2000 chars for safety)
+            speaker (str): User ID or assistant ID
+            content (str): Content of PMT (truncated to 2000 chars for safety)
+            timestamp (str): Timestamp of PMT induced into WMC
 
         Returns:
-            True on success, False on failure
+            bool: True on success, False on failure
         """
-        date_str = timestamp[:10]
+        pmt_date = timestamp[:10]
 
         try:
             self.engram.execute(
                 "INSERT INTO episodic_buffer (timestamp, date, speaker, content)"
                 "VALUES (?, ?, ?, ?)",
-                [timestamp, date_str, speaker, content[:2000]],
+                [timestamp, pmt_date, speaker, content[:2000]],
             )
             self.engram.commit()
             self._theta_rhythm.set()
