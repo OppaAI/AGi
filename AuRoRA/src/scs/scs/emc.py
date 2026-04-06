@@ -69,6 +69,7 @@ TODO:
 import json                                 # For serializing engram encodings to JSON (TODO: remove when implmented with sqlite-vec)
 import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implmented with sqlite-vec)
 import sqlite3                              # For storage of episodic memory and buffer
+import struct                               # For packing semantic vectors (fp32) into engram storage
 import threading                            # For background encoding of engrams
 from dataclasses import dataclass, field    # For defining structures of engrams and episodes
 from datetime import datetime               # (TODO) Replace with hrs.blc when BioLogic Clock is built
@@ -349,7 +350,7 @@ class EpisodicMemoryCortex:
 
         try:
             self.engram.execute(
-                "INSERT INTO episodic_buffer (timestamp, date, speaker, content)"
+                "INSERT INTO episodic_buffer (timestamp, date, speaker, content) "
                 "VALUES (?, ?, ?, ?)",
                 [timestamp, pmt_date, speaker, content[:2000]],
             )
@@ -363,10 +364,10 @@ class EpisodicMemoryCortex:
             self.logger.warning(f"EMC buffer_append failed: {exc}")
             return False
 
-    # ── Async worker — buffer → encode → episodes ─────────────────────────────
-
-    def _start_encoder(self):
-        """Start background encoding cycle thread."""
+    def _start_encoder(self) -> None:
+        """
+        Start background encoding cycle thread.
+        """
         self._encoder_running = True
         self._encoder_thread  = threading.Thread(
             target=self._encode_cycle,
@@ -387,7 +388,17 @@ class EpisodicMemoryCortex:
         worker_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)
         worker_conn.row_factory = sqlite3.Row
         worker_conn.execute("PRAGMA journal_mode=WAL;")
-        self.logger.info("⚙️  EMC consolidation cycle running…")
+
+        # Load sqlite-vec into worker connection if engram vector search is active
+        if self._engram_vector:
+            try:
+                import sqlite_vec
+                sqlite_vec.load(worker_conn)                    # sqlite-vec must be loaded per connection
+            except Exception as e:
+                self.logger.warning(f"⚠️ sqlite-vec load failed in encode worker: {e}")
+                self._engram_vector = False                     # Disable vector search — fall back to Python cosine
+
+        self.logger.info("⚙️ EMC consolidation cycle running…")
     
         while self._encoder_running:
             # Rest state — wait for hippocampal activation
@@ -406,7 +417,7 @@ class EpisodicMemoryCortex:
             if not snapshot_ids:
                 continue  # spurious wake — go back to rest
     
-            self.logger.debug(f"EMC ripple → {len(snapshot_ids)} episode(s) in snapshot")
+            self.logger.debug(f"EMC encode cycle → {len(snapshot_ids)} episode(s) in snapshot")
     
             # Replay each episode in the snapshot
             for episode_id in snapshot_ids:
@@ -422,7 +433,7 @@ class EpisodicMemoryCortex:
                 if row is None:
                     continue  # already processed by another path
     
-                # Encode the episode content
+                # Encode the PMT content into a semantic vector
                 vec = self._encoding_engine.encode(row["content"], is_cue=False)
                 if not vec:
                     # Encoding engine unavailable — skip for now, retry later
@@ -433,8 +444,9 @@ class EpisodicMemoryCortex:
                     # Don't mark processed — retry next ripple
                     continue
     
-                encoding_json = json.dumps(vec)
-    
+                # Pack vector as binary float32 for BLOB storage
+                encoding_blob = struct.pack(f"{len(vec)}f", *vec)
+            
                 with self._write_lock:
                     # Insert into episodes (engram)
                     worker_conn.execute(
@@ -446,7 +458,7 @@ class EpisodicMemoryCortex:
                             row["date"],
                             row["speaker"],
                             row["content"],
-                            encoding_json,
+                            encoding_blob,
                         ],
                     )
                     # Mark buffer episode as processed
@@ -463,8 +475,6 @@ class EpisodicMemoryCortex:
     
         worker_conn.close()
         self.logger.info("EMC consolidation cycle stopped")
-
-    # ── Semantic search (called by MCC) ───────────────────────────────────────
 
     def recall(
         self,
@@ -543,7 +553,9 @@ class EpisodicMemoryCortex:
         date_from: Optional[str],
         date_to: Optional[str],
     ) -> list[dict]:
-        """Fallback keyword search when encoding engine is unavailable."""
+        """
+        Fallback keyword search when encoding engine is unavailable.
+        """
         words = [w for w in query.lower().split() if len(w) > 3]
         if not words:
             return []
