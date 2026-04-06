@@ -194,11 +194,11 @@ class MemoryCoordinationCore:
                 role        = episode.get("role", "unknown")                 # Retrieve the role of the EMC episode
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
                 relevancy   = episode.get("relevancy", 0.0)                  # Retrieve the relevancy score of the EMC episode
-                recalled_episodes.append(                                     # Stage the content of EMC episode into the episodic buffer
+                recalled_episodes.append(                                    # Stage the content of EMC episode into the episodic buffer
                     f"[{date}] {role}: {content} (relevancy: {relevancy:.2f})"
                 )
 
-            episodic_buffer.append({                                         # Bind the recalled EMC episodes into episodic buffer
+            self.episodic_buffer.recall_stream.append({                      # Bind the recalled EMC episodes into episodic buffer
                 "role":    "system",
                 "content": "\n".join(recalled_episodes),
             })
@@ -208,7 +208,7 @@ class MemoryCoordinationCore:
             )
 
         # Bind sustained WMC PMTs in chronological order
-        episodic_buffer.extend(wmc_pmts)                                     # Bind the sustained WMC PMTS into episodic buffer
+        self.episodic_buffer.recall_stream.extend(wmc_pmts)                  # Bind the sustained WMC PMTS into episodic buffer
 
         self.logger.debug(                                                   # Log the recalled memory context (WMC PMTs + recalled EMC episodes)
             f"MCC memory context recalled: "
@@ -216,7 +216,7 @@ class MemoryCoordinationCore:
             f"{len(episodic_scaffold)} EMC episodes"
         )
 
-        return episodic_buffer                                               # Return the memory context staged in episodic buffer
+        return self.episodic_buffer.recall_stream                            # Return the memory context staged in episodic buffer
 
     def assess_memory_schema(self) -> dict:
         """
