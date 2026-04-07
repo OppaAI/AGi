@@ -521,9 +521,11 @@ class EpisodicMemoryCortex:
                     FROM episode_vectors v
                     JOIN episodes e ON e.id = v.rowid
                     WHERE v.encoding MATCH ?
+                      AND v.k = ?
+                    ORDER BY v.distance
                 """
-
-                params = [query_blob]
+                
+                params = [query_blob, top_k]
                 where = []
 
                 if date_from:
