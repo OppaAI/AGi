@@ -627,7 +627,8 @@ class EpisodicMemoryCortex:
 
                 scored = []
                 for row in rows:
-                    stored_vec = json.loads(row["encoding"] or "[]")
+                    raw = row["encoding"]
+                    stored_vec = list(struct.unpack(f"{len(raw) // 4}f", raw)) if raw else []
                     sim = _semantic_match(query_vec, stored_vec)
                     scored.append({
                         "timestamp":  row["timestamp"],
