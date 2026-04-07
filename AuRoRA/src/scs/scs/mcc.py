@@ -137,10 +137,10 @@ class MemoryCoordinationCore:
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
-                self.emc.buffer_append(                     # Bind each evicted PMT into episodic buffer
-                    role    = evicted_pmt["role"],
-                    content = evicted_pmt["content"],
-                    timestamp = evicted_pmt["timestamp"],
+                self.emc.bind_pmt(                          # Bind each evicted PMT into episodic buffer
+                    speaker = evicted_pmt["role"],          # Speaker ID (user or assistant) (TODO: M2 - Need to get the user ID)
+                    content = evicted_pmt["content"],       # Content of PMT
+                    timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
                 )
         except Exception as e:                             # If binding lapse occurs, log and continue
             self.logger.error(                             # Log the binding lapse

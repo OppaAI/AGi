@@ -24,8 +24,9 @@ Architecture:
         Model configured via EMC.ENCODING_ENGINE constant
 
     Relevancy:
-        Pure-Python cosine — no FAISS needed until millions of rows
-        Falls back to keyword search if encoding engine unavailable
+        SQLite-vec L2 distance KNN search on unit-normalized vectors (cosine-equivalent)
+        Falls back to Python cosine if SQLite-vec not available
+        Falls back to lexical search if encoding engine unavailable
 
     Storage:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
@@ -46,7 +47,7 @@ Lifecycle:
     Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
 
 Public interface:
-    emc.buffer_append(speaker, content, timestamp) → bool
+    emc.bind_pmt(speaker, content, timestamp) → bool
     emc.recall(query, top_k) → list[dict]
     emc.get_episodes_for_date(date_str) → list[dict]
     emc.buffer_pending_count() → int
@@ -60,7 +61,8 @@ TODO:
         target:  2 buffer rows → 1 episode (interaction-level)    
     M2 — put user_id instead of role in speaker column
     M2 — add date-range filtering to buffer entries and recall interface
-    M2 — FAISS index for sub-millisecond search at millions of episodes
+    M2 — migrate episode_vectors to sqlite-vec ANN index (DiskANN)
+         when episodes exceed ~50k — currently exact KNN is sufficient
     M2 — date-range filtering exposed through MCC recall interface
     M2 — SMC distillation trigger at 11pm reflection
 """
@@ -111,8 +113,8 @@ class _EncodingEngine:
                 "   EMC falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as exc:                                                    # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {exc}")     # Log the error during activation of encoding engine
+        except Exception as e:                                                    # If other errors during activation,
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")     # Log the error during activation of encoding engine
 
     @property
     def is_available(self) -> bool:
@@ -165,8 +167,8 @@ class _EncodingEngine:
                 del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
             self._cache[imprint]: list[float] = encoded_trace                           # Add the new entry to the cache
             return encoded_trace                                                        # Return the encoded vector
-        except Exception as exc:                                                        # If encoding fails,
-            self.logger.debug(f"Encoding error: {exc}")                                 # Log the debug message about encoding error
+        except Exception as e:                                                          # If encoding fails,
+            self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
 def _semantic_match(cue: list[float], engram: list[float]) -> float:
@@ -320,7 +322,7 @@ class EpisodicMemoryCortex:
             """)
         self.engram.commit()                                                # Commit the changes to the engram
 
-        # Create episode_vectors virtual schema for L2 distance semantic search
+        # Create episode vector virtual schema for L2 distance semantic search
         # Created separately — only if engram vector search is activated
         if self._engram_vector:                                             # If engram vector search is activated,
             self.engram.execute("""                                         # Create a virtual schema for the L2 distance semantic search
@@ -360,8 +362,8 @@ class EpisodicMemoryCortex:
                 f"EMC buffer ← [{speaker}] {content[:40]}…"
             )
             return True
-        except Exception as exc:
-            self.logger.warning(f"EMC buffer_append failed: {exc}")
+        except Exception as e:
+            self.logger.warning(f"EMC binding PMT failed: {e}")
             return False
 
     def _start_encoder(self) -> None:
@@ -461,6 +463,13 @@ class EpisodicMemoryCortex:
                             encoding_blob,
                         ],
                     )
+                    # Insert into episode_vectors if engram vector search is active
+                    if self._engram_vector:
+                        episode_id_new = worker_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                        worker_conn.execute(
+                            "INSERT INTO episode_vectors (rowid, encoding) VALUES (?, ?)",
+                            [episode_id_new, encoding_blob],
+                        )
                     # Mark buffer episode as processed
                     worker_conn.execute(
                         "UPDATE episodic_buffer SET processed = TRUE WHERE id = ?",
@@ -486,12 +495,12 @@ class EpisodicMemoryCortex:
         """
         Semantic search over all embedded episodes.
         Returns top-K most relevant episodes sorted by semantic relevancy.
-
-        Falls back to keyword search if encoding engine is unavailable.
+        Falls back to cosine similarity search if engram vector search is unavailable.
+        Falls back to lexical search if encoding engine is unavailable.
 
         Args:
-            query:     Natural language query
-            top_k:     Number of results to return
+            query:     Natural language recall cue
+            top_k:     Number of recalled episodes to return
             date_from: Optional ISO date string lower bound (inclusive)
             date_to:   Optional ISO date string upper bound (inclusive)
 
@@ -503,47 +512,95 @@ class EpisodicMemoryCortex:
             return self._keyword_search(query, top_k, date_from, date_to)
 
         try:
-            sql    = "SELECT timestamp, date, speaker, content, encoding FROM episodes"
-            params = []
-            where  = []
+            if self._engram_vector:
+                # L2 distance KNN search via engram vector (SQLite-vec)
+                query_blob = struct.pack(f"{len(query_vec)}f", *query_vec)          # Pack query vector as binary float32
 
-            if date_from:
-                where.append("date >= ?")
-                params.append(date_from)
-            if date_to:
-                where.append("date <= ?")
-                params.append(date_to)
-            if where:
-                sql += " WHERE " + " AND ".join(where)
+                sql = """
+                    SELECT e.timestamp, e.date, e.speaker, e.content, v.distance
+                    FROM episode_vectors v
+                    JOIN episodes e ON e.id = v.rowid
+                    WHERE v.encoding MATCH ?
+                """
 
-            rows = self.engram.execute(sql, params).fetchall()
-            if not rows:
-                return []
+                params = [query_blob]
+                where = []
 
-            scored = []
-            for row in rows:
-                stored_vec = json.loads(row["encoding"] or "[]")
-                sim = _semantic_match(query_vec, stored_vec)
-                scored.append({
-                    "timestamp":  row["timestamp"],
-                    "date":       row["date"],
-                    "speaker":       row["speaker"],
-                    "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                    "relevancy": round(sim, 4),
-                })
+                if date_from:
+                    where.append("e.date >= ?")
+                    params.append(date_from)
+                if date_to:
+                    where.append("e.date <= ?")
+                    params.append(date_to)
+                if where:
+                    sql += " AND " + " AND ".join(where)
 
-            scored.sort(key=lambda x: x["relevancy"], reverse=True)
-            results = scored[:top_k]
+                sql += " ORDER BY v.distance LIMIT ?"
+                params.append(top_k)
 
-            self.logger.debug(
-                f"EMC search '{query[:30]}…' → "
-                f"{len(results)} results "
-                f"(top sim={results[0]['relevancy'] if results else 0})"
-            )
-            return results
+                rows = self.engram.execute(sql, params).fetchall()
+                if not rows:
+                    return []
 
-        except Exception as exc:
-            self.logger.error(f"EMC search failed: {exc}")
+                self.logger.debug(
+                    f"EMC vector search '{query[:30]}…' → "
+                    f"{len(rows)} results "
+                    f"(top dist={rows[0]['distance'] if rows else 0})"
+                )
+
+                return [
+                    {
+                        "timestamp": row["timestamp"],
+                        "date":      row["date"],
+                        "speaker":   row["speaker"],
+                        "content":   row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
+                        "relevancy": round(1 / (1 + row["distance"]), 4),       # Inverse of distance (higher is more relevant)
+                    }
+                    for row in rows
+                ]
+
+            else:
+                sql    = "SELECT timestamp, date, speaker, content, encoding FROM episodes"
+                params = []
+                where  = []
+
+                if date_from:
+                    where.append("date >= ?")
+                    params.append(date_from)
+                if date_to:
+                    where.append("date <= ?")
+                    params.append(date_to)
+                if where:
+                    sql += " WHERE " + " AND ".join(where)
+
+                rows = self.engram.execute(sql, params).fetchall()
+                if not rows:
+                    return []
+
+                scored = []
+                for row in rows:
+                    stored_vec = json.loads(row["encoding"] or "[]")
+                    sim = _semantic_match(query_vec, stored_vec)
+                    scored.append({
+                        "timestamp":  row["timestamp"],
+                        "date":       row["date"],
+                        "speaker":    row["speaker"],
+                        "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
+                        "relevancy": round(sim, 4),
+                    })
+
+                scored.sort(key=lambda x: x["relevancy"], reverse=True)
+                results = scored[:top_k]
+
+                self.logger.debug(
+                    f"EMC search '{query[:30]}…' → "
+                    f"{len(results)} results "
+                    f"(top sim={results[0]['relevancy'] if results else 0})"
+                )
+                return results
+
+        except Exception as e:
+            self.logger.error(f"EMC recall failed: {e}")
             return []
 
     def _keyword_search(
@@ -554,7 +611,18 @@ class EpisodicMemoryCortex:
         date_to: Optional[str],
     ) -> list[dict]:
         """
-        Fallback keyword search when encoding engine is unavailable.
+        Lexical keyword search as fallback when encoding engine is unavailable.
+        Matches keywords against episode content using LIKE queries.
+
+        Args:
+            query:     Natural language recall cue
+            top_k:     Number of episodes to return
+            date_from: Optional ISO date string lower bound (inclusive)
+            date_to:   Optional ISO date string upper bound (inclusive)
+
+        Returns:
+            List of dicts: {"timestamp": int, "date": str, "speaker": str, "content": str, "relevancy": float}
+            relevancy is always 0.0 - no semantic scoring in lexical search
         """
         words = [w for w in query.lower().split() if len(w) > 3]
         if not words:
@@ -581,14 +649,14 @@ class EpisodicMemoryCortex:
                 {
                     "timestamp":  r["timestamp"],
                     "date":       r["date"],
-                    "speaker":       r["speaker"],
+                    "speaker":    r["speaker"],
                     "content":    r["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                     "relevancy": 0.0,
                 }
                 for r in rows
             ]
-        except Exception as exc:
-            self.logger.error(f"EMC keyword search failed: {exc}")
+        except Exception as e:
+            self.logger.error(f"EMC keyword search failed: {e}")
             return []
 
     # ── Episode retrieval for a specific date ─────────────────────────────────
@@ -596,7 +664,14 @@ class EpisodicMemoryCortex:
     def get_episodes_for_date(self, date_str: str) -> list[dict]:
         """
         Return all episodes for a given date in chronological order.
-        Used by MCC for 11pm reflection (future M2).
+        Used by MCC for 11pm Dream Cycle reflection (M2).
+
+        Args:
+            date_str (str): ISO date string (e.g. "2026-04-05")
+
+        Returns:
+            List of dicts: {timestamp, speaker, content}
+            Empty list if no episodes found or on failure.
         """
         try:
             rows = self.engram.execute(
@@ -608,14 +683,19 @@ class EpisodicMemoryCortex:
                 {"timestamp": r["timestamp"], "speaker": r["speaker"], "content": r["content"]}
                 for r in rows
             ]
-        except Exception as exc:
-            self.logger.error(f"EMC get_episodes_for_date failed: {exc}")
+        except Exception as e:
+            self.logger.error(f"EMC get_episodes_for_date failed: {e}")
             return []
 
     # ── Buffer status ─────────────────────────────────────────────────────────
 
     def buffer_pending_count(self) -> int:
-        """Return number of turns waiting to be embedded."""
+        """
+        Return number of PMTs in episodic buffer pending consolidation into episodes.
+
+        Returns:
+            int: Number of unprocessed PMTs in episodic buffer, 0 on failure.
+        """
         try:
             row = self.engram.execute(
                 "SELECT COUNT(*) FROM episodic_buffer WHERE processed = FALSE"
@@ -627,7 +707,17 @@ class EpisodicMemoryCortex:
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:
-        """Return EMC health and storage stats."""
+        """
+        Return EMC health and storage stats.
+
+        Returns:
+            dict: {
+                episodes, oldest_episode, newest_episode,
+                buffer_total, buffer_pending, db_size_mb,
+                encoding_engine_ready, engram_vector_active, encoding_engine
+            }
+            Empty dict on failure.
+        """
         try:
             ep_row = self.engram.execute(
                 "SELECT COUNT(*) as total, "
@@ -645,17 +735,18 @@ class EpisodicMemoryCortex:
                 if Path(self.engram_gateway).exists() else 0.0
 
             return {
-                "episodes":         ep_row["total"]  if ep_row  else 0,
-                "oldest_episode":   ep_row["oldest"] if ep_row  else None,
-                "newest_episode":   ep_row["newest"] if ep_row  else None,
-                "buffer_total":     buf_row["total"]   if buf_row else 0,
-                "buffer_pending":   buf_row["pending"]  if buf_row else 0,
-                "db_size_mb":       db_size_mb,
-                "encoding_engine_ready":   self._encoding_engine.is_available,
-                "ENCODING_ENGINE":  EMC.ENCODING_ENGINE,
+                "episodes":                 ep_row["total"]  if ep_row  else 0,
+                "oldest_episode":           ep_row["oldest"] if ep_row  else None,
+                "newest_episode":           ep_row["newest"] if ep_row  else None,
+                "buffer_total":             buf_row["total"]   if buf_row else 0,
+                "buffer_pending":           buf_row["pending"]  if buf_row else 0,
+                "db_size_mb":               db_size_mb,
+                "encoding_engine_ready":    self._encoding_engine.is_available,
+                "engram_vector_active":     self._engram_vector,
+                "encoding_engine":          EMC.ENCODING_ENGINE,
             }
-        except Exception as exc:
-            self.logger.error(f"EMC get_stats failed: {exc}")
+        except Exception as e:
+            self.logger.error(f"EMC get_stats failed: {e}")
             return {}
 
     # ── Cleanup ───────────────────────────────────────────────────────────────
@@ -663,7 +754,10 @@ class EpisodicMemoryCortex:
     def cleanup_processed_buffer(self, keep_days: int = 1) -> None:
         """
         Remove processed episodic_buffer rows older than keep_days.
-        Safe to call periodically — processed rows are already in episodes.
+        Safe to call periodically — processed rows are already consolidated into episodes.
+
+        Args:
+            keep_days (int): Number of days to retain processed rows (default: 1)
         """
         try:
             self.engram.execute(
@@ -674,8 +768,8 @@ class EpisodicMemoryCortex:
             )
             self.engram.commit()
             self.logger.debug("EMC buffer cleanup done")
-        except Exception as exc:
-            self.logger.warning(f"EMC buffer cleanup failed: {exc}")
+        except Exception as e:
+            self.logger.warning(f"EMC buffer cleanup failed: {e}")
 
     def close(self) -> None:
         """
@@ -683,6 +777,7 @@ class EpisodicMemoryCortex:
         This releases any open engram gateway resources and ensures proper shutdown of the engram complex.
         """
         self._encoder_running = False
+        self._theta_rhythm.set()                    # Wake up the encoder thread so it can exit cleanly
         if self._encoder_thread:
             self._encoder_thread.join(timeout=3.0)
         if self.engram:
