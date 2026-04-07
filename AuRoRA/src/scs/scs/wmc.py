@@ -216,7 +216,10 @@ class WorkingMemoryCortex:
         Returns:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
         """
-        self._introspect_chunk_load()                # Recompute sustained chunks from scratch as source of truth verification
+        self._sustained_chunks: int = sum(           # Recompute sustained chunks from scratch as source of truth verification
+            _estimate_chunk_count(pmt) 
+            for pmt in self._pmt_slot
+        )
         return {                                     # Return the occupancy of PMT and chunk sustaining in the working memory
             "pmt_count"          : len(self._pmt_slot),
             "pmt_slot_limit"     : self.pmt_slot_limit,
@@ -226,15 +229,6 @@ class WorkingMemoryCortex:
             "global_chunk_limit" : self.global_chunk_limit,
             "chunk_occupancy"    : round(self._sustained_chunks / self.global_chunk_limit * 100, 1) if self.global_chunk_limit > 0 else 0.0
         }
-
-    def _introspect_chunk_load(self) -> None:
-        """
-        Introspect the chunk load of sustained PMTs from scratch as source of truth verification.
-        """
-        self._sustained_chunks: int = sum(           # Introspect the chunk load of sustained PMTs in the slots
-            _estimate_chunk_count(pmt) 
-            for pmt in self._pmt_slot
-        )
 
     @property
     def is_empty(self) -> bool:
