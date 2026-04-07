@@ -234,19 +234,23 @@ class EpisodicBuffer:
         
     def clear_recall_stream(self) -> None:
         """Clear the recall stream before assembling a new memory context."""
-        self.recall_stream.clear()                                             # Clear the content of recall stream
+        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
+            self.recall_stream.clear()                                         # Clear the content of recall stream
 
     def stage_single_episode(self, item: dict) -> None:
         """Stage a single recalled episode into the recall stream."""
-        self.recall_stream.append(item)                                        # Stage a single recalled episode into recall stream
+        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
+            self.recall_stream.append(item)                                    # Stage a single recalled episode into recall stream
 
     def stage_episode_list(self, items: list[dict]) -> None:
         """Extend the recall stream with a list of recalled episodes."""
-        self.recall_stream.extend(items)                                       # Stage a list of recalled episodes into recall stream
+        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
+            self.recall_stream.extend(items)                                   # Stage a list of recalled episodes into recall stream
 
     def assess_recall_stream(self) -> list[dict]:
         """Return the current recall stream for memory context assembly."""
-        return self.recall_stream                                              # Assess the content in recall stream
+        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
+            return list(self.recall_stream)                                    # Assess the stable copy of the content in recall stream
         
 class EpisodicMemoryCortex:
     """
@@ -264,6 +268,7 @@ class EpisodicMemoryCortex:
     
     Thread-safety: 
         Binding stream uses a threading.Lock for safety purpose.
+        Recall stream uses a threading.Lock — guarded via EpisodicBuffer._recall_lock.
         Consolidation cycle is isolated from the main neural thread.
         All engram writes are serialized through _write_lock.
         SQLite WAL mode allows concurrent reads during async writes.
