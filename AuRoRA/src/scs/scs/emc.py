@@ -228,6 +228,10 @@ class EpisodicBuffer:
     _binding_stream: deque[dict] = field(default_factory=deque)                # Evicted PMTs pending to be encoded into episodic memory
     recall_stream: list[dict] = field(default_factory=list)                    # Recalled episodes pending to surface into active cognition context
 
+    def __post_init__(self) -> None:
+        """Set up locks not defined in the episodic buffer schema."""
+        self._recall_lock = threading.Lock()                                   # Guards recall stream mutations for safety in future implementation
+        
     def clear_recall_stream(self) -> None:
         """Clear the recall stream before assembling a new memory context."""
         self.recall_stream.clear()                                             # Clear the content of recall stream
