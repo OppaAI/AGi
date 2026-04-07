@@ -163,20 +163,15 @@ class MemoryCoordinationCore:
             list[dict]: List of message dicts [{role, content}] ready for inference
         """
         
-        # Recall WMC PMTs and EMC episodes concurrently
+        # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
         loop = asyncio.get_running_loop()                                    # Access the main neural pathway
 
-        wmc_pmts_pending = loop.run_in_executor(                             # Recruit a dormant neural thread — run WMC PMT recall on isolated neural pathway
-            None, self.wmc.recall_pmt_schema
-        )
-        emc_episodes_pending = loop.run_in_executor(                         # Recruit another dormant neural thread — run EMC episode recall on isolated neural pathway
+        wmc_pmts = self.wmc.recall_pmt_schema()                              # Recall WMC PMTs in main neural pathway
+        
+        emc_episodes = await loop.run_in_executor(                           # Await EMC episode recall that is on isolated neural pathway
             None, self.emc.recall, user_prompt, CNS.EMC.RECALL_DEPTH
         )
-
-        wmc_pmts, emc_episodes = await asyncio.gather(                       # Await both pending recalls — synchronize into active cognition
-            wmc_pmts_pending, emc_episodes_pending
-        )
-
+        
         # Pass through memory gate — suppress episodes below relevancy threshold
         episodic_scaffold = [                                                # Set up EMC episodic scaffold to stage the relevant episodes
             episode for episode in emc_episodes                              # Process each of the recalled EMC episodes
