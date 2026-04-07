@@ -232,11 +232,11 @@ class EpisodicBuffer:
         """Clear the recall stream before assembling a new memory context."""
         self.recall_stream.clear()                                             # Clear the content of recall stream
 
-    def recall_single_episode(self, item: dict) -> None:
+    def stage_single_episode(self, item: dict) -> None:
         """Stage a single recalled episode into the recall stream."""
         self.recall_stream.append(item)                                        # Stage a single recalled episode into recall stream
 
-    def recall_episode_list(self, items: list[dict]) -> None:
+    def stage_episode_list(self, items: list[dict]) -> None:
         """Extend the recall stream with a list of recalled episodes."""
         self.recall_stream.extend(items)                                       # Stage a list of recalled episodes into recall stream
 
