@@ -179,7 +179,7 @@ class MemoryCoordinationCore:
         ]
 
         # Assemble memory context
-        self.episodic_buffer.recall_stream.clear()                           # Reset recall stream of episodic buffer before assembling memory context
+        self.emc.episodic_buffer.clear_recall_stream()                       # Reset recall stream of episodic buffer before assembling memory context
 
         # Inject relevant EMC episodes as a system message
         if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
@@ -193,7 +193,7 @@ class MemoryCoordinationCore:
                     f"[{date}] {role}: {content} (relevancy: {relevancy:.2f})"
                 )
 
-            self.episodic_buffer.recall_stream.append({                      # Bind the recalled EMC episodes into episodic buffer
+            self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer
                 "role":    "system",
                 "content": "\n".join(recalled_episodes),
             })
@@ -203,7 +203,7 @@ class MemoryCoordinationCore:
             )
 
         # Bind sustained WMC PMTs in chronological order
-        self.episodic_buffer.recall_stream.extend(wmc_pmts)                  # Bind the sustained WMC PMTS into episodic buffer
+        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # Stage the sustained WMC PMTS into episodic buffer
 
         self.logger.debug(                                                   # Log the recalled memory context (WMC PMTs + recalled EMC episodes)
             f"MCC memory context recalled: "
@@ -211,7 +211,7 @@ class MemoryCoordinationCore:
             f"{len(episodic_scaffold)} EMC episodes"
         )
 
-        return self.episodic_buffer.recall_stream                            # Return the memory context staged in episodic buffer
+        return self.emc.episodic_buffer.assess_recall_stream()               # Return the memory context staged in episodic buffer
 
     def assess_memory_schema(self) -> dict:
         """
