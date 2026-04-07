@@ -119,8 +119,7 @@ class MemoryCoordinationCore:
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to episodic buffer
-            loop = asyncio.get_running_loop()                               # Access the main neural pathway
-            loop.run_in_executor(                                           # Recruit a dormant neural thread — run binding on isolated neural pathway
+            asyncio.get_running_loop().run_in_executor(                     # Recruit a dormant neural thread — run binding on isolated neural pathway
                 None, self._bind_to_episodic_buffer, evicted_pmts
             )
             self.logger.debug(                                              # Log the binding transition of evicted PMTs to episodic buffer
@@ -164,11 +163,8 @@ class MemoryCoordinationCore:
         """
         
         # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
-        loop = asyncio.get_running_loop()                                    # Access the main neural pathway
-
         wmc_pmts = self.wmc.recall_pmt_schema()                              # Recall WMC PMTs in main neural pathway
-        
-        emc_episodes = await loop.run_in_executor(                           # Await EMC episode recall that is on isolated neural pathway
+        emc_episodes = await asyncio.get_running_loop().run_in_executor(     # Await EMC episode recall that is on isolated neural pathway
             None, self.emc.recall, user_prompt, CNS.EMC.RECALL_DEPTH
         )
         
