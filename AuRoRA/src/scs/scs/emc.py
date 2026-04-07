@@ -227,7 +227,23 @@ class EpisodicBuffer:
     """
     _binding_stream: deque[dict] = field(default_factory=deque)                # Evicted PMTs pending to be encoded into episodic memory
     recall_stream: list[dict] = field(default_factory=list)                    # Recalled episodes pending to surface into active cognition context
-    
+
+    def clear_recall_stream(self) -> None:
+        """Clear the recall stream before assembling a new memory context."""
+        self.recall_stream.clear()                                             # Clear the content of recall stream
+
+    def recall_single_episode(self, item: dict) -> None:
+        """Stage a single recalled episode into the recall stream."""
+        self.recall_stream.append(item)                                        # Stage a single recalled episode into recall stream
+
+    def recall_episode_list(self, items: list[dict]) -> None:
+        """Extend the recall stream with a list of recalled episodes."""
+        self.recall_stream.extend(items)                                       # Stage a list of recalled episodes into recall stream
+
+    def assess_recall_stream(self) -> list[dict]:
+        """Return the current recall stream for memory context assembly."""
+        return self.recall_stream                                              # Assess the content in recall stream
+        
 class EpisodicMemoryCortex:
     """
     Episodic Memory Cortex.
