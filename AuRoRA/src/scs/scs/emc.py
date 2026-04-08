@@ -93,8 +93,8 @@ TODO:
 """
 
 # System libraries
-import json                                 # For serializing engram encodings to JSON (TODO: remove when implmented with sqlite-vec)
 import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implmented with sqlite-vec)
+import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
 import struct                               # For packing semantic vectors (fp32) into engram storage
 import threading                            # For background encoding of engrams
@@ -469,6 +469,9 @@ class EpisodicMemoryCortex:
         worker_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)
         worker_conn.row_factory = sqlite3.Row
         worker_conn.execute("PRAGMA journal_mode=WAL;")
+
+        # Yield processing priority to active cognition threads
+        os.nice(10)                                             # Encoding is non-latency-sensitive — defer to dedicated neural threads
 
         # Load sqlite-vec into worker connection if engram vector search is active
         if self._engram_vector:
