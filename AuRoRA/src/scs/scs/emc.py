@@ -380,9 +380,9 @@ class EpisodicMemoryCortex:
         # Create episode vector virtual schema for L2 distance semantic search
         # Created separately — only if engram vector search is activated
         if self._engram_vector:                                             # If engram vector search is activated,
-            self.engram.execute("""                                         # Create a virtual schema for the L2 distance semantic search
+            self.engram.execute(f"""                                        -- Create a virtual schema for the L2 distance semantic search
                 CREATE VIRTUAL TABLE IF NOT EXISTS episode_vectors USING vec0(
-                    encoding FLOAT[EMC.ENCODING_DIM]                        -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
+                    encoding FLOAT[{EMC.ENCODING_DIM}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
                 )
             """)
             self.engram.commit()                                            # Commit the changes to the engram
