@@ -216,10 +216,6 @@ class WorkingMemoryCortex:
         Returns:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
         """
-        self._sustained_chunks: int = sum(           # Recompute sustained chunks from scratch as source of truth verification
-            _estimate_chunk_count(pmt) 
-            for pmt in self._pmt_slot
-        )
         return {                                     # Return the occupancy of PMT and chunk sustaining in the working memory
             "pmt_count"          : len(self._pmt_slot),
             "pmt_slot_limit"     : self.pmt_slot_limit,
