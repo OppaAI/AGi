@@ -369,7 +369,7 @@ class EpisodicMemoryCortex:
                 date       TEXT    NOT NULL,                                -- Date of the episode
                 speaker    TEXT    NOT NULL,                                -- Speaker of the episode (TODO: M2 - user_id)
                 content    TEXT    NOT NULL,                                -- Content of the episode
-                encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into 768 dim vectors)
+                encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
                 created_at TEXT    DEFAULT (datetime('now'))                -- Timestamp of when the episode was created
             );
             CREATE INDEX IF NOT EXISTS idx_episodes_date                    -- Temporal recall axis — get_episodes_for_date() and Dream Cycle (M2)
@@ -382,7 +382,7 @@ class EpisodicMemoryCortex:
         if self._engram_vector:                                             # If engram vector search is activated,
             self.engram.execute("""                                         # Create a virtual schema for the L2 distance semantic search
                 CREATE VIRTUAL TABLE IF NOT EXISTS episode_vectors USING vec0(
-                    encoding FLOAT[768]                                     -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
+                    encoding FLOAT[EMC.ENCODING_DIM]                        -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
                 )
             """)
             self.engram.commit()                                            # Commit the changes to the engram
