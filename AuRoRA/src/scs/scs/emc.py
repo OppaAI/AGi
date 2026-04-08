@@ -588,19 +588,11 @@ class EpisodicMemoryCortex:
         try:
             if self._engram_vector:
                 # L2 distance KNN search via engram vector (SQLite-vec)
-                query_blob = struct.pack(f"{len(query_vec)}f", *query_vec)          # Pack query vector as binary float32
+                # Structure: MATCH + k in WHERE, date filters in WHERE, one ORDER BY, one LIMIT
+                query_blob = struct.pack(f"{len(query_vec)}f", *query_vec)
 
-                sql = """
-                    SELECT e.timestamp, e.date, e.speaker, e.content, v.distance
-                    FROM episode_vectors v
-                    JOIN episodes e ON e.id = v.rowid
-                    WHERE v.encoding MATCH ?
-                      AND v.k = ?
-                    ORDER BY v.distance
-                """
-                
+                where  = ["v.encoding MATCH ?", "v.k = ?"]
                 params = [query_blob, top_k]
-                where = []
 
                 if date_from:
                     where.append("e.date >= ?")
@@ -608,11 +600,17 @@ class EpisodicMemoryCortex:
                 if date_to:
                     where.append("e.date <= ?")
                     params.append(date_to)
-                if where:
-                    sql += " AND " + " AND ".join(where)
 
-                sql += " ORDER BY v.distance LIMIT ?"
                 params.append(top_k)
+
+                sql = f"""
+                    SELECT e.timestamp, e.date, e.speaker, e.content, v.distance
+                    FROM episode_vectors v
+                    JOIN episodes e ON e.id = v.rowid
+                    WHERE {(" AND ".join(where))}
+                    ORDER BY v.distance
+                    LIMIT ?
+                """
 
                 rows = self.engram.execute(sql, params).fetchall()
                 if not rows:
@@ -636,9 +634,10 @@ class EpisodicMemoryCortex:
                 ]
 
             else:
-                sql    = "SELECT timestamp, date, speaker, content, encoding FROM episodes"
-                params = []
+                # Fallback to cosine similarity search — pre-filter to recent episodes to bound memory usage
+                # Full table scan is avoided by limiting candidates before scoring
                 where  = []
+                params = []
 
                 if date_from:
                     where.append("date >= ?")
@@ -646,9 +645,18 @@ class EpisodicMemoryCortex:
                 if date_to:
                     where.append("date <= ?")
                     params.append(date_to)
-                if where:
-                    sql += " WHERE " + " AND ".join(where)
 
+                where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+                params.append(top_k * EMC.RECALL_POOL)  # Pre-filter: score only the most recent candidates
+
+                sql = (
+                    f"SELECT timestamp, date, speaker, content, encoding "
+                    f"FROM episodes "
+                    f"{where_clause} "
+                    f"ORDER BY rowid DESC LIMIT ?"
+                )
+
+                
                 rows = self.engram.execute(sql, params).fetchall()
                 if not rows:
                     return []

@@ -34,7 +34,7 @@ from std_msgs.msg import String
 
 import httpx
 
-from scs.mcc import MCC
+from scs.mcc import MemoryCoordinationCore
 
 
 # ── vLLM config ───────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ class CNC(Node):
         self.get_logger().info("=" * 60)
 
         # ── Memory ────────────────────────────────────────────────
-        self.mcc = MCC(logger=self.get_logger())
+        self.mcc = MemoryCoordinationCore(logger=self.get_logger())
 
         # ── asyncio event loop (runs in dedicated thread) ─────────
         self._loop = asyncio.new_event_loop()

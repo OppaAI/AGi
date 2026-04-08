@@ -99,7 +99,6 @@ class MemoryCoordinationCore:
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
-        self.episodic_buffer = self.emc.episodic_buffer                                     # Bind to shared episodic buffer in EMC for memory coordination
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
     async def register_memory(self, role: str, content: str) -> None:
@@ -137,7 +136,7 @@ class MemoryCoordinationCore:
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
                 self.emc.bind_pmt(                          # Bind each evicted PMT into episodic buffer
-                    speaker = evicted_pmt["role"],          # Speaker ID (user or assistant) (TODO: M2 - Need to get the user ID)
+                    speaker = evicted_pmt["speaker"],       # Speaker ID (user or assistant) (TODO: M2 - Need to get the user ID)
                     content = evicted_pmt["content"],       # Content of PMT
                     timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
                 )
@@ -153,7 +152,8 @@ class MemoryCoordinationCore:
         Structure:
             [WMC PMTs (chronological)]
             + [EMC episodes injected into memory context (if relevant)]
-        EMC recall runs concurrently with WMC PMT recall — no added latency.
+        WMC PMTs are recalled directly in the main neural pathway, while 
+        EMC episodes are recalled on an isolated neural pathway — awaited before returning.
         Awaits both before returning — inference requires full memory context.
         
         Args:
@@ -190,11 +190,11 @@ class MemoryCoordinationCore:
             recalled_episodes = ["Relevant memories from past interactions:"]
             for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
                 date        = episode.get("date", "unknown date")            # Retrieve the date of the EMC episode
-                role        = episode.get("role", "unknown")                 # Retrieve the role of the EMC episode
+                speaker     = episode.get("speaker", "unknown")              # Retrieve the speaker of the EMC episode
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
                 relevancy   = episode.get("relevancy", 0.0)                  # Retrieve the relevancy score of the EMC episode
                 recalled_episodes.append(                                    # Stage the content of EMC episode into the episodic buffer
-                    f"[{date}] {role}: {content} (relevancy: {relevancy:.2f})"
+                    f"[{date}] {speaker}: {content} (relevancy: {relevancy:.2f})"
                 )
 
             self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer
