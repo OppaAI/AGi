@@ -428,13 +428,25 @@ class EpisodicMemoryCortex:
     def _start_encoder(self) -> None:
         """
         Start background encoding cycle thread.
+        Recovers orphaned unprocessed PMTs from SQLite in batches to avoid
+        a large RAM spike after a crash during a long session.
         """
-        # Prepend orphan recovery before thread start
-        orphaned = self.engram.execute(
-            "SELECT timestamp, date, speaker, content "
-            "FROM episodic_buffer WHERE processed = FALSE ORDER BY id"
-        ).fetchall()
-        if orphaned:
+        # Batch orphan recovery — drain in chunks of EMC.ORPHAN_BATCH_SIZE
+        # Avoids loading thousands of unprocessed PMTs into _binding_stream at once
+        offset = 0
+        total_recovered = 0
+
+        while True:
+            orphaned = self.engram.execute(
+                "SELECT timestamp, date, speaker, content "
+                "FROM episodic_buffer WHERE processed = FALSE "
+                "ORDER BY id LIMIT ? OFFSET ?",
+                [EMC.ORPHAN_BATCH_SIZE, offset]
+            ).fetchall()
+
+            if not orphaned:
+                break
+
             with self._episodic_buffer_lock:
                 for row in orphaned:
                     self.episodic_buffer._binding_stream.append({
@@ -442,13 +454,18 @@ class EpisodicMemoryCortex:
                         "date":      row["date"],
                         "speaker":   row["speaker"],
                         "content":   row["content"],
-                        "recovered": True,                              # Flag as recovered — already in SQLite, no re-insert needed
+                        "recovered": True,          # Flag as recovered — already in SQLite, no re-insert needed
                     })
+
+            total_recovered += len(orphaned)
+            offset          += EMC.ORPHAN_BATCH_SIZE
+
+        if total_recovered:
             self.logger.info(
-                f"⚡ EMC recovered {len(orphaned)} orphaned PMT(s) from engram → _binding_stream"
+                f"⚡ EMC recovered {total_recovered} orphaned PMT(s) from engram → _binding_stream"
             )
             self._theta_rhythm.set()
-           
+
         self._encoder_running = True
         self._encoder_thread  = threading.Thread(
             target=self._encoding_cycle,
@@ -612,6 +629,9 @@ class EpisodicMemoryCortex:
                     LIMIT ?
                 """
 
+                # self.engram is the main connection — accessed cross-thread here.
+                # Safe for reads under WAL mode (concurrent readers never block).
+                # All writes are serialized through _write_lock on worker_conn in _encoding_cycle.
                 rows = self.engram.execute(sql, params).fetchall()
                 if not rows:
                     return []

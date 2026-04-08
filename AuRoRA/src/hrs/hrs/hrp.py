@@ -47,9 +47,10 @@ class AGi:                                       # Amazing Grace infrastructure
             ENCODING_DIM: int           = 768    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENGRAM_CHUNK_LIMIT: int     = 75     # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
+            ORPHAN_BATCH_SIZE: int      = 50     # [INTRINSIC] Max orphaned PMTs loaded into binding stream per recovery batch
             RECALL_RESERVE: int         = 300    # [INTRINSIC] Cortical capacity reserved for episodic recall
             RECALL_DEPTH: int           = 3      # [INTRINSIC] Maximum number of engrams surfaced per turn
-            RECALL_POOL: int            = 20     # [INTRINSIC] Number of recent engrams to be searched during recall
+            RECALL_POOL: int            = 20     # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL engrams scored)
             RECALL_TIMEOUT: float       = 5.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                  # covers encode_query (~500-900ms) + KNN search
                                                  # TODO: drop to 3.0 if model is genuinely int4 quantized

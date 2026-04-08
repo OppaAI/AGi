@@ -41,7 +41,7 @@ Terminology:
     Threshold   — minimum relevancy score for an EMC episode to be injected into memory context
 
 Public interface:
-    await mcc.register_memory(role, content)
+    await mcc.register_memory(speaker, content)
     context = await mcc.assemble_memory_context(user_prompt)
     mcc.report_memory_stats()
     mcc.forget_memory()
@@ -101,7 +101,7 @@ class MemoryCoordinationCore:
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def register_memory(self, role: str, content: str) -> None:
+    async def register_memory(self, speaker: str, content: str) -> None:
         """
         Register new PMT into working memory and bind any evicted PMTs to episodic buffer.
 
@@ -109,11 +109,11 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
-            role (str): Role label of the PMT ("user" or "assistant")
+            speaker (str): Speaker ID of the PMT (e.g., "user" or "assistant")
             content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)        # Fill the induced PMT into WMC, collect any evicted PMTs
+        evicted_pmts = self.wmc.fill_pmt(speaker=speaker, content=content)  # Fill the induced PMT into WMC, collect any evicted PMTs
             
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
@@ -131,7 +131,7 @@ class MemoryCoordinationCore:
         Runs in isolated neural pathway — never blocks active cognition.
 
         Args:
-            evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{speaker, content, timestamp}]
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
@@ -143,7 +143,6 @@ class MemoryCoordinationCore:
         except Exception as e:                             # If binding lapse occurs, log and continue
             self.logger.error(                             # Log the binding lapse
                 f"EMC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
-                exc_info=True
             )
             
     async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
@@ -159,7 +158,7 @@ class MemoryCoordinationCore:
         Args:
             user_prompt (str): Current user message (used as EMC recall query)
         Returns:
-            list[dict]: List of message dicts [{role, content}] ready for inference
+            list[dict]: List of message dicts [{speaker, content}] ready for inference
         """
         
         # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
@@ -198,7 +197,7 @@ class MemoryCoordinationCore:
                 )
 
             self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer
-                "role":    "system",
+                "speaker": "system",
                 "content": "\n".join(recalled_episodes),
             })
 

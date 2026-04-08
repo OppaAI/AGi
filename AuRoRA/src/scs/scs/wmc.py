@@ -45,7 +45,7 @@ Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
 Public interface:
-    wmc.fill_pmt(role, content) → list[evicted_pmt]
+    wmc.fill_pmt(speaker, content) → list[evicted_pmt]
     wmc.recall_pmt_schema() → list[dict]
     wmc.forget_pmt_schema() → list[dict]
     wmc.assess_pmt_schema() → dict
@@ -69,12 +69,12 @@ def _estimate_chunk_count(pmt: dict) -> int:
     Estimate the number of chunks in the given PMT.
 
     Args:
-        pmt (dict): a conversation turn with 'role' and 'content'
+        pmt (dict): a conversation turn with 'speaker' and 'content'
 
     Returns:
         int: Number of chunks, including overhead for role label and formatting
     """
-    role: str = pmt.get("role", "")                                                                      # Retrieve role label from PMT. 
+    role: str = pmt.get("speaker", "")                                                                      # Retrieve role label from PMT. 
     content: str = pmt.get("content", "")                                                                # Retrieve content from PMT.
     role_chunk_count: int = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK                # Calculate chunks for role label
     content_chunk_count: int = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
@@ -118,7 +118,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
         
-    def fill_pmt(self, role: str, content: str) -> list[dict]:
+    def fill_pmt(self, speaker: str, content: str) -> list[dict]:
         """
         Fill an induced PMT into working memory.
 
@@ -126,22 +126,22 @@ class WorkingMemoryCortex:
         them to EMC asynchronously.
 
         Args:
-            role (str): The role label ("user" or "assistant") to be induced in working memory
+            speaker (str): The speaker ID ("user" or "assistant") to be induced in working memory
             content (str): The content of the PMT to be induced in working memory
 
         Returns:
-            list[dict]: list of evicted PMTs [{role, content, timestamp}]
+            list[dict]: list of evicted PMTs [{speaker, content, timestamp}]
         """
-        # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for role and overhead
-        role_chunk_count: int   = (len(role) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for role label to determine remaining capacity for content
-        max_content_chunks: int = self.global_chunk_limit - WMC.PMT_OVERHEAD - role_chunk_count # Calculate maximum chunks available for content
+        # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for speaker and overhead
+        speaker_chunk_count: int   = (len(speaker) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for speaker ID to determine remaining capacity for content
+        max_content_chunks: int = self.global_chunk_limit - WMC.PMT_OVERHEAD - speaker_chunk_count # Calculate maximum chunks available for content
         max_content_length: int = max_content_chunks * WMC.UNITS_PER_CHUNK                      # Calculate maximum content length based on remaining chunk capacity
         if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
             content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
             self.logger.warning(f"WMC content truncated to {max_content_chunks} chunks")        # Log the warning of truncation of the content
         
         induced_pmt: dict = {                          # Combine the elements of induced PMT into one register for filling
-            "role":      role,                         # Register the role label of PMT
+            "speaker":   speaker,                      # Register the speaker ID of PMT
             "content":   content,                      # Register the content of the PMT
             "timestamp": datetime.now().isoformat(),   # Register the inducing time of the PMT
         }
@@ -160,7 +160,7 @@ class WorkingMemoryCortex:
             evicted_chunks: int = _estimate_chunk_count(evicted_pmt)                        # Calculate the chunk size of the evicted PMT
             self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)   # Update the chunk size of the working memory, cannot be negative
             self.logger.debug(                                                              # Log the eviction of the receding PMT
-                f"WMC evict → EMC: [{evicted_pmt['role']}] "
+                f"WMC evict → EMC: [{evicted_pmt['speaker']}] "
                 f"size={evicted_chunks} chunks"
             )
 
@@ -168,7 +168,7 @@ class WorkingMemoryCortex:
         self._sustained_chunks += induced_pmt_chunks      # Update the chunk size of the working memory
 
         self.logger.debug(                                # Log the filling and eviction for development/troubleshooting
-            f"WMC filled [{role}] | "
+            f"WMC filled [{speaker}] | "
             f"sustained={len(self._pmt_slot)} | "
             f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
             f"evicted={len(evicted_pmt_slot)}"
@@ -184,10 +184,10 @@ class WorkingMemoryCortex:
         Timestamps are only used for logging and memory management.
 
         Returns:
-            list[dict]: List of sustained PMTs [{role, content}]
+            list[dict]: List of sustained PMTs [{speaker, content}]
         """
         return [                                                            # Return the list of sustained PMT schema in ascending chronological order
-            {"role": pmt["role"], "content": pmt["content"]}
+            {"speaker": pmt["speaker"], "content": pmt["content"]}
             for pmt in self._pmt_slot
         ]
 
@@ -199,7 +199,7 @@ class WorkingMemoryCortex:
         caller chooses to save the returned list.
 
         Returns:
-            list[dict]: List of forgotten PMTs [{role, content, timestamp}]
+            list[dict]: List of forgotten PMTs [{speaker, content, timestamp}]
         """
         forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
         self._pmt_slot.clear()                                      # Wipe out working memory

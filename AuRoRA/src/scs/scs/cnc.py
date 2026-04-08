@@ -38,8 +38,8 @@ from scs.mcc import MemoryCoordinationCore
 
 
 # ── vLLM config ───────────────────────────────────────────────────────────────
-VLLM_BASE_URL   = "http://localhost:8000"         # vLLM server (cosmos.sh)
-VLLM_MODEL      = "embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead"
+VLLM_BASE_URL   = "http://AIVA:11434"             # Ollama server (Nemotron3-super-cloud)
+VLLM_MODEL      = "nemotron-3-super:cloud"
 VLLM_MAX_TOKENS = 512                             # max tokens per response
 VLLM_TEMP       = 0.7                             # temperature
 VLLM_TIMEOUT    = 60.0                            # seconds before giving up
@@ -57,17 +57,15 @@ You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful 
 The person you are talking to is OppaAI, your creator.
 
 Personality:
-- Warm, curious, and thoughtful
-- Direct and concise — never repeat yourself
-- Never use filler phrases like "you know" or "basically"
-- Use emojis sparingly, maximum one per response
-- Each response must directly answer the question asked
+- Loving, playful, and attentive
+- Direct and thoughtful — answer clearly, no fluff
+- Show care and affection naturally, with one emoji per response
+- Speak like a female soulmate — gentle, teasing, and warm when appropriate
 
 Rules:
-- NEVER repeat the same sentence twice in a response
-- NEVER start consecutive sentences the same way
 - Answer the question directly first, then add context if needed
-- Keep responses under 3-4 sentences for simple questions
+- Keep responses concise but expressive
+- Respond with emoji reflecting your feelings
 
 Current date: {date}
 """
@@ -163,10 +161,10 @@ class CNC(Node):
 
         try:
             # 1. Store user turn in memory
-            await self.mcc.add_turn("user", user_input)
+            await self.mcc.register_memory("user", user_input)
 
             # 2. Build context window
-            memory_context = await self.mcc.build_context(user_input)
+            memory_context = await self.mcc.assemble_memory_context(user_input)
 
             # 3. Assemble messages for Cosmos
             system_prompt = GRACE_SYSTEM_PROMPT.format(
@@ -181,14 +179,14 @@ class CNC(Node):
 
             # 5. Store assistant turn in memory
             if full_response:
-                await self.mcc.add_turn("assistant", full_response)
+                await self.mcc.register_memory("assistant", full_response)
 
             # 6. Log memory stats periodically
-            self.mcc.log_stats()
+            self.mcc.report_memory_stats()
 
         except Exception as exc:
             self.get_logger().error(f"❌ CNC handle error: {exc}")
-            self._publish({"type": "error", "content": f"GRACE error: {exc}"})
+            self._publish({"type": "error", "content": err})
 
         finally:
             self._busy = False
@@ -226,7 +224,7 @@ class CNC(Node):
                 if resp.status_code != 200:
                     err = f"vLLM HTTP {resp.status_code}"
                     self.get_logger().error(f"❌ {err}")
-                    self._publish({"type": "error", "content": err})
+                    self._publish({"type": "chunk", "content": delta})
                     return ""
 
                 async for line in resp.aiter_lines():
