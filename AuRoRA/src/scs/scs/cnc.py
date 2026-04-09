@@ -170,7 +170,7 @@ class CNC(Node):
             system_prompt = GRACE_SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d")
             )
-            messages = [{"role": "system", "content": system_prompt}]
+            messages = [{"speaker": "system", "content": system_prompt}]
             messages.extend(memory_context)
 
             # 4. Stream from vLLM

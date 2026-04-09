@@ -72,13 +72,13 @@ def _estimate_chunk_count(pmt: dict) -> int:
         pmt (dict): a conversation turn with 'speaker' and 'content'
 
     Returns:
-        int: Number of chunks, including overhead for role label and formatting
+        int: Number of chunks, including overhead for speaker ID and formatting
     """
-    role: str = pmt.get("speaker", "")                                                                      # Retrieve role label from PMT. 
+    speaker: str = pmt.get("speaker", "")                                                                # Retrieve speaker ID from PMT. 
     content: str = pmt.get("content", "")                                                                # Retrieve content from PMT.
-    role_chunk_count: int = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK                # Calculate chunks for role label
+    speaker_chunk_count: int = (len(speaker) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK          # Calculate chunks for speaker ID
     content_chunk_count: int = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
-    return role_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                     # Return total chunk count (role label + content + overhead)
+    return speaker_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                  # Return total chunk count (speaker ID + content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -180,7 +180,7 @@ class WorkingMemoryCortex:
         """
         Recall sustaining PMT schema for context window construction.
         Return PMT schema in ascending chronological order.
-        Only includes role + content — timestamp stripped for LLM.
+        Only includes speaker + content — timestamp stripped for LLM.
         Timestamps are only used for logging and memory management.
 
         Returns:
