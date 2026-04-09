@@ -331,7 +331,7 @@ class EpisodicMemoryCortex:
             self._encoder_running = False                                   # Indicate that encoding cycle not yet running
             self._theta_rhythm = threading.Event()                          # Initialize the theta rhythm for encoding cycle
             self._encoder_thread: Optional[threading.Thread] = None         # Initialize background neural thread
-            self._start_encoder()                                           # Start encoding cycle in the background
+            self._init_encoding_cycle()                                     # Start encoding cycle in the background
         except RuntimeError as e:                                           # If failed to initialize the encoding cycle
             self.logger.error(f"❌ Encoding cycle initialization failed → {e}")   # Log the failure to initialize the encoding cycle
             raise                                                           # Raise the anomaly to the caller
@@ -403,79 +403,77 @@ class EpisodicMemoryCortex:
         Returns:
             bool: True on success, False on failure
         """
-        pmt_date = timestamp[:10]
-        pmt: dict = {"timestamp": timestamp, "date": pmt_date,
-             "speaker": speaker, "content": content[:2000]}
+        pmt_date = timestamp[:10]                                                   # Extract the date from the timestamp
+        pmt: dict = {                                                               # Package the PMT data into a packet
+            "timestamp": timestamp,                                                 # Timestamp of PMT induced into WMC
+            "date":      pmt_date,                                                  # Date of PMT induced into WMC
+            "speaker":   speaker,                                                   # User ID or assistant ID
+            "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # Truncate content to the engram content limit
+        }
 
-        try:
-            with self._episodic_buffer_lock:
-                self.episodic_buffer._binding_stream.append(pmt)
-            self.engram.execute(
-                "INSERT INTO episodic_buffer (timestamp, date, speaker, content) "
-                "VALUES (?, ?, ?, ?)",
-                [timestamp, pmt_date, speaker, content[:2000]],
-            )
-            self.engram.commit()
-            self._theta_rhythm.set()
-            self.logger.debug(
+        try:                                                                        # Attempt to bind the PMT to the episodic buffer
+            with self._episodic_buffer_lock:                                        # Acquire the lock to prevent race conditions
+                self.episodic_buffer._binding_stream.append(pmt)                    # Add the PMT to the binding stream
+            self._theta_rhythm.set()                                                # Set the theta rhythm to trigger encoding cycle
+            self.logger.debug(                                                      # Log the binding of the PMT to the episodic buffer
                 f"EMC buffer ← [{speaker}] {content[:40]}…"
             )
-            return True
+            return True                                                             # Indicate successful binding
         except Exception as e:
-            self.logger.warning(f"EMC binding PMT failed: {e}")
-            return False
+            self.logger.warning(f"EMC binding PMT failed: {e}")                     # Log the failure to bind the PMT to the episodic buffer
+            return False                                                            # Report failure to bind the PMT to the episodic buffer
 
-    def _start_encoder(self) -> None:
+    def _init_encoding_cycle(self) -> None:
         """
-        Start background encoding cycle thread.
+        Initialize the dormant encoding cycle thread.
         Recovers orphaned unprocessed PMTs from SQLite in batches to avoid
         a large RAM spike after a crash during a long session.
         """
         # Batch orphan recovery — drain in chunks of EMC.ORPHAN_BATCH_SIZE
         # Avoids loading thousands of unprocessed PMTs into _binding_stream at once
-        offset = 0
-        total_recovered = 0
+        offset = 0                                                  # Initialize the offset to 0
+        total_recovered = 0                                         # Initialize the total recovered to 0
 
-        while True:
-            orphaned = self.engram.execute(
-                "SELECT timestamp, date, speaker, content "
-                "FROM episodic_buffer WHERE processed = FALSE "
-                "ORDER BY id LIMIT ? OFFSET ?",
-                [EMC.ORPHAN_BATCH_SIZE, offset]
-            ).fetchall()
+        while True:                                                 # Keep recovering orphans in batches
+            orphaned = self.engram.execute(                         # Query the engram for orphaned PMTs
+                "SELECT timestamp, date, speaker, content "         # Collect the timestamp, date, speaker, and content
+                "FROM episodic_buffer WHERE processed = FALSE "     # Choose PMTs that are not processed
+                "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
+                [EMC.ORPHAN_BATCH_SIZE, offset]                     # Process PMTs by batch size
+            ).fetchall()                                            # Fetch all the orphaned PMTs
 
-            if not orphaned:
-                break
+            if not orphaned:                                        # If no more orphans to recover, break
+                break                                               # Stop recovering orphans
 
-            with self._episodic_buffer_lock:
-                for row in orphaned:
-                    self.episodic_buffer._binding_stream.append({
-                        "timestamp": row["timestamp"],
-                        "date":      row["date"],
-                        "speaker":   row["speaker"],
-                        "content":   row["content"],
-                        "recovered": True,          # Flag as recovered — already in SQLite, no re-insert needed
+            with self._episodic_buffer_lock:                        # Acquire the lock to prevent race conditions
+                for row in orphaned:                                # Iterate through each orphaned PMT
+                    self.episodic_buffer._binding_stream.append({   # Add the orphaned PMT to the binding stream
+                        "timestamp": row["timestamp"],              # Timestamp of the PMT
+                        "date":      row["date"],                   # Date of the PMT
+                        "speaker":   row["speaker"],                # Speaker of the PMT
+                        "content":   row["content"],                # Content of the PMT
+                        "recovered": True,                          # Flag as already recovered into binding stream
                     })
 
-            total_recovered += len(orphaned)
-            offset          += EMC.ORPHAN_BATCH_SIZE
+            total_recovered += len(orphaned)                        # Increment the total recovered count by the number of orphaned PMTs
+            offset          += EMC.ORPHAN_BATCH_SIZE                # Increment the offset by the batch size
 
-        if total_recovered:
-            self.logger.info(
-                f"⚡ EMC recovered {total_recovered} orphaned PMT(s) from engram → _binding_stream"
+        if total_recovered:                                         # If any PMTs were recovered,
+            self.logger.info(                                       # Log the recovery of orphaned PMTs
+                f"⚡ EMC recovered {total_recovered} orphaned PMT(s) from engram → binding stream"
             )
-            self._theta_rhythm.set()
+            self._theta_rhythm.set()                                # Set the theta rhythm to trigger encoding
 
-        self._encoder_running = True
-        self._encoder_thread  = threading.Thread(
-            target=self._encoding_cycle,
-            name="emc-encoding-cycle",
-            daemon=True,
+        self._encoder_running = True                                # Indicate the encoding cycle is running
+        self._encoder_thread  = threading.Thread(                   # Assign a neural thread for the encoding cycle
+            target=self._run_encoding_cycle,                        # Execute the encoding cycle
+            name="emc-encoding-cycle",                              # Name the thread for future reference
+            daemon=True,                                            # Set the thread to run in the background
         )
-        self._encoder_thread.start()
-        self.logger.info("🔄 EMC encoding cycle started")
+        self._encoder_thread.start()                                # Start the neural thread of encoding cycle
+        self.logger.info("🔄 EMC encoding cycle started")           # Log the start of encoding cycle
 
-    def _encoding_cycle(self):
+    def _run_encoding_cycle(self) -> None:
         """
         Event-driven consolidation — drains episodic_buffer into episodes.
         Wakes only when buffer has episodes (sharp-wave ripple pattern).
@@ -522,7 +520,16 @@ class EpisodicMemoryCortex:
             for pmt in snapshot:
                 if not self._encoder_running:
                     break  # respect stop signal mid-ripple
-    
+
+                # Write to episodic_buffer (crash-safe record) before encoding
+                with self._write_lock:
+                    worker_conn.execute(
+                        "INSERT INTO episodic_buffer (timestamp, date, speaker, content) "
+                        "VALUES (?, ?, ?, ?)",
+                        [pmt["timestamp"], pmt["date"], pmt["speaker"], pmt["content"]],
+                    )
+                    worker_conn.commit()
+
                 # Encode the PMT content into a semantic vector
                 vec = self._encoding_engine.encode(pmt["content"], is_cue=False)
                 if not vec:

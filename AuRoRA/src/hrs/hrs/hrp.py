@@ -47,6 +47,7 @@ class AGi:                                       # Amazing Grace infrastructure
             ENCODING_DIM: int           = 768    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENGRAM_CHUNK_LIMIT: int     = 300    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
+            ENGRAM_CONTENT_LIMIT: int   = 2000   # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
             ORPHAN_BATCH_SIZE: int      = 50     # [INTRINSIC] Max orphaned PMTs loaded into binding stream per recovery batch
             RECALL_RESERVE: int         = 300    # [INTRINSIC] Cortical capacity reserved for episodic recall
             RECALL_DEPTH: int           = 5      # [INTRINSIC] Maximum number of engrams surfaced per turn
