@@ -109,7 +109,7 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
-            speaker (str): Speaker ID of the PMT (e.g., "user" or "assistant")
+            speaker (str): user ID of the PMT (e.g., "user" or "assistant")
             content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
@@ -136,7 +136,7 @@ class MemoryCoordinationCore:
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
                 self.emc.bind_pmt(                          # Bind each evicted PMT into episodic buffer
-                    speaker = evicted_pmt["speaker"],       # Speaker ID (user or assistant) (TODO: M2 - Need to get the user ID)
+                    speaker = evicted_pmt["speaker"],       # user ID (user or assistant) (TODO: M2 - Need to get the user ID)
                     content = evicted_pmt["content"],       # Content of PMT
                     timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
                 )

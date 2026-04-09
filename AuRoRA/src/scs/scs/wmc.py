@@ -72,13 +72,13 @@ def _estimate_chunk_count(pmt: dict) -> int:
         pmt (dict): a conversation turn with 'speaker' and 'content'
 
     Returns:
-        int: Number of chunks, including overhead for speaker ID and formatting
+        int: Number of chunks, including overhead for user ID and formatting
     """
-    speaker: str = pmt.get("speaker", "")                                                                # Retrieve speaker ID from PMT. 
+    speaker: str = pmt.get("speaker", "")                                                                # Retrieve user ID from PMT. 
     content: str = pmt.get("content", "")                                                                # Retrieve content from PMT.
-    speaker_chunk_count: int = (len(speaker) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK          # Calculate chunks for speaker ID
+    speaker_chunk_count: int = (len(speaker) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK          # Calculate chunks for user ID
     content_chunk_count: int = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
-    return speaker_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                  # Return total chunk count (speaker ID + content + overhead)
+    return speaker_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                  # Return total chunk count (user ID + content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -126,14 +126,14 @@ class WorkingMemoryCortex:
         them to EMC asynchronously.
 
         Args:
-            speaker (str): The speaker ID ("user" or "assistant") to be induced in working memory
+            speaker (str): The user ID ("user" or "assistant") to be induced in working memory
             content (str): The content of the PMT to be induced in working memory
 
         Returns:
             list[dict]: list of evicted PMTs [{speaker, content, timestamp}]
         """
         # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for speaker and overhead
-        speaker_chunk_count: int   = (len(speaker) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for speaker ID to determine remaining capacity for content
+        speaker_chunk_count: int   = (len(speaker) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for user ID to determine remaining capacity for content
         max_content_chunks: int = self.global_chunk_limit - WMC.PMT_OVERHEAD - speaker_chunk_count # Calculate maximum chunks available for content
         max_content_length: int = max_content_chunks * WMC.UNITS_PER_CHUNK                      # Calculate maximum content length based on remaining chunk capacity
         if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
@@ -141,7 +141,7 @@ class WorkingMemoryCortex:
             self.logger.warning(f"WMC content truncated to {max_content_chunks} chunks")        # Log the warning of truncation of the content
         
         induced_pmt: dict = {                          # Combine the elements of induced PMT into one register for filling
-            "speaker":   speaker,                      # Register the speaker ID of PMT
+            "speaker":   speaker,                      # Register the user ID of PMT
             "content":   content,                      # Register the content of the PMT
             "timestamp": datetime.now().isoformat(),   # Register the inducing time of the PMT
         }
