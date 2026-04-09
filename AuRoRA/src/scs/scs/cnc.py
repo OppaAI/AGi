@@ -172,7 +172,6 @@ class CNC(Node):
             )
             messages = [{"role": "system", "content": system_prompt}]
             messages.extend(memory_context)
-            messages.append({"role": "user", "content": user_input})
 
             # 4. Stream from vLLM
             full_response = await self._stream_cosmos(messages)
