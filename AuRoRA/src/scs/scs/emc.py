@@ -81,9 +81,9 @@ Public interface:
     emc.close() → None
 
 TODO:
-    M2 — consolidate turn pairs (user+assistant) into single engrams
-        current: 1 buffer row → 1 episode (turn-level)
-        target:  2 buffer rows → 1 episode (interaction-level)    
+    M2 — move interaction pairing from MCC into EMC
+        current: MCC pre-concatenates user+assistant → bind_pmt() receives one string
+        target:  EMC receives two raw turns → consolidates into one engram internally
     M2 — put user_id instead of role in role column
     M2 — add date-range filtering to buffer entries and recall interface
     M2 — migrate episode_vectors to sqlite-vec ANN index (DiskANN)

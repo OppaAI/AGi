@@ -55,7 +55,7 @@ class AGi:                                       # Amazing Grace infrastructure
             RECALL_TIMEOUT: float       = 5.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                  # covers encode_query (~500-900ms) + KNN search
                                                  # TODO: drop to 3.0 if model is genuinely int4 quantized
-            RELEVANCE_THRESHOLD: float  = 0.50   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
+            RELEVANCE_THRESHOLD: float  = 0.40   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                               # Working Memory Cortex
             UNITS_PER_CHUNK: int    = 4          # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
