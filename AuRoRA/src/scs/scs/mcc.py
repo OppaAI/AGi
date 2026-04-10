@@ -34,14 +34,15 @@ Terminology:
                 (e.g. evicted PMTs from WMC waiting for embedding and consolidation in EMC, or
                 recalled EMC episodes waiting to be injected into memory context)
     Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
-    Engram      — episodic memory trace (one past episode, user or assistant)
+    Engram      — episodic memory trace (one past interaction, user + assistant pair)
     PMT         — phonological memory trace (one conversation turn, user or assistant)
+                WMC stores individual turns; MCC pairs them into interactions before EMC binding
     Scaffold    — temporary staging area for relevant EMC episodes to be injected into memory context
     Reserve     — cortical capacity reserve for a specific memory function (e.g. EMC_RECALL_RESERVE for recalling relevant EMC episodes)
     Threshold   — minimum relevancy score for an EMC episode to be injected into memory context
 
 Public interface:
-    await mcc.register_memory(speaker, content)
+    await mcc.register_memory(role, content)
     context = await mcc.assemble_memory_context(user_prompt)
     mcc.report_memory_stats()
     mcc.forget_memory()
@@ -96,12 +97,13 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialize memory cortex layers
-        self.logger.info("🔄 Activating Memory Coordination Core…")                        # Log entry on MCC activation
+        self._pending_user_pmt: dict | None = None                                          # Initialize pending user PMT to None
+        self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def register_memory(self, speaker: str, content: str) -> None:
+    async def register_memory(self, role: str, content: str) -> None:
         """
         Register new PMT into working memory and bind any evicted PMTs to episodic buffer.
 
@@ -109,11 +111,11 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMTs to episodic buffer (non-blocking)
 
         Args:
-            speaker (str): user ID of the PMT (e.g., "user" or "assistant")
+            role (str): user ID of the PMT (e.g., "user" or "assistant")
             content (str): Content of the PMT (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(speaker=speaker, content=content)  # Fill the induced PMT into WMC, collect any evicted PMTs
+        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)  # Fill the induced PMT into WMC, collect any evicted PMTs
             
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
@@ -131,18 +133,29 @@ class MemoryCoordinationCore:
         Runs in isolated neural pathway — never blocks active cognition.
 
         Args:
-            evicted_pmts (list[dict]): List of evicted PMTs [{speaker, content, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
         """
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
-                self.emc.bind_pmt(                          # Bind each evicted PMT into episodic buffer
-                    speaker = evicted_pmt["speaker"],       # user ID (user or assistant) (TODO: M2 - Need to get the user ID)
-                    content = evicted_pmt["content"],       # Content of PMT
-                    timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
-                )
-        except Exception as e:                             # If binding lapse occurs, log and continue
-            self.logger.error(                             # Log the binding lapse
-                f"EMC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
+                if evicted_pmt["role"] == "user":           # If the evicted PMT is from the user, store it for later use
+                    self._pending_user_pmt = evicted_pmt    # Store the user PMT for later use
+                elif evicted_pmt["role"] == "assistant":
+                    if not self._pending_user_pmt:          # If there is no pending user PMT, drop the assistant PMT,
+                        self.logger.debug("MCC dropped unpaired assistant PMT — no pending user turn") # Drop orphaned unpaired assistant PMT
+                    else:                                   # If not,
+                        paired_pmt = (                      # Pair user and assistant PMTs
+                            f"user: {self._pending_user_pmt['content']}\n"  # Put user content into paired conversation
+                            f"assistant: {evicted_pmt['content']}"          # Put assistant content into paired conversation
+                        )
+                        self.emc.bind_pmt(                          # Bind paired PMT into episodic buffer
+                            role = self._pending_user_pmt["role"],  # "user" — interaction initiated by user
+                            content = paired_pmt,                   # Content of PMT
+                            timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
+                        )
+                        self._pending_user_pmt = None               # Clear the pending user PMT
+        except Exception as e:                                      # If binding lapse occurs, log and continue
+            self.logger.error(                                      # Log the binding lapse
+                f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
             )
             
     async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
@@ -158,7 +171,7 @@ class MemoryCoordinationCore:
         Args:
             user_prompt (str): Current user message (used as EMC recall query)
         Returns:
-            list[dict]: List of message dicts [{speaker, content}] ready for inference
+            list[dict]: List of message dicts [{role, content}] ready for inference
         """
         
         # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
@@ -189,11 +202,10 @@ class MemoryCoordinationCore:
             recalled_episodes = ["Relevant memories from past interactions:"]
             for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
                 date        = episode.get("date", "unknown date")            # Retrieve the date of the EMC episode
-                speaker     = episode.get("speaker", "unknown")              # Retrieve the speaker of the EMC episode
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
                 relevancy   = episode.get("relevancy", 0.0)                  # Retrieve the relevancy score of the EMC episode
                 recalled_episodes.append(                                    # Stage the content of EMC episode into the episodic buffer
-                    f"[{date}] {speaker}: {content} (relevancy: {relevancy:.2f})"
+                    f"[{date}]: {content} (relevancy: {relevancy:.2f})"
                 )
 
             self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer

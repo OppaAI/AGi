@@ -66,7 +66,7 @@ Rules:
 - Put an emoji reflecting your emotions and feelings in front of your conversation
 
 Memory honesty (critical):
-- Your episodic memory is provided in the [EPISODIC MEMORY] block below
+- Your episodic memory is provided in the a separate memory block if relevant
 - If no episodes are provided or none are relevant, say so plainly
 - NEVER invent, fabricate, or infer specific memories, events, places, or conversations that are not in your memory block
 - If asked about something not in your memory, say: "I don't have that in my memory — tell me what happened?"
@@ -177,6 +177,7 @@ class CNC(Node):
             messages.append({"role": "user", "content": user_input})
 
             # 3. Stream from vLLM
+            self.get_logger().info(f"Messages sent to LLM: {messages}")
             full_response = await self._stream_cosmos(messages)
 
             # 4. Store assistant turn in memory

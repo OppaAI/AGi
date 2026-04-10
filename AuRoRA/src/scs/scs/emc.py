@@ -72,7 +72,7 @@ Lifecycle:
     Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
 
 Public interface:
-    emc.bind_pmt(speaker, content, timestamp) → bool
+    emc.bind_pmt(role, content, timestamp) → bool
     emc.recall(query, top_k) → list[dict]
     emc.get_episodes_for_date(date_str) → list[dict]
     emc.buffer_pending_count() → int
@@ -84,7 +84,7 @@ TODO:
     M2 — consolidate turn pairs (user+assistant) into single engrams
         current: 1 buffer row → 1 episode (turn-level)
         target:  2 buffer rows → 1 episode (interaction-level)    
-    M2 — put user_id instead of role in speaker column
+    M2 — put user_id instead of role in role column
     M2 — add date-range filtering to buffer entries and recall interface
     M2 — migrate episode_vectors to sqlite-vec ANN index (DiskANN)
          when episodes exceed ~50k — currently exact KNN is sufficient
@@ -355,7 +355,7 @@ class EpisodicMemoryCortex:
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing index
                 timestamp  TEXT    NOT NULL,                                -- Full datetime of the PMT
                 date       TEXT    NOT NULL,                                -- Pre-computed date of the PMT (carries forward to episodes)
-                speaker    TEXT    NOT NULL,                                -- Speaker of the PMT (TODO: M2 - user_id)
+                role    TEXT    NOT NULL,                                -- role of the PMT (TODO: M2 - user_id)
                 content    TEXT    NOT NULL,                                -- Content of the PMT (truncated to fit within context window)
                 processed  BOOLEAN DEFAULT FALSE                            -- Indicator if PMT has been encoded into episodic memory
             );
@@ -367,7 +367,7 @@ class EpisodicMemoryCortex:
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing index
                 timestamp  TEXT    NOT NULL,                                -- Full datetime of the episode
                 date       TEXT    NOT NULL,                                -- Date of the episode
-                speaker    TEXT    NOT NULL,                                -- Speaker of the episode (TODO: M2 - user_id)
+                role    TEXT    NOT NULL,                                -- role of the episode (TODO: M2 - user_id)
                 content    TEXT    NOT NULL,                                -- Content of the episode
                 encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
                 created_at TEXT    DEFAULT (datetime('now'))                -- Timestamp of when the episode was created
@@ -388,7 +388,7 @@ class EpisodicMemoryCortex:
             self.engram.commit()                                            # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
 
-    def bind_pmt(self, speaker: str, content: str, timestamp: str) -> bool:
+    def bind_pmt(self, role: str, content: str, timestamp: str) -> bool:
         """
         Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
         and binds it into the episodic buffer for consolidation.
@@ -396,7 +396,7 @@ class EpisodicMemoryCortex:
         Called by MCC asynchronously at the WMC → EMC boundary — crash-safe, non-blocking.
 
         Args:
-            speaker (str): User ID or assistant ID
+            role (str): User ID or assistant ID
             content (str): Content of PMT (truncated to 2000 chars for safety)
             timestamp (str): Timestamp of PMT induced into WMC
 
@@ -407,7 +407,7 @@ class EpisodicMemoryCortex:
         pmt: dict = {                                                               # Package the PMT data into a packet
             "timestamp": timestamp,                                                 # Timestamp of PMT induced into WMC
             "date":      pmt_date,                                                  # Date of PMT induced into WMC
-            "speaker":   speaker,                                                   # User ID or assistant ID
+            "role":   role,                                                   # User ID or assistant ID
             "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # Truncate content to the engram content limit
         }
 
@@ -416,7 +416,7 @@ class EpisodicMemoryCortex:
                 self.episodic_buffer._binding_stream.append(pmt)                    # Add the PMT to the binding stream
             self._theta_rhythm.set()                                                # Set the theta rhythm to trigger encoding cycle
             self.logger.debug(                                                      # Log the binding of the PMT to the episodic buffer
-                f"EMC buffer ← [{speaker}] {content[:40]}…"
+                f"EMC buffer ← [{role}] {content[:40]}…"
             )
             return True                                                             # Indicate successful binding
         except Exception as e:
@@ -436,7 +436,7 @@ class EpisodicMemoryCortex:
 
         while True:                                                 # Keep recovering orphans in batches
             orphaned = self.engram.execute(                         # Query the engram for orphaned PMTs
-                "SELECT timestamp, date, speaker, content "         # Collect the timestamp, date, speaker, and content
+                "SELECT timestamp, date, role, content "         # Collect the timestamp, date, role, and content
                 "FROM episodic_buffer WHERE processed = FALSE "     # Choose PMTs that are not processed
                 "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
                 [EMC.ORPHAN_BATCH_SIZE, offset]                     # Process PMTs by batch size
@@ -450,7 +450,7 @@ class EpisodicMemoryCortex:
                     self.episodic_buffer._binding_stream.append({   # Add the orphaned PMT to the binding stream
                         "timestamp": row["timestamp"],              # Timestamp of the PMT
                         "date":      row["date"],                   # Date of the PMT
-                        "speaker":   row["speaker"],                # Speaker of the PMT
+                        "role":   row["role"],                # role of the PMT
                         "content":   row["content"],                # Content of the PMT
                         "recovered": True,                          # Flag as already recovered into binding stream
                     })
@@ -524,9 +524,9 @@ class EpisodicMemoryCortex:
                 # Write to episodic_buffer (crash-safe record) before encoding
                 with self._write_lock:
                     worker_conn.execute(
-                        "INSERT INTO episodic_buffer (timestamp, date, speaker, content) "
+                        "INSERT INTO episodic_buffer (timestamp, date, role, content) "
                         "VALUES (?, ?, ?, ?)",
-                        [pmt["timestamp"], pmt["date"], pmt["speaker"], pmt["content"]],
+                        [pmt["timestamp"], pmt["date"], pmt["role"], pmt["content"]],
                     )
                     worker_conn.commit()
 
@@ -536,7 +536,7 @@ class EpisodicMemoryCortex:
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(
                         f"EMC encode skipped (encoding engine unavailable): "
-                        f"[{pmt['speaker']}] {pmt['content'][:40]}…"
+                        f"[{pmt['role']}] {pmt['content'][:40]}…"
                     )
                     with self._episodic_buffer_lock:
                         self.episodic_buffer._binding_stream.appendleft(pmt)                    
@@ -550,12 +550,12 @@ class EpisodicMemoryCortex:
                     # Insert into episodes (engram)
                     worker_conn.execute(
                         "INSERT INTO episodes "
-                        "(timestamp, date, speaker, content, encoding) "
+                        "(timestamp, date, role, content, encoding) "
                         "VALUES (?, ?, ?, ?, ?)",
                         [
                             pmt["timestamp"],
                             pmt["date"],
-                            pmt["speaker"],
+                            pmt["role"],
                             pmt["content"],
                             encoding_blob,
                         ],
@@ -570,13 +570,13 @@ class EpisodicMemoryCortex:
                     # Mark buffer episode as processed
                     worker_conn.execute(
                         "UPDATE episodic_buffer SET processed = TRUE "
-                        "WHERE timestamp = ? AND speaker = ? AND processed = FALSE",
-                        [pmt["timestamp"], pmt["speaker"]],
+                        "WHERE timestamp = ? AND role = ? AND processed = FALSE",
+                        [pmt["timestamp"], pmt["role"]],
                     )
                     worker_conn.commit()
     
                 self.logger.debug(
-                    f"EMC consolidated → episodes: [{pmt['speaker']}] "
+                    f"EMC consolidated → episodes: [{pmt['role']}] "
                     f"{pmt['content'][:40]}… (date={pmt['date']})"
                 )
     
@@ -603,7 +603,7 @@ class EpisodicMemoryCortex:
             date_to:   Optional ISO date string upper bound (inclusive)
 
         Returns:
-            List of dicts: {timestamp, date, speaker, content, relevancy}
+            List of dicts: {timestamp, date, role, content, relevancy}
         """
         query_vec = self._encoding_engine.encode(query, is_cue=True)
         if not query_vec:
@@ -628,7 +628,7 @@ class EpisodicMemoryCortex:
                 params.append(top_k)
 
                 sql = f"""
-                    SELECT e.timestamp, e.date, e.speaker, e.content, v.distance
+                    SELECT e.timestamp, e.date, e.role, e.content, v.distance
                     FROM episode_vectors v
                     JOIN episodes e ON e.id = v.rowid
                     WHERE {(" AND ".join(where))}
@@ -653,7 +653,7 @@ class EpisodicMemoryCortex:
                     {
                         "timestamp": row["timestamp"],
                         "date":      row["date"],
-                        "speaker":   row["speaker"],
+                        "role":   row["role"],
                         "content":   row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                         "relevancy": round(1 / (1 + row["distance"]), 4),       # Inverse of distance (higher is more relevant)
                     }
@@ -677,7 +677,7 @@ class EpisodicMemoryCortex:
                 params.append(top_k * EMC.RECALL_POOL)  # Pre-filter: score only the most recent candidates
 
                 sql = (
-                    f"SELECT timestamp, date, speaker, content, encoding "
+                    f"SELECT timestamp, date, role, content, encoding "
                     f"FROM episodes "
                     f"{where_clause} "
                     f"ORDER BY rowid DESC LIMIT ?"
@@ -696,7 +696,7 @@ class EpisodicMemoryCortex:
                     scored.append({
                         "timestamp":  row["timestamp"],
                         "date":       row["date"],
-                        "speaker":    row["speaker"],
+                        "role":    row["role"],
                         "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                         "relevancy": round(sim, 4),
                     })
@@ -733,7 +733,7 @@ class EpisodicMemoryCortex:
             date_to:   Optional ISO date string upper bound (inclusive)
 
         Returns:
-            List of dicts: {"timestamp": int, "date": str, "speaker": str, "content": str, "relevancy": float}
+            List of dicts: {"timestamp": int, "date": str, "role": str, "content": str, "relevancy": float}
             relevancy is always 0.0 - no semantic scoring in lexical search
         """
         words = [w for w in query.lower().split() if len(w) > 3]
@@ -751,7 +751,7 @@ class EpisodicMemoryCortex:
             params.append(date_to)
 
         sql = (
-            f"SELECT timestamp, date, speaker, content FROM episodes "
+            f"SELECT timestamp, date, role, content FROM episodes "
             f"WHERE {' AND '.join(where)} "
             f"ORDER BY timestamp DESC LIMIT {top_k}"
         )
@@ -761,7 +761,7 @@ class EpisodicMemoryCortex:
                 {
                     "timestamp":  r["timestamp"],
                     "date":       r["date"],
-                    "speaker":    r["speaker"],
+                    "role":    r["role"],
                     "content":    r["content"][:EMC.ENGRAM_CHUNK_LIMIT],
                     "relevancy": 0.0,
                 }
@@ -782,17 +782,17 @@ class EpisodicMemoryCortex:
             date_str (str): ISO date string (e.g. "2026-04-05")
 
         Returns:
-            List of dicts: {timestamp, speaker, content}
+            List of dicts: {timestamp, role, content}
             Empty list if no episodes found or on failure.
         """
         try:
             rows = self.engram.execute(
-                "SELECT timestamp, speaker, content FROM episodes "
+                "SELECT timestamp, role, content FROM episodes "
                 "WHERE date = ? ORDER BY timestamp",
                 [date_str],
             ).fetchall()
             return [
-                {"timestamp": r["timestamp"], "speaker": r["speaker"], "content": r["content"]}
+                {"timestamp": r["timestamp"], "role": r["role"], "content": r["content"]}
                 for r in rows
             ]
         except Exception as e:

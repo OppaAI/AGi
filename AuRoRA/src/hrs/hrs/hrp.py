@@ -32,7 +32,7 @@ TODO:
 """
 
 class AGi:                                       # Amazing Grace infrastructure
-    ENTITY_GATEWAY = "agi"                       # [STATIC] Entry point for all the interactions with AGi's core systems
+    ENTITY_GATEWAY = ".agi"                       # [STATIC] Entry point for all the interactions with AGi's core systems
 
     class CNS:                                   # Central Nervous System
         CORTICAL_CAPACITY: int = 2048            # [STATIC]    Total neural capacity of the active cognitive core
