@@ -24,15 +24,15 @@ Architecture:
         Two streams, private vs shared, mirroring biological architecture:
  
         _binding_stream  — private deque inside EMC (hippocampal binding)
-                          Evicted PMTs land here first (fast RAM staging).
-                          Invisible to MCC — MCC calls bind_pmt() and lets go,
-                          just as the prefrontal cortex does not monitor every
-                          hippocampal trace after handoff.
-                          Dual-write: also written to SQLite episodic_buffer
-                          simultaneously as crash-safe backstop.
-                          _encoding_cycle drains _binding_stream as primary path.
-                          On restart, _encoding_cycle falls back to SQLite to
-                          recover any orphaned unprocessed PMTs.
+                        Evicted PMTs land here first (fast RAM staging).
+                        Invisible to MCC — MCC calls bind_pmt() and lets go,
+                        just as the prefrontal cortex does not monitor every
+                        hippocampal trace after handoff.
+                        _run_encoding_cycle() drains _binding_stream, writes to
+                        episodic_buffer (SQLite) before encoding, then consolidates
+                        into episodes. On restart, orphaned unprocessed rows in
+                        episodic_buffer are recovered back into _binding_stream
+                        by _init_encoding_cycle() before the cycle starts.
  
         recall_stream   — shared on EpisodicBuffer (cross-layer)
                           Recalled episodes surface here before being injected

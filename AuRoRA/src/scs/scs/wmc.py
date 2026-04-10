@@ -187,7 +187,7 @@ class WorkingMemoryCortex:
             list[dict]: List of sustained PMTs [{speaker, content}]
         """
         return [                                                            # Return the list of sustained PMT schema in ascending chronological order
-            {"speaker": pmt["speaker"], "content": pmt["content"]}
+            {"role": pmt["speaker"], "content": pmt["content"]}
             for pmt in self._pmt_slot
         ]
 

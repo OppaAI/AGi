@@ -165,33 +165,31 @@ class CNC(Node):
         full_response = ""
 
         try:
-            # 1. Store user turn in memory
-            await self.mcc.register_memory("user", user_input)
-
-            # 2. Build context window
+            # 1. Build context window
             memory_context = await self.mcc.assemble_memory_context(user_input)
 
-            # 3. Assemble messages for Cosmos
+            # 2. Assemble messages for Cosmos
             system_prompt = GRACE_SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d")
-                episodic_memory=self.mcc.get_episodic_block()
             )
-            messages = [{"speaker": "system", "content": system_prompt}]
+            messages = [{"role": "system", "content": system_prompt}]
             messages.extend(memory_context)
+            messages.append({"role": "user", "content": user_input})
 
-            # 4. Stream from vLLM
+            # 3. Stream from vLLM
             full_response = await self._stream_cosmos(messages)
 
-            # 5. Store assistant turn in memory
+            # 4. Store assistant turn in memory
             if full_response:
+                await self.mcc.register_memory("user", user_input)
                 await self.mcc.register_memory("assistant", full_response)
 
-            # 6. Log memory stats periodically
+            # 5. Log memory stats periodically
             self.mcc.report_memory_stats()
 
-        except Exception as exc:
-            self.get_logger().error(f"❌ CNC handle error: {exc}")
-            self._publish({"type": "error", "content": err})
+        except Exception as e:
+            self.get_logger().error(f"❌ CNC handle error: {e}")
+            self._publish({"type": "error", "content": str(e)})
 
         finally:
             self._busy = False
@@ -229,7 +227,7 @@ class CNC(Node):
                 if resp.status_code != 200:
                     err = f"vLLM HTTP {resp.status_code}"
                     self.get_logger().error(f"❌ {err}")
-                    self._publish({"type": "chunk", "content": delta})
+                    self._publish({"type": "chunk", "content": err})
                     return ""
 
                 async for line in resp.aiter_lines():

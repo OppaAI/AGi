@@ -197,7 +197,7 @@ class MemoryCoordinationCore:
                 )
 
             self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer
-                "speaker": "system",
+                "role": "system",
                 "content": "\n".join(recalled_episodes),
             })
 
