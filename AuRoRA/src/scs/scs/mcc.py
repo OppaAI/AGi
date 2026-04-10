@@ -97,7 +97,6 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
 
         # Initialize memory cortex layers
-        self._pending_user_pmt: dict | None = None                                          # Initialize pending user PMT to None
         self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
@@ -135,24 +134,32 @@ class MemoryCoordinationCore:
         Args:
             evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
         """
+        pending_user_pmt: dict | None = None                # Initialize staging single-turn PMT to be pending for pairing into interraction content
+
         try:                                                # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                # Process each evicted PMT
                 if evicted_pmt["role"] == "user":           # If the evicted PMT is from the user, store it for later use
-                    self._pending_user_pmt = evicted_pmt    # Store the user PMT for later use
+                    pending_user_pmt = evicted_pmt          # Store the user PMT for later use
                 elif evicted_pmt["role"] == "assistant":
-                    if not self._pending_user_pmt:          # If there is no pending user PMT, drop the assistant PMT,
-                        self.logger.debug("MCC dropped unpaired assistant PMT — no pending user turn") # Drop orphaned unpaired assistant PMT
+                    if not pending_user_pmt:                # If there is no pending user PMT, drop the assistant PMT,
+                        self.logger.debug("MCC dropped unpaired assistant PMT — discarding pending user PMT") # Drop orphaned unpaired assistant PMT
                     else:                                   # If not,
                         paired_pmt = (                      # Pair user and assistant PMTs
-                            f"user: {self._pending_user_pmt['content']}\n"  # Put user content into paired conversation
-                            f"assistant: {evicted_pmt['content']}"          # Put assistant content into paired conversation
+                            f"user: {pending_user_pmt['content']}\n"  # Put user content into paired interraction content
+                            f"assistant: {evicted_pmt['content']}"    # Put assistant content into paired interraction content
                         )
                         self.emc.bind_pmt(                          # Bind paired PMT into episodic buffer
-                            role = self._pending_user_pmt["role"],  # "user" — interaction initiated by user
+                            role = pending_user_pmt["role"],        # "user" — interaction initiated by user
                             content = paired_pmt,                   # Content of PMT
                             timestamp = evicted_pmt["timestamp"],   # Timestamp of PMT
                         )
-                        self._pending_user_pmt = None               # Clear the pending user PMT
+                        pending_user_pmt = None                     # Clear the staging user PMT after pairing
+            # Handle orphaned user PMT at end of batch
+            if pending_user_pmt:
+                self.logger.debug(
+                    f"MCC holding orphaned user PMT — no assistant pair in batch: "
+                    f"{pending_user_pmt['content'][:40]}…"
+                )        
         except Exception as e:                                      # If binding lapse occurs, log and continue
             self.logger.error(                                      # Log the binding lapse
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
