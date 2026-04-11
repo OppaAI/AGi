@@ -99,9 +99,6 @@ class MemoryCoordinationCore:
 
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
-        self._orphaned_user_prompt: Optional[Dict] = None                                    #
-        self._orphaned_ai_response: Optional[Dict] = None                                    #
-        self._lock = threading.Lock()                                                        #
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # Initialize WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
@@ -133,100 +130,17 @@ class MemoryCoordinationCore:
     def _bind_to_episodic_buffer(self, evicted_pmts: list[dict]) -> None:
         """
         Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
-        Runs in isolated neural pathway — never blocks active cognition.
+        Takes place in isolated neural pathway — never blocks active cognition neural pathway.
 
         Args:
-            evicted_pmts (list[dict]): List of evicted PMTs [{role, content, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{interaction, timestamp}]
         """
-        # Pair evicted user prompt with corresponding AI response
-        with self._lock:
-            pending_user_prompt = self._orphaned_user_prompt
-            pending_ai_repsonse = self._orphaned_ai_response
-            self._orphaned_user_prompt = None
-            self._orphaned_ai_response = None
-
-        displaced_user_prompt: Optional[Dict] = None
-        #pending_user_pmt: dict | None = None                        # Initialize staging single-turn PMT to be pending for pairing into interraction content
-
         try:                                                         # Attempt binding evicted PMTs to episodic buffer
-            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT
-                if evicted_pmt["role"] == "user":                    # If the evicted PMT is from the user, store it for later use
-                    displaced_user_prompt = pending_user_prompt      # 
-
-                pending_user_pmt = evicted_pmt                       # Store the user PMT for later use
-                
-                # If the corresponding AI response is pending, pair immediately
-                if pending_assistant is not None:
-                    user_content = pending_user["content"]
-                    if displaced_user:
-                        user_content = f"{displaced_user['content']}\n{user_content}"
-                        displaced_user = None
-
-                    paired = (
-                        f"user: {user_content}\n"
-                        f"assistant: {pending_assistant['content']}"
-                    )
-                    self.emc.bind_pmt(
-                        role="user",  # or "pair" if your EMC supports it
-                        content=paired,
-                        timestamp=pending_assistant.get("timestamp", pmt.get("timestamp"))
-                    )
-                    self.logger.debug("MCC: Paired carried assistant with new user turn")
-                    pending_user = None
-                    pending_assistant = None
-                    
-                elif pmt["role"] == "assistant":
-                    if pending_user is not None:
-                        # Normal pairing
-                        user_content = pending_user["content"]
-                        if displaced_user:
-                            user_content = f"{displaced_user['content']}\n{user_content}"
-                            displaced_user = None
-
-                        paired = (
-                            f"user: {user_content}\n"
-                            f"assistant: {pmt['content']}"
-                        )
-                        self.emc.bind_pmt(
-                            role="user",
-                            content=paired,
-                            timestamp=pmt.get("timestamp")
-                        )
-                        self.logger.debug("MCC: Paired user + assistant turn")
-                        pending_user = None
-                    else:
-                        # No pending user → carry assistant forward
-                        pending_assistant = pmt
-                        self.logger.debug(f"MCC: Carrying solo assistant turn forward: {pmt['content'][:60]}...")
-
-            # Carry forward any remaining orphans
-            with self._lock:
-                self._orphaned_user = pending_user or displaced_user
-                self._orphaned_assistant = pending_assistant
-
-                if self._orphaned_user:
-                    self.logger.debug(f"MCC: Carrying user turn to next batch: {self._orphaned_user['content'][:60]}...")
-                if self._orphaned_assistant:
-                    self.logger.debug(f"MCC: Carrying assistant turn to next batch: {self._orphaned_assistant['content'][:60]}...")
-                    #if not pending_user_pmt:                         # If there is no pending user PMT, drop the assistant PMT,
-                    #    self.logger.debug("MCC dropped unpaired assistant PMT — discarding pending user PMT") # Drop orphaned unpaired assistant PMT
-                    #else:                                            # If not,
-                    #    paired_pmt = (                               # Pair user and assistant PMTs
-                    #        f"user: {pending_user_pmt['content']}\n" # Put user content into paired interraction content
-                    #        f"assistant: {evicted_pmt['content']}"   # Put assistant content into paired interraction content
-                    #    )
-                    #    self.emc.bind_pmt(                           # Bind paired PMT into episodic buffer
-                    #        role = pending_user_pmt["role"],         # "user" — interaction initiated by user
-                    #        content = paired_pmt,                    # Content of PMT
-                    #        timestamp = evicted_pmt["timestamp"],    # Timestamp of PMT
-                    #    )
-                    #    pending_user_pmt = None                      # Clear the staging user PMT after pairing
-            # Handle orphaned user PMT at end of batch
-            #if pending_user_pmt:
-             #   self.logger.debug(
-             #       f"MCC holding orphaned user PMT — no assistant pair in batch: "
-             #       f"{pending_user_pmt['content'][:40]}…"
-             #   )        
+            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT                
+                self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
+                    interaction=evicted_pmt["interaction"],          # Bind the content of the interraction
+                    timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interraction
+                )       
         except Exception as e:                                       # If binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
