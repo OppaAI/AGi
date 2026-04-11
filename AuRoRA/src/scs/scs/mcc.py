@@ -138,8 +138,8 @@ class MemoryCoordinationCore:
         try:                                                         # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                         # Process each evicted PMT                
                 self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
-                    interaction=evicted_pmt["interaction"],          # Bind the content of the interraction
-                    timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interraction
+                    interaction=evicted_pmt["interaction"],          # Bind the content of the interaction
+                    timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
                 )       
         except Exception as e:                                       # If binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
