@@ -39,6 +39,7 @@ class AGi:                                       # Amazing Grace infrastructure
         COGNITIVE_RESERVE: int = 512             # [INTRINSIC] Cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str    = "cns"           # [STATIC]    Neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str    = "engram.db"     # [STATIC]    Engram complex where long-term memories storage
+        UNITS_PER_CHUNK: int    = 4              # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
 
         class EMC:                               # Episodic Memory Cortex
             ENCODING_ENGINE: str        = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
@@ -58,7 +59,6 @@ class AGi:                                       # Amazing Grace infrastructure
             RELEVANCE_THRESHOLD: float  = 0.40   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                               # Working Memory Cortex
-            UNITS_PER_CHUNK: int    = 4          # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
             PMT_OVERHEAD: int       = 4          # [STATIC]    Overhead chunks for each PMT
             PMT_SLOT_LIMIT: int     = 7          # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2          # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
