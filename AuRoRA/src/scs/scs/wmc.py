@@ -45,7 +45,7 @@ Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
 Public interface:
-    wmc.fill_pmt(role, content) → list[evicted_pmt]
+    wmc.fill_pmt(speaker, content) → list[evicted_pmt]
     wmc.recall_pmt_schema() → list[dict]
     wmc.forget_pmt_schema() → list[dict]
     wmc.assess_pmt_schema() → dict
@@ -62,23 +62,23 @@ from collections import deque
 
 # AGi libraries
 from hrs.hrp import AGi                  # Import AGi homeostatic regulation parameters
-WMC = AGi.CNS.WMC                        # Channel for interfacing with Working Memory Cortex (WMC)
+CNS = AGi.CNS                            # Channel for interfacing with Central Nervous System (CNS)
+WMC = CNS.WMC                            # Channel for interfacing with Working Memory Cortex (WMC)
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
     Estimate the number of chunks in the given PMT.
+    Each PMT is one complete interaction — user prompt + AI response paired.
 
     Args:
-        pmt (dict): a conversation turn with 'role' and 'content'
+        pmt (dict): a complete interaction with 'timestamp' and 'content'
 
     Returns:
-        int: Number of chunks, including overhead for role value and formatting
+        int: Number of chunks, including overhead for formatting
     """
-    role: str = pmt.get("role", "")                                                                   # Retrieve role value from PMT. 
-    content: str = pmt.get("content", "")                                                             # Retrieve content from PMT.
-    role_chunk_count: int = (len(role) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK             # Calculate chunks for role value
-    content_chunk_count: int = max(1, (len(content) + WMC.UNITS_PER_CHUNK - 1 ) // WMC.UNITS_PER_CHUNK)  # Calculate chunks for content, minimum 1 chunk even for empty content
-    return role_chunk_count + content_chunk_count + WMC.PMT_OVERHEAD                                  # Return total chunk count (role value + content + overhead)
+    content: str = pmt.get("content", "")                                                                   # Retrieve content from PMT.
+    content_chunk_count: int = max(1, (len(content) + CNS.UNITS_PER_CHUNK - 1 ) // CNS.UNITS_PER_CHUNK)     # Calculate chunks for content, minimum 1 chunk even for empty content
+    return content_chunk_count + WMC.PMT_OVERHEAD                                                           # Return total chunk count (content + overhead)
 
 class WorkingMemoryCortex:
     """
@@ -111,6 +111,7 @@ class WorkingMemoryCortex:
         self.pmt_slot_limit: int     = pmt_slot_limit       # Retrieve PMT slot limit from MCC configuration for WMC
         self.pmt_slot_buffer: int    = pmt_slot_buffer      # Retrieve PMT slot buffer from MCC configuration for WMC
         self._pmt_slot: deque[dict]  = deque()              # Set up slot for holding the phonological memory, Safe — single-threaded access guaranteed by CNC._busy flag
+        self._induced_pmt: dict | None = None               # Set up slot for holding the induced PMT pending pairing
         self._sustained_chunks: int  = 0                    # Start with empty working memory with no sustained chunks
 
         self.logger.info(                                   # Log entry on WMC initialization with configured capacity
@@ -118,78 +119,120 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
         
-    def fill_pmt(self, role: str, content: str) -> list[dict]:
+    def fill_pmt(self, speaker: str, content: str) -> list[dict]:
         """
-        Fill an induced PMT into working memory.
-
-        Returns the evicted PMT schema (may be empty) so MCC can forward
-        them to EMC asynchronously.
+        Induce a user prompt and pair it with AI response into a complete interaction internally.
+        Fill the complete interaction into working memory.
+        Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached.
 
         Args:
-            role (str): The role ("user" or "assistant") to be induced in working memory
+            speaker (str): The user ID of the speaker to be induced in working memory
             content (str): The content of the PMT to be induced in working memory
 
         Returns:
-            list[dict]: list of evicted PMTs [{role, content, timestamp}]
+            list[dict]: list of evicted PMTs [{timestamp, content}], empty if no eviction occurred
         """
-        # Truncate content if it exceeds the global chunk limit to prevent overflow, ensuring at least 1 chunk for role and overhead
-        role_chunk_count: int   = (len(role) + WMC.UNITS_PER_CHUNK - 1) // WMC.UNITS_PER_CHUNK  # Calculate chunks for role value to determine remaining capacity for content
-        max_content_chunks: int = self.global_chunk_limit - WMC.PMT_OVERHEAD - role_chunk_count # Calculate maximum chunks available for content
-        max_content_length: int = max_content_chunks * WMC.UNITS_PER_CHUNK                      # Calculate maximum content length based on remaining chunk capacity
-        if len(content) > max_content_length:                                                   # If content exceeds maximum content length,
-            content = content[:max_content_length]                                              # Truncate content to fit within global chunk limit
-            self.logger.warning(f"WMC content truncated to {max_content_chunks} chunks")        # Log the warning of truncation of the content
-        
-        induced_pmt: dict = {                          # Combine the elements of induced PMT into one register for filling
-            "role":   role,                         # Register the role value of PMT
-            "content":   content,                      # Register the content of the PMT
-            "timestamp": datetime.now().isoformat(),   # Register the inducing time of the PMT
-        }
-        induced_pmt_chunks: int = _estimate_chunk_count(induced_pmt)    # Calculate how many chunks in the PMT to be induced
+        if speaker == "user":                                   # If this is user prompt,
+            # Induce unpaired user prompt — pending for AI response
+            self._induced_pmt = {                               # Induce the user prompt into PMT
+                "timestamp": datetime.now().isoformat(),        # Register the inducing time of the PMT (TODO M2: use ROS2 time)
+                "content": {                                    # Embed both user prompt and AI response in the same PMT
+                    "speaker": speaker,                         # Register the user ID of the interaction (TODO M2: replace with real user_id)
+                    "prompt": content,                          # Register the user prompt of the interaction
+                    "response": ""                              # Register the empty response until AI responds
+                }
+            }
+            self.logger.debug(                                  # Log the induced unpaired user prompt
+                "WMC induced unpaired user prompt — pending for AI response"
+            )
+            return []                                           # Exchange incomplete — nothing to induce or evict
 
-        # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
-        # And then fill the induced PMT, to keep working memory always within the capacities
-        evicted_pmt_slot: list[dict] = []                         # Set up buffer for holding receding memory
-        
-        while self._pmt_slot and (                                                # Evict loop when the working memory is not empty, and one of the following condition is met
-            self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit # - Global chunk limit exceeded after filling of the induced PMT, or
-            or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # - PMT schema exceeds the limit of PMT slot (ie. Miller's Law 7±2, tunable)
-        ):
-            evicted_pmt: dict = self._pmt_slot.popleft()                                    # Evict the receding PMT from the working memory 
-            evicted_pmt_slot.append(evicted_pmt)                                            # Fill the evicted PMT to the evicted slot
-            evicted_chunks: int = _estimate_chunk_count(evicted_pmt)                        # Calculate the chunk size of the evicted PMT
-            self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)   # Update the chunk size of the working memory, cannot be negative
-            self.logger.debug(                                                              # Log the eviction of the receding PMT
-                f"WMC evict → EMC: [{evicted_pmt['role']}] "
-                f"size={evicted_chunks} chunks"
+        elif speaker == "assistant":                            # If this is AI response,
+            if self._induced_pmt is None:                       # If there is no induced PMT (orphaned AI response),
+                self.logger.warning(                            # Log the warning of orphaned AI response
+                    "WMC: AI response induced without user prompt — wrapping with placeholder"
+                )
+                self._induced_pmt = {                           # Wrap the orphaned AI response with placeholder
+                    "timestamp": datetime.now().isoformat(),    # Register the inducing time of the PMT
+                    "content": {                                # Embed the orphaned AI response with placeholder
+                        "speaker": "user",                      # Register the user ID of the interaction
+                        "prompt": "[context missing]",          # Register the placeholder for missing context
+                        "response": content                     # Register the AI response
+                    }
+                }
+                # Fall through to complete the pairing — orphanded AI response wrapped with placeholder, proceed normally
+
+            else:
+                # Complete the pairing of user prompt and AI response to form a complete interaction
+                self._induced_pmt["content"]["response"]: str = content  # Register the AI response to the induced PMT
+
+            # Flatten induced PMT into evictable PMT
+            content: dict = self._induced_pmt["content"]        # Extract the complete interaction
+            induced_pmt: dict = {                               # Prepare the PMT to be filled
+                "timestamp": self._induced_pmt["timestamp"],    # Register the inducing time of the PMT
+                "content":   f"{content['speaker']}: {content['prompt']}\n"  # Combine user prompt and AI response into one content
+                             f"assistant: {content['response']}",  
+            }
+            self._induced_pmt = None                            # Clear the induced PMT — exchange complete
+
+            induced_pmt_chunks: int = _estimate_chunk_count(induced_pmt)    # Calculate how many chunks in the PMT to be induced
+
+            # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
+            # And then fill the induced PMT, to keep working memory always within the capacities
+            evicted_pmt_slot: list[dict] = []                                         # Set up buffer for holding receding memory
+            while self._pmt_slot and (                                                # Evict loop when the working memory is not empty, and one of the following condition is met
+                self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit # - Global chunk limit exceeded after filling of the induced PMT, or
+                or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # - PMT schema exceeds the limit of PMT slot (ie. Miller's Law 7±2, tunable)
+            ):
+                evicted_pmt: dict           = self._pmt_slot.popleft()                          # Evict the receding PMT from the working memory
+                evicted_pmt_slot.append(evicted_pmt)                                            # Fill the evicted PMT to the evicted slot
+                evicted_chunks: int         = _estimate_chunk_count(evicted_pmt)                # Calculate the chunk size of the evicted PMT
+                self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)   # Update the chunk size of the working memory, cannot be negative
+                self.logger.debug(                                                              # Log the eviction of the receding PMT
+                    f"WMC evict → EMC: size={evicted_chunks} chunks"
+                )
+
+            # Fill the induced PMT into working memory
+            self._pmt_slot.append(induced_pmt)                # Fill the induced PMT into working memory
+            self._sustained_chunks += induced_pmt_chunks      # Update the chunk size of the working memory
+
+            self.logger.debug(                                # Log the filling and eviction for development/troubleshooting
+                f"WMC filled [{speaker}] | "
+                f"sustained={len(self._pmt_slot)} | "
+                f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
+                f"evicted={len(evicted_pmt_slot)}"
             )
 
-        self._pmt_slot.append(induced_pmt)                # Fill in the induced PMT into working memory
-        self._sustained_chunks += induced_pmt_chunks      # Update the chunk size of the working memory
+            return evicted_pmt_slot                            # Return the list of evicted PMT schema back to MCC
 
-        self.logger.debug(                                # Log the filling and eviction for development/troubleshooting
-            f"WMC filled [{role}] | "
-            f"sustained={len(self._pmt_slot)} | "
-            f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
-            f"evicted={len(evicted_pmt_slot)}"
-        )
-
-        return evicted_pmt_slot                            # Return the list of evicted PMT schema back to MCC
+        return []                                              # Return empty list if no PMT schema is induced
 
     def recall_pmt_schema(self) -> list[dict]:
         """
         Recall sustaining PMT schema for context window construction.
+        Unpacks the PMT schema into pair of user prompt and AI response.
         Return PMT schema in ascending chronological order.
         Only includes role + content — timestamp stripped for LLM.
         Timestamps are only used for logging and memory management.
 
         Returns:
-            list[dict]: List of sustained PMTs [{role, content}]
+            list[dict]: List of sustained PMTs unpacked for LLM inference [{role, content}]
         """
-        return [                                                    # Return the list of sustained PMT schema in ascending chronological order
-            {"role": pmt["role"], "content": pmt["content"]}
-            for pmt in self._pmt_slot
-        ]
+        messages = []
+        for pmt in self._pmt_slot:
+            # Each pmt["content"] is "user: {prompt}\nassistant: {response}"
+            # Split back into two turns for LLM message format
+            parts = pmt["content"].split("\nassistant: ", 1)
+            if len(parts) == 2:
+                user_content      = parts[0].replace("user: ", "", 1)
+                assistant_content = parts[1]
+                messages.append({"role": "user",      "content": user_content})
+                messages.append({"role": "assistant",  "content": assistant_content})
+            else:
+                # Malformed — surface as-is rather than silently dropping
+                messages.append({"role": "user", "content": pmt["content"]})
+        return messages
+        # Return the list of sustained PMT schema in ascending chronological order
 
     def forget_pmt_schema(self) -> list[dict]:
         """
@@ -199,10 +242,11 @@ class WorkingMemoryCortex:
         caller chooses to save the returned list.
 
         Returns:
-            list[dict]: List of forgotten PMTs [{role, content, timestamp}]
+            list[dict]: List of forgotten PMTs [{timestamp, content}]
         """
         forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
         self._pmt_slot.clear()                                      # Wipe out working memory
+        self._induced_pmt = None                                    # Clear any incomplete induced PMT  
         self._sustained_chunks: int = 0                             # Zero out sustained chunk count
         self.logger.info(                                           # Log the forgetting of the PMT schema from working memory
             f"🧹 WMC forgotten ({len(forgotten_pmt_schema)} PMTs)"

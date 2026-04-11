@@ -59,7 +59,7 @@ class AGi:                                       # Amazing Grace infrastructure
             RELEVANCE_THRESHOLD: float  = 0.40   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                               # Working Memory Cortex
-            PMT_OVERHEAD: int       = 4          # [STATIC]    Overhead chunks for each PMT
+            PMT_OVERHEAD: int       = 4          # [STATIC]    Overhead chunks per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7          # [INTRINSIC] Maximum slot vacancy for PMTs (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2          # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
 

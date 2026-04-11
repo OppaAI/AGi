@@ -102,7 +102,7 @@ class MemoryCoordinationCore:
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # Initialize EMC with provided logger and gateway to engram complex
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
-    async def register_memory(self, role: str, content: str) -> None:
+    async def register_memory(self, user_id: str, content: str) -> None:
         """
         Register new PMT into working memory and bind any evicted interactions to episodic buffer.
         WMC accumulates individual turns and pairs them into complete interactions internally.
@@ -112,11 +112,11 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMT to episodic buffer (non-blocking)
 
         Args:
-            role (str):    Role of the conversation turn — "user" or "assistant"
+            speaker (str): User ID of the speaker interacting with the AI
             content (str): Content of the conversation turn (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)        # Induce conversation turn to WMC, and collect any evicted PMTs
+        evicted_pmts = self.wmc.fill_pmt(speaker=user_id, content=content)  # Induce conversation turn to WMC, and collect any evicted PMTs
             
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
