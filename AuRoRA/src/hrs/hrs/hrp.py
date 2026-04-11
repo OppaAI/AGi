@@ -35,8 +35,8 @@ class AGi:                                       # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                       # [STATIC] Entry point for all the interactions with AGi's core systems
 
     class CNS:                                   # Central Nervous System
-        CORTICAL_CAPACITY: int = 2048            # [STATIC]    Total neural capacity of the active cognitive core
-        COGNITIVE_RESERVE: int = 300             # [INTRINSIC] Cortical capacity reserved for identity and cognition
+        CORTICAL_CAPACITY: int = 8192            # [STATIC]    Total neural capacity of the active cognitive core
+        COGNITIVE_RESERVE: int = 512             # [INTRINSIC] Cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str    = "cns"           # [STATIC]    Neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str    = "engram.db"     # [STATIC]    Engram complex where long-term memories storage
 
@@ -47,10 +47,10 @@ class AGi:                                       # Amazing Grace infrastructure
             ENCODING_DIM: int           = 768    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENGRAM_CHUNK_LIMIT: int     = 300    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
-            ENGRAM_CONTENT_LIMIT: int   = 2000   # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
+            ENGRAM_CONTENT_LIMIT: int   = 6000   # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
             ORPHAN_BATCH_SIZE: int      = 50     # [INTRINSIC] Max orphaned PMTs loaded into binding stream per recovery batch
-            RECALL_RESERVE: int         = 300    # [INTRINSIC] Cortical capacity reserved for episodic recall
-            RECALL_DEPTH: int           = 5      # [INTRINSIC] Maximum number of engrams surfaced per turn
+            RECALL_RESERVE: int         = 1024   # [INTRINSIC] Cortical capacity reserved for episodic recall
+            RECALL_DEPTH: int           = 8      # [INTRINSIC] Maximum number of engrams surfaced per turn
             RECALL_POOL: int            = 50     # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL engrams scored)
             RECALL_TIMEOUT: float       = 5.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                  # covers encode_query (~500-900ms) + KNN search

@@ -31,12 +31,12 @@ Architecture:
 
 Terminology:
     Buffer      — temporary staging area for memory traces in transition 
-                (e.g. evicted PMTs from WMC waiting for embedding and consolidation in EMC, or
+                (e.g. evicted PMTs from WMC waiting for encoding and consolidation in EMC, or
                 recalled EMC episodes waiting to be injected into memory context)
     Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
-    Engram      — episodic memory trace (one past interaction, user + assistant pair)
-    PMT         — phonological memory trace (one conversation turn, user or assistant)
-                WMC stores individual turns; MCC pairs them into interactions before EMC binding
+    Engram      — episodic memory trace (one past interaction, user prompt + AI response)
+    PMT         — phonological memory trace (one interaction, user prompt + AI response)
+                WMC pairs the interaction internally; MCC forwards evicted PMTs to EMC for encoding and consolidation
     Scaffold    — temporary staging area for relevant EMC episodes to be injected into memory context
     Reserve     — cortical capacity reserve for a specific memory function (e.g. EMC_RECALL_RESERVE for recalling relevant EMC episodes)
     Threshold   — minimum relevancy score for an EMC episode to be injected into memory context
@@ -60,7 +60,6 @@ TODO:
 # System libraries
 import asyncio                              # For concurrent WMC and EMC recall
 from pathlib import Path                    # For handling gateway to the engrams
-from typing import Dict, Optional, List     #
 
 # AGi libraries
 from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex layer of the CNS, responsible for sustaining PMTs in working memory
@@ -105,17 +104,19 @@ class MemoryCoordinationCore:
 
     async def register_memory(self, role: str, content: str) -> None:
         """
-        Register new PMT into working memory and bind any evicted PMTs to episodic buffer.
+        Register new PMT into working memory and bind any evicted interactions to episodic buffer.
+        WMC accumulates individual turns and pairs them into complete interactions internally.
+        Eviction only fires at interaction boundary — never mid-exchange.
 
-        1. Fill induced PMT to WMC
-        2. Bind any evicted PMTs to episodic buffer (non-blocking)
+        1. Pair to complete interaction and fill induced PMT into WMC
+        2. Bind any evicted PMT to episodic buffer (non-blocking)
 
         Args:
-            role (str): user ID of the PMT (e.g., "user" or "assistant")
-            content (str): Content of the PMT (the message text)
+            role (str):    Role of the conversation turn — "user" or "assistant"
+            content (str): Content of the conversation turn (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)  # Fill the induced PMT into WMC, collect any evicted PMTs
+        evicted_pmts = self.wmc.fill_pmt(role=role, content=content)        # Induce conversation turn to WMC, and collect any evicted PMTs
             
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
@@ -133,12 +134,12 @@ class MemoryCoordinationCore:
         Takes place in isolated neural pathway — never blocks active cognition neural pathway.
 
         Args:
-            evicted_pmts (list[dict]): List of evicted PMTs [{interaction, timestamp}]
+            evicted_pmts (list[dict]): List of evicted PMTs [{content, timestamp}]
         """
         try:                                                         # Attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                         # Process each evicted PMT                
                 self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
-                    interaction=evicted_pmt["interaction"],          # Bind the content of the interaction
+                    content=evicted_pmt["content"],                  # Bind the content of the interaction
                     timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
                 )       
         except Exception as e:                                       # If binding lapse occurs, log and continue
