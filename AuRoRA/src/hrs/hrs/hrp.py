@@ -42,21 +42,21 @@ class AGi:                                       # Amazing Grace infrastructure
         UNITS_PER_CHUNK: int    = 4              # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
 
         class EMC:                               # Episodic Memory Cortex
-            ENCODING_ENGINE: str        = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
+            ENCODING_ENGINE: str        = "BAAI/bge-small-en-v1.5"  # [STATIC] Encoding engine for episodic memory
             ENCODING_CACHE_LIMIT: int   = 256    # [INTRINSIC] Maximum number of imprints held in encoding cache to control memory usage
             ENCODING_IMPRINT_LIMIT: int = 300    # [INTRINSIC] Maximum length of imprints to control cache hit rate vs false positive risk
-            ENCODING_DIM: int           = 768    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
+            ENCODING_DIM: int           = 384    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENGRAM_CHUNK_LIMIT: int     = 300    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
             ENGRAM_CONTENT_LIMIT: int   = 6000   # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
             ORPHAN_BATCH_SIZE: int      = 50     # [INTRINSIC] Max orphaned PMTs loaded into binding stream per recovery batch
             RECALL_RESERVE: int         = 1024   # [INTRINSIC] Cortical capacity reserved for episodic recall
-            RECALL_DEPTH: int           = 8      # [INTRINSIC] Maximum number of engrams surfaced per turn
+            RECALL_DEPTH: int           = 3      # [INTRINSIC] Maximum number of engrams surfaced per turn
             RECALL_POOL: int            = 50     # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL engrams scored)
-            RECALL_TIMEOUT: float       = 5.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
+            RECALL_TIMEOUT: float       = 2.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                  # covers encode_query (~500-900ms) + KNN search
                                                  # TODO: drop to 3.0 if model is genuinely int4 quantized
-            RELEVANCE_THRESHOLD: float  = 0.40   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
+            RELEVANCE_THRESHOLD: float  = 0.25   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                               # Working Memory Cortex
             PMT_OVERHEAD: int       = 4          # [STATIC]    Overhead chunks per PMT for formatting and metadata

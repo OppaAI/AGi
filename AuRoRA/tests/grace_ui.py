@@ -3,7 +3,6 @@ from rclpy.node import Node
 from std_msgs.msg import String
 import threading
 import json
-import sys
 import time
 
 class GraceUI(Node):

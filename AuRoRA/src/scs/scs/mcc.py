@@ -177,6 +177,11 @@ class MemoryCoordinationCore:
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # Log the timeout error while recalling EMC episodes
             emc_episodes = []                                                # Proceed without episodic context
         
+        self.logger.info(
+            f"EMC raw recall: {len(emc_episodes)} episodes, "
+            f"scores: {[e['relevancy'] for e in emc_episodes]}"
+        )
+
         # Pass through memory gate — suppress episodes below relevancy threshold
         episodic_scaffold = [                                                # Set up EMC episodic scaffold to stage the relevant episodes
             episode for episode in emc_episodes                              # Process each of the recalled EMC episodes
@@ -188,19 +193,29 @@ class MemoryCoordinationCore:
 
         # Inject relevant EMC episodes as a system message
         if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
-            recalled_episodes = ["Relevant memories from past interactions:"]
             for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
-                date        = episode.get("date", "unknown date")            # Retrieve the date of the EMC episode
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
-                relevancy   = episode.get("relevancy", 0.0)                  # Retrieve the relevancy score of the EMC episode
-                recalled_episodes.append(                                    # Stage the content of EMC episode into the episodic buffer
-                    f"[{date}]: {content} (relevancy: {relevancy:.2f})"
-                )
 
-            self.emc.episodic_buffer.stage_single_episode({                  # Stage the recalled EMC episodes into episodic buffer
-                "role": "system",
-                "content": "\n".join(recalled_episodes),
-            })
+                # Parse the content to extract into user prompt/AI response pairs
+                if "user:" in content and "assistant:" in content:                      # If the content contains user prompt and AI response pairs,
+                    context = content.split("assistant:")                               # Split the content into user prompt and AI response pairs
+                    recalled_user_prompt = context[0].replace("user:", "").strip()      # Extract the user prompt from the content
+                    recalled_ai_response = context[1].split("(relevancy:")[0].strip()   # Extract the AI response from the content
+
+                    # Stage the user prompt/AI response pairs as separate conversation messages
+                    self.emc.episodic_buffer.stage_single_episode({                  # Stage the user prompt as a separate conversation message
+                        "role": "user",
+                        "content": recalled_user_prompt
+                    })
+                    self.emc.episodic_buffer.stage_single_episode({                  # Stage the AI response as a separate conversation message
+                        "role": "assistant", 
+                        "content": recalled_ai_response
+                    })
+                else:
+                    self.emc.episodic_buffer.stage_single_episode({         # Malformed — surface as-is
+                        "role":    "user",
+                        "content": content,
+                    })
 
             self.logger.debug(                                               # Log the number of EMC episodes bound into episodic buffer
                 f"MCC injected {len(episodic_scaffold)} EMC episode(s) into episodic buffer"

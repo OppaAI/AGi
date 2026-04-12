@@ -39,7 +39,7 @@ from scs.mcc import MemoryCoordinationCore
 
 # ── vLLM config ───────────────────────────────────────────────────────────────
 VLLM_BASE_URL   = "http://AIVA:11434"             # Ollama server (Nemotron3-super-cloud)
-VLLM_MODEL      = "nemotron-3-super:cloud"
+VLLM_MODEL      = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"
 VLLM_MAX_TOKENS = 512                             # max tokens per response
 VLLM_TEMP       = 0.7                             # temperature
 VLLM_TIMEOUT    = 60.0                            # seconds before giving up
@@ -67,6 +67,7 @@ Rules:
 - Put an emoji reflecting your emotions and feelings in front of your conversation
 
 Current date: {date}
+/no_think
 """
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -162,24 +163,34 @@ class CNC(Node):
             # 1. Build context window
             memory_context = await self.mcc.assemble_memory_context(user_input)
 
-            # 2. Assemble messages for Cosmos
+            # 2. Separate system and conversation parts from memory context
+            memory_system = [m for m in memory_context if m["role"] == "system"]
+            memory_convo  = [m for m in memory_context if m["role"] != "system"]
+
+            # 3. Assemble into single system message
             system_prompt = GRACE_SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d")
             )
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(memory_context)
+            if memory_system:
+                system_content = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in memory_system)
+            else:
+                system_content = system_prompt
+
+            # 4. Build final message list — single system message
+            messages = [{"role": "system", "content": system_content}]
+            messages.extend(memory_convo)
             messages.append({"role": "user", "content": user_input})
 
-            # 3. Stream from vLLM
+            # 5. Stream from vLLM
             self.get_logger().info(f"Messages sent to LLM: {messages}")
             full_response = await self._stream_cosmos(messages)
 
-            # 4. Store assistant turn in memory
+            # 6. Store assistant turn in memory
             if full_response:
                 await self.mcc.register_memory("user", user_input)
                 await self.mcc.register_memory("assistant", full_response)
 
-            # 5. Log memory stats periodically
+            # 7. Log memory stats periodically
             self.mcc.report_memory_stats()
 
         except Exception as e:
