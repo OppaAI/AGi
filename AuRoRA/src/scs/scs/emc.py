@@ -747,22 +747,35 @@ class EpisodicMemoryCortex:
         self.logger.debug("EMC recall → no results from either path")
         return []
 
+    def _sanitize_fts_query(self, query: str) -> str:
+        """
+        Sanitize raw query string for safe FTS5 MATCH usage.
+        Quotes each token to treat them as literal terms, neutralizing
+        FTS5 operators (*, -, ", parentheses, AND, OR, NOT).
+        """
+        tokens = query.strip().split()
+        return " ".join(f'"{t}"' for t in tokens if t)
+    
     def _lexical_match(self, query: str, top_k: int) -> list[dict]:
         """
         Lexical pattern separation search via FTS5.
         Dentate gyrus analogue — precise, keyword-driven engram retrieval.
-     
+    
         FTS5 rank() is negative (more negative = better). We normalise to
         a 0.0–1.0 relevancy score so RRF can treat both paths uniformly.
-     
+    
         Args:
             query   : Raw recall cue string (not encoded — FTS5 works on text)
             top_k   : Maximum candidates to return before RRF fusion
-     
+    
         Returns:
             list[dict] with keys: id, timestamp, date, content, relevancy
                        sorted best-first (highest relevancy first)
         """
+        safe_query = self._sanitize_fts_query(query)
+        if not safe_query:
+            return []
+    
         try:
             # Fetch 2× top_k candidates — RRF will cull to top_k after fusion
             rows = self.engram.execute(
@@ -775,17 +788,17 @@ class EpisodicMemoryCortex:
                 ORDER BY fts.rank          -- most negative = best
                 LIMIT ?
                 """,
-                [query, top_k * 2],
+                [safe_query, top_k * 2],
             ).fetchall()
-     
+    
             if not rows:
                 return []
-     
+    
             # Normalise raw FTS5 rank to 0.0–1.0 relevancy
             # raw_rank is negative; least negative = worst; most negative = best
             raw_scores = [abs(row["raw_rank"]) for row in rows]
             max_score  = max(raw_scores) if raw_scores else 1.0
-     
+    
             results = []
             for i, row in enumerate(rows):
                 results.append({
@@ -797,11 +810,11 @@ class EpisodicMemoryCortex:
                     "_rank"     : i,   # 0-based rank for RRF (best = 0)
                 })
             return results
-     
+    
         except Exception as e:
             self.logger.debug(f"EMC lexical match failed: {e}")
             return []
-
+        
     def _hippocampal_convergence(
         self,
         semantic_results : list[dict],
