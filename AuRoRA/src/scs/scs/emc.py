@@ -15,9 +15,10 @@ Responsibilities:
     - Inject recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
-    Two-table SQLite design:
+    Three-table SQLite design:
         episodic_buffer  — crash-safe raw binding from WMC overflow
-        episodes   — embedded, searchable episodic memory (permanent)
+        episodes         — embedded, searchable episodic memory (permanent)
+        episodes_fts     — FTS5 lexical index for pattern separation recall
 
      
     Episodic Buffer (Baddeley's model):
@@ -54,9 +55,18 @@ Architecture:
         Never blocks the robot's active cognition
         
     Relevancy:
-        SQLite-vec L2 distance KNN search on unit-normalized vectors (cosine-equivalent)
-        Falls back to Python cosine if SQLite-vec not available
-        Falls back to lexical search if encoding engine unavailable
+        Dual-path retrieval fused via Reciprocal Rank Fusion (hippocampal convergence):
+            PATH 1 — Semantic (CA3 pattern completion):
+                SQLite-vec L2 distance KNN on unit-normalized vectors (cosine-equivalent)
+                Falls back to Python cosine similarity if SQLite-vec not available
+            PATH 2 — Lexical (dentate gyrus pattern separation):
+                FTS5 porter-stemmed keyword search on episode content
+        Both paths run in parallel and are fused via RRF scoring through CA1 convergence.
+        Fallback chain:
+            Both paths active  → RRF fusion (full hippocampal convergence)
+            Semantic only      → semantic results (encoding engine available, FTS5 unavailable)
+            Lexical only       → lexical results  (encoding engine unavailable)
+            Neither            → []               (full degraded state)
 
     Storage:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
@@ -66,7 +76,7 @@ Terminology:
     encoding         — semantic encoding of a turn into a vector
     episodes         — embedded episodic memory table (permanent)
     engram           — one embedded episode (a specific remembered moment)
-    relevancy        — cosine distance between query and episode encodings
+    relevancy        — RRF-fused engram salience score (0.0–1.0) combining semantic and lexical rank
 
 Lifecycle:
     Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
@@ -382,7 +392,24 @@ class EpisodicMemoryCortex:
             """)
             self.engram.commit()                                            # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
-
+            
+        # ── NEW ──────────────────────────────────────────────────────────────────
+        # FTS5 virtual table — lexical pattern separation (dentate gyrus analogue)
+        # content="" makes it a contentless-rowid table, keeping storage minimal.
+        # content="episodes" would mirror the episodes table but doubles storage —
+        # contentless is correct here since we JOIN back to episodes on recall.
+        self.engram.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
+                content,
+                content='episodes',
+                content_rowid='id',
+                tokenize='porter unicode61'
+            )
+        """)
+        self.engram.commit()
+        self.logger.debug("EMC FTS5 lexical index initialized")
+        # ── END NEW ──────────────────────────────────────────────────────────────
+    
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
         Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
@@ -537,33 +564,7 @@ class EpisodicMemoryCortex:
                 # Pack encoded episode vector as fp32 binary for engram storage
                 encoding_blob = struct.pack(f"{len(encoded_episode)}f", *encoded_episode)   # Pack encoded episode vector as fp32 binary for engram storage
             
-                with self._write_lock:                                              # With write lock on episodic buffer,
-                    # Insert into episodes (engram)
-                    encoder_conn.execute(                                           # Insert the episode into the engram
-                        "INSERT INTO episodes "                                     # Insert into episodes table
-                        "(timestamp, date, content, encoding) "                     # With timestamp, date, content, and encoding
-                        "VALUES (?, ?, ?, ?)",                                      # Values to insert
-                        [
-                            episode["timestamp"],
-                            episode["date"],
-                            episode["content"],
-                            encoding_blob,
-                        ],
-                    )
-                    # Insert into episode_vectors if engram vector search is active
-                    if self._engram_vector:
-                        episode_id_new = encoder_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                        encoder_conn.execute(
-                            "INSERT INTO episode_vectors (rowid, encoding) VALUES (?, ?)",
-                            [episode_id_new, encoding_blob],
-                        )
-                    # Mark buffer episode as processed
-                    encoder_conn.execute(
-                        "UPDATE episodic_buffer SET processed = TRUE "
-                        "WHERE timestamp = ? AND processed = FALSE",
-                        [episode["timestamp"]],
-                    )
-                    encoder_conn.commit()                                           # Commit the transaction
+                self._consolidate_episode(encoder_conn, episode, encoding_blob)
     
                 self.logger.debug(
                     f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
@@ -572,197 +573,296 @@ class EpisodicMemoryCortex:
     
         encoder_conn.close()
         self.logger.info("EMC consolidation cycle stopped")
-
-    def recall(
-        self,
-        query: str,
-        top_k: int = EMC.RECALL_DEPTH,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-    ) -> list[dict]:
+        
+    def _consolidate_episode(self, encoder_conn, episode: dict, encoding_blob: bytes, episode_id_hint=None) -> None:
         """
-        Semantic search over all embedded episodes.
-        Returns top-K most relevant episodes sorted by semantic relevancy.
-        Falls back to cosine similarity search if engram vector search is unavailable.
-        Falls back to lexical search if encoding engine is unavailable.
-
-        Args:
-            query:     Natural language recall cue
-            top_k:     Number of recalled episodes to return
-            date_from: Optional ISO date string lower bound (inclusive)
-            date_to:   Optional ISO date string upper bound (inclusive)
-
-        Returns:
-            List of dicts: {timestamp, date, content, relevancy}
+        Internal helper — consolidates one encoded episode into all three indexes.
+        Called from _run_encoding_cycle() after successful encoding.
+     
+        Writes:
+            episodes          — primary episodic record
+            episode_vectors   — vec0 KNN index (if sqlite-vec available)
+            episodes_fts      — FTS5 lexical index (always)
         """
-        query_vec = self._encoding_engine.encode(query, is_cue=True)
-        if not query_vec:
-            return self._keyword_search(query, top_k, date_from, date_to)
-
-        try:
+        with self._write_lock:
+            # 1. Primary episodic record
+            cursor = encoder_conn.execute(
+                "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",
+                [episode["timestamp"], episode["date"], episode["content"], encoding_blob],
+            )
+            episode_id = cursor.lastrowid
+     
+            # 2. Vec0 semantic KNN index (pattern completion — CA3 analogue)
             if self._engram_vector:
-                # L2 distance KNN search via engram vector (SQLite-vec)
-                # Structure: MATCH + k in WHERE, date filters in WHERE, one ORDER BY, one LIMIT
-                query_blob = struct.pack(f"{len(query_vec)}f", *query_vec)
-
-                where  = ["v.encoding MATCH ?", "v.k = ?"]
-                params = [query_blob, top_k]
-
-                if date_from:
-                    where.append("e.date >= ?")
-                    params.append(date_from)
-                if date_to:
-                    where.append("e.date <= ?")
-                    params.append(date_to)
-
-                params.append(top_k)
-
-                sql = f"""
-                    SELECT e.timestamp, e.date, e.content, v.distance
-                    FROM episode_vectors v
-                    JOIN episodes e ON e.id = v.rowid
-                    WHERE {(" AND ".join(where))}
-                    ORDER BY v.distance
-                    LIMIT ?
-                """
-
-                # self.engram is the main connection — accessed cross-thread here.
-                # Safe for reads under WAL mode (concurrent readers never block).
-                # All writes are serialized through _write_lock on worker_conn in _encoding_cycle.
-                rows = self.engram.execute(sql, params).fetchall()
-                if not rows:
-                    return []
-
-                self.logger.debug(
-                    f"EMC vector search '{query[:30]}…' → "
-                    f"{len(rows)} results "
-                    f"(top dist={rows[0]['distance'] if rows else 0})"
+                encoder_conn.execute(
+                    "INSERT INTO episode_vectors (rowid, encoding) VALUES (?,?)",
+                    [episode_id, encoding_blob],
                 )
-
-                return [
-                    {
-                        "timestamp": row["timestamp"],
-                        "date":      row["date"],
-                        "content":   row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                        "relevancy": round(1 / (1 + row["distance"]), 4),       # Inverse of distance (higher is more relevant)
-                    }
-                    for row in rows
-                ]
-
-            else:
-                # Fallback to cosine similarity search — pre-filter to recent episodes to bound memory usage
-                # Stratified sampling — half from recent, half from oldest
-                # Guarantees old memories like personal facts get scored alongside recent ones
-                where  = []
-                params = []
-
-                if date_from:
-                    where.append("date >= ?")
-                    params.append(date_from)
-                if date_to:
-                    where.append("date <= ?")
-                    params.append(date_to)
-
-                where_clause = f"WHERE {' AND '.join(where)}" if where else ""
-                half_pool = top_k * EMC.RECALL_POOL // 2  # Half from recent, half from oldest
-
-                sql = (
-                    f"SELECT timestamp, date, role, content, encoding FROM episodes "
-                    f"{where_clause} ORDER BY rowid DESC LIMIT ? "
-                    f"UNION ALL "
-                    f"SELECT timestamp, date, role, content, encoding FROM episodes "
-                    f"{where_clause} ORDER BY rowid ASC LIMIT ?"
-                )
-
-                # Build params for both halves of the UNION — date filters applied to each
-                union_params = params + [half_pool] + params + [half_pool]
-                rows = self.engram.execute(sql, union_params).fetchall()
-
-                if not rows:
-                    return []
-
-                scored = []
-                for row in rows:
-                    raw = row["encoding"]
-                    stored_vec = list(struct.unpack(f"{len(raw) // 4}f", raw)) if raw else []
-                    sim = _semantic_match(query_vec, stored_vec)
-                    scored.append({
-                        "timestamp":  row["timestamp"],
-                        "date":       row["date"],
-                        "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                        "relevancy":  round(sim, 4),
-                    })
-
-                scored.sort(key=lambda x: x["relevancy"], reverse=True)
-                results = scored[:top_k]
-
-                self.logger.debug(
-                    f"EMC search '{query[:30]}…' → "
-                    f"{len(results)} results "
-                    f"(top sim={results[0]['relevancy'] if results else 0})"
-                )
-                return results
-
+     
+            # ── NEW ──────────────────────────────────────────────────────────────
+            # 3. FTS5 lexical index (pattern separation — dentate gyrus analogue)
+            # rowid must match episodes.id so JOIN works during recall
+            encoder_conn.execute(
+                "INSERT INTO episodes_fts (rowid, content) VALUES (?,?)",
+                [episode_id, episode["content"]],
+            )
+            # ── END NEW ──────────────────────────────────────────────────────────
+     
+            # 4. Mark buffer entry as processed
+            encoder_conn.execute(
+                "UPDATE episodic_buffer SET processed=TRUE WHERE timestamp=? AND content=?",
+                [episode["timestamp"], episode["content"]],
+            )
+            encoder_conn.commit()
+        
+    def recall(self, query: str, top_k: int = 5) -> list[dict]:
+        """
+        Recall relevant episodes from episodic memory.
+        Runs semantic (CA3 pattern completion) and lexical (dentate gyrus pattern
+        separation) retrieval in parallel, fusing via hippocampal convergence (RRF).
+     
+        Fallback chain:
+            semantic + lexical  → RRF fusion          (both paths available)
+            semantic only       → semantic results     (FTS5 unavailable)
+            lexical only        → lexical results      (encoding engine unavailable)
+            neither             → []                   (full degraded state)
+     
+        Args:
+            query  : Recall cue string
+            top_k  : Number of episodes to return (default 5)
+     
+        Returns:
+            list[dict] of recalled episodes, sorted by descending relevancy.
+            Each dict: id, timestamp, date, content, relevancy
+        """
+        if not query or not query.strip():
+            return []
+     
+        semantic_results : list[dict] = []
+        lexical_results  : list[dict] = []
+     
+        # ── PATH 1: Semantic — CA3 pattern completion ─────────────────────────
+        if self._encoding_engine.is_available:
+            cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)
+     
+            if cue_vector:
+                if self._engram_vector:
+                    # Primary: sqlite-vec L2 KNN (cosine-equivalent on unit vectors)
+                    try:
+                        cue_blob = struct.pack(f"{len(cue_vector)}f", *cue_vector)
+                        rows = self.engram.execute(
+                            """
+                            SELECT e.id, e.timestamp, e.date, e.content,
+                                   ev.distance
+                            FROM episode_vectors ev
+                            JOIN episodes e ON e.id = ev.rowid
+                            WHERE ev.encoding MATCH ?
+                            ORDER BY ev.distance
+                            LIMIT ?
+                            """,
+                            [cue_blob, top_k * 2],
+                        ).fetchall()
+                        if rows:
+                            max_dist = max(r["distance"] for r in rows) or 1.0
+                            for i, row in enumerate(rows):
+                                semantic_results.append({
+                                    "id"        : row["id"],
+                                    "timestamp" : row["timestamp"],
+                                    "date"      : row["date"],
+                                    "content"   : row["content"],
+                                    "relevancy" : 1.0 - (row["distance"] / max_dist),
+                                    "_rank"     : i,
+                                })
+                    except Exception as e:
+                        self.logger.debug(f"EMC vec KNN failed, falling to cosine: {e}")
+     
+                if not semantic_results:
+                    # Fallback: Python cosine similarity
+                    try:
+                        rows = self.engram.execute(
+                            "SELECT id, timestamp, date, content, encoding FROM episodes"
+                        ).fetchall()
+                        scored = []
+                        for row in rows:
+                            engram_vec = list(struct.unpack(
+                                f"{len(cue_vector)}f",
+                                row["encoding"][:len(cue_vector) * 4]
+                            ))
+                            score = _semantic_match(cue_vector, engram_vec)
+                            if score > 0.0:
+                                scored.append((score, row))
+                        scored.sort(key=lambda x: x[0], reverse=True)
+                        for i, (score, row) in enumerate(scored[:top_k * 2]):
+                            semantic_results.append({
+                                "id"        : row["id"],
+                                "timestamp" : row["timestamp"],
+                                "date"      : row["date"],
+                                "content"   : row["content"],
+                                "relevancy" : score,
+                                "_rank"     : i,
+                            })
+                    except Exception as e:
+                        self.logger.debug(f"EMC cosine fallback failed: {e}")
+     
+        # ── PATH 2: Lexical — dentate gyrus pattern separation ────────────────
+        try:
+            lexical_results = self._lexical_match(query, top_k)
         except Exception as e:
-            self.logger.error(f"EMC recall failed: {e}")
+            self.logger.debug(f"EMC lexical path failed: {e}")
+     
+        # ── CONVERGENCE: RRF fusion through CA1 ───────────────────────────────
+        if semantic_results and lexical_results:
+            # Both paths active — full hippocampal convergence
+            fused = self._hippocampal_convergence(semantic_results, lexical_results, top_k)
+            self.logger.debug(
+                f"EMC recall → semantic:{len(semantic_results)} "
+                f"lexical:{len(lexical_results)} fused:{len(fused)}"
+            )
+            return fused
+     
+        if semantic_results:
+            # Lexical unavailable — return semantic only, capped to top_k
+            results = sorted(semantic_results, key=lambda x: x["relevancy"], reverse=True)
+            for r in results:
+                r.pop("_rank", None)
+            return results[:top_k]
+     
+        if lexical_results:
+            # Encoding engine unavailable — return lexical only, capped to top_k
+            results = sorted(lexical_results, key=lambda x: x["relevancy"], reverse=True)
+            for r in results:
+                r.pop("_rank", None)
+            return results[:top_k]
+     
+        self.logger.debug("EMC recall → no results from either path")
+        return []
+
+    def _lexical_match(self, query: str, top_k: int) -> list[dict]:
+        """
+        Lexical pattern separation search via FTS5.
+        Dentate gyrus analogue — precise, keyword-driven engram retrieval.
+     
+        FTS5 rank() is negative (more negative = better). We normalise to
+        a 0.0–1.0 relevancy score so RRF can treat both paths uniformly.
+     
+        Args:
+            query   : Raw recall cue string (not encoded — FTS5 works on text)
+            top_k   : Maximum candidates to return before RRF fusion
+     
+        Returns:
+            list[dict] with keys: id, timestamp, date, content, relevancy
+                       sorted best-first (highest relevancy first)
+        """
+        try:
+            # Fetch 2× top_k candidates — RRF will cull to top_k after fusion
+            rows = self.engram.execute(
+                """
+                SELECT e.id, e.timestamp, e.date, e.content,
+                       rank() OVER (ORDER BY fts.rank) AS fts_rank,
+                       fts.rank AS raw_rank
+                FROM episodes_fts fts
+                JOIN episodes e ON e.id = fts.rowid
+                WHERE episodes_fts MATCH ?
+                ORDER BY fts.rank          -- most negative = best
+                LIMIT ?
+                """,
+                [query, top_k * 2],
+            ).fetchall()
+     
+            if not rows:
+                return []
+     
+            # Normalise raw FTS5 rank to 0.0–1.0 relevancy
+            # raw_rank is negative; least negative = worst; most negative = best
+            raw_scores = [abs(row["raw_rank"]) for row in rows]
+            max_score  = max(raw_scores) if raw_scores else 1.0
+     
+            results = []
+            for i, row in enumerate(rows):
+                results.append({
+                    "id"        : row["id"],
+                    "timestamp" : row["timestamp"],
+                    "date"      : row["date"],
+                    "content"   : row["content"],
+                    "relevancy" : abs(row["raw_rank"]) / max_score if max_score else 0.0,
+                    "_rank"     : i,   # 0-based rank for RRF (best = 0)
+                })
+            return results
+     
+        except Exception as e:
+            self.logger.debug(f"EMC lexical match failed: {e}")
             return []
 
-    def _keyword_search(
+    def _hippocampal_convergence(
         self,
-        query: str,
-        top_k: int,
-        date_from: Optional[str],
-        date_to: Optional[str],
+        semantic_results : list[dict],
+        lexical_results  : list[dict],
+        top_k            : int,
+        k                : int = 60,
     ) -> list[dict]:
         """
-        Lexical recall as fallback when encoding engine is unavailable.
-        Matches lexicons against episode content using LIKE queries.
-
+        Hippocampal convergence via Reciprocal Rank Fusion (RRF).
+        CA3 pattern completion (semantic) + dentate gyrus pattern separation (lexical)
+        → unified engram salience ranking through CA1.
+     
+        RRF formula per engram:
+            rrf_score = 1/(k + rank_semantic) + 1/(k + rank_lexical)
+     
+        Engrams appearing in only one list get a rank of (list_length + 1)
+        in the missing list — a mild penalty, not a full exclusion.
+        This mirrors biology: a memory with strong semantic match but zero
+        keyword match is still a valid recall candidate.
+     
         Args:
-            query:     Natural language recall cue
-            top_k:     Number of episodes to return
-            date_from: Optional ISO date string lower bound (inclusive)
-            date_to:   Optional ISO date string upper bound (inclusive)
-
+            semantic_results : Ranked list from vec KNN / cosine search
+            lexical_results  : Ranked list from FTS5 search
+            top_k            : Final number of engrams to return
+            k                : RRF constant (default 60, standard in literature)
+     
         Returns:
-            List of dicts: {"timestamp": int, "date": str, "content": str, "relevancy": float}
-            relevancy is always 0.0 - no semantic scoring in lexical search
+            list[dict] top_k engrams sorted by descending RRF score,
+                       with 'relevancy' set to normalised RRF score (0.0–1.0)
         """
-        words = [w for w in query.lower().split() if len(w) > 3]
-        if not words:
-            return []
-
-        where  = ["(" + " OR ".join(["LOWER(content) LIKE ?" for _ in words]) + ")"]
-        params = [f"%{w}%" for w in words]
-
-        if date_from:
-            where.append("date >= ?")
-            params.append(date_from)
-        if date_to:
-            where.append("date <= ?")
-            params.append(date_to)
-
-        sql = (
-            f"SELECT timestamp, date, content FROM episodes "
-            f"WHERE {' AND '.join(where)} "
-            f"ORDER BY timestamp DESC LIMIT {top_k}"
-        )
-        try:
-            rows = self.engram.execute(sql, params).fetchall()
-            return [
-                {
-                    "timestamp": r["timestamp"],
-                    "date":      r["date"],
-                    "content":   r["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                    "relevancy": 0.0,
-                }
-                for r in rows
-            ]
-        except Exception as e:
-            self.logger.error(f"EMC keyword search failed: {e}")
-            return []
-
-    # ── Episode retrieval for a specific date ─────────────────────────────────
+        # Build rank lookup by episode id — 0-based, best = 0
+        sem_rank  = {r["id"]: i for i, r in enumerate(semantic_results)}
+        lex_rank  = {r["id"]: i for i, r in enumerate(lexical_results)}
+        sem_miss  = len(semantic_results)   # penalty rank for absence
+        lex_miss  = len(lexical_results)    # penalty rank for absence
+     
+        # Union of all candidate episode ids
+        all_ids = set(sem_rank) | set(lex_rank)
+     
+        # Build id → episode dict for metadata lookup
+        episode_lookup: dict[int, dict] = {}
+        for r in semantic_results:
+            episode_lookup[r["id"]] = r
+        for r in lexical_results:
+            episode_lookup.setdefault(r["id"], r)
+     
+        # Compute RRF score for each candidate
+        scored: list[tuple[float, int]] = []  # (rrf_score, episode_id)
+        for eid in all_ids:
+            sr = sem_rank.get(eid, sem_miss)
+            lr = lex_rank.get(eid, lex_miss)
+            rrf = 1.0 / (k + sr) + 1.0 / (k + lr)
+            scored.append((rrf, eid))
+     
+        # Sort descending by RRF score
+        scored.sort(key=lambda x: x[0], reverse=True)
+     
+        # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
+        max_rrf = scored[0][0] if scored else 1.0
+     
+        fused = []
+        for rrf_score, eid in scored[:top_k]:
+            ep = dict(episode_lookup[eid])  # copy — don't mutate cached result
+            ep["relevancy"] = rrf_score / max_rrf
+            ep.pop("_rank", None)           # remove internal rank field
+            fused.append(ep)
+     
+        return fused
+    
+     # ── Episode retrieval for a specific date ─────────────────────────────────
 
     def get_episodes_for_date(self, date_str: str) -> list[dict]:
         """
