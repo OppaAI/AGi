@@ -49,6 +49,13 @@ Public interface:
     mcc.close()
 
 TODO:
+    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown
+        gate on novelty/importance scoring — low-salience turns should be
+        truly forgotten, not blindly bound
+    M2 — salience gate at eviction boundary in _bind_to_episodic_buffer():
+         score evicted PMTs for novelty and importance before binding;
+         discard low-salience turns, bind high-salience turns to EMC.
+         WMC and EMC remain salience-agnostic — MCC owns this decision.
     M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
          EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
          WMC's chunk limit
