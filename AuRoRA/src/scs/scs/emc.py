@@ -266,9 +266,10 @@ class EpisodicMemoryCortex:
     retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
     (crash-safe binding), then are encoded and consolidated into episodes.
 
-    Two-table SQLite design:
-        episodic_buffer  — buffer for evicted PMT schemas from WMC overflow (crash-safe binding)
-        episodes         — encoded, retrievable episodic memory (permanent)
+    Three-table SQLite design:
+        episodic_buffer  — crash-safe raw binding from WMC overflow
+        episodes         — embedded, searchable episodic memory (permanent)
+        episodes_fts     — FTS5 lexical index for pattern separation recall
 
     The consolidation worker runs in a separate neural thread, draining binding stream of episodic buffer →
     encoding → episodes continuously during wake without blocking the main neural thread's responses.
@@ -332,7 +333,7 @@ class EpisodicMemoryCortex:
 
         try:                                                                # Attempt to initialize the write lock
             # Write lock — only encoding cycle writes to episodes
-            self._write_lock = threading.Lock()                             # Ensure only one thread inscribes into the engram at a time
+            self._write_lock = threading.RLock()                            # Ensure only one thread inscribes into the engram at a time
 
             # Set up encoding cycle
             self._encoder_running = False                                   # Indicate that encoding cycle not yet running
@@ -535,18 +536,20 @@ class EpisodicMemoryCortex:
             self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
     
             # Replay each episode in the ripple
-            for episode in ripple:                                  # For each episode in the ripple,
+            for episode in ripple:                              # For each episode in the ripple,
                 if not self._encoder_running:                   # If the encoder is not running,
                     break                                       # Respect stop signal mid-ripple
 
                 # Write to episodic_buffer (crash-safe record) before encoding
-                with self._write_lock:                                              # With write lock on episodic buffer,
-                    encoder_conn.execute(                                           # Insert the episode into the episodic buffer
-                        "INSERT INTO episodic_buffer (timestamp, date, content) "
-                        "VALUES (?, ?, ?)",
-                        [episode["timestamp"], episode["date"], episode["content"]],
-                    )
-                    encoder_conn.commit()                                           # Commit the transaction
+                # Skip if already recovered from episodic_buffer on restart
+                if not episode.get("recovered"):
+                    with self._write_lock:                                              # With write lock on episodic buffer,
+                        encoder_conn.execute(                                           # Insert the episode into the episodic buffer
+                            "INSERT INTO episodic_buffer (timestamp, date, content) "
+                            "VALUES (?, ?, ?)",
+                            [episode["timestamp"], episode["date"], episode["content"]],
+                        )
+                        encoder_conn.commit()                                           # Commit the transaction
 
                 # Encode the episode content into a semantic vector
                 encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
@@ -574,7 +577,7 @@ class EpisodicMemoryCortex:
         encoder_conn.close()
         self.logger.info("EMC consolidation cycle stopped")
         
-    def _consolidate_episode(self, encoder_conn, episode: dict, encoding_blob: bytes, episode_id_hint=None) -> None:
+    def _consolidate_episode(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
         """
         Internal helper — consolidates one encoded episode into all three indexes.
         Called from _run_encoding_cycle() after successful encoding.
@@ -679,9 +682,18 @@ class EpisodicMemoryCortex:
                 if not semantic_results:
                     # Fallback: Python cosine similarity
                     try:
+                        # Stratified sampling — half recent, half oldest
+                        # Bounds memory usage and ensures old memories score alongside recent ones
+                        half_pool = (top_k * EMC.RECALL_POOL) // 2
                         rows = self.engram.execute(
-                            "SELECT id, timestamp, date, content, encoding FROM episodes"
+                            "SELECT id, timestamp, date, content, encoding FROM episodes "
+                            "ORDER BY rowid DESC LIMIT ? "
+                            "UNION ALL "
+                            "SELECT id, timestamp, date, content, encoding FROM episodes "
+                            "ORDER BY rowid ASC LIMIT ?",
+                            [half_pool, half_pool],
                         ).fetchall()
+                        
                         scored = []
                         for row in rows:
                             engram_vec = list(struct.unpack(
@@ -758,7 +770,6 @@ class EpisodicMemoryCortex:
             rows = self.engram.execute(
                 """
                 SELECT e.id, e.timestamp, e.date, e.content,
-                       rank() OVER (ORDER BY fts.rank) AS fts_rank,
                        fts.rank AS raw_rank
                 FROM episodes_fts fts
                 JOIN episodes e ON e.id = fts.rowid
@@ -824,20 +835,22 @@ class EpisodicMemoryCortex:
                        with 'relevancy' set to normalised RRF score (0.0–1.0)
         """
         # Build rank lookup by episode id — 0-based, best = 0
-        sem_rank  = {r["id"]: i for i, r in enumerate(semantic_results)}
-        lex_rank  = {r["id"]: i for i, r in enumerate(lexical_results)}
-        sem_miss  = len(semantic_results)   # penalty rank for absence
-        lex_miss  = len(lexical_results)    # penalty rank for absence
-     
+        sem_rank: dict[int, int] = {}
+        episode_lookup: dict[int, dict] = {}
+        for i, r in enumerate(semantic_results):
+            sem_rank[r["id"]] = i
+            episode_lookup[r["id"]] = r
+        
+        lex_rank: dict[int, int] = {}
+        for i, r in enumerate(lexical_results):
+            lex_rank[r["id"]] = i
+            episode_lookup.setdefault(r["id"], r)
+        
+        sem_miss = len(semantic_results)
+        lex_miss = len(lexical_results)
+        
         # Union of all candidate episode ids
         all_ids = set(sem_rank) | set(lex_rank)
-     
-        # Build id → episode dict for metadata lookup
-        episode_lookup: dict[int, dict] = {}
-        for r in semantic_results:
-            episode_lookup[r["id"]] = r
-        for r in lexical_results:
-            episode_lookup.setdefault(r["id"], r)
      
         # Compute RRF score for each candidate
         scored: list[tuple[float, int]] = []  # (rrf_score, episode_id)
