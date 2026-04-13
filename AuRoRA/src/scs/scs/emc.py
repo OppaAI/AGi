@@ -401,10 +401,8 @@ class EpisodicMemoryCortex:
         # contentless is correct here since we JOIN back to episodes on recall.
         self.engram.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
-                content,
-                content='episodes',
-                content_rowid='id',
-                tokenize='porter unicode61'
+               content,
+               tokenize='porter unicode61'
             )
         """)
         self.engram.commit()
@@ -673,7 +671,7 @@ class EpisodicMemoryCortex:
                                     "timestamp" : row["timestamp"],
                                     "date"      : row["date"],
                                     "content"   : row["content"],
-                                    "relevancy" : 1.0 - (row["distance"] / max_dist),
+                                    "relevancy" : 1.0 / (1.0 + row["distance"]),
                                     "_rank"     : i,
                                 })
                     except Exception as e:
