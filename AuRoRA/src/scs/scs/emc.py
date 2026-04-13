@@ -566,8 +566,8 @@ class EpisodicMemoryCortex:
                     encoder_conn.commit()                                           # Commit the transaction
     
                 self.logger.debug(
-                    f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks", # Log the number of chunks in the episode
-                    f" (date={pmt['date']})",                                                            # Log the date of the episode
+                    f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
+                    f" (date={episode['date']})",                                                            # Log the date of the episode
                 )
     
         encoder_conn.close()
@@ -794,7 +794,7 @@ class EpisodicMemoryCortex:
 
     def buffer_pending_count(self) -> int:
         """
-        Return number of PMTs pending consolidation.
+        Return number of episodes pending encoding.
         Combines binding stream (RAM) and episodic buffer (unprocessed)
         for a complete picture of pending encoding work.
  
