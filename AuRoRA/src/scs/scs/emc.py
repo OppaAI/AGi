@@ -4,7 +4,7 @@ EMC — Episodic Memory Cortex
 AuRoRA · Semantic Cognitive System (SCS)
 
 Episodic memory layer of the CNS — "I remember that specific moment."
-Stores PMTs with semantic encodings into engrams for recall using semantic search.
+Stores memory episodes with semantic encodings into engrams for recall using semantic search.
 No expiry — 1TB NVMe means the robot remembers everything.
 
 Responsibilities:
@@ -30,7 +30,7 @@ Architecture:
                         hippocampal trace after handoff.
                         _run_encoding_cycle() drains _binding_stream, writes to
                         episodic_buffer (SQLite) before encoding, then consolidates
-                        into episodes. On restart, orphaned unprocessed rows in
+                        into episodes. On restart, Unencoded episodes in
                         episodic_buffer are recovered back into _binding_stream
                         by _init_encoding_cycle() before the cycle starts.
  
@@ -62,7 +62,7 @@ Architecture:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
 Terminology:
-    episodic_buffer  — raw PMT binding table (crash-safe, temporary)
+    episodic_buffer  — raw binding table for evicted PMTs (crash-safe, temporary)
     encoding         — semantic encoding of a turn into a vector
     episodes         — embedded episodic memory table (permanent)
     engram           — one embedded episode (a specific remembered moment)
@@ -122,8 +122,8 @@ class _EncodingEngine:
             logger: Logger instance for logging encoding engine operations
         """
         self.logger     = logger                    # Retrieve logger from CNC for logging EMC operations
-        self._core      = None                      # Initialize encoding engine core to hold the engine instance
-        self._cache: dict[str, list[float]] = {}    # Initialize cache for recent encodings to avoid redundant encoding
+        self._core      = None                      # For holding the encoding engine instance for semantic encoding
+        self._cache: dict[str, list[float]] = {}    # For holding the cache of recent encodings to avoid redundant encoding
 
         try:                                                                        # Attempt to activate the encoding engine
             from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
@@ -160,7 +160,7 @@ class _EncodingEngine:
         prompting EMC to fall back to lexical recall.
         
         Args:
-            trace (str): The given memory trace to encode (e.g. PMT content).
+            trace (str): The given memory trace to encode (e.g. episode content).
             is_cue (bool): Whether the trace is a recall cue (True) or an episode to be stored(False).
                              This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
 
@@ -175,7 +175,7 @@ class _EncodingEngine:
             )
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-        imprint = f"{'cue' if is_cue else 'pmt'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash and label the encoding type
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash and label the encoding type
         if imprint in self._cache:                                                      # If the imprint is already in the cache,
             return self._cache[imprint]                                                 # Return the encoded vector in the cache
 
@@ -257,7 +257,7 @@ class EpisodicMemoryCortex:
     (crash-safe binding), then are encoded and consolidated into episodes.
 
     Two-table SQLite design:
-        episodic_buffer  — raw PMT schemas from WMC overflow (crash-safe binding)
+        episodic_buffer  — buffer for evicted PMT schemas from WMC overflow (crash-safe binding)
         episodes         — encoded, retrievable episodic memory (permanent)
 
     The consolidation worker runs in a separate neural thread, draining binding stream of episodic buffer →
@@ -341,21 +341,21 @@ class EpisodicMemoryCortex:
         This method creates the necessary tables and indexes for storing episodic memories.
 
         Tables:
-        - episodic_buffer   : Raw PMT binding from WMC overflow (crash-safe)
+        - episodic_buffer   : Buffer for evicted PMT schemas from WMC overflow (crash-safe binding)
         - episodes          : Encoded episodic memory (permanent, retrievable)
         - episode_vectors   : Semantic vectors for L2 distance semantic search
                               (Only created if engram vector search is activated)
         """
-        self.engram.executescript("""                                       -- Execute SQL script to create the tables and indexes
-            -- Raw PMT binding from WMC overflow (crash-safe, temporary)
+        self.engram.executescript("""                                       -- Create the tables and indexes of episodic memory
+            -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
             CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Create the episodic buffer schema
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing index
-                timestamp  TEXT    NOT NULL,                                -- Full datetime of the PMT
-                date       TEXT    NOT NULL,                                -- Pre-computed date of the PMT (carries forward to episodes)
-                content    TEXT    NOT NULL,                                -- Content of the PMT (truncated to fit within context window)
-                processed  BOOLEAN DEFAULT FALSE                            -- Indicator if PMT has been encoded into episodic memory
+                timestamp  TEXT    NOT NULL,                                -- Full datetime of the episode
+                date       TEXT    NOT NULL,                                -- Pre-computed date of the episode (carries forward to episodes)
+                content    TEXT    NOT NULL,                                -- Content of the episode (truncated to fit within context window)
+                processed  BOOLEAN DEFAULT FALSE                            -- Indicator if episode has been encoded into episodic memory
             );
-            CREATE INDEX IF NOT EXISTS idx_episodic_buffer_processed        -- Create index to retrieve PMTs by encoding status
+            CREATE INDEX IF NOT EXISTS idx_episodic_buffer_processed        -- Create index to retrieve episodes by encoding status
                 ON episodic_buffer(processed);
 
             -- Encoded episodic memory (permanent, retrievable)
@@ -386,7 +386,7 @@ class EpisodicMemoryCortex:
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
         Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
-        and binds it into the episodic buffer for consolidation.
+        and binds it into the episodic buffer as episode for encoding and consolidation.
     
         Called by MCC asynchronously at the WMC → EMC boundary — crash-safe, non-blocking.
 
@@ -397,62 +397,61 @@ class EpisodicMemoryCortex:
         Returns:
             bool: True on success, False on failure
         """
-        pmt_date = timestamp[:10]                                                   # Extract the date from the timestamp
-        pmt: dict = {                                                               # Package the PMT data into a packet
+        episode: dict = {                                                           # Package the evicted PMT data into episode
             "timestamp": timestamp,                                                 # Timestamp of PMT induced into WMC
-            "date":      pmt_date,                                                  # Date of PMT induced into WMC
+            "date":      timestamp[:10],                                            # Date of PMT induced into WMC
             "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # Truncate content to the engram content limit
         }
 
-        try:                                                                        # Attempt to bind the PMT to the episodic buffer
+        try:                                                                        # Attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # Acquire the lock to prevent race conditions
-                self.episodic_buffer._binding_stream.append(pmt)                    # Add the PMT to the binding stream
+                self.episodic_buffer._binding_stream.append(episode)                # Bind the episode to the binding stream
             self._theta_rhythm.set()                                                # Set the theta rhythm to trigger encoding cycle
-            self.logger.debug(                                                      # Log the binding of the PMT to the episodic buffer
+            self.logger.debug(                                                      # Log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
             )
             return True                                                             # Indicate successful binding
         except Exception as e:
-            self.logger.warning(f"EMC binding PMT failed: {e}")                     # Log the failure to bind the PMT to the episodic buffer
-            return False                                                            # Report failure to bind the PMT to the episodic buffer
+            self.logger.warning(f"EMC binding PMT failed: {e}")                     # Log the failure to bind the evicted PMT into episodic buffer
+            return False                                                            # Report failure to bind the evicted PMT into episodic buffer
 
     def _init_encoding_cycle(self) -> None:
         """
         Initialize the dormant encoding cycle thread.
-        Recovers orphaned unprocessed PMTs from SQLite in batches to avoid
+        Recovers unencoded unprocessed PMTs from SQLite in batches to avoid
         a large RAM spike after a crash during a long session.
         """
-        # Batch orphan recovery — drain in chunks of EMC.ORPHAN_BATCH_SIZE
-        # Avoids loading thousands of unprocessed PMTs into _binding_stream at once
-        offset = 0                                                  # Initialize the offset to 0
-        total_recovered = 0                                         # Initialize the total recovered to 0
+        # Batch recovery of unencoded episodes — drain in chunks of EMC.RECOVERY_BATCH_SIZE
+        # Avoids loading thousands of unprocessed episodes into _binding_stream at once
+        recovery_count = 0                                          # For tracking the number of recovered unencoded episodes
+        recovery_offset = 0                                         # For tracking the offset for batch recovery of unencoded episodes
 
-        while True:                                                 # Keep recovering orphans in batches
-            orphaned = self.engram.execute(                         # Query the engram for orphaned PMTs
+        while True:                                                 # Keep recovering unencoded episodes in batches
+            unencoded = self.engram.execute(                        # Query the engram for unencoded episodes
                 "SELECT timestamp, date, content "                  # Collect the timestamp, date, and content
-                "FROM episodic_buffer WHERE processed = FALSE "     # Choose PMTs that are not processed
+                "FROM episodic_buffer WHERE processed = FALSE "     # Choose episodes that are not processed
                 "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
-                [EMC.ORPHAN_BATCH_SIZE, offset]                     # Process PMTs by batch size
-            ).fetchall()                                            # Fetch all the orphaned PMTs
+                [EMC.RECOVERY_BATCH_SIZE, recovery_offset]          # Process episodes by batch size
+            ).fetchall()                                            # Fetch all the unencoded episodes
 
-            if not orphaned:                                        # If no more orphans to recover, break
-                break                                               # Stop recovering orphans
+            if not unencoded:                                       # If no more unencoded episodes to recover, break
+                break                                               # Stop recovering unencoded episodes
 
             with self._episodic_buffer_lock:                        # Acquire the lock to prevent race conditions
-                for row in orphaned:                                # Iterate through each orphaned PMT
-                    self.episodic_buffer._binding_stream.append({   # Add the orphaned PMT to the binding stream
-                        "timestamp": row["timestamp"],              # Timestamp of the PMT
-                        "date":      row["date"],                   # Date of the PMT
-                        "content":   row["content"],                # Content of the PMT
+                for row in unencoded:                               # Iterate through each unencoded episode
+                    self.episodic_buffer._binding_stream.append({   # Add the unencoded episode to the binding stream
+                        "timestamp": row["timestamp"],              # Timestamp of the episode
+                        "date":      row["date"],                   # Date of the episode
+                        "content":   row["content"],                # Content of the episode
                         "recovered": True,                          # Flag as already recovered into binding stream
                     })
 
-            total_recovered += len(orphaned)                        # Increment the total recovered count by the number of orphaned PMTs
-            offset          += EMC.ORPHAN_BATCH_SIZE                # Increment the offset by the batch size
+            recovery_count  += len(unencoded)                       # Increment the total recovered count by the number of unencoded episodes
+            recovery_offset += EMC.RECOVERY_BATCH_SIZE              # Increment the offset by the batch size
 
-        if total_recovered:                                         # If any PMTs were recovered,
-            self.logger.info(                                       # Log the recovery of orphaned PMTs
-                f"⚡ EMC recovered {total_recovered} orphaned PMT(s) from engram → binding stream"
+        if recovery_count:                                          # If any episodes were recovered,
+            self.logger.info(                                       # Log the recovery of unencoded episodes
+                f"⚡ EMC recovered {recovery_count} Unencoded episode(s) from engram → binding stream"
             )
             self._theta_rhythm.set()                                # Set the theta rhythm to trigger encoding
 
@@ -472,106 +471,106 @@ class EpisodicMemoryCortex:
         Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
         """
 
-        # Worker-local SQLite connection (WAL allows concurrent access)
-        worker_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)
-        worker_conn.row_factory = sqlite3.Row
-        worker_conn.execute("PRAGMA journal_mode=WAL;")
+        # Connect to engram gateway with WAL mode for concurrent access
+        encoder_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)    # Connect to engram gateway without thread checking
+        encoder_conn.row_factory = sqlite3.Row                                          # Set the row factory to return rows as dictionaries
+        encoder_conn.execute("PRAGMA journal_mode=WAL;")                                # Set the journal mode to WAL for concurrent access
 
         # Yield processing priority to active cognition threads
         os.nice(10)                                             # Encoding is non-latency-sensitive — defer to dedicated neural threads
 
         # Load sqlite-vec into worker connection if engram vector search is active
-        if self._engram_vector:
-            try:
-                import sqlite_vec
-                sqlite_vec.load(worker_conn)                    # sqlite-vec must be loaded per connection
-            except Exception as e:
-                self.logger.warning(f"⚠️ sqlite-vec load failed in encode worker: {e}")
-                self._engram_vector = False                     # Disable vector search — fall back to Python cosine
+        if self._engram_vector:                                 # If engram vector search is active,
+            try:                                                # Attempt to activate engram vector search into worker connection
+                import sqlite_vec                               # For vector similarity search of episodic memories
+                sqlite_vec.load(encoder_conn)                   # Load engram vector search into encoder connection
+            except Exception as e:                              # If engram vector search fails to load
+                self.logger.warning(f"⚠️ sqlite-vec load failed in encode worker: {e}") # Log the failure to load engram vector search
+                self._engram_vector = False                     # Disable engram vector search — fall back to cosine similarity search
 
-        self.logger.info("⚙️ EMC consolidation cycle running…")
+        self.logger.info("⚙️ EMC encoding cycle running…")      # Log the start of encoding cycle
     
-        while self._encoder_running:
+        while self._encoder_running:                            # While the encoder is running,
             # Rest state — wait for hippocampal activation
-            self._theta_rhythm.wait()
-            self._theta_rhythm.clear()
+            self._theta_rhythm.wait()                           # Wait for theta rhythm activation
+            self._theta_rhythm.clear()                          # Clear the theta rhythm activation flag
     
-            if not self._encoder_running:
-                break  # clean exit if stopped while waiting
+            if not self._encoder_running:                       # If the encoder is not running,
+                break                                           # Clean exit if stopped while waiting
     
             # Snapshot IDs at this moment — one ripple, one defined window
-            with self._episodic_buffer_lock:
-                if not self.episodic_buffer._binding_stream:
-                    continue
-                snapshot: list[dict] = list(self.episodic_buffer._binding_stream)
-                self.episodic_buffer._binding_stream.clear()
+            with self._episodic_buffer_lock:                    # With lock on episodic buffer,
+                if not self.episodic_buffer._binding_stream:    # If the binding stream is empty,
+                    continue                                    # Skip this encoding cycle
+                ripple: list[dict] = list(self.episodic_buffer._binding_stream)   # Capture point-in-time of the binding stream
+                self.episodic_buffer._binding_stream.clear()    # Clear the binding stream
     
-            self.logger.debug(f"EMC encoding cycle → {len(snapshot)} episode(s) in snapshot")
+            self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
     
-            # Replay each episode in the snapshot
-            for pmt in snapshot:
-                if not self._encoder_running:
-                    break  # respect stop signal mid-ripple
+            # Replay each episode in the ripple
+            for episode in ripple:                                  # For each episode in the ripple,
+                if not self._encoder_running:                   # If the encoder is not running,
+                    break                                       # Respect stop signal mid-ripple
 
                 # Write to episodic_buffer (crash-safe record) before encoding
-                with self._write_lock:
-                    worker_conn.execute(
+                with self._write_lock:                                              # With write lock on episodic buffer,
+                    encoder_conn.execute(                                           # Insert the episode into the episodic buffer
                         "INSERT INTO episodic_buffer (timestamp, date, content) "
                         "VALUES (?, ?, ?)",
-                        [pmt["timestamp"], pmt["date"], pmt["content"]],
+                        [episode["timestamp"], episode["date"], episode["content"]],
                     )
-                    worker_conn.commit()
+                    encoder_conn.commit()                                           # Commit the transaction
 
-                # Encode the PMT content into a semantic vector
-                vec = self._encoding_engine.encode(pmt["content"], is_cue=False)
-                if not vec:
+                # Encode the episode content into a semantic vector
+                encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
+                if not encoded_episode:                                             # If the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
-                    self.logger.warning(
-                        f"EMC encode skipped (encoding engine unavailable): "
-                        f"{len(pmt['content']) // CNS.UNITS_PER_CHUNK + 1} chunks"
+                    self.logger.warning(                                            # Log the warning message of unavailability of the encoding engine
+                        f"EMC encode skipped (encoding engine unavailable): ",
+                        f"{len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks"
                     )
-                    with self._episodic_buffer_lock:
-                        self.episodic_buffer._binding_stream.appendleft(pmt)                    
+                    with self._episodic_buffer_lock:                                # With lock on episodic buffer,
+                        self.episodic_buffer._binding_stream.appendleft(episode)    # Append the episode to the binding stream
                     # Don't mark processed — retry next ripple
-                    continue
+                    continue                                                        # Continue to the next episode
     
-                # Pack vector as binary float32 for BLOB storage
-                encoding_blob = struct.pack(f"{len(vec)}f", *vec)
+                # Pack encoded episode vector as fp32 binary for engram storage
+                encoding_blob = struct.pack(f"{len(encoded_episode)}f", *encoded_episode)   # Pack encoded episode vector as fp32 binary for engram storage
             
-                with self._write_lock:
+                with self._write_lock:                                              # With write lock on episodic buffer,
                     # Insert into episodes (engram)
-                    worker_conn.execute(
-                        "INSERT INTO episodes "
-                        "(timestamp, date, content, encoding) "
-                        "VALUES (?, ?, ?, ?)",
+                    encoder_conn.execute(                                           # Insert the episode into the engram
+                        "INSERT INTO episodes "                                     # Insert into episodes table
+                        "(timestamp, date, content, encoding) "                     # With timestamp, date, content, and encoding
+                        "VALUES (?, ?, ?, ?)",                                      # Values to insert
                         [
-                            pmt["timestamp"],
-                            pmt["date"],
-                            pmt["content"],
+                            episode["timestamp"],
+                            episode["date"],
+                            episode["content"],
                             encoding_blob,
                         ],
                     )
                     # Insert into episode_vectors if engram vector search is active
                     if self._engram_vector:
-                        episode_id_new = worker_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-                        worker_conn.execute(
+                        episode_id_new = encoder_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                        encoder_conn.execute(
                             "INSERT INTO episode_vectors (rowid, encoding) VALUES (?, ?)",
                             [episode_id_new, encoding_blob],
                         )
                     # Mark buffer episode as processed
-                    worker_conn.execute(
+                    encoder_conn.execute(
                         "UPDATE episodic_buffer SET processed = TRUE "
                         "WHERE timestamp = ? AND processed = FALSE",
-                        [pmt["timestamp"]],
+                        [episode["timestamp"]],
                     )
-                    worker_conn.commit()
+                    encoder_conn.commit()                                           # Commit the transaction
     
                 self.logger.debug(
-                    f"EMC consolidated → episodes: {len(pmt['content']) // CNS.UNITS_PER_CHUNK + 1} chunks"
-                    f" (date={pmt['date']})"
+                    f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks", # Log the number of chunks in the episode
+                    f" (date={pmt['date']})",                                                            # Log the date of the episode
                 )
     
-        worker_conn.close()
+        encoder_conn.close()
         self.logger.info("EMC consolidation cycle stopped")
 
     def recall(
@@ -652,7 +651,8 @@ class EpisodicMemoryCortex:
 
             else:
                 # Fallback to cosine similarity search — pre-filter to recent episodes to bound memory usage
-                # Full table scan is avoided by limiting candidates before scoring
+                # Stratified sampling — half from recent, half from oldest
+                # Guarantees old memories like personal facts get scored alongside recent ones
                 where  = []
                 params = []
 
@@ -664,17 +664,20 @@ class EpisodicMemoryCortex:
                     params.append(date_to)
 
                 where_clause = f"WHERE {' AND '.join(where)}" if where else ""
-                params.append(top_k * EMC.RECALL_POOL)  # Pre-filter: score only the most recent candidates
+                half_pool = top_k * EMC.RECALL_POOL // 2  # Half from recent, half from oldest
 
                 sql = (
-                    f"SELECT timestamp, date, content, encoding "
-                    f"FROM episodes "
-                    f"{where_clause} "
-                    f"ORDER BY rowid DESC LIMIT ?"
+                    f"SELECT timestamp, date, role, content, encoding FROM episodes "
+                    f"{where_clause} ORDER BY rowid DESC LIMIT ? "
+                    f"UNION ALL "
+                    f"SELECT timestamp, date, role, content, encoding FROM episodes "
+                    f"{where_clause} ORDER BY rowid ASC LIMIT ?"
                 )
 
-                
-                rows = self.engram.execute(sql, params).fetchall()
+                # Build params for both halves of the UNION — date filters applied to each
+                union_params = params + [half_pool] + params + [half_pool]
+                rows = self.engram.execute(sql, union_params).fetchall()
+
                 if not rows:
                     return []
 
@@ -687,7 +690,7 @@ class EpisodicMemoryCortex:
                         "timestamp":  row["timestamp"],
                         "date":       row["date"],
                         "content":    row["content"][:EMC.ENGRAM_CHUNK_LIMIT],
-                        "relevancy": round(sim, 4),
+                        "relevancy":  round(sim, 4),
                     })
 
                 scored.sort(key=lambda x: x["relevancy"], reverse=True)

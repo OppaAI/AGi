@@ -49,13 +49,13 @@ class AGi:                                       # Amazing Grace infrastructure
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENGRAM_CHUNK_LIMIT: int     = 300    # [INTRINSIC] Maximum number of chunks surfaced per engram during recall
             ENGRAM_CONTENT_LIMIT: int   = 6000   # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
-            ORPHAN_BATCH_SIZE: int      = 50     # [INTRINSIC] Max orphaned PMTs loaded into binding stream per recovery batch
             RECALL_RESERVE: int         = 1024   # [INTRINSIC] Cortical capacity reserved for episodic recall
             RECALL_DEPTH: int           = 3      # [INTRINSIC] Maximum number of engrams surfaced per turn
             RECALL_POOL: int            = 50     # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL engrams scored)
             RECALL_TIMEOUT: float       = 2.0    # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                  # covers encode_query (~500-900ms) + KNN search
                                                  # TODO: drop to 3.0 if model is genuinely int4 quantized
+            RECOVERY_BATCH_SIZE: int    = 50     # [INTRINSIC] Max unencoded episodes loaded into binding stream per recovery batch
             RELEVANCE_THRESHOLD: float  = 0.25   # [INTRINSIC] Minimum relevance score for an engram to be surfaced
 
         class WMC:                               # Working Memory Cortex

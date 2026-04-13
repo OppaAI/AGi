@@ -40,6 +40,8 @@ from scs.mcc import MemoryCoordinationCore
 # ── vLLM config ───────────────────────────────────────────────────────────────
 VLLM_BASE_URL   = "http://AIVA:11434"             # Ollama server (Nemotron3-super-cloud)
 VLLM_MODEL      = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"
+#VLLM_BASE_URL = "http://localhost:8000"          # vllm — Cosmos vision model
+#VLLM_MODEL    = "embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead"
 VLLM_MAX_TOKENS = 512                             # max tokens per response
 VLLM_TEMP       = 0.7                             # temperature
 VLLM_TIMEOUT    = 60.0                            # seconds before giving up

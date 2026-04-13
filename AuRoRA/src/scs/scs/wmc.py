@@ -107,12 +107,12 @@ class WorkingMemoryCortex:
             pmt_slot_buffer (int): Additional buffer for PMTs beyond Miller's Law limit to allow flexibility if chunks are small (default 2)
         """
         self.logger                  = logger               # Retrieve logger from CNC for logging WMC operations
-        self.global_chunk_limit: int = global_chunk_limit   # Retrieve global chunk limit of from MCC configuration for WMC
-        self.pmt_slot_limit: int     = pmt_slot_limit       # Retrieve PMT slot limit from MCC configuration for WMC
-        self.pmt_slot_buffer: int    = pmt_slot_buffer      # Retrieve PMT slot buffer from MCC configuration for WMC
-        self._pmt_slot: deque[dict]  = deque()              # Set up slot for holding the phonological memory, Safe — single-threaded access guaranteed by CNC._busy flag
-        self._induced_pmt: dict | None = None               # Set up slot for holding the induced PMT pending pairing
-        self._sustained_chunks: int  = 0                    # Start with empty working memory with no sustained chunks
+        self.global_chunk_limit: int = global_chunk_limit   # For holding the maximum number of chunks WMC can hold
+        self.pmt_slot_limit: int     = pmt_slot_limit       # For holding the maximum number of PMTs WMC can hold
+        self.pmt_slot_buffer: int    = pmt_slot_buffer      # For holding the additional buffer for PMTs beyond the slot limit
+        self._induced_pmt: dict | None = None               # For holding the induced user prompt pending pairing with AI response
+        self._pmt_slot: deque[dict]  = deque()              # For holding the sustained PMTs, Safe — single-threaded access guaranteed by CNC._busy flag
+        self._sustained_chunks: int  = 0                    # For tracking the number of sustained chunks in WMC
 
         self.logger.info(                                   # Log entry on WMC initialization with configured capacity
             f"   [Working Memory Cortex]  ONLINE ✅ — "
@@ -148,19 +148,19 @@ class WorkingMemoryCortex:
             return []                                           # Exchange incomplete — nothing to induce or evict
 
         elif speaker == "assistant":                            # If this is AI response,
-            if self._induced_pmt is None:                       # If there is no induced PMT (orphaned AI response),
-                self.logger.warning(                            # Log the warning of orphaned AI response
+            if self._induced_pmt is None:                       # If there is no induced PMT (unpaired AI response),
+                self.logger.warning(                            # Log the warning of unpaired AI response
                     "WMC: AI response induced without user prompt — wrapping with placeholder"
                 )
-                self._induced_pmt = {                           # Wrap the orphaned AI response with placeholder
+                self._induced_pmt = {                           # Wrap the unpaired AI response with placeholder
                     "timestamp": datetime.now().isoformat(),    # Register the inducing time of the PMT
-                    "content": {                                # Embed the orphaned AI response with placeholder
+                    "content": {                                # Embed the unpaired AI response with placeholder
                         "speaker": "user",                      # Register the user ID of the interaction
                         "prompt": "[context missing]",          # Register the placeholder for missing context
                         "response": content                     # Register the AI response
                     }
                 }
-                # Fall through to complete the pairing — orphanded AI response wrapped with placeholder, proceed normally
+                # Fall through to complete the pairing — unpaired AI response wrapped with placeholder, proceed normally
 
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
