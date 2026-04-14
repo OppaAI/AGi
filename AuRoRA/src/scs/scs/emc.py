@@ -10,7 +10,7 @@ No expiry — 1TB NVMe means the robot remembers everything.
 Responsibilities:
     - Receive evicted PMTs from MCC into crash-safe buffer (binding)
     - Encode buffered turns into semantic encodings (encoding)
-    - Consolidate encoded episodes into SMC and PMC permanently (consolidation)
+    - Store encoded episodes into SMC and PMC intermediately for future consolidation into LTM
     - Search episodes via semantical and lexical search for relevant past context (recall)
     - Inject recalled episodes into MCC memory context (reinstatement)
 
@@ -30,8 +30,8 @@ Architecture:
                         just as the prefrontal cortex does not monitor every
                         hippocampal trace after handoff.
                         _run_encoding_cycle() drains _binding_stream, writes to
-                        episodic_buffer (SQLite) before encoding, then consolidates
-                        into episodes. On restart, Unencoded episodes in
+                        episodic_buffer (SQLite) before encoding, then stores
+                        into engram as episodes. On restart, Unencoded episodes in
                         episodic_buffer are recovered back into _binding_stream
                         by _init_encoding_cycle() before the cycle starts.
  
@@ -82,11 +82,11 @@ Terminology:
     RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
 
 Lifecycle:
-    Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
+    Binding → Encoding → Synaptic Consolidation → System Consolidation → Recall → Reinstatement
 
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
-    emc.recall(query, top_k) → list[dict]
+    emc.recall_episode(query, top_k) → list[dict]
     emc.get_episodes_for_date(date_str) → list[dict]
     emc.buffer_pending_count() → int
     emc.get_stats() → dict
@@ -268,20 +268,20 @@ class EpisodicMemoryCortex:
     Episodic Memory Cortex.
     Receives evicted PMT schema from WMC via MCC, persisting them as
     retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
-    (crash-safe binding), then are encoded and consolidated into episodes.
+    (crash-safe binding), then are encoded and stored into engram as episodes.
 
     Three-table SQLite design:
         episodic_buffer  — crash-safe raw binding from WMC overflow
         episodes         — embedded, searchable episodic memory (permanent)
         episodes_fts     — FTS5 lexical index for pattern separation recall
 
-    The consolidation worker runs in a separate neural thread, draining binding stream of episodic buffer →
+    The encoding worker runs in a separate neural thread, draining binding stream of episodic buffer →
     encoding → episodes continuously during wake without blocking the main neural thread's responses.
     
     Thread-safety: 
         Binding stream uses a threading.Lock for safety purpose.
         Recall stream uses a threading.Lock — guarded via EpisodicBuffer._recall_lock.
-        Consolidation cycle is isolated from the main neural thread.
+        Encoding cycle is isolated from the main neural thread.
         All engram writes are serialized through _write_lock.
         SQLite WAL mode allows concurrent reads during async writes.
     """
@@ -410,7 +410,7 @@ class EpisodicMemoryCortex:
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
         Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
-        and binds it into the episodic buffer as episode for encoding and consolidation.
+        and binds it into the episodic buffer as episode for encoding and storing into engram.
     
         Called by MCC asynchronously at the WMC → EMC boundary — crash-safe, non-blocking.
 
@@ -490,7 +490,7 @@ class EpisodicMemoryCortex:
 
     def _run_encoding_cycle(self) -> None:
         """
-        Event-driven consolidation — drains episodic_buffer into episodes.
+        Event-driven encoding — drains episodic_buffer into episodes.
         Wakes only when buffer has episodes (sharp-wave ripple pattern).
         Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
         """
@@ -563,20 +563,24 @@ class EpisodicMemoryCortex:
                 # Pack encoded episode vector as fp32 binary for engram storage
                 encoding_blob = struct.pack(f"{len(encoded_episode)}f", *encoded_episode)   # Pack encoded episode vector as fp32 binary for engram storage
             
-                self._consolidate_episode(encoder_conn, episode, encoding_blob)
+                self._synaptic_consolidate()(encoder_conn, episode, encoding_blob)
     
                 self.logger.debug(
-                    f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
-                    f" (date={episode['date']})",                                                               # Log the date of the episode
+                    f"EMC coded and stored → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
+                    f" (date={episode['date']})",                                   # Log the date of the episode
                 )
     
         encoder_conn.close()                                                        # Close the encoder connection
-        self.logger.info("EMC consolidation cycle stopped")                         # Log the stop of the EMC consolidation cycle
+        self.logger.info("EMC encoding cycle stopped")                              # Log the stop of the EMC encoding cycle
         
-    def _consolidate_episode(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
+    def _synaptic_consolidate(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
         """
-        Internal helper — consolidates one encoded episode into all three indexes.
-        Called from _run_encoding_cycle() after successful encoding.
+        Synaptic consolidation — stabilizes one encoded episode into all three
+        engram indexes. Biological analogue: LTP-driven trace stabilization 
+        within the hippocampus during wake encoding.
+        
+        Distinct from systems consolidation (EMC → SMC), which occurs
+        during the M2 Dream Cycle.
      
         Writes:
             episodes          — primary episodic record
@@ -590,11 +594,11 @@ class EpisodicMemoryCortex:
         """
         with self._write_lock:
             # Primary episodic record
-            cursor = encoder_conn.execute(
+            engram_id = encoder_conn.execute(
                 "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",
                 [episode["timestamp"], episode["date"], episode["content"], encoding_blob],
             )
-            episode_id = cursor.lastrowid
+            episode_id = engram_id.lastrowid
      
             # Vec0 semantic KNN index (pattern completion — CA3 analogue)
             if self._engram_vector:
@@ -617,7 +621,7 @@ class EpisodicMemoryCortex:
             )
             encoder_conn.commit()
         
-    def recall(self, query: str, top_k: int = 5) -> list[dict]:
+    def recall_episodes(self, query: str, top_k: int = 5) -> list[dict]:
         """
         Recall relevant episodes from episodic memory.
         Runs semantic (CA3 pattern completion) and lexical (dentate gyrus pattern
@@ -1015,7 +1019,7 @@ class EpisodicMemoryCortex:
         then releases the engram connection.
         """
         self._encoder_running = False
-        self._theta_rhythm.set()                    # Wake up the encoder thread so it can exit cleanly
+        self._theta_rhythm.set()                        # Wake up the encoder thread so it can exit cleanly
         if self._encoder_thread:
             self._encoder_thread.join(timeout=3.0)
         if self.engram:
