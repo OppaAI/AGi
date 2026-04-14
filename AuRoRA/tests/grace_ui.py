@@ -1,38 +1,104 @@
+"""
+CLI — Command Line Interface
+==============================
+AuRoRA · Semantic Cognitive System (SCS)
+
+Simple terminal interface for chatting with GRACE during development.
+No rosbridge, no browser — just two ROS2 topics and a terminal.
+
+Usage:
+    ros2 run scs cli
+
+    Or directly:
+    python3 cli.py
+"""
+
+import json
+import threading
+import time
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
-import threading
-import json
-import time
 
-class GraceUI(Node):
+
+# ── ANSI colours ──────────────────────────────────────────────────────────────
+RESET  = "\033[0m"
+BOLD   = "\033[1m"
+CYAN   = "\033[96m"    # You
+PINK   = "\033[95m"    # GRACE
+GREY   = "\033[90m"    # system messages
+RED    = "\033[91m"    # errors
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Topics ───────────────────────────────────────────────────────────────────
+TOPIC_INPUT    = "/cns/neural_input"
+TOPIC_RESPONSE = "/gce/response"
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class GraceCLI(Node):
+    """
+    Command Line Interface node for GRACE.
+
+    Publishes user input to /cns/neural_input.
+    Subscribes to /gce/response and prints streaming tokens inline.
+    """
+
     def __init__(self):
-        super().__init__('grace_ui')
-        self.pub = self.create_publisher(String, '/cns/neural_input', 10)
-        self.sub = self.create_subscription(String, '/gce/response', self.callback, 10)
+        super().__init__("grace_cli")
 
-        # Timing + token tracking state
-        self._turn_start: float | None = None
-        self._token_count: int = 0
+        # ── Publisher ─────────────────────────────────────────────────────────
+        self._pub = self.create_publisher(String, TOPIC_INPUT, 10)
 
-        print("\n" + "="*40)
-        print("🌸 GRACE COGNITIVE INTERFACE ONLINE")
-        print("="*40 + "\n")
+        # ── Subscriber ────────────────────────────────────────────────────────
+        self._sub = self.create_subscription(
+            String, TOPIC_RESPONSE, self._on_response, 10
+        )
 
-    def callback(self, msg):
+        # ── State ─────────────────────────────────────────────────────────────
+        self._streaming    = False
+        self._print_lock   = threading.Lock()
+        self._turn_start   = None   # float | None
+        self._token_count  = 0
+
+        self._print_header()
+
+    # ── Startup banner ────────────────────────────────────────────────────────
+
+    def _print_header(self):
+        print(f"\n{BOLD}{PINK}╔══════════════════════════════════╗")
+        print(f"║     Chat with GRACE — AuRoRA     ║")
+        print(f"╚══════════════════════════════════╝{RESET}")
+        print(f"{GREY}Topics:")
+        print(f"  PUB  {TOPIC_INPUT}")
+        print(f"  SUB  {TOPIC_RESPONSE}")
+        print(f"\nType your message and press Enter.")
+        print(f"Ctrl+C to quit.{RESET}\n")
+
+    # ── Response handler ──────────────────────────────────────────────────────
+
+    def _on_response(self, msg: String):
+        """Handle streaming response chunks from GRACE."""
         try:
             data = json.loads(msg.data)
-            msg_type = data.get("type")
-            content = data.get("content", "")
+        except json.JSONDecodeError:
+            return
 
+        msg_type = data.get("type", "")
+        content  = data.get("content", "")
+
+        with self._print_lock:
             if msg_type == "start":
-                self._turn_start = time.monotonic()
+                self._streaming   = True
+                self._turn_start  = time.monotonic()
                 self._token_count = 0
-                print(f"\n🌸 GRACE: {content}", end="", flush=True)
+                print(f"\n{BOLD}{PINK}GRACE{RESET}{PINK} 🌸  {RESET}", end="", flush=True)
+                print(content, end="", flush=True)
 
             elif msg_type == "delta":
-                # Approximate token count: split on whitespace as a rough proxy.
-                # Replace with an exact count if your backend sends token metadata.
+                # Approximate token count by whitespace-splitting the chunk.
+                # Replace with exact metadata from your backend if available.
                 self._token_count += max(1, len(content.split()))
                 print(content, end="", flush=True)
 
@@ -48,43 +114,87 @@ class GraceUI(Node):
                     f"~{self._token_count} tok | "
                     f"{tps:.1f} tok/s]"
                 )
-                print(f"\n{stats}")
-                print("-" * 20 + "\n> ", end="", flush=True)
+                self._streaming  = False
                 self._turn_start = None
+                print(f"\n{GREY}{stats}{RESET}\n")
+                self._print_prompt()
 
             elif msg_type == "error":
-                print(f"\n❌ SYSTEM ERROR: {content}\n> ", end="", flush=True)
+                self._streaming  = False
                 self._turn_start = None
+                print(f"\n{RED}[error] {content}{RESET}\n")
+                self._print_prompt()
 
-        except json.JSONDecodeError:
-            print(f"\n🌸 GRACE (raw): {msg.data}\n> ", end="")
+    # ── Send message ──────────────────────────────────────────────────────────
 
-    def send(self, text):
-        msg = String()
-        msg.data = text
-        self.pub.publish(msg)
+    def send(self, text: str, web_search: bool = False):
+        """Publish a user message to GRACE."""
+        payload = json.dumps({"text": text, "web_search": web_search})
+        msg      = String()
+        msg.data = payload
+        self._pub.publish(msg)
+
+    # ── Prompt ────────────────────────────────────────────────────────────────
+
+    def _print_prompt(self):
+        print(f"{BOLD}{CYAN}You{RESET}{CYAN} 💙  {RESET}", end="", flush=True)
 
 
-def main():
-    rclpy.init()
-    node = GraceUI()
+# ── Input thread ──────────────────────────────────────────────────────────────
 
-    thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
-    thread.start()
+def input_loop(node: GraceCLI):
+    """
+    Blocking input loop — runs in a separate thread so ROS2 can spin freely.
+    """
+    node._print_prompt()
+
+    while rclpy.ok():
+        try:
+            text = input().strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        if not text:
+            node._print_prompt()
+            continue
+
+        if node._streaming:
+            print(f"{GREY}[GRACE is still thinking — please wait]{RESET}")
+            node._print_prompt()
+            continue
+
+        # Check for web search prefix: /web <message>
+        web_search = False
+        if text.startswith("/web "):
+            web_search = True
+            text = text[5:].strip()
+            print(f"{GREY}[web search enabled]{RESET}")
+
+        node.send(text, web_search=web_search)
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = GraceCLI()
+
+    # Input runs in a thread — ROS2 spin runs in main thread
+    input_thread = threading.Thread(
+        target=input_loop,
+        args=(node,),
+        daemon=True,
+    )
+    input_thread.start()
 
     try:
-        while rclpy.ok():
-            user_input = input("> ")
-            if user_input.lower() in ['exit', 'quit', 'clear']:
-                break
-            if user_input.strip():
-                node.send(user_input)
+        rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        print(f"\n{GREY}Goodbye! 👋{RESET}\n")
     finally:
         node.destroy_node()
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
