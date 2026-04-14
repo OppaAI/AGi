@@ -184,7 +184,7 @@ class MemoryCoordinationCore:
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # Log the timeout error while recalling EMC episodes
             emc_episodes = []                                                # Proceed without episodic context
         
-        self.logger.info(
+        self.logger.info(                                                    # Log the EMC recall results with relevancy scores
             f"EMC raw recall: {len(emc_episodes)} episodes, "
             f"scores: {[e['relevancy'] for e in emc_episodes]}"
         )
@@ -246,8 +246,8 @@ class MemoryCoordinationCore:
         Returns:
             dict: Combined schema from WMC and EMC cortex layers
         """
-        wmc_schema = self.wmc.assess_pmt_schema()            # Assess the PMT schema of WMC
-        emc_schema = self.emc.get_stats()                    # Assess the engram complex of EMC
+        wmc_schema: dict = self.wmc.assess_pmt_schema()      # Assess the PMT schema of WMC
+        emc_schema: dict = self.emc.get_stats()              # Assess the engram complex of EMC
         return {                                             # Return the current stats of all memory cortex layers
             "wmc": wmc_schema,
             "emc": emc_schema,
@@ -262,9 +262,9 @@ class MemoryCoordinationCore:
         - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
         - GUI — expose via ROS2 topic for real-time memory visualisation
         """
-        stats = self.assess_memory_schema()                 # Assess the current stats of all memory cortex layers
-        wmc_stats = stats["wmc"]                            # Retrieve current stats of working memory
-        emc_stats = stats["emc"]                            # Retrieve current stats of episodic memory
+        stats: dict = self.assess_memory_schema()           # Assess the current stats of all memory cortex layers
+        wmc_stats: dict = stats["wmc"]                      # Retrieve current stats of working memory
+        emc_stats: dict = stats["emc"]                      # Retrieve current stats of episodic memory
         self.logger.info(                                   # Log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
             f"   WMC: {wmc_stats['pmt_count']} PMTs ({wmc_stats['slot_occupancy']}%) | "

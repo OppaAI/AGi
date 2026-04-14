@@ -11,13 +11,13 @@ Responsibilities:
     - Receive evicted PMTs from MCC into crash-safe buffer (binding)
     - Encode buffered turns into semantic encodings (encoding)
     - Consolidate encoded episodes into SMC and PMC permanently (consolidation)
-    - Search episodes semantically for relevant past context (recall)
+    - Search episodes via semantical and lexical search for relevant past context (recall)
     - Inject recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
     Three-table SQLite design:
         episodic_buffer  — crash-safe raw binding from WMC overflow
-        episodes         — embedded, searchable episodic memory (permanent)
+        episodes         — encoded, searchable episodic memory (intermediate to permanent)
         episodes_fts     — FTS5 lexical index for pattern separation recall
 
      
@@ -56,11 +56,11 @@ Architecture:
         
     Relevancy:
         Dual-path retrieval fused via Reciprocal Rank Fusion (hippocampal convergence):
-            PATH 1 — Semantic (CA3 pattern completion):
+            PATH 1 — Semantic (cf. CA3 pattern completion):
                 SQLite-vec L2 distance KNN on unit-normalized vectors (cosine-equivalent)
                 Falls back to Python cosine similarity if SQLite-vec not available
-            PATH 2 — Lexical (dentate gyrus pattern separation):
-                FTS5 porter-stemmed keyword search on episode content
+            PATH 2 — Lexical (cf. Dentate gyrus pattern separation):
+                FTS5 porter-stemmed lexical search on episode content
         Both paths run in parallel and are fused via RRF scoring through CA1 convergence.
         Fallback chain:
             Both paths active  → RRF fusion (full hippocampal convergence)
@@ -74,9 +74,12 @@ Architecture:
 Terminology:
     episodic_buffer  — raw binding table for evicted PMTs (crash-safe, temporary)
     encoding         — semantic encoding of a turn into a vector
-    episodes         — embedded episodic memory table (permanent)
-    engram           — one embedded episode (a specific remembered moment)
+    episodes         — encoded episodic memory table (intermediate to permanent)
+    engram           — one encoded episode (a specific remembered moment)
+    FTS5             — SQLite FTS5 full-text search extension for lexical search
     relevancy        — RRF-fused engram salience score (0.0–1.0) combining semantic and lexical rank
+    recall stream    — shared stream for recalled episodes (cross-layer)
+    RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
 
 Lifecycle:
     Binding → Encoding → Consolidation → Storing → Recall → Reinstatement
@@ -96,10 +99,11 @@ TODO:
          when episodes exceed ~50k — currently exact KNN is sufficient
     M2 — date-range filtering exposed through MCC recall interface
     M2 — SMC distillation trigger at 11pm reflection
+    M2 — add heartbeat logging during long idle periods (Dream Cycle sessions)
 """
 
 # System libraries
-import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implmented with sqlite-vec)
+import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implemented with sqlite-vec)
 import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
 import struct                               # For packing semantic vectors (fp32) into engram storage
@@ -153,8 +157,8 @@ class _EncodingEngine:
     def is_available(self) -> bool:
         """
         Check if encoding engine is loaded successfully and ready for encoding.
-        This is used by EMC to determine whether to perform semantic encoding and search,
-        or to fall back to keyword search when the engine is unavailable.
+        This is used by EMC to determine whether to perform semantic search is available,
+        or to fall back to solely lexical search when the engine is unavailable.
 
         Returns:
             bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
@@ -181,7 +185,7 @@ class _EncodingEngine:
         """
         if not self.is_available:                                                       # If encoding engine is unavailable,
             self.logger.debug(                                                          # Log the debug message about encoding engine being unavailable
-                "Encoding engine unavailable — falling back to lexical recall"
+                "Encoding engine unavailable — semantic search inactive"
             )
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
@@ -204,9 +208,9 @@ class _EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-def _semantic_match(cue: list[float], engram: list[float]) -> float:
+def _semantic_search(cue: list[float], engram: list[float]) -> float:
     """
-    Match a recall cue against a stored engram semantically.
+    Search a recall cue against a stored engram semantically.
     TODO: To be replaced with sqlite-vec ANN search.
 
     Args:
@@ -394,20 +398,14 @@ class EpisodicMemoryCortex:
             self.engram.commit()                                            # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
             
-        # ── NEW ──────────────────────────────────────────────────────────────────
-        # FTS5 virtual table — lexical pattern separation (dentate gyrus analogue)
-        # content="" makes it a contentless-rowid table, keeping storage minimal.
-        # content="episodes" would mirror the episodes table but doubles storage —
-        # contentless is correct here since we JOIN back to episodes on recall.
-        self.engram.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
+        self.engram.execute("""                                             -- Create a virtual schema for the lexical search using FTS5 index
+            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_lexical USING fts5(
                content,
                tokenize='porter unicode61'
             )
         """)
         self.engram.commit()
         self.logger.debug("EMC FTS5 lexical index initialized")
-        # ── END NEW ──────────────────────────────────────────────────────────────
     
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
@@ -517,8 +515,8 @@ class EpisodicMemoryCortex:
         self.logger.info("⚙️ EMC encoding cycle running…")      # Log the start of encoding cycle
     
         while self._encoder_running:                            # While the encoder is running,
-            # Rest state — wait for hippocampal activation
-            self._theta_rhythm.wait()                           # Wait for theta rhythm activation
+            # Rest state — wait for theta rhythm activation
+            self._theta_rhythm.wait(timeout=EMC.ENCODING_CYCLE_TIMEOUT) # Wait for theta rhythm activation (max 60 seconds)
             self._theta_rhythm.clear()                          # Clear the theta rhythm activation flag
     
             if not self._encoder_running:                       # If the encoder is not running,
@@ -698,7 +696,7 @@ class EpisodicMemoryCortex:
                                 f"{len(cue_vector)}f",
                                 row["encoding"][:len(cue_vector) * 4]
                             ))
-                            score = _semantic_match(cue_vector, engram_vec)
+                            score = _semantic_search(cue_vector, engram_vec)
                             if score > 0.0:
                                 scored.append((score, row))
                         scored.sort(key=lambda x: x[0], reverse=True)
@@ -716,7 +714,7 @@ class EpisodicMemoryCortex:
      
         # ── PATH 2: Lexical — dentate gyrus pattern separation ────────────────
         try:
-            lexical_results = self._lexical_match(query, top_k)
+            lexical_results = self._lexical_search(query, top_k)
         except Exception as e:
             self.logger.debug(f"EMC lexical path failed: {e}")
      
@@ -756,7 +754,7 @@ class EpisodicMemoryCortex:
         tokens = query.strip().split()
         return " ".join(f'"{t}"' for t in tokens if t)
     
-    def _lexical_match(self, query: str, top_k: int) -> list[dict]:
+    def _lexical_search(self, query: str, top_k: int) -> list[dict]:
         """
         Lexical pattern separation search via FTS5.
         Dentate gyrus analogue — precise, keyword-driven engram retrieval.
@@ -812,7 +810,7 @@ class EpisodicMemoryCortex:
             return results
     
         except Exception as e:
-            self.logger.debug(f"EMC lexical match failed: {e}")
+            self.logger.debug(f"EMC lexical search failed: {e}")
             return []
         
     def _hippocampal_convergence(
@@ -833,7 +831,7 @@ class EpisodicMemoryCortex:
         Engrams appearing in only one list get a rank of (list_length + 1)
         in the missing list — a mild penalty, not a full exclusion.
         This mirrors biology: a memory with strong semantic match but zero
-        keyword match is still a valid recall candidate.
+        lexical match is still a valid recall candidate.
      
         Args:
             semantic_results : Ranked list from vec KNN / cosine search

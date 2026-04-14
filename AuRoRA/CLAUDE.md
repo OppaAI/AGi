@@ -14,11 +14,12 @@ The system is designed to run on NVIDIA Jetson hardware with Docker containerize
 ## Key Components
 
 ### SCS Package (`src/scs/`)
-- **CLI Interface** (`src/scs/scs/cli.py`): Terminal interface for interacting with GRACE
+- **CLI Interface** (`tests/grace_ui.py`: `GraceCLI` class): Terminal interface for interacting with GRACE
   - Publishes user input to `/cns/neural_input` topic
   - Subscribes to `/gce/response` for streaming responses
   - Supports web search via `/web <message>` prefix
-  - Features colored output and streaming response display
+  - Features colored output, streaming response display, and performance statistics
+  - Note: The CLI implementation was moved from `src/scs/scs/cli.py` to `tests/grace_ui.py` for enhancement
 
 ### HRS Package (`src/hrs/`)
 - **Parameter Management** (`src/hrs/hrs/hrp.py`): Homeostatic Regulation Parameters
@@ -54,8 +55,8 @@ source install/setup.bash
 
 # Run the SCS CLI interface
 ros2 run scs cli
-# or directly
-ros2 run scs cli.py
+# Alternatively, run the enhanced CLI directly from tests folder
+python3 tests/grace_ui.py
 ```
 
 ### Testing
@@ -76,8 +77,8 @@ colcon test-result --verbose
 # Test SQLite vector operations (EMC validation)
 python3 tests/test_sqlite_vec.py
 
-# Test GRACE UI interface
-python3 tests/grace_ui.py
+# Note: tests/grace_ui.py now contains the enhanced CLI implementation
+# Run it directly with: python3 tests/grace_ui.py
 ```
 
 ### Linting and Code Quality

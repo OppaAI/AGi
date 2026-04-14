@@ -44,6 +44,7 @@ class AGi:                                       # Amazing Grace infrastructure
         class EMC:                               # Episodic Memory Cortex
             ENCODING_ENGINE: str        = "BAAI/bge-small-en-v1.5"  # [STATIC] Encoding engine for episodic memory
             ENCODING_CACHE_LIMIT: int   = 256    # [INTRINSIC] Maximum number of imprints held in encoding cache to control memory usage
+            ENCODING_CYCLE_TIMEOUT: float = 30.0 # [INTRINSIC] Timeout for encoding cycle theta rhythm wait
             ENCODING_IMPRINT_LIMIT: int = 300    # [INTRINSIC] Maximum length of imprints to control cache hit rate vs false positive risk
             ENCODING_DIM: int           = 384    # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                  # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
