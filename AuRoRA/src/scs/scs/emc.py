@@ -399,13 +399,13 @@ class EpisodicMemoryCortex:
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
             
         self.engram.execute("""                                             -- Create a virtual schema for the lexical search using FTS5 index
-            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_lexical USING fts5(
-               content,
-               tokenize='porter unicode61'
+            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_lexical USING fts5( -- FTS5 index for lexical search
+               content,                                                     -- Content of the episode
+               tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
             )
         """)
-        self.engram.commit()
-        self.logger.debug("EMC FTS5 lexical index initialized")
+        self.engram.commit()                                                # Commit the changes to the engram
+        self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
     
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
@@ -567,11 +567,11 @@ class EpisodicMemoryCortex:
     
                 self.logger.debug(
                     f"EMC consolidated → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
-                    f" (date={episode['date']})",                                                            # Log the date of the episode
+                    f" (date={episode['date']})",                                                               # Log the date of the episode
                 )
     
-        encoder_conn.close()
-        self.logger.info("EMC consolidation cycle stopped")
+        encoder_conn.close()                                                        # Close the encoder connection
+        self.logger.info("EMC consolidation cycle stopped")                         # Log the stop of the EMC consolidation cycle
         
     def _consolidate_episode(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
         """
@@ -582,32 +582,35 @@ class EpisodicMemoryCortex:
             episodes          — primary episodic record
             episode_vectors   — vec0 KNN index (if sqlite-vec available)
             episodes_fts      — FTS5 lexical index (always)
+
+        Args:
+            encoder_conn : Engine connection for writing
+            episode      : Episode dictionary with timestamp, date, content
+            encoding_blob: Binary encoding data of the episode
         """
         with self._write_lock:
-            # 1. Primary episodic record
+            # Primary episodic record
             cursor = encoder_conn.execute(
                 "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",
                 [episode["timestamp"], episode["date"], episode["content"], encoding_blob],
             )
             episode_id = cursor.lastrowid
      
-            # 2. Vec0 semantic KNN index (pattern completion — CA3 analogue)
+            # Vec0 semantic KNN index (pattern completion — CA3 analogue)
             if self._engram_vector:
                 encoder_conn.execute(
                     "INSERT INTO episode_vectors (rowid, encoding) VALUES (?,?)",
                     [episode_id, encoding_blob],
                 )
      
-            # ── NEW ──────────────────────────────────────────────────────────────
-            # 3. FTS5 lexical index (pattern separation — dentate gyrus analogue)
+            # FTS5 lexical index (pattern separation — dentate gyrus analogue)
             # rowid must match episodes.id so JOIN works during recall
             encoder_conn.execute(
                 "INSERT INTO episodes_fts (rowid, content) VALUES (?,?)",
                 [episode_id, episode["content"]],
             )
-            # ── END NEW ──────────────────────────────────────────────────────────
      
-            # 4. Mark buffer entry as processed
+            # Mark buffer entry as processed
             encoder_conn.execute(
                 "UPDATE episodic_buffer SET processed=TRUE WHERE timestamp=? AND content=?",
                 [episode["timestamp"], episode["content"]],
@@ -640,7 +643,7 @@ class EpisodicMemoryCortex:
         semantic_results : list[dict] = []
         lexical_results  : list[dict] = []
      
-        # ── PATH 1: Semantic — CA3 pattern completion ─────────────────────────
+        # PATH 1: Semantic — CA3 pattern completion
         if self._encoding_engine.is_available:
             cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)
      
