@@ -176,7 +176,7 @@ class MemoryCoordinationCore:
         try:                                                                 # Attempt to recall EMC episodes
             emc_episodes = await asyncio.wait_for(                           # Await recalling of EMC episodes that is on isolated neural pathway
                 asyncio.get_running_loop().run_in_executor(
-                    None, self.emc.recall, user_prompt, CNS.EMC.RECALL_DEPTH
+                    None, self.emc.recall_episodes, user_prompt, CNS.EMC.RECALL_DEPTH
                 ),
                 timeout=CNS.EMC.RECALL_TIMEOUT                               # Set a time limit for recalling EMC episodes
             )
