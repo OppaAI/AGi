@@ -15,10 +15,11 @@ Responsibilities:
     - Inject recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
-    Three-table SQLite design:
+    One Buffer + Three-table SQLite design:
         episodic_buffer  — crash-safe raw binding from WMC overflow
-        episodes         — encoded, searchable episodic memory (intermediate to permanent)
-        episodes_fts     — FTS5 lexical index for pattern separation recall
+        episodes         — embedded, searchable episodic memory (intermediate)
+        engram_vectors   — semantic vectors for L2 distance semantic search
+        engram_lexical   — FTS5 lexical index for pattern separation recall
 
      
     Episodic Buffer (Baddeley's model):
@@ -74,10 +75,10 @@ Architecture:
 Terminology:
     episodic_buffer  — raw binding table for evicted PMTs (crash-safe, temporary)
     encoding         — semantic encoding of a turn into a vector
-    episodes         — encoded episodic memory table (intermediate to permanent)
-    engram           — one encoded episode (a specific remembered moment)
+    episode          — dated and encoded memory trace (a specific remembered moment)
+    engram           — the memory store containing encoded episodes
     FTS5             — SQLite FTS5 full-text search extension for lexical search
-    relevancy        — RRF-fused engram salience score (0.0–1.0) combining semantic and lexical rank
+    relevancy        — RRF-fused salience score of the episode (0.0–1.0) combining semantic and lexical rank
     recall stream    — shared stream for recalled episodes (cross-layer)
     RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
 
@@ -95,7 +96,7 @@ Public interface:
 
 TODO:
     M2 — add date-range filtering to buffer entries and recall interface
-    M2 — migrate episode_vectors to sqlite-vec ANN index (DiskANN)
+    M2 — migrate engram_vectors to sqlite-vec ANN index (DiskANN)
          when episodes exceed ~50k — currently exact KNN is sufficient
     M2 — date-range filtering exposed through MCC recall interface
     M2 — SMC distillation trigger at 11pm reflection
@@ -106,12 +107,12 @@ TODO:
 import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implemented with sqlite-vec)
 import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
-import struct                               # For packing semantic vectors (fp32) into engram storage
-import threading                            # For background encoding of engrams
+import struct                               # For packing semantic vectors (fp32) of episodes into engram
+import threading                            # For background encoding of episodes
 from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
-from dataclasses import dataclass, field    # For defining structures of engrams and episodes
+from dataclasses import dataclass, field    # For defining structures of episodes and engram
 from datetime import datetime               # (TODO) Replace with hrs.blc when BioLogic Clock is built
-from pathlib import Path                    # For handling gateway to the engrams
+from pathlib import Path                    # For handling gateway to the engram
 from typing import Optional                 # For validating parameters
 
 # AGi libraries
@@ -123,7 +124,7 @@ class _EncodingEngine:
     """
     Encoding engine for semantic encoding of episodic memories for storage and recall.
     Loads at EMC initialization - encoding engine ready for first recall.
-    Primes recent encodings to avoid redundant encoding of identical or similar engrams
+    Primes recent encodings to avoid redundant encoding of identical or similar episodes
     and to speed up subsequent recall.
     """
 
@@ -208,24 +209,24 @@ class _EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-def _semantic_search(cue: list[float], engram: list[float]) -> float:
+def _semantic_search(cue: list[float], episode: list[float]) -> float:
     """
-    Search a recall cue against a stored engram semantically.
+    Search a recall cue against a stored episode semantically.
     TODO: To be replaced with sqlite-vec ANN search.
 
     Args:
-        cue    (list[float]): Encoded recall cue.
-        engram (list[float]): Encoded stored engram.
+        cue     (list[float]): Encoded recall cue.
+        episode (list[float]): Encoded stored episode.
     
     Returns:
         float: Semantic relevancy score (0.0 – 1.0).
     """
-    if not cue or not engram or len(cue) != len(engram):                       # If either vector is empty or they have different lengths,
-        return 0.0                                                             # Return 0.0 as relevancy cannot be computed
-    dot: float        = sum(c * e for c, e in zip(cue, engram))                # Compute the dot product of the two vectors
-    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                     # Compute the magnitude of the encoded recall cue
-    engram_mag: float = math.sqrt(sum(e * e for e in engram))                  # Compute the magnitude of the encoded stored engram
-    return dot / (cue_mag * engram_mag) if cue_mag and engram_mag else 0.0     # Return the semantic relevancy score, or 0.0 if either magnitude is 0
+    if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
+        return 0.0                                                              # Return 0.0 as relevancy cannot be computed
+    dot: float        = sum(c * e for c, e in zip(cue, episode))                # Compute the dot product of the two vectors
+    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                      # Compute the magnitude of the encoded recall cue
+    episode_mag: float = math.sqrt(sum(e * e for e in episode))                 # Compute the magnitude of the encoded stored episode
+    return dot / (cue_mag * episode_mag) if cue_mag and episode_mag else 0.0    # Return the semantic relevancy score, or 0.0 if either magnitude is 0
     
 @dataclass
 class EpisodicBuffer:
@@ -270,19 +271,21 @@ class EpisodicMemoryCortex:
     retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
     (crash-safe binding), then are encoded and stored into engram as episodes.
 
-    Three-table SQLite design:
+    One Buffer + Three-table SQLite design:
         episodic_buffer  — crash-safe raw binding from WMC overflow
-        episodes         — embedded, searchable episodic memory (permanent)
-        episodes_fts     — FTS5 lexical index for pattern separation recall
+        episodes         — embedded, searchable episodic memory (intermediate)
+        engram_vectors   — semantic vectors for L2 distance semantic search
+        engram_lexical   — FTS5 lexical index for pattern separation recall
+
 
     The encoding worker runs in a separate neural thread, draining binding stream of episodic buffer →
     encoding → episodes continuously during wake without blocking the main neural thread's responses.
     
     Thread-safety: 
         Binding stream uses a threading.Lock for safety purpose.
-        Recall stream uses a threading.Lock — guarded via EpisodicBuffer._recall_lock.
+        Recall stream uses a threading.Lock — guarded via recall lock.
         Encoding cycle is isolated from the main neural thread.
-        All engram writes are serialized through _write_lock.
+        All inscription into engram are serialized through inscription lock.
         SQLite WAL mode allows concurrent reads during async writes.
     """
 
@@ -315,14 +318,14 @@ class EpisodicMemoryCortex:
             # Set up SQLite-vec for L2 distance semantic search
             # Graceful fallback to cosine similarity if SQLite-vec not available
             try:
-                import sqlite_vec                                           # Initialize SQLite-vec for semantic search
+                import sqlite_vec                                           # Initialize SQLite-vec for engram vector index semantic search
                 sqlite_vec.load(self.engram)                                # Load SQLite-vec into the engram connection
-                self._engram_vector = True                                  # Activate engram vector search via SQLite-vec
-                self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector search
+                self._engram_index = True                                   # Activate engram vector index semantic search via SQLite-vec
+                self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
             except Exception as e:
-                self._engram_vector = False                                 # Set engram vector search as unavailable and fallback to cosine similarity
-                self.logger.warning(                                        # Log the fallback to cosine similarity due to engram vector search unavailability
-                    f"⚠️ Engram vector search not available, falling back to semantic search via cosine similarity\n"
+                self._engram_index = False                                  # Set engram vector index as unavailable and fallback to cosine similarity
+                self.logger.warning(                                        # Log the fallback to cosine similarity due to engram vector index unavailability
+                    f"⚠️ engram vector index not available, falling back to unindexed cosine similarity\n"
                     f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
                     f"   Reason: {e}"
                 ) 
@@ -336,8 +339,8 @@ class EpisodicMemoryCortex:
             raise                                                           # Raise the anomaly to the caller
 
         try:                                                                # Attempt to initialize the write lock
-            # Write lock — only encoding cycle writes to episodes
-            self._write_lock = threading.RLock()                            # Ensure only one thread inscribes into the engram at a time
+            # Inscription lock — only encoding cycle inscribes into episodes
+            self._inscription_lock = threading.RLock()                      # Ensure only one thread inscribes into the engram at a time
 
             # Set up encoding cycle
             self._encoder_running = False                                   # Indicate that encoding cycle not yet running
@@ -355,51 +358,54 @@ class EpisodicMemoryCortex:
         Initialize the schema of the engram.
         This method creates the necessary tables and indexes for storing episodic memories.
 
-        Tables:
+        One Buffer + Three-table SQLite design:
         - episodic_buffer   : Buffer for evicted PMT schemas from WMC overflow (crash-safe binding)
-        - episodes          : Encoded episodic memory (permanent, retrievable)
-        - episode_vectors   : Semantic vectors for L2 distance semantic search
-                              (Only created if engram vector search is activated)
+        - episodes          : Encoded episodic memory (intermediate, retrievable)
+        - engram_vectors    : Semantic vectors for L2 distance semantic search
+                              (Only created if engram vector index is activated)
+        - engram_lexical    : Lexical index for fast retrieval of episodic memories
         """
         self.engram.executescript("""                                       -- Create the tables and indexes of episodic memory
             -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
-            CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Create the episodic buffer schema
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing index
-                timestamp  TEXT    NOT NULL,                                -- Full datetime of the episode
-                date       TEXT    NOT NULL,                                -- Pre-computed date of the episode (carries forward to episodes)
-                content    TEXT    NOT NULL,                                -- Content of the episode (truncated to fit within context window)
+            CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Temporary buffer for evicted PMT schemas
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing buffer index
+                timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
+                date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
+                content    TEXT    NOT NULL,                                -- Content of the episode (truncated to engram content limit)
                 processed  BOOLEAN DEFAULT FALSE                            -- Indicator if episode has been encoded into episodic memory
             );
             CREATE INDEX IF NOT EXISTS idx_episodic_buffer_processed        -- Create index to retrieve episodes by encoding status
                 ON episodic_buffer(processed);
 
-            -- Encoded episodic memory (permanent, retrievable)
-            CREATE TABLE IF NOT EXISTS episodes (                           -- Create the episodes schema
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing index
-                timestamp  TEXT    NOT NULL,                                -- Full datetime of the episode
-                date       TEXT    NOT NULL,                                -- Date of the episode
-                content    TEXT    NOT NULL,                                -- Content of the episode
+            -- Encoded episodic memory (intermediate, retrievable)
+            CREATE TABLE IF NOT EXISTS episodes (                           -- Episodic memory storage
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing engram id
+                timestamp  TEXT    NOT NULL,                                -- Full datetime of induction into WMC
+                date       TEXT    NOT NULL,                                -- Pre-computed date (temporal recall axis)
+                content    TEXT    NOT NULL,                                -- Raw interaction content (user prompt + AI response)
                 encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
-                created_at TEXT    DEFAULT (datetime('now'))                -- Timestamp of when the episode was created
+                created_at TEXT    DEFAULT (datetime('now'))                -- Consolidation timestamp
             );
             CREATE INDEX IF NOT EXISTS idx_episodes_date                    -- Temporal recall axis — get_episodes_for_date() and Dream Cycle (M2)
                 ON episodes(date);
             """)
         self.engram.commit()                                                # Commit the changes to the engram
 
-        # Create episode vector virtual schema for L2 distance semantic search
-        # Created separately — only if engram vector search is activated
-        if self._engram_vector:                                             # If engram vector search is activated,
-            self.engram.execute(f"""                                        -- Create a virtual schema for the L2 distance semantic search
-                CREATE VIRTUAL TABLE IF NOT EXISTS episode_vectors USING vec0(
+        # Create episode vector virtual schema for engram vector index semantic search
+        # Created separately — only if engram vector index is activated
+        if self._engram_index:                                              # If engram vector index is activated,
+            self.engram.execute(f"""                                        -- Create a virtual schema for engram vector index semantic search
+                CREATE VIRTUAL TABLE IF NOT EXISTS engram_vectors USING vec0(
                     encoding FLOAT[{EMC.ENCODING_DIM}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
                 )
             """)
             self.engram.commit()                                            # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
             
+        # Create episode lexical virtual schema for FTS5 lexical search
+        # Created separately — always created
         self.engram.execute("""                                             -- Create a virtual schema for the lexical search using FTS5 index
-            CREATE VIRTUAL TABLE IF NOT EXISTS episodes_lexical USING fts5( -- FTS5 index for lexical search
+            CREATE VIRTUAL TABLE IF NOT EXISTS engram_lexical USING fts5(   -- FTS5 index for lexical search
                content,                                                     -- Content of the episode
                tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
             )
@@ -503,14 +509,14 @@ class EpisodicMemoryCortex:
         # Yield processing priority to active cognition threads
         os.nice(10)                                             # Encoding is non-latency-sensitive — defer to dedicated neural threads
 
-        # Load sqlite-vec into worker connection if engram vector search is active
-        if self._engram_vector:                                 # If engram vector search is active,
-            try:                                                # Attempt to activate engram vector search into worker connection
+        # Load sqlite-vec into encoder connection if engram vector index is active
+        if self._engram_index:                                  # If engram vector index is active,
+            try:                                                # Attempt to activate engram vector index into encoder connection
                 import sqlite_vec                               # For vector similarity search of episodic memories
-                sqlite_vec.load(encoder_conn)                   # Load engram vector search into encoder connection
-            except Exception as e:                              # If engram vector search fails to load
-                self.logger.warning(f"⚠️ sqlite-vec load failed in encode worker: {e}") # Log the failure to load engram vector search
-                self._engram_vector = False                     # Disable engram vector search — fall back to cosine similarity search
+                sqlite_vec.load(encoder_conn)                   # Load engram vector index into encoder connection
+            except Exception as e:                              # If engram vector index fails to load
+                self.logger.warning(f"⚠️ engram vector index failure to load in encoder connection: {e}") # Log the failure to load engram vector index
+                self._engram_index = False                      # Disable engram vector index — fall back to cosine similarity search
 
         self.logger.info("⚙️ EMC encoding cycle running…")      # Log the start of encoding cycle
     
@@ -539,7 +545,7 @@ class EpisodicMemoryCortex:
                 # Write to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
                 if not episode.get("recovered"):
-                    with self._write_lock:                                              # With write lock on episodic buffer,
+                    with self._inscription_lock:                                        # With inscription lock on episodic buffer,
                         encoder_conn.execute(                                           # Insert the episode into the episodic buffer
                             "INSERT INTO episodic_buffer (timestamp, date, content) "
                             "VALUES (?, ?, ?)",
@@ -582,40 +588,41 @@ class EpisodicMemoryCortex:
         Distinct from systems consolidation (EMC → SMC), which occurs
         during the M2 Dream Cycle.
      
-        Writes:
-            episodes          — primary episodic record
-            episode_vectors   — vec0 KNN index (if sqlite-vec available)
-            episodes_fts      — FTS5 lexical index (always)
+        Inscribes:
+            - episodes          : Encoded episodic memory (intermediate, retrievable)
+            - engram_vectors    : Semantic vectors for L2 distance semantic search
+                                (Only created if engram vector index is activated)
+            - engram_lexical    : Lexical index for fast retrieval of episodic memories
 
         Args:
             encoder_conn : Engine connection for writing
             episode      : Episode dictionary with timestamp, date, content
             encoding_blob: Binary encoding data of the episode
         """
-        with self._write_lock:
+        with self._inscription_lock:                                                            # Ensure only one thread inscribes into the engram at a time
             # Primary episodic record
-            engram_id = encoder_conn.execute(
+            engram_id = encoder_conn.execute(                                                   # Insert the episode into engram
                 "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",
                 [episode["timestamp"], episode["date"], episode["content"], encoding_blob],
             )
-            episode_id = engram_id.lastrowid
+            episode_id = engram_id.lastrowid                                                    # Get the ID of the inscribed episode
      
-            # Vec0 semantic KNN index (pattern completion — CA3 analogue)
-            if self._engram_vector:
-                encoder_conn.execute(
-                    "INSERT INTO episode_vectors (rowid, encoding) VALUES (?,?)",
+            # Engram vector index (vec0 KNN for semantic search)
+            if self._engram_index:                                                              # Only create if engram vector index is activated
+                encoder_conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
+                    "INSERT INTO engram_vectors (rowid, encoding) VALUES (?,?)",
                     [episode_id, encoding_blob],
                 )
      
-            # FTS5 lexical index (pattern separation — dentate gyrus analogue)
+            # Engram lexical index (FTS5 index for lexical search)
             # rowid must match episodes.id so JOIN works during recall
-            encoder_conn.execute(
-                "INSERT INTO episodes_fts (rowid, content) VALUES (?,?)",
+            encoder_conn.execute(                                                               # Insert the episode content into engram lexical for fast retrieval
+                "INSERT INTO engram_lexical (rowid, content) VALUES (?,?)",
                 [episode_id, episode["content"]],
             )
      
             # Mark buffer entry as processed
-            encoder_conn.execute(
+            encoder_conn.execute(                                                               # Indicate the corresponding memory entry as processed
                 "UPDATE episodic_buffer SET processed=TRUE WHERE timestamp=? AND content=?",
                 [episode["timestamp"], episode["content"]],
             )
@@ -652,7 +659,7 @@ class EpisodicMemoryCortex:
             cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)
      
             if cue_vector:
-                if self._engram_vector:
+                if self._engram_index:
                     # Primary: sqlite-vec L2 KNN (cosine-equivalent on unit vectors)
                     try:
                         cue_blob = struct.pack(f"{len(cue_vector)}f", *cue_vector)
@@ -660,7 +667,7 @@ class EpisodicMemoryCortex:
                             """
                             SELECT e.id, e.timestamp, e.date, e.content,
                                    ev.distance
-                            FROM episode_vectors ev
+                            FROM engram_vectors ev
                             JOIN episodes e ON e.id = ev.rowid
                             WHERE ev.encoding MATCH ?
                             ORDER BY ev.distance
@@ -787,9 +794,9 @@ class EpisodicMemoryCortex:
                 """
                 SELECT e.id, e.timestamp, e.date, e.content,
                        fts.rank AS raw_rank
-                FROM episodes_fts fts
+                FROM engram_lexical fts
                 JOIN episodes e ON e.id = fts.rowid
-                WHERE episodes_fts MATCH ?
+                WHERE engram_lexical MATCH ?
                 ORDER BY fts.rank          -- most negative = best
                 LIMIT ?
                 """,
@@ -983,7 +990,7 @@ class EpisodicMemoryCortex:
                 "binding_pending":          binding_pending,
                 "db_size_mb":               db_size_mb,
                 "encoding_engine_ready":    self._encoding_engine.is_available,
-                "engram_vector_active":     self._engram_vector,
+                "engram_index_active":      self._engram_index,
                 "encoding_engine":          EMC.ENCODING_ENGINE,
             }
         except Exception as e:
