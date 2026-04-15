@@ -93,7 +93,6 @@ Public interface:
     emc.get_episodes_for_date(date_str) → list[dict]
     emc.buffer_pending_count() → int
     emc.get_stats() → dict
-    emc.cleanup_processed_buffer(keep_days) → None
     emc.close() → None
 
 TODO:
@@ -103,7 +102,7 @@ TODO:
     M2 — date-range filtering exposed through MCC recall interface
     M2 — SMC distillation trigger at 11pm reflection
     M2 — add heartbeat logging during long idle periods (Dream Cycle sessions)
-    M2 — add episodic buffer cleaning after consolidation (after Dream Cycle implementations)
+    M2 — add staging_id check (unencoded in episodic buffer) after consolidation (after Dream Cycle implementations)
 """
 
 # System libraries
@@ -464,7 +463,7 @@ class EpisodicMemoryCortex:
         while True:                                                 # Keep recovering unencoded episodes in batches
             unencoded = self.engram.execute(                        # Query the engram for unencoded episodes
                 "SELECT id, timestamp, date, content "              # Collect the index, timestamp, date, and content
-                "FROM episodic_buffer WHERE processed = FALSE "     # Choose episodes that are not processed
+                "FROM episodic_buffer "                             # Choose episodes that are not processed
                 "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
                 [EMC.RECOVERY_BATCH_SIZE, recovery_offset]          # Process episodes by batch size
             ).fetchall()                                            # Fetch all the unencoded episodes
@@ -479,7 +478,6 @@ class EpisodicMemoryCortex:
                         "timestamp": row["timestamp"],              # Timestamp of the episode
                         "date":      row["date"],                   # Date of the episode
                         "content":   row["content"],                # Content of the episode
-                        "recovered": True,                          # Flag as already recovered into binding stream
                     })
 
             recovery_count  += len(unencoded)                       # Increment the total recovered count by the number of unencoded episodes
@@ -550,7 +548,7 @@ class EpisodicMemoryCortex:
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
-                if not episode.get("recovered"):
+                if not episode.get("staging_id"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
                         staging_id = encoder_conn.execute(                              # Insert the episode into the episodic buffer
                             "INSERT INTO episodic_buffer (timestamp, date, content) "
@@ -559,7 +557,7 @@ class EpisodicMemoryCortex:
                         )
                         encoder_conn.commit()                                           # Commit the transaction
                         episode["staging_id"] = staging_id.lastrowid                    # Capture staging index for deletion after encoding
-
+        
                 # Encode the episode content into a semantic vector
                 encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
                 if not encoded_episode:                                             # If the encoding failed,
@@ -631,7 +629,7 @@ class EpisodicMemoryCortex:
             # Mark buffer entry as processed
             if episode.get("staging_id") is not None:
                 encoder_conn.execute(                                                           # Indicate the corresponding memory entry as processed
-                    "UPDATE episodic_buffer SET processed=TRUE WHERE id=?",
+                    "DELETE FROM episodic_buffer WHERE id=?",
                     [episode["staging_id"]],
                 )
             encoder_conn.commit()
@@ -949,7 +947,7 @@ class EpisodicMemoryCortex:
             with self._episodic_buffer_lock:
                 ram_pending = len(self.episodic_buffer._binding_stream)
             sql_pending = self.engram.execute(
-                 "SELECT COUNT(*) FROM episodic_buffer WHERE processed = FALSE"
+                 "SELECT COUNT(*) FROM episodic_buffer"
             ).fetchone()[0]
             return ram_pending + sql_pending
         except Exception:
@@ -1004,28 +1002,6 @@ class EpisodicMemoryCortex:
         except Exception as e:
             self.logger.error(f"EMC get_stats failed: {e}")
             return {}
-
-    # ── Cleanup ───────────────────────────────────────────────────────────────
-
-    def cleanup_processed_buffer(self, keep_days: int = 1) -> None:
-        """
-        Remove processed episodic_buffer rows older than keep_days.
-        Safe to call periodically — processed rows are already consolidated into episodes.
-
-        Args:
-            keep_days (int): Number of days to retain processed rows (default: 1)
-        """
-        try:
-            self.engram.execute(
-                "DELETE FROM episodic_buffer "
-                "WHERE processed = TRUE "
-                "AND date < date('now', ?)",
-                [f"-{keep_days} days"],
-            )
-            self.engram.commit()
-            self.logger.debug("EMC buffer cleanup done")
-        except Exception as e:
-            self.logger.warning(f"EMC buffer cleanup failed: {e}")
 
     def close(self) -> None:
         """
