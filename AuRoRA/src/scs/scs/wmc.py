@@ -58,7 +58,8 @@ TODO:
 
 # System libraries
 from datetime import datetime            # (TODO) Replace with hrs.blc when BioLogic Clock is built
-from collections import deque
+from collections import deque            # For PMT slot — fast FIFO eviction of receding PMTs
+import json                              # For structured PMT storage — crash-safe serialization and recall
 
 # AGi libraries
 from hrs.hrp import AGi                  # Import AGi homeostatic regulation parameters
@@ -166,12 +167,14 @@ class WorkingMemoryCortex:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
                 self._induced_pmt["content"]["response"]: str = content  # Register the AI response to the induced PMT
 
-            # Flatten induced PMT into evictable PMT
-            content: dict = self._induced_pmt["content"]        # Extract the complete interaction
-            induced_pmt: dict = {                               # Prepare the PMT to be filled
-                "timestamp": self._induced_pmt["timestamp"],    # Register the inducing time of the PMT
-                "content":   f"{content['speaker']}: {content['prompt']}\n"  # Combine user prompt and AI response into one content
-                             f"assistant: {content['response']}",  
+            # Decay induced PMT into evictable PMT
+            content: dict = self._induced_pmt["content"]            # Extract the complete interaction
+            induced_pmt: dict = {                                   # Prepare the PMT to be filled
+                "timestamp": self._induced_pmt["timestamp"],        # Register the inducing time of the PMT
+                "content":   json.dumps({                           # Combine user prompt and AI response into one content
+                                 "user":      content["prompt"],
+                                 "assistant": content["response"],
+                             }),
             }
             self._induced_pmt = None                            # Clear the induced PMT — exchange complete
 
@@ -222,14 +225,12 @@ class WorkingMemoryCortex:
         for pmt in self._pmt_slot:
             # Each pmt["content"] is "user: {prompt}\nassistant: {response}"
             # Split back into two turns for LLM message format
-            parts = pmt["content"].split("\nassistant: ", 1)
-            if len(parts) == 2:
-                user_content      = parts[0].replace("user: ", "", 1)
-                assistant_content = parts[1]
-                messages.append({"role": "user",      "content": user_content})
-                messages.append({"role": "assistant",  "content": assistant_content})
-            else:
-                # Malformed — surface as-is rather than silently dropping
+            try:
+                content = json.loads(pmt["content"])
+                messages.append({"role": "user",      "content": content["user"]})
+                messages.append({"role": "assistant", "content": content["assistant"]})
+            except (json.JSONDecodeError, KeyError):
+                # Malformed — surface as-is rather tan silent drop
                 messages.append({"role": "user", "content": pmt["content"]})
         return messages
         # Return the list of sustained PMT schema in ascending chronological order
