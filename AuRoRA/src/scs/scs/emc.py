@@ -15,8 +15,10 @@ Responsibilities:
     - Inject recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
-    One Buffer + Three-table SQLite design:
-        episodic_buffer  — crash-safe raw binding from WMC overflow
+    Episodic Buffer (2-layer)
+        _binding_stream  —  transient intake of evicted PMTs from WMC overflow
+        episodic_buffer  — crash-safe pre-consolidation staging of episodes
+    One Table + Two Indexes SQLite design:
         episodes         — embedded, searchable episodic memory (intermediate)
         engram_vectors   — semantic vectors for L2 distance semantic search
         engram_lexical   — FTS5 lexical index for pattern separation recall
@@ -271,14 +273,15 @@ class EpisodicMemoryCortex:
     retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
     (crash-safe binding), then are encoded and stored into engram as episodes.
 
-    One Buffer + Three-table SQLite design:
-        episodic_buffer  — crash-safe raw binding from WMC overflow
+    Episodic Buffer (2-layer)
+        _binding_stream  —  transient intake of evicted PMTs from WMC overflow
+        episodic_buffer  — crash-safe pre-consolidation staging of episodes
+    One Table + Two Indexes SQLite design:
         episodes         — embedded, searchable episodic memory (intermediate)
         engram_vectors   — semantic vectors for L2 distance semantic search
         engram_lexical   — FTS5 lexical index for pattern separation recall
 
-
-    The encoding worker runs in a separate neural thread, draining binding stream of episodic buffer →
+    The encoding cycle runs in a separate neural thread, draining binding stream of episodic buffer →
     encoding → episodes continuously during wake without blocking the main neural thread's responses.
     
     Thread-safety: 
@@ -358,12 +361,13 @@ class EpisodicMemoryCortex:
         Initialize the schema of the engram.
         This method creates the necessary tables and indexes for storing episodic memories.
 
-        One Buffer + Three-table SQLite design:
-        - episodic_buffer   : Buffer for evicted PMT schemas from WMC overflow (crash-safe binding)
-        - episodes          : Encoded episodic memory (intermediate, retrievable)
-        - engram_vectors    : Semantic vectors for L2 distance semantic search
-                              (Only created if engram vector index is activated)
-        - engram_lexical    : Lexical index for fast retrieval of episodic memories
+        Episodic Buffer (2-layer)
+            _binding_stream  —  transient intake of evicted PMTs from WMC overflow
+            episodic_buffer  — crash-safe pre-consolidation staging of episodes
+        One Table + Two Indexes SQLite design:
+            episodes         — embedded, searchable episodic memory (intermediate)
+            engram_vectors   — semantic vectors for L2 distance semantic search
+            engram_lexical   — FTS5 lexical index for pattern separation recall
         """
         self.engram.executescript("""                                       -- Create the tables and indexes of episodic memory
             -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
@@ -458,7 +462,7 @@ class EpisodicMemoryCortex:
 
         while True:                                                 # Keep recovering unencoded episodes in batches
             unencoded = self.engram.execute(                        # Query the engram for unencoded episodes
-                "SELECT timestamp, date, content "                  # Collect the timestamp, date, and content
+                "SELECT id, timestamp, date, content "              # Collect the index, timestamp, date, and content
                 "FROM episodic_buffer WHERE processed = FALSE "     # Choose episodes that are not processed
                 "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
                 [EMC.RECOVERY_BATCH_SIZE, recovery_offset]          # Process episodes by batch size
@@ -470,6 +474,7 @@ class EpisodicMemoryCortex:
             with self._episodic_buffer_lock:                        # Acquire the lock to prevent race conditions
                 for row in unencoded:                               # Iterate through each unencoded episode
                     self.episodic_buffer._binding_stream.append({   # Add the unencoded episode to the binding stream
+                        "staging_id" : row["id"],                    # Staging index of the episode
                         "timestamp": row["timestamp"],              # Timestamp of the episode
                         "date":      row["date"],                   # Date of the episode
                         "content":   row["content"],                # Content of the episode
@@ -542,16 +547,17 @@ class EpisodicMemoryCortex:
                 if not self._encoder_running:                   # If the encoder is not running,
                     break                                       # Respect stop signal mid-ripple
 
-                # Write to episodic_buffer (crash-safe record) before encoding
+                # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
                 if not episode.get("recovered"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
-                        encoder_conn.execute(                                           # Insert the episode into the episodic buffer
+                        staging_id = encoder_conn.execute(                                           # Insert the episode into the episodic buffer
                             "INSERT INTO episodic_buffer (timestamp, date, content) "
                             "VALUES (?, ?, ?)",
                             [episode["timestamp"], episode["date"], episode["content"]],
                         )
                         encoder_conn.commit()                                           # Commit the transaction
+                        episode["staging_id"] = staging_id.lastrowid                      # Capture episodic buffer index for deletion
 
                 # Encode the episode content into a semantic vector
                 encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
@@ -569,7 +575,7 @@ class EpisodicMemoryCortex:
                 # Pack encoded episode vector as fp32 binary for engram storage
                 encoding_blob = struct.pack(f"{len(encoded_episode)}f", *encoded_episode)   # Pack encoded episode vector as fp32 binary for engram storage
             
-                self._synaptic_consolidate()(encoder_conn, episode, encoding_blob)
+                self._synaptic_consolidate(encoder_conn, episode, encoding_blob)
     
                 self.logger.debug(
                     f"EMC coded and stored → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
@@ -622,10 +628,11 @@ class EpisodicMemoryCortex:
             )
      
             # Mark buffer entry as processed
-            encoder_conn.execute(                                                               # Indicate the corresponding memory entry as processed
-                "UPDATE episodic_buffer SET processed=TRUE WHERE timestamp=? AND content=?",
-                [episode["timestamp"], episode["content"]],
-            )
+            if episode.get("staging_id") is not None:
+                encoder_conn.execute(                                                           # Indicate the corresponding memory entry as processed
+                    "UPDATE episodic_buffer SET processed=TRUE WHERE id=?",
+                    [episode["staging_id"]],
+                )
             encoder_conn.commit()
         
     def recall_episodes(self, query: str, top_k: int = 5) -> list[dict]:
