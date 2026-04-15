@@ -223,7 +223,7 @@ class WorkingMemoryCortex:
         """
         messages = []
         for pmt in self._pmt_slot:
-            # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response conversation turns
+            # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response pairs
             try:
                 content = json.loads(pmt["content"])
                 messages.append({"role": "user",      "content": content["user"]})
