@@ -103,6 +103,7 @@ TODO:
     M2 — date-range filtering exposed through MCC recall interface
     M2 — SMC distillation trigger at 11pm reflection
     M2 — add heartbeat logging during long idle periods (Dream Cycle sessions)
+    M2 — add episodic buffer cleaning after consolidation (after Dream Cycle implementations)
 """
 
 # System libraries
@@ -551,13 +552,13 @@ class EpisodicMemoryCortex:
                 # Skip if already recovered from episodic_buffer on restart
                 if not episode.get("recovered"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
-                        staging_id = encoder_conn.execute(                                           # Insert the episode into the episodic buffer
+                        staging_id = encoder_conn.execute(                              # Insert the episode into the episodic buffer
                             "INSERT INTO episodic_buffer (timestamp, date, content) "
                             "VALUES (?, ?, ?)",
                             [episode["timestamp"], episode["date"], episode["content"]],
                         )
                         encoder_conn.commit()                                           # Commit the transaction
-                        episode["staging_id"] = staging_id.lastrowid                      # Capture episodic buffer index for deletion
+                        episode["staging_id"] = staging_id.lastrowid                    # Capture staging index for deletion after encoding
 
                 # Encode the episode content into a semantic vector
                 encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
