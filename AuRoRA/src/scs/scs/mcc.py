@@ -66,6 +66,7 @@ TODO:
 
 # System libraries
 import asyncio                              # For concurrent WMC and EMC recall
+import json                                 # For structured PMT storage — crash-safe serialization and recall
 from pathlib import Path                    # For handling gateway to the engrams
 
 # AGi libraries
@@ -203,7 +204,7 @@ class MemoryCoordinationCore:
             for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
 
-                # Parse the content to extract into user prompt/AI response pairs
+                # Deserialize JSON content into user prompt/AI response pairs for context assembly
                 try:
                     content = json.loads(content)
                     self.emc.episodic_buffer.stage_single_episode({"role": "user",      "content": content["user"]})
