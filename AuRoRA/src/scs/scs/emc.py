@@ -508,7 +508,7 @@ class EpisodicMemoryCortex:
         encoder_conn.execute("PRAGMA journal_mode=WAL;")                                # Set the journal mode to WAL for concurrent access
 
         # Yield processing priority to active cognition threads
-        os.nice(10)                                             # Encoding is non-latency-sensitive — defer to dedicated neural threads
+        os.nice(19)                                             # Encoding is non-latency-sensitive — defers to all active cognition threads
 
         # Load sqlite-vec into encoder connection if engram vector index is active
         if self._engram_index:                                  # If engram vector index is active,
@@ -523,7 +523,7 @@ class EpisodicMemoryCortex:
     
         while self._encoder_running:                            # While the encoder is running,
             # Rest state — wait for theta rhythm activation
-            self._theta_rhythm.wait(timeout=EMC.ENCODING_CYCLE_TIMEOUT) # Wait for theta rhythm activation (max 60 seconds)
+            self._theta_rhythm.wait()                           # Wait for theta rhythm activation
             self._theta_rhythm.clear()                          # Clear the theta rhythm activation flag
     
             if not self._encoder_running:                       # If the encoder is not running,
@@ -542,6 +542,7 @@ class EpisodicMemoryCortex:
             for episode in ripple:                              # For each episode in the ripple,
                 if not self._encoder_running:                   # If the encoder is not running,
                     break                                       # Respect stop signal mid-ripple
+                time.sleep(0.01)                                # 10ms yield — defers to active cognition between encodes
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
