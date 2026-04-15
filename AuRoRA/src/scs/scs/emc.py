@@ -376,10 +376,7 @@ class EpisodicMemoryCortex:
                 timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
                 date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
                 content    TEXT    NOT NULL,                                -- Content of the episode (truncated to engram content limit)
-                processed  BOOLEAN DEFAULT FALSE                            -- Indicator if episode has been encoded into episodic memory
             );
-            CREATE INDEX IF NOT EXISTS idx_episodic_buffer_processed        -- Create index to retrieve episodes by encoding status
-                ON episodic_buffer(processed);
 
             -- Encoded episodic memory (intermediate, retrievable)
             CREATE TABLE IF NOT EXISTS episodes (                           -- Episodic memory storage
@@ -452,18 +449,18 @@ class EpisodicMemoryCortex:
     def _init_encoding_cycle(self) -> None:
         """
         Initialize the dormant encoding cycle thread.
-        Recovers unencoded unprocessed PMTs from SQLite in batches to avoid
+        Recovers unencoded PMTs from episodic buffer in batches to avoid
         a large RAM spike after a crash during a long session.
         """
         # Batch recovery of unencoded episodes — drain in chunks of EMC.RECOVERY_BATCH_SIZE
-        # Avoids loading thousands of unprocessed episodes into _binding_stream at once
+        # Avoids loading thousands of unencoded episodes into binding stream at once
         recovery_count = 0                                          # For tracking the number of recovered unencoded episodes
         recovery_offset = 0                                         # For tracking the offset for batch recovery of unencoded episodes
 
         while True:                                                 # Keep recovering unencoded episodes in batches
             unencoded = self.engram.execute(                        # Query the engram for unencoded episodes
                 "SELECT id, timestamp, date, content "              # Collect the index, timestamp, date, and content
-                "FROM episodic_buffer "                             # Choose episodes that are not processed
+                "FROM episodic_buffer "                             # All episodes in the episodic buffer is unencoded by definition
                 "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
                 [EMC.RECOVERY_BATCH_SIZE, recovery_offset]          # Process episodes by batch size
             ).fetchall()                                            # Fetch all the unencoded episodes
@@ -568,7 +565,7 @@ class EpisodicMemoryCortex:
                     )
                     with self._episodic_buffer_lock:                                # With lock on episodic buffer,
                         self.episodic_buffer._binding_stream.appendleft(episode)    # Append the episode to the binding stream
-                    # Don't mark processed — retry next ripple
+                    # Retry next ripple
                     continue                                                        # Continue to the next episode
     
                 # Pack encoded episode vector as fp32 binary for engram storage
@@ -626,9 +623,9 @@ class EpisodicMemoryCortex:
                 [episode_id, episode["content"]],
             )
      
-            # Mark buffer entry as processed
+            # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
             if episode.get("staging_id") is not None:
-                encoder_conn.execute(                                                           # Indicate the corresponding memory entry as processed
+                encoder_conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
                     "DELETE FROM episodic_buffer WHERE id=?",
                     [episode["staging_id"]],
                 )
@@ -937,7 +934,7 @@ class EpisodicMemoryCortex:
     def buffer_pending_count(self) -> int:
         """
         Return number of episodes pending encoding.
-        Combines binding stream (RAM) and episodic buffer (unprocessed)
+        Combines epsodes in binding stream and episodic buffer (unencoded)
         for a complete picture of pending encoding work.
  
         Returns:
@@ -962,7 +959,7 @@ class EpisodicMemoryCortex:
         Returns:
             dict: {
                 episodes, oldest_episode, newest_episode,
-                buffer_total, buffer_pending, intake_pending,
+                buffer_total, binding_pending,
                 db_size_mb, encoding_engine_ready,
                 engram_vector_active, encoding_engine
             }
@@ -976,9 +973,7 @@ class EpisodicMemoryCortex:
             ).fetchone()
 
             buf_row = self.engram.execute(
-                "SELECT COUNT(*) as total, "
-                "SUM(CASE WHEN processed=FALSE THEN 1 ELSE 0 END) as pending "
-                "FROM episodic_buffer"
+                "SELECT COUNT(*) as total FROM episodic_buffer"
             ).fetchone()
             
             with self._episodic_buffer_lock:
