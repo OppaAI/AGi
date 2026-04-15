@@ -204,26 +204,14 @@ class MemoryCoordinationCore:
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
 
                 # Parse the content to extract into user prompt/AI response pairs
-                if "user:" in content and "assistant:" in content:                      # If the content contains user prompt and AI response pairs,
-                    context = content.split("assistant:")                               # Split the content into user prompt and AI response pairs
-                    recalled_user_prompt = context[0].replace("user:", "").strip()      # Extract the user prompt from the content
-                    recalled_ai_response = context[1].split("(relevancy:")[0].strip()   # Extract the AI response from the content
-
-                    # Stage the user prompt/AI response pairs as separate conversation messages
-                    self.emc.episodic_buffer.stage_single_episode({                  # Stage the user prompt as a separate conversation message
-                        "role": "user",
-                        "content": recalled_user_prompt
-                    })
-                    self.emc.episodic_buffer.stage_single_episode({                  # Stage the AI response as a separate conversation message
-                        "role": "assistant", 
-                        "content": recalled_ai_response
-                    })
-                else:
-                    self.emc.episodic_buffer.stage_single_episode({         # Malformed — surface as-is
-                        "role":    "user",
-                        "content": content,
-                    })
-
+                try:
+                    content = json.loads(content)
+                    self.emc.episodic_buffer.stage_single_episode({"role": "user",      "content": content["user"]})
+                    self.emc.episodic_buffer.stage_single_episode({"role": "assistant", "content": content["assistant"]})
+                except (json.JSONDecodeError, KeyError):
+                    # Malformed — surface as-is rather than silent drop
+                    self.emc.episodic_buffer.stage_single_episode({"role": "user", "content": content})
+                 
             self.logger.debug(                                               # Log the number of EMC episodes bound into episodic buffer
                 f"MCC injected {len(episodic_scaffold)} EMC episode(s) into episodic buffer"
             )
