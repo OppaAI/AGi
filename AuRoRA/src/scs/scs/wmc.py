@@ -223,8 +223,7 @@ class WorkingMemoryCortex:
         """
         messages = []
         for pmt in self._pmt_slot:
-            # Each pmt["content"] is "user: {prompt}\nassistant: {response}"
-            # Split back into two turns for LLM message format
+            # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response conversation turns
             try:
                 content = json.loads(pmt["content"])
                 messages.append({"role": "user",      "content": content["user"]})
@@ -232,8 +231,9 @@ class WorkingMemoryCortex:
             except (json.JSONDecodeError, KeyError):
                 # Malformed — surface as-is rather tan silent drop
                 messages.append({"role": "user", "content": pmt["content"]})
-        return messages
+
         # Return the list of sustained PMT schema in ascending chronological order
+        return messages
 
     def forget_pmt_schema(self) -> list[dict]:
         """
