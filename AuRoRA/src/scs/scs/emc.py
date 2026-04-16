@@ -106,10 +106,8 @@ TODO:
 """
 
 # System libraries
-import math                                 # For relevance scoring (semantic relevancy) calculation (TODO: remove when implemented with sqlite-vec)
 import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
-import struct                               # For packing semantic vectors (fp32) of episodes into engram
 import threading                            # For background encoding of episodes
 import time
 from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
@@ -123,141 +121,20 @@ from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
 CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
-class _EncodingEngine:
-    """
-    Encoding engine for semantic encoding of episodic memories for storage and recall.
-    Loads at EMC initialization - encoding engine ready for first recall.
-    Primes recent encodings to avoid redundant encoding of identical or similar episodes
-    and to speed up subsequent recall.
-    """
+# Memory Storage Bank — shared infrastructure across all memory cortices
+from msb import (
+    EncodingEngine,         # Shared encoding engine (sentence-transformers wrapper with cache)
+    unit_normalize,         # L2-normalize a vector for cosine-equivalent L2 search
+    semantic_search,        # Cosine similarity fallback (when sqlite-vec unavailable)
+    pack_vector,            # Pack a float vector into fp32 binary blob for engram storage
+    unpack_vector,          # Unpack a fp32 binary blob back into a float vector
+    open_engram,            # Open a SQLite connection with WAL mode and row factory
+    try_load_sqlite_vec,    # Attempt to load the sqlite-vec extension into a connection
+    sanitize_fts_query,     # Sanitize a raw query string for safe FTS5 MATCH usage
+    memory_convergence,     # RRF fusion of semantic + lexical ranked result lists
+)
 
-    def __init__(self, logger) -> None:
-        """
-        Initialize the encoding engine with a logger.
-        This method sets up the encoding engine core and cache for recent encodings.
         
-        Args:
-            logger: Logger instance for logging encoding engine operations
-        """
-        self.logger     = logger                    # Retrieve logger from CNC for logging EMC operations
-        self._core      = None                      # For holding the encoding engine instance for semantic encoding
-        self._cache: dict[str, list[float]] = {}    # For holding the cache of recent encodings to avoid redundant encoding
-
-        try:                                                                        # Attempt to activate the encoding engine
-            from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
-            self.logger.info("⏳ Activating Encoding Engine…")                      # Log the start of encoding engine activation
-            self._core = SentenceTransformer(EMC.ENCODING_ENGINE)                   # Activate encoding engine defined in homeostatic Regulation parameters
-            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
-        except ImportError:                                                         # If missing the inferencer component of encoding engine,
-            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
-                "⚠️ Encoding Engine offline - missing inferencing component.\n"
-                "   EMC falling back to lexical recall.\n"
-                "   Note to technician: pip3 install sentence-transformers --break-system-packages"
-            )
-        except Exception as e:                                                    # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")     # Log the error during activation of encoding engine
-
-    @property
-    def is_available(self) -> bool:
-        """
-        Check if encoding engine is loaded successfully and ready for encoding.
-        This is used by EMC to determine whether to perform semantic search is available,
-        or to fall back to solely lexical search when the engine is unavailable.
-
-        Returns:
-            bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
-        """
-        return self._core is not None            # Encoding engine is available if the core was successfully loaded during initialization
-
-    def encode(self, trace: str, is_cue: bool = False) -> list[float]:
-        """
-        Encode the given memory trace into a semantic vector for storage or recall.
-        Uses caching to avoid redundant encoding of identical or similar texts.
-        Caches recent encodings to speed up subsequent recall.
-        If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting EMC to fall back to lexical recall.
-        
-        Args:
-            trace (str): The given memory trace to encode (e.g. episode content).
-            is_cue (bool): Whether the trace is a recall cue (True) or an episode to be stored(False).
-                             This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
-
-        Returns:
-            list[float]: The semantic encoding vector for the input trace, 
-                         or an empty list if the encoding engine is unavailable.
-                         Empty list signals EMC to fall back to lexical recall.
-        """
-        if not self.is_available:                                                       # If encoding engine is unavailable,
-            self.logger.debug(                                                          # Log the debug message about encoding engine being unavailable
-                "Encoding engine unavailable — semantic search inactive"
-            )
-            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
-
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash and label the encoding type
-        if imprint in self._cache:                                                      # If the imprint is already in the cache,
-            return self._cache[imprint]                                                 # Return the encoded vector in the cache
-
-        try:                                                                            # Attempt to encode the trace
-            if is_cue:                                                                  # If the trace is a cue for memory recall,
-                encoded_trace: list[float] = self._core.encode_query(trace).tolist()    # Encode the cue for memory recall
-            else:                                                                       # If the trace is a memory trace to be stored,
-                encoded_trace: list[float] = self._core.encode_document(trace).tolist() # Encode the memory trace for storage
-            encoded_trace = _normalize(encoded_trace)                                   #
-
-            # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
-                decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
-                del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
-            self._cache[imprint]: list[float] = encoded_trace                           # Add the new entry to the cache
-            return encoded_trace                                                        # Return the encoded vector
-        except Exception as e:                                                          # If encoding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
-            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
-
-def _unit_normalize(vector: list[float]) -> list[float]:
-    """
-    Ensure encoding engine conduct semantic search properly by
-    unit-normalizing a vector so that L2 distance search is equivalent to cosine similarity.
-
-    sqlite-vec uses Euclidean (L2) distance, not cosine similarity. For unit vectors,
-    cosine_sim(a, b) == 1 - L2(a, b)² / 2, so normalizing before insert/query makes
-    L2 nearest-neighbor search semantically equivalent to cosine nearest-neighbor search.
-
-    BGE-base outputs near-unit vectors, but normalization may be eroded by dtype
-    conversion or serialization. This function is a zero-cost safety net: already
-    unit-normalized vectors (‖v‖ ≈ 1.0 within 1e-6) are returned as-is. Zero vectors
-    are returned unchanged to avoid division by zero.
-
-    Args:
-        vector: A float vector, e.g. from an embedding model.
-
-    Returns:
-        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero.
-    """
-    vector_mag = math.sqrt(sum(v * v for v in vector))                        # Compute L2-norm - Euclidean magnitude of the vector
-    if abs(vector_mag - 1.0) < 1e-6:                                          # If the vector is already unit-normalized,
-        return vector                                                         # Return the original vector
-    return [v / vector_mag for v in vector] if vector_mag > 0.0 else vector   # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
-    
-def _semantic_search(cue: list[float], episode: list[float]) -> float:
-    """
-    Search a recall cue against a stored episode semantically.
-    TODO: To be replaced with sqlite-vec ANN search.
-
-    Args:
-        cue     (list[float]): Encoded recall cue.
-        episode (list[float]): Encoded stored episode.
-    
-    Returns:
-        float: Semantic relevancy score (0.0 – 1.0).
-    """
-    if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
-        return 0.0                                                              # Return 0.0 as relevancy cannot be computed
-    dot: float        = sum(c * e for c, e in zip(cue, episode))                # Compute the dot product of the two vectors
-    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                      # Compute the magnitude of the encoded recall cue
-    episode_mag: float = math.sqrt(sum(e * e for e in episode))                 # Compute the magnitude of the encoded stored episode
-    return dot / (cue_mag * episode_mag) if cue_mag and episode_mag else 0.0    # Return the semantic relevancy score, or 0.0 if either magnitude is 0
-    
 @dataclass
 class EpisodicBuffer:
     """
@@ -336,30 +213,17 @@ class EpisodicMemoryCortex:
         self.engram_gateway: str     = str(engram_gateway)                      # Retrieve engram gateway passed down from MCC
         self.episodic_buffer         = EpisodicBuffer()                         # Initialize episodic buffer — binding and recall streams for active cognition
         self._episodic_buffer_lock   = threading.Lock()                         # Lock for thread-safe access to episodic buffer
-        self._encoding_engine        = _EncodingEngine(logger=logger)           # Initialize encoding engine and provide the logger from MCC
+        self._encoding_engine        = EncodingEngine(logger=logger)            # Initialize shared encoding engine from MSB
 
         # SQLite — WAL mode for concurrent reads during async writes
         try:                                                                # Attempt to connect to the engram
-            self.engram = sqlite3.connect(engram_gateway, check_same_thread=False) # Access the engram through the provided gateway
-            self.engram.row_factory = sqlite3.Row                           # Define the structure of query results of the engram
-            self.engram.execute("PRAGMA journal_mode=WAL;")                 # Set up engram to allow retrieval and storing simultaneously
-            self.engram.execute("PRAGMA synchronous=NORMAL;")               # Balance episodes safety vs storing speed
-            self.engram.commit()                                            # Apply the above parameters into the engram
+            self.engram = open_engram(engram_gateway, logger=logger)        # Open engram connection via shared MSB factory (WAL + row_factory)
 
             # Set up SQLite-vec for L2 distance semantic search
             # Graceful fallback to cosine similarity if SQLite-vec not available
-            try:
-                import sqlite_vec                                           # Initialize SQLite-vec for engram vector index semantic search
-                sqlite_vec.load(self.engram)                                # Load SQLite-vec into the engram connection
-                self._engram_index = True                                   # Activate engram vector index semantic search via SQLite-vec
+            self._engram_index = try_load_sqlite_vec(self.engram, logger=logger)    # Attempt to activate engram vector index via shared MSB utility
+            if self._engram_index:                                          # If engram vector index successfully loaded,
                 self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
-            except Exception as e:
-                self._engram_index = False                                  # Set engram vector index as unavailable and fallback to cosine similarity
-                self.logger.warning(                                        # Log the fallback to cosine similarity due to engram vector index unavailability
-                    f"⚠️ engram vector index not available, falling back to unindexed cosine similarity\n"
-                    f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
-                    f"   Reason: {e}"
-                ) 
 
             self._init_engram_schema()                                      # Initialize the schema of the engram
 
@@ -531,20 +395,14 @@ class EpisodicMemoryCortex:
         """
 
         # Connect to engram gateway with WAL mode for concurrent access
-        encoder_conn = sqlite3.connect(self.engram_gateway, check_same_thread=False)    # Connect to engram gateway without thread checking
-        encoder_conn.row_factory = sqlite3.Row                                          # Set the row factory to return rows as dictionaries
-        encoder_conn.execute("PRAGMA journal_mode=WAL;")                                # Set the journal mode to WAL for concurrent access
+        encoder_conn = open_engram(self.engram_gateway)                             # Open encoder connection via shared MSB factory (WAL + row_factory)
 
         # Yield processing priority to active cognition threads
         os.nice(19)                                             # Encoding is non-latency-sensitive — defers to all active cognition threads
 
         # Load sqlite-vec into encoder connection if engram vector index is active
         if self._engram_index:                                  # If engram vector index is active,
-            try:                                                # Attempt to activate engram vector index into encoder connection
-                import sqlite_vec                               # For vector similarity search of episodic memories
-                sqlite_vec.load(encoder_conn)                   # Load engram vector index into encoder connection
-            except Exception as e:                              # If engram vector index fails to load
-                self.logger.warning(f"⚠️ engram vector index failure to load in encoder connection: {e}") # Log the failure to load engram vector index
+            if not try_load_sqlite_vec(encoder_conn, logger=self.logger):   # Attempt to load sqlite-vec into encoder connection via shared MSB utility
                 self._engram_index = False                      # Disable engram vector index — fall back to cosine similarity search
 
         self.logger.info("⚙️ EMC encoding cycle running…")      # Log the start of encoding cycle
@@ -598,7 +456,7 @@ class EpisodicMemoryCortex:
                     continue                                                        # Continue to the next episode
     
                 # Pack encoded episode vector as fp32 binary for engram storage
-                encoding_blob = struct.pack(f"{len(encoded_episode)}f", *encoded_episode)   # Pack encoded episode vector as fp32 binary for engram storage
+                encoding_blob = pack_vector(encoded_episode)                        # Pack encoded episode vector via shared MSB utility
             
                 self._synaptic_consolidate(encoder_conn, episode, encoding_blob)
     
@@ -694,7 +552,7 @@ class EpisodicMemoryCortex:
                 if self._engram_index:                                                          # And if the engram vector index is available,
                     # Primary: sqlite-vec L2 KNN (cosine-equivalent on unit-normalized vectors)
                     try:                                                                        # Attempt to use the engram vector index
-                        cue_blob = struct.pack(f"{len(cue_vector)}f", *cue_vector)              # Pack the cue vector as a binary blob
+                        cue_blob = pack_vector(cue_vector)                                      # Pack the cue vector as a binary blob via shared MSB utility
                         semantic_candidates = self.engram.execute(                              # Query the engram vector index and retrieve the top recall_limit * 2 episodes
                             """
                             SELECT e.id, e.timestamp, e.date, e.content,                        -- Retrieve the episode ID, timestamp, date, and content
@@ -741,11 +599,8 @@ class EpisodicMemoryCortex:
                             expected_bytes = len(cue_vector) * 4
                             if len(row["encoding"]) != expected_bytes:
                                 continue      # skip mismatched dimension — stale encoding from old model
-                            engram_vec = list(struct.unpack(
-                                f"{len(cue_vector)}f",
-                                row["encoding"]
-                            ))
-                            score = _semantic_search(cue_vector, engram_vec)
+                            engram_vec = unpack_vector(row["encoding"], len(cue_vector))    # Unpack engram vector via shared MSB utility
+                            score = semantic_search(cue_vector, engram_vec)                 # Compute cosine similarity via shared MSB utility
                             if score > 0.0:
                                 scored.append((score, row))
                         scored.sort(key=lambda x: x[0], reverse=True)
@@ -770,7 +625,7 @@ class EpisodicMemoryCortex:
         # ── CONVERGENCE: RRF fusion through CA1 ───────────────────────────────
         if semantic_results and lexical_results:
             # Both paths active — full memory convergence
-            fused = self._memory_convergence(semantic_results, lexical_results, recall_limit)
+            fused = memory_convergence(semantic_results, lexical_results, recall_limit)     # Fuse results via shared MSB RRF utility
             self.logger.debug(
                 f"EMC recall → semantic:{len(semantic_results)} "
                 f"lexical:{len(lexical_results)} fused:{len(fused)}"
@@ -793,15 +648,6 @@ class EpisodicMemoryCortex:
      
         self.logger.debug("EMC recall → no results from either path")
         return []
-
-    def _sanitize_fts_query(self, query: str) -> str:
-        """
-        Sanitize raw query string for safe FTS5 MATCH usage.
-        Quotes each token to treat them as literal terms, neutralizing
-        FTS5 operators (*, -, ", parentheses, AND, OR, NOT).
-        """
-        tokens = query.strip().split()
-        return " ".join(f'"{t}"' for t in tokens if t)
     
     def _lexical_search(self, query: str, recall_limit: int) -> list[dict]:
         """
@@ -819,7 +665,7 @@ class EpisodicMemoryCortex:
             list[dict] with keys: id, timestamp, date, content, relevancy
                        sorted best-first (highest relevancy first)
         """
-        safe_query = self._sanitize_fts_query(query)
+        safe_query = sanitize_fts_query(query)                              # Sanitize the query for safe FTS5 MATCH usage via shared MSB utility
         if not safe_query:
             return []
     
@@ -861,77 +707,6 @@ class EpisodicMemoryCortex:
         except Exception as e:
             self.logger.debug(f"EMC lexical search failed: {e}")
             return []
-        
-    def _memory_convergence(
-        self,
-        semantic_results : list[dict],
-        lexical_results  : list[dict],
-        recall_limit     : int,
-        k                : int = 60,
-    ) -> list[dict]:
-        """
-        Memory convergence via Reciprocal Rank Fusion (RRF).
-        Semantic search (vec KNN / cosine) + lexical search (FTS5)
-        → unified engram salience ranking through memory convergence (RRF).
-     
-        RRF formula per engram:
-            rrf_score = 1/(k + rank_semantic) + 1/(k + rank_lexical)
-     
-        Engrams appearing in only one list get a rank of (list_length + 1)
-        in the missing list — a mild penalty, not a full exclusion.
-        This mirrors biology: a memory with strong semantic match but zero
-        lexical match is still a valid recall candidate.
-     
-        Args:
-            semantic_results : Ranked list from semantic search (vec KNN / cosine)
-            lexical_results  : Ranked list from lexical search (FTS5)
-            recall_limit     : Final number of engrams to return
-            k                : RRF constant (default 60, standard in literature)
-     
-        Returns:
-            list[dict]: list of recall_limit engrams sorted by descending RRF score,
-                        with 'relevancy' set to normalised RRF score (0.0–1.0)
-        """
-        # Build rank lookup by episode id — 0-based, best = 0
-        sem_rank: dict[int, int] = {}
-        episode_lookup: dict[int, dict] = {}
-        for i, r in enumerate(semantic_results):
-            sem_rank[r["id"]] = i
-            episode_lookup[r["id"]] = r
-        
-        lex_rank: dict[int, int] = {}
-        for i, r in enumerate(lexical_results):
-            lex_rank[r["id"]] = i
-            episode_lookup.setdefault(r["id"], r)
-        
-        sem_miss = len(semantic_results)
-        lex_miss = len(lexical_results)
-        
-        # Union of all candidate episode ids
-        all_ids = set(sem_rank) | set(lex_rank)
-     
-        # Compute RRF score for each candidate
-        scored: list[tuple[float, int]] = []  # (rrf_score, episode_id)
-        for eid in all_ids:
-            sr = sem_rank.get(eid, sem_miss)
-            lr = lex_rank.get(eid, lex_miss)
-            rrf = 1.0 / (k + sr) + 1.0 / (k + lr)
-            scored.append((rrf, eid))
-     
-        # Sort descending by RRF score
-        scored.sort(key=lambda x: x[0], reverse=True)
-     
-        # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-        max_rrf = scored[0][0] if scored else 1.0
-     
-        fused = []
-        for rrf_score, eid in scored[:recall_limit]:
-            ep = dict(episode_lookup[eid])  # copy — don't mutate cached result
-            ep["relevancy"] = rrf_score / max_rrf
-            ep.pop("_rank", None)           # remove internal rank field
-            fused.append(ep)
-     
-        return fused
     
      # ── Episode retrieval for a specific date ─────────────────────────────────
 
