@@ -20,7 +20,7 @@ Architecture:
 
     Capacity:
         Phonological limit — Miller's Law (7±2 PMTs), tunable via HRS config
-        Global chunk limit — LLM context window minus system prompt,
+        Global chunk limit — Cognitive engine context window minus system prompt,
                              GRACE personality, and EMC injection reserve
 
     Eviction triggers (both checked on every fill):
@@ -36,7 +36,7 @@ Architecture:
         - No async — all operations are synchronous and in-memory
 
 Terminology:
-    Chunk   — unit of LLM context window size (~4 neural units per chunk)
+    Chunk   — unit of cognitive engine context window size (~4 neural units per chunk)
     PMT     — phonological memory trace (one conversation turn, user or assistant)
     Schema  — a subset of PMTs evicted or recalled together as a group
     Slot    — the active deque buffer holding all sustained PMTs
@@ -85,7 +85,7 @@ class WorkingMemoryCortex:
     """
     Working Memory Cortex.
 
-    Maintains the active conversation window sent to LLM on every PMT.
+    Maintains the active conversation window sent to cognitive engine on every PMT.
     Receding PMT schema are evicted when the global chunk limit or PMT slot limit is exceeded,
     and returned to MCC for async forwarding to EMC.
 
@@ -103,7 +103,7 @@ class WorkingMemoryCortex:
 
         Args:
             logger: Logger instance from CNC for logging WMC operations
-            global_chunk_limit (int): Maximum number of chunks WMC can hold (tunable based on LLM context window and hardware constraints)
+            global_chunk_limit (int): Maximum number of chunks WMC can hold (tunable based on cognitive engine context window and hardware constraints)
             pmt_slot_limit (int): Maximum number of PMTs WMC can hold (based on Miller's Law 7±2, but can be adjusted as needed)
             pmt_slot_buffer (int): Additional buffer for PMTs beyond Miller's Law limit to allow flexibility if chunks are small (default 2)
         """
@@ -215,25 +215,24 @@ class WorkingMemoryCortex:
         Recall sustaining PMT schema for context window construction.
         Unpacks the PMT schema into pair of user prompt and AI response.
         Return PMT schema in ascending chronological order.
-        Only includes role + content — timestamp stripped for LLM.
+        Only includes role + content — timestamp stripped for cognitive engine.
         Timestamps are only used for logging and memory management.
 
         Returns:
-            list[dict]: List of sustained PMTs unpacked for LLM inference [{role, content}]
+            list[dict]: List of sustained PMTs unpacked for cognitive engine inference [{role, content}]
         """
-        messages = []
-        for pmt in self._pmt_slot:
+        sustained_pmts = []                                                                        # For collecting recalled pmts for cognitive engine memory context
+        for pmt in self._pmt_slot:                                                                 # Iterate over each sustained PMT in the slot
             # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response pairs
-            try:
-                content = json.loads(pmt["content"])
-                messages.append({"role": "user",      "content": content["user"]})
-                messages.append({"role": "assistant", "content": content["assistant"]})
-            except (json.JSONDecodeError, KeyError):
-                # Malformed — surface as-is rather tan silent drop
-                messages.append({"role": "user", "content": pmt["content"]})
+            try:                                                                                   # Attempt to deserialize the PMT content
+                content = json.loads(pmt["content"])                                               # Deserialize PMT content into user prompt/AI response pair
+                sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user prompt from the content
+                sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack AI response from the content
+            except (json.JSONDecodeError, KeyError):                                               # Malformed — surface as-is rather than silent drop
+                sustained_pmts.append({"role": "user", "content": pmt["content"]})                 # Use the PMT content as-is
 
         # Return the list of sustained PMT schema in ascending chronological order
-        return messages
+        return sustained_pmts                                                                      # Return the list of unpacked user prompt/AI response pairs
 
     def forget_pmt_schema(self) -> list[dict]:
         """
