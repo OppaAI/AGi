@@ -201,6 +201,8 @@ class _EncodingEngine:
                 encoded_trace: list[float] = self._core.encode_query(trace).tolist()    # Encode the cue for memory recall
             else:                                                                       # If the trace is a memory trace to be stored,
                 encoded_trace: list[float] = self._core.encode_document(trace).tolist() # Encode the memory trace for storage
+            encoded_trace = _normalize(encoded_trace)                                   #
+
             # Keep cache small — evict oldest if over the encoding cache limit
             if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
                 decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
@@ -211,6 +213,11 @@ class _EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
+def _normalize(v: list[float]) -> list[float]:
+    """Unit-normalize a vector for cosine-equivalent L2 search."""
+    mag = math.sqrt(sum(x * x for x in v))
+    return [x / mag for x in v] if mag > 0.0 else v
+    
 def _semantic_search(cue: list[float], episode: list[float]) -> float:
     """
     Search a recall cue against a stored episode semantically.
