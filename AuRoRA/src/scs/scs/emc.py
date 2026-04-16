@@ -214,12 +214,30 @@ class _EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-def _normalize(v: list[float]) -> list[float]:
-    """Unit-normalize a vector for cosine-equivalent L2 search."""
-    mag = math.sqrt(sum(x * x for x in v))
-    if abs(mag - 1.0) < 1e-6:   # already unit-normalized
-        return v
-    return [x / mag for x in v] if mag > 0.0 else v
+def _unit_normalize(vector: list[float]) -> list[float]:
+    """
+    Ensure encoding engine conduct semantic search properly by
+    unit-normalizing a vector so that L2 distance search is equivalent to cosine similarity.
+
+    sqlite-vec uses Euclidean (L2) distance, not cosine similarity. For unit vectors,
+    cosine_sim(a, b) == 1 - L2(a, b)² / 2, so normalizing before insert/query makes
+    L2 nearest-neighbor search semantically equivalent to cosine nearest-neighbor search.
+
+    BGE-base outputs near-unit vectors, but normalization may be eroded by dtype
+    conversion or serialization. This function is a zero-cost safety net: already
+    unit-normalized vectors (‖v‖ ≈ 1.0 within 1e-6) are returned as-is. Zero vectors
+    are returned unchanged to avoid division by zero.
+
+    Args:
+        vector: A float vector, e.g. from an embedding model.
+
+    Returns:
+        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero.
+    """
+    vector_mag = math.sqrt(sum(v * v for v in vector))                        # Compute L2-norm - Euclidean magnitude of the vector
+    if abs(vector_mag - 1.0) < 1e-6:                                          # If the vector is already unit-normalized,
+        return vector                                                         # Return the original vector
+    return [v / vector_mag for v in vector] if vector_mag > 0.0 else vector   # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
     
 def _semantic_search(cue: list[float], episode: list[float]) -> float:
     """
