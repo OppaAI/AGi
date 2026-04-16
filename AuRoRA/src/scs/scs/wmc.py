@@ -228,7 +228,7 @@ class WorkingMemoryCortex:
                 content = json.loads(pmt["content"])                                               # Deserialize PMT content into user prompt/AI response pair
                 sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user prompt from the content
                 sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack AI response from the content
-            except (json.JSONDecodeError, KeyError):                                               # Malformed — surface as-is rather than silent drop
+            except (json.JSONDecodeError, KeyError):                                               # When error occurs during deseralization - malformed content format
                 sustained_pmts.append({"role": "user", "content": pmt["content"]})                 # Use the PMT content as-is
 
         # Return the list of sustained PMT schema in ascending chronological order
