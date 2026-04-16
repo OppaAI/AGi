@@ -111,6 +111,7 @@ import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
 import struct                               # For packing semantic vectors (fp32) of episodes into engram
 import threading                            # For background encoding of episodes
+import time
 from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
 from dataclasses import dataclass, field    # For defining structures of episodes and engram
 from datetime import datetime               # (TODO) Replace with hrs.blc when BioLogic Clock is built
@@ -216,6 +217,8 @@ class _EncodingEngine:
 def _normalize(v: list[float]) -> list[float]:
     """Unit-normalize a vector for cosine-equivalent L2 search."""
     mag = math.sqrt(sum(x * x for x in v))
+    if abs(mag - 1.0) < 1e-6:   # already unit-normalized
+        return v
     return [x / mag for x in v] if mag > 0.0 else v
     
 def _semantic_search(cue: list[float], episode: list[float]) -> float:
@@ -382,7 +385,7 @@ class EpisodicMemoryCortex:
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing buffer index
                 timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
                 date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
-                content    TEXT    NOT NULL,                                -- Content of the episode (truncated to engram content limit)
+                content    TEXT    NOT NULL                                 -- Content of the episode (truncated to engram content limit)
             );
 
             -- Encoded episodic memory (intermediate, retrievable)
@@ -568,7 +571,7 @@ class EpisodicMemoryCortex:
                 if not encoded_episode:                                             # If the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # Log the warning message of unavailability of the encoding engine
-                        f"EMC encode skipped (encoding engine unavailable): ",
+                        f"EMC encode skipped (encoding engine unavailable): "
                         f"{len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks"
                     )
                     with self._episodic_buffer_lock:                                # With lock on episodic buffer,
@@ -715,10 +718,14 @@ class EpisodicMemoryCortex:
                         ).fetchall()
 
                         scored = []
+
                         for row in rows:            
+                            expected_bytes = len(cue_vector) * 4
+                            if len(row["encoding"]) != expected_bytes:
+                                continue      # skip mismatched dimension — stale encoding from old model
                             engram_vec = list(struct.unpack(
                                 f"{len(cue_vector)}f",
-                                row["encoding"][:len(cue_vector) * 4]
+                                row["encoding"]
                             ))
                             score = _semantic_search(cue_vector, engram_vec)
                             if score > 0.0:
@@ -994,7 +1001,6 @@ class EpisodicMemoryCortex:
                 "oldest_episode":           ep_row["oldest"] if ep_row  else None,
                 "newest_episode":           ep_row["newest"] if ep_row  else None,
                 "buffer_total":             buf_row["total"]   if buf_row else 0,
-                "buffer_pending":           buf_row["pending"]  if buf_row else 0,
                 "binding_pending":          binding_pending,
                 "db_size_mb":               db_size_mb,
                 "encoding_engine_ready":    self._encoding_engine.is_available,
