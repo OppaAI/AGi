@@ -204,14 +204,14 @@ class MemoryCoordinationCore:
             for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
                 content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
 
-                # Deserialize JSON content into user prompt/AI response pairs for context assembly
+                # Deserialize episode content into user prompt/AI response pairs for context assembly
                 try:
-                    content = json.loads(content)
-                    self.emc.episodic_buffer.stage_single_episode({"role": "user",      "content": content["user"]})
-                    self.emc.episodic_buffer.stage_single_episode({"role": "assistant", "content": content["assistant"]})
-                except (json.JSONDecodeError, KeyError):
+                    content = json.loads(content)                                                                            # Deserialize episode content into user prompt/AI response pair
+                    self.emc.episodic_buffer.stage_single_episode({"role": "user",      "content": content["user"]})         # Unpack user prompt from the content
+                    self.emc.episodic_buffer.stage_single_episode({"role": "assistant", "content": content["assistant"]})    # Unpack AI response from the content
+                except (json.JSONDecodeError, KeyError):                                                                     # When error occurs during deseralization - malformed content format
                     # Malformed — surface as-is rather than silent drop
-                    self.emc.episodic_buffer.stage_single_episode({"role": "user", "content": content})
+                    self.emc.episodic_buffer.stage_single_episode({"role": "user", "content": content})                      # Use the episode content as-is
                  
             self.logger.debug(                                               # Log the number of EMC episodes bound into episodic buffer
                 f"MCC injected {len(episodic_scaffold)} EMC episode(s) into episodic buffer"
