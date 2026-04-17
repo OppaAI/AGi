@@ -128,8 +128,8 @@ from msb import (               # Aquire access to memory storage bank
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
     connect_engram,             # Open a SQLite connection with WAL mode and row factory
-    try_load_sqlite_vec,        # Attempt to load the sqlite-vec extension into a connection
-    sanitize_fts_query,         # Sanitize a raw query string for safe FTS5 MATCH usage
+    activate_engram_index,      # Attempt to load the sqlite-vec extension into a connection
+    sanitize_lexical_cue,       # Sanitize a raw query string for safe FTS5 MATCH usage
     memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
 )
 
@@ -220,7 +220,7 @@ class EpisodicMemoryCortex:
 
             # Set up SQLite-vec for L2 distance semantic search
             # Graceful fallback to cosine similarity if SQLite-vec not available
-            self._engram_index = try_load_sqlite_vec(self.engram, logger=logger)    # Attempt to activate engram vector index via shared MSB utility
+            self._engram_index = activate_engram_index(self.engram, logger=logger)    # Attempt to activate engram vector index via shared MSB utility
             if self._engram_index:                                          # If engram vector index successfully loaded,
                 self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
 
@@ -401,7 +401,7 @@ class EpisodicMemoryCortex:
 
         # Load sqlite-vec into encoder connection if engram vector index is active
         if self._engram_index:                                    # If engram vector index is active,
-            if not try_load_sqlite_vec(encoder_conn, logger=self.logger):   # Attempt to load sqlite-vec into encoder connection via shared MSB utility
+            if not activate_engram_index(encoder_conn, logger=self.logger):  # Attempt to load sqlite-vec into encoder connection via shared MSB utility
                 self._engram_index = False                        # Disable engram vector index — fall back to cosine similarity search
 
         self.logger.info("⚙️ EMC encoding cycle running…")       # Log the start of encoding cycle
@@ -664,7 +664,7 @@ class EpisodicMemoryCortex:
             list[dict] with keys: id, timestamp, date, content, relevancy
                        sorted best-first (highest relevancy first)
         """
-        safe_query = sanitize_fts_query(query)                              # Sanitize the query for safe FTS5 MATCH usage via shared MSB utility
+        safe_query = sanitize_lexical_cue(query)                                # Sanitize the query for safe FTS5 MATCH usage via shared MSB utility
         if not safe_query:
             return []
     
