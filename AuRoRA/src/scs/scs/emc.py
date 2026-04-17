@@ -109,7 +109,7 @@ TODO:
 import os                                   # For process priority adjustment
 import sqlite3                              # For storage of episodic memory and buffer
 import threading                            # For background encoding of episodes
-import time
+import time                                 # For inter-encode yielding (sleep) and timing control within encoding cycle
 from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
 from dataclasses import dataclass, field    # For defining structures of episodes and engram
 from datetime import datetime               # (TODO) Replace with hrs.blc when BioLogic Clock is built
@@ -121,17 +121,16 @@ from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
 CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
-# Memory Storage Bank — shared infrastructure across all memory cortices
-from msb import (
-    EncodingEngine,         # Shared encoding engine (sentence-transformers wrapper with cache)
-    unit_normalize,         # L2-normalize a vector for cosine-equivalent L2 search
-    semantic_search,        # Cosine similarity fallback (when sqlite-vec unavailable)
-    pack_vector,            # Pack a float vector into fp32 binary blob for engram storage
-    unpack_vector,          # Unpack a fp32 binary blob back into a float vector
-    open_engram,            # Open a SQLite connection with WAL mode and row factory
-    try_load_sqlite_vec,    # Attempt to load the sqlite-vec extension into a connection
-    sanitize_fts_query,     # Sanitize a raw query string for safe FTS5 MATCH usage
-    memory_convergence,     # RRF fusion of semantic + lexical ranked result lists
+from msb import (               # Aquire access to memory storage bank
+    EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
+    unit_normalize,             # L2-normalize a vector for cosine-equivalent L2 search
+    semantic_search,            # Cosine similarity fallback (when sqlite-vec unavailable)
+    pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
+    unpack_vector,              # Unpack a fp32 binary blob back into a float vector
+    open_engram,                # Open a SQLite connection with WAL mode and row factory
+    try_load_sqlite_vec,        # Attempt to load the sqlite-vec extension into a connection
+    sanitize_fts_query,         # Sanitize a raw query string for safe FTS5 MATCH usage
+    memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
 )
 
         
@@ -428,7 +427,7 @@ class EpisodicMemoryCortex:
             for episode in ripple:                              # For each episode in the ripple,
                 if not self._encoder_running:                   # If the encoder is not running,
                     break                                       # Respect stop signal mid-ripple
-                time.sleep(0.01)                                # 10ms yield — defers to active cognition between encodes
+                time.sleep(0.01)                                # 10ms yield — prevents encoding loop from starving active cognition mid-ripple
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
