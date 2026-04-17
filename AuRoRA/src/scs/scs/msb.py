@@ -42,10 +42,13 @@ Terminology:
     FTS5        — SQLite FTS5 full-text search extension for lexical search
     RRF         — Reciprocal Rank Fusion for combining semantic and lexical search
     unit vector — vector with L2-norm = 1.0 (cosine sim ≡ L2 distance on unit vectors)
+
+TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector math needed outside memory cortices
 """
 
 # System libraries
 import math                     # For vector magnitude and relevance scoring
+import numpy as np              # For fast vector math — normalization and cosine similarity
 import sqlite3                  # For engram connection factory
 import struct                   # For packing/unpacking semantic vectors (fp32)
 
@@ -144,9 +147,6 @@ class EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-
-# ── Vector Math ───────────────────────────────────────────────────────────────
-
 def unit_normalize(vector: list[float]) -> list[float]:
     """
     Ensure encoding engine conduct semantic search properly by
@@ -167,11 +167,11 @@ def unit_normalize(vector: list[float]) -> list[float]:
     Returns:
         list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero.
     """
-    vector_mag = math.sqrt(sum(v * v for v in vector))                        # Compute L2-norm - Euclidean magnitude of the vector
-    if abs(vector_mag - 1.0) < 1e-6:                                          # If the vector is already unit-normalized,
-        return vector                                                         # Return the original vector
-    return [v / vector_mag for v in vector] if vector_mag > 0.0 else vector   # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
-
+    vector_array = np.array(vector)                                                # Convert to NumPy array for fast vector math
+    vector_mag = np.linalg.norm(vector_array)                                      # Compute L2-norm - Euclidean magnitude of the vector
+    if abs(vector_mag - 1.0) < 1e-6:                                               # If the vector is already unit-normalized,
+        return vector                                                              # Return the original vector as-is
+    return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
 
 def semantic_search(cue: list[float], episode: list[float]) -> float:
     """
@@ -182,19 +182,16 @@ def semantic_search(cue: list[float], episode: list[float]) -> float:
     Args:
         cue     (list[float]): Encoded recall cue.
         episode (list[float]): Encoded stored episode.
+        * Both cue and episode vectors have alreaddy been unit-normalized — only dot product is needed to equal cosine similarity
     
     Returns:
         float: Semantic relevancy score (0.0 – 1.0).
     """
     if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
         return 0.0                                                              # Return 0.0 as relevancy cannot be computed
-    dot: float        = sum(c * e for c, e in zip(cue, episode))                # Compute the dot product of the two vectors
-    cue_mag: float    = math.sqrt(sum(c * c for c in cue))                      # Compute the magnitude of the encoded recall cue
-    episode_mag: float = math.sqrt(sum(e * e for e in episode))                 # Compute the magnitude of the encoded stored episode
-    return dot / (cue_mag * episode_mag) if cue_mag and episode_mag else 0.0    # Return the semantic relevancy score, or 0.0 if either magnitude is 0
+    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == Compute cosine similarity on the unit vectors
 
-
-def pack_vector(vector: list[float]) -> bytes:
+def pack_memory_vector(vector: list[float]) -> bytes:
     """
     Pack a float vector into fp32 binary blob for engram storage.
     Used before INSERT into episodes and engram_vectors.
