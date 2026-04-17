@@ -209,7 +209,7 @@ def semantic_match(cue: list[float], episode: list[float]) -> float:
     Args:
         cue     (list[float]): Encoded recall cue.
         episode (list[float]): Encoded stored episode.
-        * Both cue and episode vectors have alreaddy been unit-normalized — only dot product is needed to equal cosine similarity
+        * Both cue and episode vectors have already been unit-normalized — only dot product is needed to equal cosine similarity
     
     Returns:
         float: Semantic relevancy score (0.0 – 1.0).
@@ -237,32 +237,32 @@ def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     Raises:
         sqlite3.Error: If connection cannot be established.
     """
-    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # Connect to engram gateway without checking neural threads
+    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # Allow cross-thread engram access for concurrent cortex connections
     engram_conn.row_factory = sqlite3.Row                              # Define the structure of query results of the engram
     engram_conn.execute("PRAGMA journal_mode=WAL;")                    # Set up engram to allow retrieval and storing simultaneously
     engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # Balance episode safety vs storing speed
     engram_conn.commit()                                               # Apply the above settings into the engram
-    return engram_conn                                                 # Return the configured connection for the encoder
+    return engram_conn                                                 # Return the configured connection
 
-def try_load_sqlite_vec(conn: sqlite3.Connection, logger=None) -> bool:
+def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
     """
-    Attempt to load the sqlite-vec extension into an engram connection.
-    Returns True if successfully loaded, False on failure.
-
-    sqlite-vec provides vec0 virtual tables for L2 distance KNN search.
-    Graceful fallback to Python cosine similarity if unavailable.
-
+    Activate the engram vector index for KNN semantic search.
+    Returns True if successfully activated, False on failure.
+    
+    Vec0 virtual tables provide L2 distance KNN search over encoded episodes.
+    Graceful fallback to Python cosine similarity if index unavailable.
+    
     Args:
-        conn        : An open SQLite connection.
-        logger      : Optional logger for warning on failure.
-
+        engram_conn: An open engram connection.
+        logger     : Optional logger for warning on failure.
+    
     Returns:
-        bool: True if sqlite-vec loaded successfully, False otherwise.
+        bool: True if engram vector index activated, False otherwise.
     """
     try:                                                        # Attempt to activate engram vector index
-        import sqlite_vec                                       # Initialize SQLite-vec for engram vector index semantic search
-        sqlite_vec.load(conn)                                   # Load SQLite-vec into the provided connection
-        return True                                             # Signal successful load
+        import sqlite_vec                                       # Load sqlite-vec extension for engram vector index
+        sqlite_vec.load(engram_conn)                            # Activate vector index on the engram connection
+        return True                                             # Signal successful activation
     except Exception as e:                                      # If sqlite-vec fails to load,
         if logger:                                              # If a logger is provided,
             logger.warning(                                     # Log the fallback to cosine similarity due to engram vector index unavailability
@@ -270,7 +270,7 @@ def try_load_sqlite_vec(conn: sqlite3.Connection, logger=None) -> bool:
                 f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
                 f"   Reason: {e}"
             )
-        return False                                            # Signal failed load
+        return False                                            # Signal failed activation — caller falls back to cosine similarity
 
 
 # ── Lexical ───────────────────────────────────────────────────────────────────
