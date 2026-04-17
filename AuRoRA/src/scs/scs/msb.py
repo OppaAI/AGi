@@ -45,18 +45,13 @@ Terminology:
 """
 
 # System libraries
-import math         # For vector magnitude and relevance scoring
-import sqlite3      # For engram connection factory
-import struct       # For packing/unpacking semantic vectors (fp32)
-from typing import Optional
+import math                     # For vector magnitude and relevance scoring
+import sqlite3                  # For engram connection factory
+import struct                   # For packing/unpacking semantic vectors (fp32)
 
 # AGi libraries
 from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
-CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
-
-
-# ── Encoding Engine ───────────────────────────────────────────────────────────
 
 class EncodingEngine:
     """
