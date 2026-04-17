@@ -124,7 +124,7 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 from msb import (               # Aquire access to memory storage bank
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
     unit_normalize,             # L2-normalize a vector for cosine-equivalent L2 search
-    semantic_search,            # Cosine similarity fallback (when sqlite-vec unavailable)
+    semantic_match,             # Cosine similarity fallback (when sqlite-vec unavailable)
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
     open_engram,                # Open a SQLite connection with WAL mode and row factory
@@ -599,7 +599,7 @@ class EpisodicMemoryCortex:
                             if len(row["encoding"]) != expected_bytes:
                                 continue      # skip mismatched dimension — stale encoding from old model
                             engram_vec = unpack_vector(row["encoding"], len(cue_vector))    # Unpack engram vector via shared MSB utility
-                            score = semantic_search(cue_vector, engram_vec)                 # Compute cosine similarity via shared MSB utility
+                            score = semantic_match(cue_vector, engram_vec)                  # Compute cosine similarity via shared MSB utility
                             if score > 0.0:
                                 scored.append((score, row))
                         scored.sort(key=lambda x: x[0], reverse=True)
