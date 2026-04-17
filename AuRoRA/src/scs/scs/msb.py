@@ -26,7 +26,7 @@ Architecture:
         open_engram()          — open a SQLite connection with WAL mode and row factory
 
     Lexical:
-        sanitize_lexical_cue() — sanitize a raw query string for safe FTS5 MATCH usage
+        sanitize_lexical_cue() — sanitize a raw cue string for safe FTS5 MATCH usage
 
     Convergence:
         memory_convergence()   — RRF fusion of semantic + lexical ranked result lists
@@ -272,26 +272,20 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
             )
         return False                                            # Signal failed activation — caller falls back to cosine similarity
 
-
-# ── Lexical ───────────────────────────────────────────────────────────────────
-
-def sanitize_lexical_cue(query: str) -> str:
+def sanitize_lexical_cue(cue: str) -> str:
     """
-    Sanitize raw query string for safe FTS5 MATCH usage.
+    Sanitize raw cue string for safe FTS5 MATCH usage.
     Quotes each token to treat them as literal terms, neutralizing
     FTS5 operators (*, -, ", parentheses, AND, OR, NOT).
 
     Args:
-        query (str): Raw recall cue string from the caller.
+        cue (str): Raw recall cue string from the caller.
 
     Returns:
         str: FTS5-safe quoted token string, or empty string if query is blank.
     """
-    tokens = query.strip().split()
-    return " ".join(f'"{t}"' for t in tokens if t)
-
-
-# ── Memory Convergence (RRF) ──────────────────────────────────────────────────
+    lexemes = cue.strip().split()                                    # Split cue into individual lexemes for FTS5 matching
+    return " ".join(f'"{lexeme}"' for lexeme in lexemes if lexeme)   # Wrap each lexeme in quotes — neutralizes FTS5 operators
 
 def memory_convergence(
     semantic_results : list[dict],
