@@ -15,21 +15,21 @@ Responsibilities:
 
 Architecture:
     Encoding:
-        _EncodingEngine      — sentence-transformers model wrapper with caching
-        encode()             — encode a trace or cue into a semantic vector
+        _EncodingEngine        — sentence-transformers model wrapper with caching
+        encode()               — encode a trace or cue into a semantic vector
 
     Vector Math:
-        unit_normalize()     — L2-normalize a vector for cosine-equivalent L2 search
-        semantic_match()     — cosine similarity fallback (when sqlite-vec unavailable)
+        unit_normalize()       — L2-normalize a vector for cosine-equivalent L2 search
+        semantic_match()       — cosine similarity fallback (when sqlite-vec unavailable)
 
     Storage:
-        open_engram()        — open a SQLite connection with WAL mode and row factory
+        open_engram()          — open a SQLite connection with WAL mode and row factory
 
     Lexical:
-        sanitize_fts_query() — sanitize a raw query string for safe FTS5 MATCH usage
+        sanitize_lexical_cue() — sanitize a raw query string for safe FTS5 MATCH usage
 
     Convergence:
-        memory_convergence() — RRF fusion of semantic + lexical ranked result lists
+        memory_convergence()   — RRF fusion of semantic + lexical ranked result lists
 
 Used by:
     EMC — Episodic Memory Cortex
@@ -275,7 +275,7 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
 
 # ── Lexical ───────────────────────────────────────────────────────────────────
 
-def sanitize_fts_query(query: str) -> str:
+def sanitize_lexical_cue(query: str) -> str:
     """
     Sanitize raw query string for safe FTS5 MATCH usage.
     Quotes each token to treat them as literal terms, neutralizing
