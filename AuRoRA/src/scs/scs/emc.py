@@ -127,7 +127,7 @@ from msb import (               # Aquire access to memory storage bank
     semantic_match,             # Cosine similarity fallback (when sqlite-vec unavailable)
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
-    open_engram,                # Open a SQLite connection with WAL mode and row factory
+    connect_engram,             # Open a SQLite connection with WAL mode and row factory
     try_load_sqlite_vec,        # Attempt to load the sqlite-vec extension into a connection
     sanitize_fts_query,         # Sanitize a raw query string for safe FTS5 MATCH usage
     memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
@@ -216,7 +216,7 @@ class EpisodicMemoryCortex:
 
         # SQLite — WAL mode for concurrent reads during async writes
         try:                                                                # Attempt to connect to the engram
-            self.engram = open_engram(engram_gateway, logger=logger)        # Open engram connection via shared MSB factory (WAL + row_factory)
+            self.engram = connect_engram(engram_gateway, logger=logger)     # Open engram connection via shared MSB factory (WAL + row_factory)
 
             # Set up SQLite-vec for L2 distance semantic search
             # Graceful fallback to cosine similarity if SQLite-vec not available
@@ -394,25 +394,25 @@ class EpisodicMemoryCortex:
         """
 
         # Connect to engram gateway with WAL mode for concurrent access
-        encoder_conn = open_engram(self.engram_gateway)                             # Open encoder connection via shared MSB factory (WAL + row_factory)
+        encoder_conn = connect_engram(self.engram_gateway)        # Open encoder connection via shared MSB factory (WAL + row_factory)
 
         # Yield processing priority to active cognition threads
-        os.nice(19)                                             # Encoding is non-latency-sensitive — defers to all active cognition threads
+        os.nice(19)                                               # Encoding is non-latency-sensitive — defers to all active cognition threads
 
         # Load sqlite-vec into encoder connection if engram vector index is active
-        if self._engram_index:                                  # If engram vector index is active,
+        if self._engram_index:                                    # If engram vector index is active,
             if not try_load_sqlite_vec(encoder_conn, logger=self.logger):   # Attempt to load sqlite-vec into encoder connection via shared MSB utility
-                self._engram_index = False                      # Disable engram vector index — fall back to cosine similarity search
+                self._engram_index = False                        # Disable engram vector index — fall back to cosine similarity search
 
-        self.logger.info("⚙️ EMC encoding cycle running…")      # Log the start of encoding cycle
+        self.logger.info("⚙️ EMC encoding cycle running…")       # Log the start of encoding cycle
     
-        while self._encoder_running:                            # While the encoder is running,
+        while self._encoder_running:                              # While the encoder is running,
             # Rest state — wait for theta rhythm activation
-            self._theta_rhythm.wait()                           # Wait for theta rhythm activation
-            self._theta_rhythm.clear()                          # Clear the theta rhythm activation flag
+            self._theta_rhythm.wait()                             # Wait for theta rhythm activation
+            self._theta_rhythm.clear()                            # Clear the theta rhythm activation flag
     
-            if not self._encoder_running:                       # If the encoder is not running,
-                break                                           # Clean exit if stopped while waiting
+            if not self._encoder_running:                         # If the encoder is not running,
+                break                                             # Clean exit if stopped while waiting
     
             # Snapshot IDs at this moment — one ripple, one defined window
             with self._episodic_buffer_lock:                    # With lock on episodic buffer,
