@@ -291,10 +291,10 @@ def memory_convergence(
     semantic_results : list[dict],
     lexical_results  : list[dict],
     recall_limit     : int,
-    k                : int = 60,
+    rrf_k            : int = 60,
 ) -> list[dict]:
     """
-    Memory convergence via Reciprocal Rank Fusion (RRF).
+    Fuse semantic and lexical recall results into a unified engram salience ranking.
     Semantic search (vec KNN / cosine) + lexical search (FTS5)
     → unified engram salience ranking through memory convergence (RRF).
 
@@ -313,36 +313,34 @@ def memory_convergence(
         semantic_results : Ranked list from semantic search (vec KNN / cosine)
         lexical_results  : Ranked list from lexical search (FTS5)
         recall_limit     : Final number of engrams to return
-        k                : RRF constant (default 60, standard in literature)
+        rrf_k            : RRF constant (default 60, standard in literature)
 
     Returns:
-        list[dict]: list of recall_limit engrams sorted by descending RRF score,
+        list[dict]: list of episodes up  to recall limit sorted by descending RRF score,
                     with 'relevancy' set to normalised RRF score (0.0–1.0)
     """
-    # Build rank lookup by episode id — 0-based, best = 0
-    sem_rank: dict[int, int] = {}
-    episode_lookup: dict[int, dict] = {}
-    for i, r in enumerate(semantic_results):
-        sem_rank[r["id"]] = i
-        episode_lookup[r["id"]] = r
+    # Build rank lookup list by episode id — 0-based, best = 0
+    episode_pool: dict[int, dict] = {}                                # Union pool of all candidate episodes from both paths
+    semantic_rank: dict[int, int] = {}                                # Semantic rank lookup — episode_id → 0-based rank
+    lexical_rank: dict[int, int] = {}                                 # Lexical rank lookup  — episode_id → 0-based rank
 
-    lex_rank: dict[int, int] = {}
-    for i, r in enumerate(lexical_results):
-        lex_rank[r["id"]] = i
-        episode_lookup.setdefault(r["id"], r)
+    for rank, episode in enumerate(semantic_results):                 # Iterate through each semantic match results
+        semantic_rank[episode["id"]] = rank                           # Store semantic rank — 0-based, best = 0
+        episode_pool[episode["id"]] = episode                         # Add episode to pool for later retrieval
 
-    sem_miss = len(semantic_results)
-    lex_miss = len(lexical_results)
+    for rank, episode in enumerate(lexical_results):                  # Iterate through each lexical match results
+        lexical_rank[episode["id"]] = rank                            # Store lexical rank — 0-based, best = 0
+        episode_pool.setdefault(episode["id"], episode)               # Add episode to pool if not already from semantic path
 
-    # Union of all candidate episode ids
-    all_ids = set(sem_rank) | set(lex_rank)
+    semantic_miss = len(semantic_results)                             # Penalty rank for episodes missed by semantic path
+    lexical_miss = len(lexical_results)                               # Penalty rank for episodes missed by lexical path
 
     # Compute RRF score for each candidate
-    scored: list[tuple[float, int]] = []  # (rrf_score, episode_id)
+    scored: list[tuple[float, int]] = []                              # 
     for eid in all_ids:
-        sr = sem_rank.get(eid, sem_miss)
-        lr = lex_rank.get(eid, lex_miss)
-        rrf = 1.0 / (k + sr) + 1.0 / (k + lr)
+        sr = semantic_rank.get(eid, semantic_miss)
+        lr = lexical_rank.get(eid, lexical_miss)
+        rrf = 1.0 / (rrf_k + sr) + 1.0 / (rrf_k + lr)
         scored.append((rrf, eid))
 
     # Sort descending by RRF score
