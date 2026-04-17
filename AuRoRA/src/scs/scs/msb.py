@@ -218,9 +218,9 @@ def semantic_match(cue: list[float], episode: list[float]) -> float:
         return 0.0                                                              # Return 0.0 as relevancy cannot be computed
     return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == Compute cosine similarity on the unit vectors
     
-def open_engram(gateway: str, logger=None) -> sqlite3.Connection:
+def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     """
-    Open a SQLite engram connection with WAL mode and row factory.
+    Connect to engram (SQLite) with WAL mode and row factory.
     Shared connection factory — all memory cortices (EMC, SMC, PMC) use
     the same pragma configuration for consistent concurrent access behavior.
 
@@ -237,13 +237,12 @@ def open_engram(gateway: str, logger=None) -> sqlite3.Connection:
     Raises:
         sqlite3.Error: If connection cannot be established.
     """
-    conn = sqlite3.connect(gateway, check_same_thread=False)    # Connect to engram gateway without thread checking
-    conn.row_factory = sqlite3.Row                              # Define the structure of query results of the engram
-    conn.execute("PRAGMA journal_mode=WAL;")                    # Set up engram to allow retrieval and storing simultaneously
-    conn.execute("PRAGMA synchronous=NORMAL;")                  # Balance episode safety vs storing speed
-    conn.commit()                                               # Apply the above parameters into the engram
-    return conn                                                 # Return the configured connection
-
+    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # Connect to engram gateway without checking neural threads
+    engram_conn.row_factory = sqlite3.Row                              # Define the structure of query results of the engram
+    engram_conn.execute("PRAGMA journal_mode=WAL;")                    # Set up engram to allow retrieval and storing simultaneously
+    engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # Balance episode safety vs storing speed
+    engram_conn.commit()                                               # Apply the above settings into the engram
+    return engram_conn                                                 # Return the configured connection for the encoder
 
 def try_load_sqlite_vec(conn: sqlite3.Connection, logger=None) -> bool:
     """
