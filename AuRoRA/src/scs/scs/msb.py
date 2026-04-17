@@ -20,7 +20,7 @@ Architecture:
 
     Vector Math:
         unit_normalize()     — L2-normalize a vector for cosine-equivalent L2 search
-        semantic_search()    — cosine similarity fallback (when sqlite-vec unavailable)
+        semantic_match()     — cosine similarity fallback (when sqlite-vec unavailable)
 
     Storage:
         open_engram()        — open a SQLite connection with WAL mode and row factory
@@ -173,24 +173,6 @@ def unit_normalize(vector: list[float]) -> list[float]:
         return vector                                                              # Return the original vector as-is
     return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
 
-def semantic_search(cue: list[float], episode: list[float]) -> float:
-    """
-    Search a recall cue against a stored episode semantically.
-    Cosine similarity fallback — used when sqlite-vec ANN index is unavailable.
-    TODO: To be replaced with sqlite-vec ANN search.
-
-    Args:
-        cue     (list[float]): Encoded recall cue.
-        episode (list[float]): Encoded stored episode.
-        * Both cue and episode vectors have alreaddy been unit-normalized — only dot product is needed to equal cosine similarity
-    
-    Returns:
-        float: Semantic relevancy score (0.0 – 1.0).
-    """
-    if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
-        return 0.0                                                              # Return 0.0 as relevancy cannot be computed
-    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == Compute cosine similarity on the unit vectors
-
 def pack_memory_vector(vector: list[float]) -> bytes:
     """
     Pack a float vector into fp32 binary blob for engram storage.
@@ -203,7 +185,6 @@ def pack_memory_vector(vector: list[float]) -> bytes:
         bytes: Binary blob of fp32 values.
     """
     return struct.pack(f"{len(vector)}f", *vector)                              # Pack encoded vector as fp32 binary for engram storage
-
 
 def unpack_vector(blob: bytes, dim: int) -> list[float]:
     """
@@ -219,9 +200,24 @@ def unpack_vector(blob: bytes, dim: int) -> list[float]:
     """
     return list(struct.unpack(f"{dim}f", blob))                                 # Unpack fp32 binary blob back into a float vector
 
+def semantic_match(cue: list[float], episode: list[float]) -> float:
+    """
+    Match a recall cue against a stored episode semantically.
+    Cosine similarity fallback — used when sqlite-vec ANN index is unavailable.
+    TODO: To be replaced with sqlite-vec ANN search.
 
-# ── Storage ───────────────────────────────────────────────────────────────────
-
+    Args:
+        cue     (list[float]): Encoded recall cue.
+        episode (list[float]): Encoded stored episode.
+        * Both cue and episode vectors have alreaddy been unit-normalized — only dot product is needed to equal cosine similarity
+    
+    Returns:
+        float: Semantic relevancy score (0.0 – 1.0).
+    """
+    if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
+        return 0.0                                                              # Return 0.0 as relevancy cannot be computed
+    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == Compute cosine similarity on the unit vectors
+    
 def open_engram(gateway: str, logger=None) -> sqlite3.Connection:
     """
     Open a SQLite engram connection with WAL mode and row factory.
