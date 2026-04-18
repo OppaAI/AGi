@@ -15,15 +15,15 @@ Responsibilities:
 
 Architecture:
     Encoding:
-        _EncodingEngine        — sentence-transformers model wrapper with caching
-        encode()               — encode a trace or cue into a semantic vector
+        _EncodingEngine        — Sentence-transformers model wrapper with caching
+        encode()               — Encode a trace or cue into a semantic vector
 
     Vector Math:
         unit_normalize()       — L2-normalize a vector for cosine-equivalent L2 search
-        semantic_match()       — cosine similarity fallback (when sqlite-vec unavailable)
+        semantic_match()       — Cosine similarity fallback (when sqlite-vec unavailable)
 
     Storage:
-        open_engram()          — open a SQLite connection with WAL mode and row factory
+        connect_engram()       — Connect to engram (SQLite) with WAL mode and row factory
 
     Lexical:
         sanitize_lexical_cue() — sanitize a raw cue string for safe FTS5 MATCH usage
@@ -47,7 +47,6 @@ TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector mat
 """
 
 # System libraries
-import math                     # For vector magnitude and relevance scoring
 import numpy as np              # For fast vector math — normalization and cosine similarity
 import sqlite3                  # For engram connection factory
 import struct                   # For packing/unpacking semantic vectors (fp32)
@@ -173,7 +172,7 @@ def unit_normalize(vector: list[float]) -> list[float]:
         return vector                                                              # Return the original vector as-is
     return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
 
-def pack_memory_vector(vector: list[float]) -> bytes:
+def pack_vector(vector: list[float]) -> bytes:
     """
     Pack a float vector into fp32 binary blob for engram storage.
     Used before INSERT into episodes and engram_vectors.
@@ -216,7 +215,7 @@ def semantic_match(cue: list[float], episode: list[float]) -> float:
     """
     if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
         return 0.0                                                              # Return 0.0 as relevancy cannot be computed
-    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == Compute cosine similarity on the unit vectors
+    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == cosine similarity on unit vectors
     
 def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     """
@@ -316,44 +315,45 @@ def memory_convergence(
         rrf_k            : RRF constant (default 60, standard in literature)
 
     Returns:
-        list[dict]: list of episodes up  to recall limit sorted by descending RRF score,
+        list[dict]: list of episodes up to recall limit sorted by descending RRF score,
                     with 'relevancy' set to normalised RRF score (0.0–1.0)
     """
-    # Build rank lookup list by episode id — 0-based, best = 0
-    episode_pool: dict[int, dict] = {}                                # Union pool of all candidate episodes from both paths
-    semantic_rank: dict[int, int] = {}                                # Semantic rank lookup — episode_id → 0-based rank
-    lexical_rank: dict[int, int] = {}                                 # Lexical rank lookup  — episode_id → 0-based rank
+    # Build rank lookup schemas and episode pool — 0-based, best = 0
+    episode_pool: dict[int, dict] = {}                                        # Union pool of all candidate episodes from both paths
+    semantic_rank: dict[int, int] = {}                                        # Semantic rank lookup — episode_id → 0-based rank
+    lexical_rank: dict[int, int] = {}                                         # Lexical rank lookup  — episode_id → 0-based rank
 
-    for rank, episode in enumerate(semantic_results):                 # Iterate through each semantic match results
-        semantic_rank[episode["id"]] = rank                           # Store semantic rank — 0-based, best = 0
-        episode_pool[episode["id"]] = episode                         # Add episode to pool for later retrieval
+    for rank, episode in enumerate(semantic_results):                         # Iterate through each semantic match results
+        semantic_rank[episode["id"]] = rank                                   # Store semantic rank — 0-based, best = 0
+        episode_pool[episode["id"]] = episode                                 # Add episode to pool for later retrieval
 
-    for rank, episode in enumerate(lexical_results):                  # Iterate through each lexical match results
-        lexical_rank[episode["id"]] = rank                            # Store lexical rank — 0-based, best = 0
-        episode_pool.setdefault(episode["id"], episode)               # Add episode to pool if not already from semantic path
+    for rank, episode in enumerate(lexical_results):                          # Iterate through each lexical match results
+        lexical_rank[episode["id"]] = rank                                    # Store lexical rank — 0-based, best = 0
+        episode_pool.setdefault(episode["id"], episode)                       # Add episode to pool if not already from semantic path
 
-    semantic_miss = len(semantic_results)                             # Penalty rank for episodes missed by semantic path
-    lexical_miss = len(lexical_results)                               # Penalty rank for episodes missed by lexical path
+    semantic_miss = len(semantic_results)                                     # Penalty rank for episodes missed by semantic path
+    lexical_miss = len(lexical_results)                                       # Penalty rank for episodes missed by lexical path
 
     # Compute RRF score for each candidate
-    scored: list[tuple[float, int]] = []                              # 
-    for eid in all_ids:
-        sr = semantic_rank.get(eid, semantic_miss)
-        lr = lexical_rank.get(eid, lexical_miss)
-        rrf = 1.0 / (rrf_k + sr) + 1.0 / (rrf_k + lr)
-        scored.append((rrf, eid))
+    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — safe to prevent mutation to original pool
+        episode = dict(episode)                                               # Obtain a clone of the episode — prevent mutation of original episode
+        episode["rrf_score"] = (                                              # Calculate rrf score of each episode from the ranks of both paths
+            1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) +
+            1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))
+        )
+        episode_pool[episode["id"]] = episode                                 # Replace original episode entry with rrf score added
 
     # Sort descending by RRF score
-    scored.sort(key=lambda x: x[0], reverse=True)
+    sorted_episodes = sorted(episode_pool.values(),                           # Sort episodes by RRF score — best first
+                             key=lambda episode: episode["rrf_score"], 
+                             reverse=True)
 
     # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-    max_rrf = scored[0][0] if scored else 1.0
+    max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # Computing best RRF score for normalization — guard against empty results
 
-    fused = []
-    for rrf_score, eid in scored[:recall_limit]:
-        ep = dict(episode_lookup[eid])  # copy — don't mutate cached result
-        ep["relevancy"] = rrf_score / max_rrf
-        ep.pop("_rank", None)           # remove internal rank field
-        fused.append(ep)
-
-    return fused
+    for episode in sorted_episodes[:recall_limit]:                            # Surface top episodes up to recall limit
+        episode["relevancy"] = episode["rrf_score"] / max_rrf                 # Normalize RRF score to 0.0–1.0 relevancy
+        episode.pop("_rank", None)                                            # Remove internal rank field before surfacing
+        episode.pop("rrf_score", None)                                        # Remove internal RRF score before surfacing
+    
+    return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
