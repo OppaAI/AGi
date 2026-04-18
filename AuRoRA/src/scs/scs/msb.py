@@ -357,3 +357,353 @@ def memory_convergence(
         episode.pop("rrf_score", None)                                        # Remove internal RRF score before surfacing
     
     return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
+
+class EngramStorageBank:
+    """
+    Engram Storage Bank (ESB) — episodic memory storage abstraction layer.
+    Owns all SQL operations for EMC — schema creation, staging, consolidation,
+    search, and retrieval. EMC never touches SQL directly.
+
+    Shared engram file (grace.db) — EMC tables only at this stage.
+    SMC and PMC will extend with their own tables in M2.
+
+    Backend today: SQLite + sqlite-vec
+    Backend future: Qdrant, pgvector, or other vector DB — swap here only,
+                    EMC cognitive logic untouched.
+
+    Tables owned:
+        episodic_buffer  — crash-safe PMT staging (temporary)
+        episodes         — encoded episodic memory (intermediate, retrievable)
+        engram_vectors   — vec0 KNN index for semantic search
+        engram_lexical   — FTS5 index for lexical search
+
+    Args:
+        engram_conn      : Open SQLite connection (WAL + row_factory configured)
+        engram_dim       : Vector dimension of the encoding engine (e.g. 384 for BGE-small)
+        engram_index     : Whether sqlite-vec vector index is active
+        logger           : Logger instance for logging operations
+    """
+
+    def __init__(
+        self,
+        engram_conn: sqlite3.Connection,
+        engram_dim: int,
+        engram_index: bool,
+        logger,
+    ) -> None:
+        self._conn         = engram_conn
+        self._engram_dim   = engram_dim
+        self._engram_index = engram_index
+        self.logger        = logger
+
+    # ── Schema ────────────────────────────────────────────────────────────────
+
+    def init_schema(self) -> None:
+        """
+        Initialize the schema of the engram.
+        This method creates the necessary tables and indexes for storing episodic memories.
+
+        Episodic Buffer (2-layer)
+            _binding_stream  —  transient intake of evicted PMTs from WMC overflow
+            episodic_buffer  — crash-safe pre-consolidation staging of episodes
+        One Table + Two Indexes SQLite design:
+            episodes         — embedded, searchable episodic memory (intermediate)
+            engram_vectors   — semantic vectors for L2 distance semantic search
+            engram_lexical   — FTS5 lexical index for pattern separation recall
+        """
+        self._conn.executescript("""                                        -- Create the tables and indexes of episodic memory
+            -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
+            CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Temporary buffer for evicted PMT schemas
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing buffer index
+                timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
+                date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
+                content    TEXT    NOT NULL                                 -- Content of the episode (truncated to engram content limit)
+            );
+
+            -- Encoded episodic memory (intermediate, retrievable)
+            CREATE TABLE IF NOT EXISTS episodes (                           -- Episodic memory storage
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing engram id
+                timestamp  TEXT    NOT NULL,                                -- Full datetime of induction into WMC
+                date       TEXT    NOT NULL,                                -- Pre-computed date (temporal recall axis)
+                content    TEXT    NOT NULL,                                -- Raw interaction content (user prompt + AI response)
+                encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
+                created_at TEXT    DEFAULT (datetime('now'))                -- Consolidation timestamp
+            );
+            CREATE INDEX IF NOT EXISTS idx_episodes_date                    -- Temporal recall axis — get_episodes_for_date() and Dream Cycle (M2)
+                ON episodes(date);
+            """)
+        self._conn.commit()                                                 # Commit the changes to the engram
+
+        if self._engram_index:                                              # If engram vector index is activated,
+            self._conn.execute(f"""                                         -- Create a virtual schema for engram vector index semantic search
+                CREATE VIRTUAL TABLE IF NOT EXISTS engram_vectors USING vec0(
+                    encoding FLOAT[{self._engram_dim}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
+                )
+            """)
+            self._conn.commit()                                             # Commit the changes to the engram
+            self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
+
+        self._conn.execute("""                                              -- Create a virtual schema for the lexical search using FTS5 index
+            CREATE VIRTUAL TABLE IF NOT EXISTS engram_lexical USING fts5(   -- FTS5 index for lexical search
+               content,                                                     -- Content of the episode
+               tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
+            )
+        """)
+        self._conn.commit()                                                 # Commit the changes to the engram
+        self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
+
+    # ── Staging ───────────────────────────────────────────────────────────────
+
+    def insert_staged(self, conn: sqlite3.Connection, episode: dict) -> int:
+        """
+        Insert an episode into the episodic buffer (crash-safe staging).
+        Returns the staging_id for deletion after synaptic consolidation.
+
+        Args:
+            conn    : Encoder connection (separate from main engram connection)
+            episode : Episode dict with timestamp, date, content
+
+        Returns:
+            int: staging_id of the inserted episode
+        """
+        staging_id = conn.execute(                                              # Insert the episode into the episodic buffer
+            "INSERT INTO episodic_buffer (timestamp, date, content) "
+            "VALUES (?, ?, ?)",
+            [episode["timestamp"], episode["date"], episode["content"]],
+        )
+        conn.commit()                                                           # Commit the transaction
+        return staging_id.lastrowid                                             # Capture staging index for deletion after encoding
+
+    def get_unencoded(self, batch_size: int, offset: int) -> list:
+        """
+        Fetch a batch of unencoded episodes from the episodic buffer.
+        Used during recovery to drain episodic_buffer back into binding stream.
+
+        Args:
+            batch_size : Maximum number of episodes to fetch per batch
+            offset     : Batch offset for pagination
+
+        Returns:
+            list: Rows of unencoded episodes
+        """
+        return self._conn.execute(                                          # Query the engram for unencoded episodes
+            "SELECT id, timestamp, date, content "                          # Collect the index, timestamp, date, and content
+            "FROM episodic_buffer "                                         # All episodes in the episodic buffer is unencoded by definition
+            "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
+            [batch_size, offset]                                            # Process episodes by batch size
+        ).fetchall()                                                        # Fetch all the unencoded episodes
+
+    def get_buffer_count(self) -> int:
+        """
+        Return count of episodes currently staged in episodic buffer.
+
+        Returns:
+            int: Number of unencoded episodes in episodic buffer
+        """
+        return self._conn.execute(
+            "SELECT COUNT(*) FROM episodic_buffer"
+        ).fetchone()[0]
+
+    def delete_staged(self, conn: sqlite3.Connection, staging_id: int) -> None:
+        """
+        Remove a staged episode from the episodic buffer after synaptic consolidation.
+
+        Args:
+            conn       : Encoder connection (separate from main engram connection)
+            staging_id : ID of the staged episode to remove
+        """
+        conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
+            "DELETE FROM episodic_buffer WHERE id=?",                           # Remove the episode from episodic buffer
+            [staging_id],                                                       # Using the episode ID
+        )
+
+    # ── Consolidation ─────────────────────────────────────────────────────────
+
+    def insert_episode(self, conn: sqlite3.Connection, episode: dict, encoding_blob: bytes) -> int:
+        """
+        Insert an encoded episode into the episodes table.
+
+        Args:
+            conn          : Encoder connection for writing
+            episode       : Episode dict with timestamp, date, content
+            encoding_blob : Binary encoding blob of the episode
+
+        Returns:
+            int: episode_id of the inserted episode
+        """
+        engram_id = conn.execute(                                               # Insert the episode into engram
+            "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
+            [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
+        )
+        return engram_id.lastrowid                                              # Get the ID of the inscribed episode
+
+    def insert_vector(self, conn: sqlite3.Connection, episode_id: int, encoding_blob: bytes) -> None:
+        """
+        Insert an episode encoding into the engram vector index.
+        Only called if engram vector index is activated.
+
+        Args:
+            conn          : Encoder connection for writing
+            episode_id    : ID of the episode to index
+            encoding_blob : Binary encoding blob of the episode
+        """
+        conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
+            "INSERT INTO engram_vectors (rowid, encoding) VALUES (?,?)",        # Insert the episode encoding into engram vectors
+            [episode_id, encoding_blob],                                        # With the episode ID and encoding
+        )
+
+    def insert_lexical(self, conn: sqlite3.Connection, episode_id: int, content: str) -> None:
+        """
+        Insert episode content into the FTS5 lexical index.
+        rowid must match episodes.id so JOIN works during recall.
+
+        Args:
+            conn       : Encoder connection for writing
+            episode_id : ID of the episode to index
+            content    : Raw content of the episode
+        """
+        conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
+            "INSERT INTO engram_lexical (rowid, content) VALUES (?,?)",         # Insert the episode content into engram lexical
+            [episode_id, content],                                              # With the episode ID and content
+        )
+
+    # ── Search ────────────────────────────────────────────────────────────────
+
+    def search_knn(self, cue_blob: bytes, limit: int) -> list:
+        """
+        Search the engram vector index for the top KNN episodes.
+        Primary semantic search path — sqlite-vec L2 distance KNN
+        (cosine-equivalent on unit-normalized vectors).
+
+        Args:
+            cue_blob : Binary blob of the encoded recall cue
+            limit    : Maximum number of candidates to return
+
+        Returns:
+            list: Rows of matching episodes with distance scores
+        """
+        return self._conn.execute(                                              # Query the engram vector index and retrieve the top recall_limit * 2 episodes
+            """
+            SELECT e.id, e.timestamp, e.date, e.content,                        -- Retrieve the episode ID, timestamp, date, and content
+                   ev.distance                                                  -- Retrieve the semantic similarity between the cue and the episode
+            FROM engram_vectors ev                                              -- From the engram vector index virtual table
+            JOIN episodes e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
+            WHERE ev.encoding MATCH ?                                           -- Match the cue vector
+            ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
+            LIMIT ?                                                             -- Limit to recall_limit * 2 episodes
+            """,
+            [cue_blob, limit],                                                  # Retrieve the top limit episodes
+        ).fetchall()                                                            # Fetch all matching episode candidates
+
+    def search_cosine_pool(self, half_pool: int) -> list:
+        """
+        Fetch a stratified pool of episodes for cosine similarity fallback.
+        Stratified sampling — half recent, half oldest.
+        Bounds memory usage and ensures old memories score alongside recent ones.
+
+        Args:
+            half_pool : Half the total pool size (recent + oldest)
+
+        Returns:
+            list: Rows of episodes with encoding blobs for cosine scoring
+        """
+        return self._conn.execute(                                          # Attempt to use cosine similarity
+            "SELECT id, timestamp, date, content, encoding FROM episodes "
+            "ORDER BY rowid DESC LIMIT ? "
+            "UNION ALL "
+            "SELECT id, timestamp, date, content, encoding FROM episodes "
+            "ORDER BY rowid ASC LIMIT ?",
+            [half_pool, half_pool],
+        ).fetchall()
+
+    def search_lexical(self, safe_query: str, limit: int) -> list:
+        """
+        Lexical pattern separation search via FTS5.
+        Dentate gyrus analogue — precise, keyword-driven engram retrieval.
+
+        FTS5 rank() is negative (more negative = better). We normalise to
+        a 0.0–1.0 relevancy score so RRF can treat both paths uniformly.
+
+        Args:
+            safe_query : Sanitized FTS5 query string
+            limit      : Maximum candidates to return before RRF fusion
+
+        Returns:
+            list: Rows of matching episodes with raw FTS5 rank scores
+        """
+        return self._conn.execute(                                          # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
+            """
+            SELECT e.id, e.timestamp, e.date, e.content,
+                   fts.rank AS raw_rank
+            FROM engram_lexical fts
+            JOIN episodes e ON e.id = fts.rowid
+            WHERE engram_lexical MATCH ?
+            ORDER BY fts.rank          -- most negative = best
+            LIMIT ?
+            """,
+            [safe_query, limit],
+        ).fetchall()
+
+    # ── Retrieval ─────────────────────────────────────────────────────────────
+
+    def get_episodes_for_date(self, date_str: str) -> list[dict]:
+        """
+        Return all episodes for a given date in chronological order.
+        Used by MCC for 11pm Dream Cycle reflection (M2).
+
+        Args:
+            date_str (str): ISO date string (e.g. "2026-04-05")
+
+        Returns:
+            List of dicts: {timestamp, content}
+            Empty list if no episodes found or on failure.
+        """
+        try:
+            rows = self._conn.execute(
+                "SELECT timestamp, content FROM episodes "
+                "WHERE date = ? ORDER BY timestamp",
+                [date_str],
+            ).fetchall()
+            return [
+                {"timestamp": r["timestamp"], "content": r["content"]}
+                for r in rows
+            ]
+        except Exception as e:
+            self.logger.error(f"EMC get_episodes_for_date failed: {e}")
+            return []
+
+    def get_stats(self, engram_gateway: str) -> dict:
+        """
+        Return EMC health and storage stats.
+
+        Returns:
+            dict: {
+                episodes, oldest_episode, newest_episode,
+                buffer_total, db_size_mb
+            }
+            Empty dict on failure.
+        """
+        try:
+            ep_row = self._conn.execute(
+                "SELECT COUNT(*) as total, "
+                "MIN(date) as oldest, MAX(date) as newest "
+                "FROM episodes"
+            ).fetchone()
+
+            buf_row = self._conn.execute(
+                "SELECT COUNT(*) as total FROM episodic_buffer"
+            ).fetchone()
+
+            db_size_mb = round(Path(engram_gateway).stat().st_size / 1_048_576, 2) \
+                if Path(engram_gateway).exists() else 0.0
+
+            return {
+                "episodes":       ep_row["total"]  if ep_row  else 0,
+                "oldest_episode": ep_row["oldest"] if ep_row  else None,
+                "newest_episode": ep_row["newest"] if ep_row  else None,
+                "buffer_total":   buf_row["total"] if buf_row else 0,
+                "db_size_mb":     db_size_mb,
+            }
+        except Exception as e:
+            self.logger.error(f"EMC get_stats failed: {e}")
+            return {}

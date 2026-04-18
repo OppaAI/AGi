@@ -123,7 +123,7 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 
 from msb import (               # Aquire access to memory storage bank
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
-    unit_normalize,             # L2-normalize a vector for cosine-equivalent L2 search
+    EngramStorageBank,          # Centralized engram memory storage interface
     semantic_match,             # Cosine similarity fallback (when sqlite-vec unavailable)
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
@@ -224,7 +224,13 @@ class EpisodicMemoryCortex:
             if self._engram_index:                                          # If engram vector index successfully loaded,
                 self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
 
-            self._init_engram_schema()                                      # Initialize the schema of the engram
+            self._esb = EngramStorageBank(                                  # Acquire access to the engram
+                engram       = self.engram,
+                engram_dim   = EMC.ENCODING_DIM,
+                engram_index = self._engram_index,
+                logger       = self.logger
+            )
+            self._esb.init_schema()                                         # Initialize the schema of the engram
 
         except sqlite3.Error as e:                                          # If failed to connect to the engram
             self.logger.error(f"❌ Engram connection failed → {e}")         # Log the failure to connect to the engram
@@ -246,65 +252,7 @@ class EpisodicMemoryCortex:
             raise                                                           # Raise the anomaly to the caller
 
         self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # Log the successful initialization of the engram
-
-    def _init_engram_schema(self) -> None:
-        """
-        Initialize the schema of the engram.
-        This method creates the necessary tables and indexes for storing episodic memories.
-
-        Episodic Buffer (2-layer)
-            _binding_stream  —  transient intake of evicted PMTs from WMC overflow
-            episodic_buffer  — crash-safe pre-consolidation staging of episodes
-        One Table + Two Indexes SQLite design:
-            episodes         — embedded, searchable episodic memory (intermediate)
-            engram_vectors   — semantic vectors for L2 distance semantic search
-            engram_lexical   — FTS5 lexical index for pattern separation recall
-        """
-        self.engram.executescript("""                                       -- Create the tables and indexes of episodic memory
-            -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
-            CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Temporary buffer for evicted PMT schemas
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing buffer index
-                timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
-                date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
-                content    TEXT    NOT NULL                                 -- Content of the episode (truncated to engram content limit)
-            );
-
-            -- Encoded episodic memory (intermediate, retrievable)
-            CREATE TABLE IF NOT EXISTS episodes (                           -- Episodic memory storage
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing engram id
-                timestamp  TEXT    NOT NULL,                                -- Full datetime of induction into WMC
-                date       TEXT    NOT NULL,                                -- Pre-computed date (temporal recall axis)
-                content    TEXT    NOT NULL,                                -- Raw interaction content (user prompt + AI response)
-                encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
-                created_at TEXT    DEFAULT (datetime('now'))                -- Consolidation timestamp
-            );
-            CREATE INDEX IF NOT EXISTS idx_episodes_date                    -- Temporal recall axis — get_episodes_for_date() and Dream Cycle (M2)
-                ON episodes(date);
-            """)
-        self.engram.commit()                                                # Commit the changes to the engram
-
-        # Create episode vector virtual schema for engram vector index semantic search
-        # Created separately — only if engram vector index is activated
-        if self._engram_index:                                              # If engram vector index is activated,
-            self.engram.execute(f"""                                        -- Create a virtual schema for engram vector index semantic search
-                CREATE VIRTUAL TABLE IF NOT EXISTS engram_vectors USING vec0(
-                    encoding FLOAT[{EMC.ENCODING_DIM}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
-                )
-            """)
-            self.engram.commit()                                            # Commit the changes to the engram
-            self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
-            
-        # Create episode lexical virtual schema for FTS5 lexical search
-        # Created separately — always created
-        self.engram.execute("""                                             -- Create a virtual schema for the lexical search using FTS5 index
-            CREATE VIRTUAL TABLE IF NOT EXISTS engram_lexical USING fts5(   -- FTS5 index for lexical search
-               content,                                                     -- Content of the episode
-               tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
-            )
-        """)
-        self.engram.commit()                                                # Commit the changes to the engram
-        self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
-    
+   
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
         Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
@@ -349,12 +297,10 @@ class EpisodicMemoryCortex:
         recovery_offset = 0                                         # For tracking the offset for batch recovery of unencoded episodes
 
         while True:                                                 # Keep recovering unencoded episodes in batches
-            unencoded = self.engram.execute(                        # Query the engram for unencoded episodes
-                "SELECT id, timestamp, date, content "              # Collect the index, timestamp, date, and content
-                "FROM episodic_buffer "                             # All episodes in the episodic buffer is unencoded by definition
-                "ORDER BY id LIMIT ? OFFSET ?",                     # Sort by id and limit the results
-                [EMC.RECOVERY_BATCH_SIZE, recovery_offset]          # Process episodes by batch size
-            ).fetchall()                                            # Fetch all the unencoded episodes
+            unencoded = self._esb.get_unencoded(                    # Query the engram for unencoded episodes
+                batch_size = EMC.RECOVERY_BATCH_SIZE,
+                offset     = recovery_offset,
+            )
 
             if not unencoded:                                       # If no more unencoded episodes to recover, break
                 break                                               # Stop recovering unencoded episodes
@@ -433,14 +379,11 @@ class EpisodicMemoryCortex:
                 # Skip if already recovered from episodic_buffer on restart
                 if not episode.get("staging_id"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
-                        staging_id = encoder_conn.execute(                              # Insert the episode into the episodic buffer
-                            "INSERT INTO episodic_buffer (timestamp, date, content) "
-                            "VALUES (?, ?, ?)",
-                            [episode["timestamp"], episode["date"], episode["content"]],
+                        episode["staging_id"] = self._esb.insert_staged(                # Insert the episode into the episodic buffer
+                            conn=encoder_conn,
+                            episode=episode,
                         )
-                        encoder_conn.commit()                                           # Commit the transaction
-                        episode["staging_id"] = staging_id.lastrowid                    # Capture staging index for deletion after encoding
-        
+      
                 # Encode the episode content into a semantic vector
                 encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
                 if not encoded_episode:                                             # If the encoding failed,
@@ -504,16 +447,17 @@ class EpisodicMemoryCortex:
      
             # Engram lexical index (FTS5 index for lexical search)
             # rowid must match episodes.id so JOIN works during recall
-            encoder_conn.execute(                                                               # Insert the episode content into engram lexical for fast retrieval
-                "INSERT INTO engram_lexical (rowid, content) VALUES (?,?)",                     # Insert the episode content into engram lexical
-                [episode_id, episode["content"]],                                               # With the episode ID and content
+            self._esb.insert_lexical(                                                           # If the episode still staging in episodic buffer,
+                conn=encoder_conn,
+                episode_id=episode_id,
+                content=episode["content"],
             )
      
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
             if episode.get("staging_id") is not None:                                           # If the episode still staging in episodic buffer,
-                encoder_conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
-                    "DELETE FROM episodic_buffer WHERE id=?",                                   # Remove the episode from episodic buffer
-                    [episode["staging_id"]],                                                    # Using the episode ID
+                self._esb.delete_staged(                                                        # Remove the episode from episodic buffer after synaptic consolidation
+                    conn=encoder_conn,
+                    staging_id=episode["staging_id"],
                 )
             encoder_conn.commit()                                                               # Commit the transaction
         
