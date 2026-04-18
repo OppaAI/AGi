@@ -91,7 +91,6 @@ Public interface:
     emc.bind_pmt(timestamp, content) → bool
     emc.recall_episode(query, recall_limit) → list[dict]
     emc.get_episodes_for_date(date_str) → list[dict]
-    emc.buffer_pending_count() → int
     emc.get_stats() → dict
     emc.close() → None
 
@@ -432,33 +431,19 @@ class EpisodicMemoryCortex:
         """
         with self._inscription_lock:                                                            # Ensure only one thread inscribes into the engram at a time
             # Primary episodic record
-            engram_id = encoder_conn.execute(                                                   # Insert the episode into engram
-                "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
-                [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
-            )
-            episode_id = engram_id.lastrowid                                                    # Get the ID of the inscribed episode
-     
+            episode_id = self._esb.insert_episode(encoder_conn, episode, encoding_blob)         # Insert the episode into engram
+
             # Engram vector index (vec0 KNN for semantic search)
             if self._engram_index:                                                              # Only create if engram vector index is activated
-                encoder_conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
-                    "INSERT INTO engram_vectors (rowid, encoding) VALUES (?,?)",                # Insert the episode encoding into engram vectors
-                    [episode_id, encoding_blob],                                                # With the episode ID and encoding
-                )
+                self._esb.insert_vector(encoder_conn, episode_id, encoding_blob)                # Insert the episode encoding into engram vectors for fast retrieval
      
             # Engram lexical index (FTS5 index for lexical search)
-            # rowid must match episodes.id so JOIN works during recall
-            self._esb.insert_lexical(                                                           # If the episode still staging in episodic buffer,
-                conn=encoder_conn,
-                episode_id=episode_id,
-                content=episode["content"],
-            )
+            self._esb.insert_lexical(encoder_conn, episode_id, episode["content"])              # Insert the episode content into engram lexical for fast retrieval
      
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
             if episode.get("staging_id") is not None:                                           # If the episode still staging in episodic buffer,
-                self._esb.delete_staged(                                                        # Remove the episode from episodic buffer after synaptic consolidation
-                    conn=encoder_conn,
-                    staging_id=episode["staging_id"],
-                )
+                self._esb.delete_staged(encoder_conn, episode["staging_id"])                    # Remove the episode from episodic buffer after synaptic consolidation
+                
             encoder_conn.commit()                                                               # Commit the transaction
         
     def recall_episodes(self, query: str, recall_limit: int = 5) -> list[dict]:
@@ -609,50 +594,37 @@ class EpisodicMemoryCortex:
                        sorted best-first (highest relevancy first)
         """
         safe_query = sanitize_lexical_cue(query)                                # Sanitize the query for safe FTS5 MATCH usage via shared MSB utility
-        if not safe_query:
-            return []
+        if not safe_query:                                                      # If the query is empty or invalid
+            return []                                                           # Return empty list
     
-        try:
-            # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion   
-            rows = self.engram.execute(
-                """
-                SELECT e.id, e.timestamp, e.date, e.content,
-                       fts.rank AS raw_rank
-                FROM engram_lexical fts
-                JOIN episodes e ON e.id = fts.rowid
-                WHERE engram_lexical MATCH ?
-                ORDER BY fts.rank          -- most negative = best
-                LIMIT ?
-                """,
-                [safe_query, recall_limit * 2],
-            ).fetchall()
+        try:                                                                    # Attempt to execute the lexical search query
+            # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
+            rows = self._esb.search(safe_query, recall_limit * 2)               # Fetch lexical search results from the engram
     
-            if not rows:
-                return []
+            if not rows:                                                        # If no rows are found
+                return []                                                       # Return empty list
     
             # Normalise raw FTS5 rank to 0.0–1.0 relevancy
             # raw_rank is negative; least negative = worst; most negative = best
-            raw_scores = [abs(row["raw_rank"]) for row in rows]
-            max_score  = max(raw_scores) if raw_scores else 1.0
+            raw_scores = [abs(row["raw_rank"]) for row in rows]                 # Get the absolute values of the raw ranks
+            max_score  = max(raw_scores) if raw_scores else 1.0                 # Get the maximum score
     
-            results = []
-            for i, row in enumerate(rows):
+            results = []                                                        # Initialize the results list
+            for i, row in enumerate(rows):                                      # Iterate over the rows with their index
                 results.append({
                     "id"        : row["id"],
                     "timestamp" : row["timestamp"],
                     "date"      : row["date"],
                     "content"   : row["content"],
                     "relevancy" : abs(row["raw_rank"]) / max_score if max_score else 0.0,
-                    "_rank"     : i,   # 0-based rank for RRF (best = 0)
+                    "_rank"     : i,                                            # 0-based rank for RRF (best = 0)
                 })
-            return results
+            return results                                                      # Return the results list
     
-        except Exception as e:
-            self.logger.debug(f"EMC lexical search failed: {e}")
-            return []
+        except Exception as e:                                                  # If error occurs,
+            self.logger.debug(f"EMC lexical search failed: {e}")                # Log the exception
+            return []                                                           # Return empty list
     
-     # ── Episode retrieval for a specific date ─────────────────────────────────
-
     def get_episodes_for_date(self, date_str: str) -> list[dict]:
         """
         Return all episodes for a given date in chronological order.
@@ -665,87 +637,33 @@ class EpisodicMemoryCortex:
             List of dicts: {timestamp, content}
             Empty list if no episodes found or on failure.
         """
-        try:
-            rows = self.engram.execute(
-                "SELECT timestamp, content FROM episodes "
-                "WHERE date = ? ORDER BY timestamp",
-                [date_str],
-            ).fetchall()
-            return [
-                {"timestamp": r["timestamp"], "content": r["content"]}
-                for r in rows
-            ]
-        except Exception as e:
-            self.logger.error(f"EMC get_episodes_for_date failed: {e}")
-            return []
-
-    # ── Buffer status ─────────────────────────────────────────────────────────
-
-    def buffer_pending_count(self) -> int:
-        """
-        Return number of episodes pending encoding.
-        Combines epsodes in binding stream and episodic buffer (unencoded)
-        for a complete picture of pending encoding work.
- 
-        Returns:
-            int: Total number of PMTs pending encoding, 0 on failure.
-        """
-        try:
-            with self._episodic_buffer_lock:
-                ram_pending = len(self.episodic_buffer._binding_stream)
-            sql_pending = self.engram.execute(
-                 "SELECT COUNT(*) FROM episodic_buffer"
-            ).fetchone()[0]
-            return ram_pending + sql_pending
-        except Exception:
-            return 0
-
-    # ── Stats ─────────────────────────────────────────────────────────────────
+        return self._esb.get_episodes_for_date(date_str)                        # Obtain episodes for the given date from engram
 
     def get_stats(self) -> dict:
         """
         Return EMC health and storage stats.
 
         Returns:
-            dict: {
-                episodes, oldest_episode, newest_episode,
-                buffer_total, binding_pending,
-                db_size_mb, encoding_engine_ready,
-                engram_vector_active, encoding_engine
-            }
-            Empty dict on failure.
+            dict: Statistics about EMC, including encoding engine, binding stream, engram stats
+                  Empty dict on failure.
         """
         try:
-            ep_row = self.engram.execute(
-                "SELECT COUNT(*) as total, "
-                "MIN(date) as oldest, MAX(date) as newest "
-                "FROM episodes"
-            ).fetchone()
-
-            buf_row = self.engram.execute(
-                "SELECT COUNT(*) as total FROM episodic_buffer"
-            ).fetchone()
-            
-            with self._episodic_buffer_lock:
-                binding_pending= len(self.episodic_buffer._binding_stream)
+           
+            with self._episodic_buffer_lock:                                    # Lock the episodic buffer to obtain accurate count
+                binding_pending= len(self.episodic_buffer._binding_stream)      # Count episodes in binding stream of episodic buffer
                 
-            db_size_mb = round(Path(self.engram_gateway).stat().st_size / 1_048_576, 2) \
-                if Path(self.engram_gateway).exists() else 0.0
+            engram_stats = self._esb.get_stats(self.engram_gateway)             # Obtain stats of engram from episodic storage bank
 
-            return {
-                "episodes":                 ep_row["total"]  if ep_row  else 0,
-                "oldest_episode":           ep_row["oldest"] if ep_row  else None,
-                "newest_episode":           ep_row["newest"] if ep_row  else None,
-                "buffer_total":             buf_row["total"]   if buf_row else 0,
+            return {                                                            # Retures the health and storage stats of EMC
+                **engram_stats,
                 "binding_pending":          binding_pending,
-                "db_size_mb":               db_size_mb,
-                "encoding_engine_ready":    self._encoding_engine.is_available,
                 "engram_index_active":      self._engram_index,
+                "encoding_engine_ready":    self._encoding_engine.is_available,
                 "encoding_engine":          EMC.ENCODING_ENGINE,
             }
-        except Exception as e:
-            self.logger.error(f"EMC get_stats failed: {e}")
-            return {}
+        except Exception as e:                                                  # If any error occurs,
+            self.logger.error(f"EMC get_stats failed: {e}")                     # Log the failure
+            return {}                                                           # Return empty dict
 
     def close(self) -> None:
         """
@@ -753,10 +671,10 @@ class EpisodicMemoryCortex:
         Signals encoding cycle to stop, waits for clean exit,
         then releases the engram connection.
         """
-        self._encoder_running = False
-        self._theta_rhythm.set()                        # Wake up the encoder thread so it can exit cleanly
-        if self._encoder_thread:
-            self._encoder_thread.join(timeout=3.0)
-        if self.engram:
-            self.engram.close()
-        self.logger.info("🗄️  EMC closed")
+        self._encoder_running = False                   # Signal the encoder cycle to stop
+        self._theta_rhythm.set()                        # Wake up the encoder cycle so it can exit cleanly
+        if self._encoder_thread:                        # If encoder cycle is still running,
+            self._encoder_thread.join(timeout=3.0)      # Wait for it to finish
+        if self.engram:                                 # If engram is still connected,
+            self.engram.close()                         # Close the connection to the engram
+        self.logger.info("🗄️  EMC deactivated")         # Log the deactivation of EMC
