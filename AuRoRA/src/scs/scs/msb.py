@@ -2,47 +2,53 @@
 MSB — Memory Storage Bank
 ==========================
 AuRoRA · Semantic Cognitive System (SCS)
-
+ 
 Shared memory infrastructure layer — encoding, vector math, lexical search,
 storage utilities, and convergence fusion used across all memory cortices.
-
+ 
 Responsibilities:
     - Provide a shared encoding engine (semantic vector encoding) for EMC, SMC, PMC
     - Provide shared vector math utilities (normalization, cosine similarity)
     - Provide shared SQLite connection factory (WAL mode, row factory)
     - Provide shared lexical search utilities (FTS5 query sanitization)
     - Provide shared RRF memory convergence fusion for dual-path retrieval
-
+ 
 Architecture:
     Encoding:
-        _EncodingEngine        — Sentence-transformers model wrapper with caching
+        EncodingEngine         — Sentence-transformers model wrapper with caching
         encode()               — Encode a trace or cue into a semantic vector
-
+ 
     Vector Math:
         unit_normalize()       — L2-normalize a vector for cosine-equivalent L2 search
         semantic_match()       — Cosine similarity fallback (when sqlite-vec unavailable)
-
+ 
     Storage:
         connect_engram()       — Connect to engram (SQLite) with WAL mode and row factory
-
+        activate_engram_index()— Load sqlite-vec extension into a connection
+ 
     Lexical:
-        sanitize_lexical_cue() — sanitize a raw cue string for safe FTS5 MATCH usage
-
+        sanitize_lexical_cue() — Sanitize a raw cue string for safe FTS5 MATCH usage
+ 
     Convergence:
         memory_convergence()   — RRF fusion of semantic + lexical ranked result lists
-
+ 
+    EngramStorageBank:
+        Storage primitive interface — speaks rows, blobs, counts.
+        Zero memory domain vocabulary. EMC, SMC, PMC supply meaning.
+        Each cortex gets its own ESB instance pointing at its own table prefix.
+ 
 Used by:
     EMC — Episodic Memory Cortex
     SMC — Semantic Memory Cortex      (M2)
     PMC — Procedural Memory Cortex    (M2)
-
+ 
 Terminology:
     encoding    — semantic vector representation of a memory trace
     engram      — the memory store containing encoded episodes
     FTS5        — SQLite FTS5 full-text search extension for lexical search
     RRF         — Reciprocal Rank Fusion for combining semantic and lexical search
     unit vector — vector with L2-norm = 1.0 (cosine sim ≡ L2 distance on unit vectors)
-
+ 
 TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector math needed outside memory cortices
 """
 
@@ -50,6 +56,7 @@ TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector mat
 import numpy as np              # For fast vector math — normalization and cosine similarity
 import sqlite3                  # For engram connection factory
 import struct                   # For packing/unpacking semantic vectors (fp32)
+from pathlib import Path        # For calculating database size — owned here, never passed back up
 
 # AGi libraries
 from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
@@ -358,24 +365,18 @@ def memory_convergence(
     
     return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
 
-class EngramStorageBank:
+class MemoryBank:
     """
-    Engram Storage Bank (ESB) — episodic memory storage abstraction layer.
-    Owns all SQL operations for EMC — schema creation, staging, consolidation,
-    search, and retrieval. EMC never touches SQL directly.
+    Memory Bank (MB) — memory storage bank abstraction layer.
+    Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
+    search, and retrieval. The memory cortex never touches SQL directly.
 
-    Shared engram file (grace.db) — EMC tables only at this stage.
+    Shared engram file (memory_bank.db) — EMC tables only at this stage.
     SMC and PMC will extend with their own tables in M2.
 
     Backend today: SQLite + sqlite-vec
     Backend future: Qdrant, pgvector, or other vector DB — swap here only,
                     EMC cognitive logic untouched.
-
-    Tables owned:
-        episodic_buffer  — crash-safe PMT staging (temporary)
-        episodes         — encoded episodic memory (intermediate, retrievable)
-        engram_vectors   — vec0 KNN index for semantic search
-        engram_lexical   — FTS5 index for lexical search
 
     Args:
         engram_conn      : Open SQLite connection (WAL + row_factory configured)
@@ -386,11 +387,18 @@ class EngramStorageBank:
 
     def __init__(
         self,
+        memory_type: str,
         engram_conn: sqlite3.Connection,
         engram_dim: int,
         engram_index: bool,
         logger,
     ) -> None:
+
+        self._storage_schema = f"{memory_type}_storage"                 # Schema of engram storage
+        self._staging_schema = f"{memory_type}_staging"                 # Schema of staging buffer
+        self._vector_schema  = f"{memory_type}_vector"                  # Schema of semantic search index
+        self._lexical_schema = f"{memory_type}_lexical"                 # Schema of lexical search index
+
         self._conn         = engram_conn
         self._engram_dim   = engram_dim
         self._engram_index = engram_index
@@ -436,15 +444,15 @@ class EngramStorageBank:
 
         if self._engram_index:                                              # If engram vector index is activated,
             self._conn.execute(f"""                                         -- Create a virtual schema for engram vector index semantic search
-                CREATE VIRTUAL TABLE IF NOT EXISTS engram_vectors USING vec0(
+                CREATE VIRTUAL TABLE IF NOT EXISTS {self._storage_schema}_vectors USING vec0(
                     encoding FLOAT[{self._engram_dim}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
                 )
             """)
             self._conn.commit()                                             # Commit the changes to the engram
             self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
 
-        self._conn.execute("""                                              -- Create a virtual schema for the lexical search using FTS5 index
-            CREATE VIRTUAL TABLE IF NOT EXISTS engram_lexical USING fts5(   -- FTS5 index for lexical search
+        self._conn.execute(f"""                                             -- Create a virtual schema for the lexical search using FTS5 index
+            CREATE VIRTUAL TABLE IF NOT EXISTS {self._storage_schema}_lexical USING fts5(   -- FTS5 index for lexical search
                content,                                                     -- Content of the episode
                tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
             )
@@ -707,3 +715,20 @@ class EngramStorageBank:
         except Exception as e:
             self.logger.error(f"EMC get_stats failed: {e}")
             return {}
+
+ # ── Stats ————————————————————————————————————————————————————————————————
+    def count_stored_engrams(self) -> int:
+        """
+        Count number of engrams stored in the memory bank.
+        """
+        return self._conn.execute(                              # Return count of engrams in storage schema
+            f"SELECT COUNT(*) FROM {self._storage_schema}"      # Query engram storage schema for count
+        ).fetchone()[0]                                         # Return first element of result tuple
+
+    def count_staged_engrams(self) -> int:
+        """
+        Count number of engrams staged in the buffer pending for storage.
+        """
+        return self._conn.execute(                              # Return count of engrams in staging schema
+            f"SELECT COUNT(*) FROM {self._staging_schema}"      # Query engram staging schema for count
+        ).fetchone()[0]                                         # Return first element of result tuple
