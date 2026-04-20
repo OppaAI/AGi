@@ -67,7 +67,6 @@ EMC = AGi.CNS.EMC                           # Channel for interfacing with Episo
 # ===== ENGRAM PRIMITIVE STORAGE CONCEPTS =====
 # Note: This section defines the fundamental building blocks of engram schemas.
 # Each memory cortex (EMC, SMC, PMC) instantiates these concepts to define its own specific schemas.
-
 class EngramModality(Enum):
     """
     Defines the modality of engram memory traces (ie. the type of data stored).
@@ -98,6 +97,7 @@ class EngramSchema:
     lexical_traces: list[str] | None = None                     # The lexical fields for the engram used for lexical search
     index_traces: list[str] | None = None                       # The index fields for the engram used for fast retrieval
 
+# ===== ENCODING ENGINE =====
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -106,24 +106,28 @@ class EncodingEngine:
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger, model_name: str) -> None:
+    def __init__(self, logger, encoding_engine: str, cache_limit: int = 256, imprint_limit: int = 300) -> None:
         """
         Initialize the encoding engine with a logger.
         This method sets up the encoding engine core and cache for recent encodings.
         
         Args:
-            logger: Logger instance for logging encoding engine operations
-            model_name (str): The specific embedding model to load (e.g. from HRP)
+            logger               : Logger instance for logging encoding engine operations
+            encoding_engine (str): The specific embedding model to load (e.g. from HRP)
+            cache_limit     (int): Maximum number of entries in the LRU encoding cache
+            imprint_limit   (int): Maximum number of characters to hash for the imprint
         """
-        self.logger = logger                                # Retrieve logger from CNC for logging operations
-        self.model_name = model_name                        # Store the model name for dynamic formatting during encoding
-        self._core = None                                   # For holding the encoding engine instance for semantic encoding
-        self._cache: dict[str, list[float]] = {}            # For holding the cache of recent encodings to avoid redundant encoding
+        self.logger                         = logger                # Retrieve logger from CNC for logging operations
+        self.encoding_engine: str           = encoding_engine       # Store the model name for dynamic formatting during encoding
+        self.cache_limit: int               = cache_limit           # Maximum number of imprints to hold in cache to control memory usage
+        self.imprint_limit: int             = imprint_limit         # Maximum length of the imprint to control cache hit rate vs false positive risk
+        self._core                          = None                  # For holding the encoding engine instance for semantic encoding
+        self._cache: dict[str, list[float]] = {}                    # For holding the cache of recent encodings to avoid redundant encoding
 
         try:                                                                        # Attempt to activate the encoding engine
             from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
-            self.logger.info(f"⏳ Activating Encoding Engine ({model_name})…")      # Log the start of encoding engine activation
-            self._core = SentenceTransformer(self.model_name)                       # Activate the requested model
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of encoding engine activation
+            self._core = SentenceTransformer(self.encoding_engine)                  # Activate the requested model
             self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
         except ImportError:                                                         # If missing the inferencer component of encoding engine,
             self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
@@ -131,8 +135,8 @@ class EncodingEngine:
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                    # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")     # Log the error during activation of encoding engine
+        except Exception as e:                                                      # If other errors during activation,
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # Log the error during activation of encoding engine
 
     @property
     def is_available(self) -> bool:
@@ -170,27 +174,17 @@ class EncodingEngine:
             )
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:EMC.ENCODING_IMPRINT_LIMIT])}"  # Create a unique imprint hash and label the encoding type
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique imprint hash and label the encoding type
         if imprint in self._cache:                                                      # If the imprint is already in the cache,
             return self._cache[imprint]                                                 # Return the encoded vector in the cache
 
         try:                                                                            # Attempt to encode the trace
-            active_model = self.model_name.lower()                                      # Get the active model name to apply specific encoding rules
-
-            if "bge-small" in active_model:
-                if is_cue:
-                    trace = f"Represent this sentence for searching relevant passages: {trace}"
-                encoded_trace: list[float] = self._core.encode(trace).tolist()          # BGE-small uses manual prefixes
-            elif "embeddinggemma" in model_name:
-                prompt_name = "query" if is_cue else "document"
-                encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # EmbeddingGemma uses prompt configs
-            else:
-                encoded_trace: list[float] = self._core.encode(trace).tolist()          # Universal fallback for all other models
-                
+            prompt_name = "query" if is_cue else "document"                             # Assign the appropriate prompt name based on whether the trace is a cue or an episode to be encoded
+            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Encode the trace using the encoding engine
             encoded_trace = unit_normalize(encoded_trace)                               # Unit-normalize for cosine-equivalent L2 search
 
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
+            if len(self._cache) >= self.cache_limit:                                    # If the cache is over the limit,
                 decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
                 del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
             self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
@@ -199,6 +193,7 @@ class EncodingEngine:
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
 
+# ===== VECTOR OPERATIONS =====
 def unit_normalize(vector: list[float]) -> list[float]:
     """
     Ensure encoding engine conduct semantic search properly by
@@ -411,7 +406,7 @@ def memory_convergence(
     
     return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
 
-class MemoryBank:
+class EngramStorageBank:
     """
     Memory Bank (MB) — memory storage bank abstraction layer.
     Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
@@ -435,6 +430,7 @@ class MemoryBank:
         self,
         memory_type: str,
         engram_conn: sqlite3.Connection,
+        engram_schema: EngramSchema,
         engram_dim: int,
         engram_index: bool,
         logger,
@@ -446,6 +442,7 @@ class MemoryBank:
         self._lexical_schema = f"{memory_type}_lexical"                 # Schema of lexical search index
 
         self._conn         = engram_conn
+        self._schema       = engram_schema                              # Store the engram schema for dynamic table generation
         self._engram_dim   = engram_dim
         self._engram_index = engram_index
         self.logger        = logger
@@ -766,15 +763,31 @@ class MemoryBank:
     def build_schema(self) -> None:
         """
         Build the schema for the memory bank.
+        Generates the SQL table based on the injected EngramSchema.
         """
         try:
+            columns = []
+            for trace in self._schema.storage:                                  # Iterate over all defined traces in the schema
+                col_def = f"{trace.label} {trace.modality.value}"               # Define the column name and SQLite datatype (e.g., 'content TEXT')
+                
+                if trace.label == "id":                                         # If the field is the id, mark it as primary key
+                    col_def += " PRIMARY KEY"
+                elif trace.essential:                                           # If the field is essential, ensure it cannot be null
+                    col_def += " NOT NULL"
+                    
+                if trace.baseline is not None:                                  # If there is a baseline value, assign the SQLite default
+                    if trace.modality == EngramModality.TEXT:
+                        col_def += f" DEFAULT '{trace.baseline}'"               # Text defaults need quotes
+                    else:
+                        col_def += f" DEFAULT {trace.baseline}"                 # Numeric/boolean defaults do not
+                        
+                columns.append(col_def)                                         # Append the column definition to the list
+                
+            columns_sql = ",\n                    ".join(columns)               # Join all columns into a single string for the SQL statement
+
             self._conn.execute(
                 f"""CREATE TABLE IF NOT EXISTS {self._storage_schema} (
-                    id INTEGER PRIMARY KEY,
-                    timestamp REAL,
-                    content TEXT,
-                    vector BLOB,
-                    encoding TEXT
+                    {columns_sql}
                 )"""
             )
             self._conn.commit()

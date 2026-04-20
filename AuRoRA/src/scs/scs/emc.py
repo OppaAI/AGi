@@ -123,6 +123,9 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 from msb import (               # Aquire access to memory storage bank
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
     EngramStorageBank,          # Centralized engram memory storage interface
+    EngramSchema,               # Schema definition object for memory cortices
+    EngramTrace,                # Trace definition object for individual engram fields
+    EngramModality,             # Enumeration of valid engram field modalities
     semantic_match,             # Cosine similarity fallback (when sqlite-vec unavailable)
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
@@ -131,7 +134,17 @@ from msb import (               # Aquire access to memory storage bank
     sanitize_lexical_cue,       # Sanitize a raw query string for safe FTS5 MATCH usage
     memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
 )
+)
 
+EMC_SCHEMA = EngramSchema(                                              # Define the engram schema for episodic memory
+    storage=[
+        EngramTrace(label="id", modality=EngramModality.INTEGER, essential=True),
+        EngramTrace(label="timestamp", modality=EngramModality.REAL, essential=True),
+        EngramTrace(label="content", modality=EngramModality.TEXT, essential=True),
+        EngramTrace(label="vector", modality=EngramModality.BLOB, essential=True),
+        EngramTrace(label="encoding", modality=EngramModality.TEXT, essential=True),
+    ]
+)
         
 @dataclass
 class EpisodicBuffer:
@@ -211,7 +224,10 @@ class EpisodicMemoryCortex:
         self.engram_gateway: str     = str(engram_gateway)                      # Retrieve engram gateway passed down from MCC
         self.episodic_buffer         = EpisodicBuffer()                         # Initialize episodic buffer — binding and recall streams for active cognition
         self._episodic_buffer_lock   = threading.Lock()                         # Lock for thread-safe access to episodic buffer
-        self._encoding_engine        = EncodingEngine(logger=logger)            # Initialize shared encoding engine from MSB
+        self._encoding_engine        = EncodingEngine(
+            logger=logger,
+            encoding_engine=EMC.ENCODING_ENGINE
+        )                                                                       # Initialize shared encoding engine from MSB
 
         # SQLite — WAL mode for concurrent reads during async writes
         try:                                                                # Attempt to connect to the engram
@@ -224,7 +240,9 @@ class EpisodicMemoryCortex:
                 self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
 
             self._esb = EngramStorageBank(                                  # Acquire access to the engram
-                engram       = self.engram,
+                memory_type  = "emc",
+                engram_conn  = self.engram,
+                engram_schema= EMC_SCHEMA,
                 engram_dim   = EMC.ENCODING_DIM,
                 engram_index = self._engram_index,
                 logger       = self.logger
