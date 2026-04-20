@@ -547,7 +547,7 @@ class EngramStorageBank:
                 else:
                     col_def += f" DEFAULT {trace.baseline}"
             columns.append(col_def)
-        self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
+        self.logger.debug(f"MSB schema columns built — {len(columns)} fields")             # Log the initialization of the FTS5 lexical index
         return ",\n                        ".join(columns)
 
     # ── Staging ───────────────────────────────────────────────────────────────
@@ -807,7 +807,7 @@ class EngramStorageBank:
             return {}
 
 
- # ── Diagnostic stats —————————————————————————————————————————————————————
+    # ── Diagnostic stats —————————————————————————————————————————————————————
     def count_stored_engrams(self) -> int:
         """
         Count number of engrams stored in the memory bank.
