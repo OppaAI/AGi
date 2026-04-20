@@ -120,7 +120,7 @@ from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
 CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
-from msb import (               # Aquire access to memory storage bank
+from scs.msb import (               # Aquire access to memory storage bank
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
     EngramStorageBank,          # Centralized engram memory storage interface
     EngramSchema,               # Schema definition object for memory cortices
@@ -134,16 +134,25 @@ from msb import (               # Aquire access to memory storage bank
     sanitize_lexical_cue,       # Sanitize a raw query string for safe FTS5 MATCH usage
     memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
 )
-)
 
 EMC_SCHEMA = EngramSchema(                                              # Define the engram schema for episodic memory
     storage=[
         EngramTrace(label="id", modality=EngramModality.INTEGER, essential=True),
-        EngramTrace(label="timestamp", modality=EngramModality.REAL, essential=True),
+        EngramTrace(label="timestamp", modality=EngramModality.TEXT, essential=True),
+        EngramTrace(label="date", modality=EngramModality.TEXT, essential=True),
         EngramTrace(label="content", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="vector", modality=EngramModality.BLOB, essential=True),
-        EngramTrace(label="encoding", modality=EngramModality.TEXT, essential=True),
-    ]
+        EngramTrace(label="encoding", modality=EngramModality.BLOB, essential=True),
+        EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"),
+    ],
+    staging=[
+        EngramTrace(label="id", modality=EngramModality.INTEGER, essential=True),
+        EngramTrace(label="timestamp", modality=EngramModality.TEXT, essential=True),
+        EngramTrace(label="date", modality=EngramModality.TEXT, essential=True),
+        EngramTrace(label="content", modality=EngramModality.TEXT, essential=True),
+    ],
+    semantic_traces="encoding",
+    lexical_traces=["content"],
+    index_traces=["date"]
 )
         
 @dataclass

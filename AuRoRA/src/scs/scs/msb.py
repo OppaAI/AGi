@@ -452,55 +452,80 @@ class EngramStorageBank:
     def init_schema(self) -> None:
         """
         Initialize the schema of the engram.
-        This method creates the necessary tables and indexes for storing episodic memories.
-
-        Episodic Buffer (2-layer)
-            _binding_stream  —  transient intake of evicted PMTs from WMC overflow
-            episodic_buffer  — crash-safe pre-consolidation staging of episodes
-        One Table + Two Indexes SQLite design:
-            episodes         — embedded, searchable episodic memory (intermediate)
-            engram_vectors   — semantic vectors for L2 distance semantic search
-            engram_lexical   — FTS5 lexical index for pattern separation recall
+        This method dynamically creates tables and indexes based on the injected EngramSchema.
         """
-        self._conn.executescript("""                                        -- Create the tables and indexes of episodic memory
-            -- Evicted PMT binding from WMC overflow (crash-safe, temporary)
-            CREATE TABLE IF NOT EXISTS episodic_buffer (                    -- Temporary buffer for evicted PMT schemas
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing buffer index
-                timestamp  TEXT    NOT NULL,                                -- Induction timestamp inherited from WMC
-                date       TEXT    NOT NULL,                                -- Pre-computed date (carries forward to episodes on encoding)
-                content    TEXT    NOT NULL                                 -- Content of the episode (truncated to engram content limit)
-            );
+        try:
+            # 1. Build Staging Table (if defined)
+            if self._schema.staging:
+                staging_cols = self._build_columns_sql(self._schema.staging)
+                self._conn.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self._staging_schema} (
+                        {staging_cols}
+                    )
+                """)
 
-            -- Encoded episodic memory (intermediate, retrievable)
-            CREATE TABLE IF NOT EXISTS episodes (                           -- Episodic memory storage
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,               -- Auto-incrementing engram id
-                timestamp  TEXT    NOT NULL,                                -- Full datetime of induction into WMC
-                date       TEXT    NOT NULL,                                -- Pre-computed date (temporal recall axis)
-                content    TEXT    NOT NULL,                                -- Raw interaction content (user prompt + AI response)
-                encoding   BLOB    NOT NULL,                                -- Encoded content of the episode (into vectors of the model dimension)
-                created_at TEXT    DEFAULT (datetime('now'))                -- Consolidation timestamp
-            );
-            CREATE INDEX IF NOT EXISTS idx_episodes_date                    -- Temporal recall axis — get_episodes_for_date() and Dream Cycle (M2)
-                ON episodes(date);
-            """)
-        self._conn.commit()                                                 # Commit the changes to the engram
-
-        if self._engram_index:                                              # If engram vector index is activated,
-            self._conn.execute(f"""                                         -- Create a virtual schema for engram vector index semantic search
-                CREATE VIRTUAL TABLE IF NOT EXISTS {self._storage_schema}_vectors USING vec0(
-                    encoding FLOAT[{self._engram_dim}]                      -- L2 distance semantic search on unit-normalized vectors (cosine-equivalent)
+            # 2. Build Storage Table
+            storage_cols = self._build_columns_sql(self._schema.storage)
+            self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._storage_schema} (
+                    {storage_cols}
                 )
             """)
-            self._conn.commit()                                             # Commit the changes to the engram
-            self.logger.debug("EMC engram vector index initialized")        # Log the initialization of the engram vector index
 
-        self._conn.execute(f"""                                             -- Create a virtual schema for the lexical search using FTS5 index
-            CREATE VIRTUAL TABLE IF NOT EXISTS {self._storage_schema}_lexical USING fts5(   -- FTS5 index for lexical search
-               content,                                                     -- Content of the episode
-               tokenize='porter unicode61'                                  -- Tokenize the content using porter unicode61
-            )
-        """)
-        self._conn.commit()                                                 # Commit the changes to the engram
+            # 3. Build Indexes
+            if self._schema.index_traces:
+                for trace in self._schema.index_traces:
+                    self._conn.execute(f"""
+                        CREATE INDEX IF NOT EXISTS idx_{self._storage_schema}_{trace}
+                        ON {self._storage_schema}({trace})
+                    """)
+            
+            self._conn.commit()
+
+            # 4. Build Vector Search Virtual Table
+            if self._engram_index and self._schema.semantic_traces:
+                semantic_col = self._schema.semantic_traces
+                self._conn.execute(f"""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
+                        {semantic_col} FLOAT[{self._engram_dim}]
+                    )
+                """)
+                self._conn.commit()
+                self.logger.debug(f"EMC engram vector index initialized for {self._vector_schema}")
+
+            # 5. Build Lexical Search Virtual Table (FTS5)
+            if self._schema.lexical_traces:
+                lexical_cols = ", ".join(self._schema.lexical_traces)
+                self._conn.execute(f"""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS {self._lexical_schema} USING fts5(
+                       {lexical_cols},
+                       tokenize='porter unicode61'
+                    )
+                """)
+                self._conn.commit()
+                
+        except sqlite3.Error as e:
+            self.logger.error(f"Engram schema initialization failed: {e}")
+            raise
+
+    def _build_columns_sql(self, traces: list[EngramTrace]) -> str:
+        """Helper to generate SQL column definitions from a list of EngramTraces."""
+        columns = []
+        for trace in traces:
+            col_def = f"{trace.label} {trace.modality.value}"
+            if trace.label == "id":
+                # Ensure SQLite correctly auto-increments INTEGER PRIMARY KEY
+                col_def += " PRIMARY KEY AUTOINCREMENT" if trace.modality == EngramModality.INTEGER else " PRIMARY KEY"
+            elif trace.essential:
+                col_def += " NOT NULL"
+                
+            if trace.baseline is not None:
+                if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):
+                    col_def += f" DEFAULT '{trace.baseline}'"
+                else:
+                    col_def += f" DEFAULT {trace.baseline}"
+            columns.append(col_def)
+        return ",\n                        ".join(columns)
         self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
 
     # ── Staging ───────────────────────────────────────────────────────────────
@@ -518,7 +543,7 @@ class EngramStorageBank:
             int: staging_id of the inserted episode
         """
         staging_id = conn.execute(                                              # Insert the episode into the episodic buffer
-            "INSERT INTO episodic_buffer (timestamp, date, content) "
+            f"INSERT INTO {self._staging_schema} (timestamp, date, content) "
             "VALUES (?, ?, ?)",
             [episode["timestamp"], episode["date"], episode["content"]],
         )
@@ -538,8 +563,8 @@ class EngramStorageBank:
             list: Rows of unencoded episodes
         """
         return self._conn.execute(                                          # Query the engram for unencoded episodes
-            "SELECT id, timestamp, date, content "                          # Collect the index, timestamp, date, and content
-            "FROM episodic_buffer "                                         # All episodes in the episodic buffer is unencoded by definition
+            f"SELECT id, timestamp, date, content "                          # Collect the index, timestamp, date, and content
+            f"FROM {self._staging_schema} "                                 # All episodes in the episodic buffer is unencoded by definition
             "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
             [batch_size, offset]                                            # Process episodes by batch size
         ).fetchall()                                                        # Fetch all the unencoded episodes
@@ -552,7 +577,7 @@ class EngramStorageBank:
             int: Number of unencoded episodes in episodic buffer
         """
         return self._conn.execute(
-            "SELECT COUNT(*) FROM episodic_buffer"
+            f"SELECT COUNT(*) FROM {self._staging_schema}"
         ).fetchone()[0]
 
     def delete_staged(self, conn: sqlite3.Connection, staging_id: int) -> None:
@@ -564,7 +589,7 @@ class EngramStorageBank:
             staging_id : ID of the staged episode to remove
         """
         conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
-            "DELETE FROM episodic_buffer WHERE id=?",                           # Remove the episode from episodic buffer
+            f"DELETE FROM {self._staging_schema} WHERE id=?",                       # Remove the episode from episodic buffer
             [staging_id],                                                       # Using the episode ID
         )
 
@@ -583,7 +608,7 @@ class EngramStorageBank:
             int: episode_id of the inserted episode
         """
         engram_id = conn.execute(                                               # Insert the episode into engram
-            "INSERT INTO episodes (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
+            f"INSERT INTO {self._storage_schema} (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
             [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
         )
         return engram_id.lastrowid                                              # Get the ID of the inscribed episode
@@ -599,7 +624,7 @@ class EngramStorageBank:
             encoding_blob : Binary encoding blob of the episode
         """
         conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
-            "INSERT INTO engram_vectors (rowid, encoding) VALUES (?,?)",        # Insert the episode encoding into engram vectors
+            f"INSERT INTO {self._vector_schema} (rowid, {self._schema.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
             [episode_id, encoding_blob],                                        # With the episode ID and encoding
         )
 
@@ -614,7 +639,7 @@ class EngramStorageBank:
             content    : Raw content of the episode
         """
         conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
-            "INSERT INTO engram_lexical (rowid, content) VALUES (?,?)",         # Insert the episode content into engram lexical
+            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._schema.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
             [episode_id, content],                                              # With the episode ID and content
         )
 
@@ -634,12 +659,12 @@ class EngramStorageBank:
             list: Rows of matching episodes with distance scores
         """
         return self._conn.execute(                                              # Query the engram vector index and retrieve the top recall_limit * 2 episodes
-            """
+            f"""
             SELECT e.id, e.timestamp, e.date, e.content,                        -- Retrieve the episode ID, timestamp, date, and content
                    ev.distance                                                  -- Retrieve the semantic similarity between the cue and the episode
-            FROM engram_vectors ev                                              -- From the engram vector index virtual table
-            JOIN episodes e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
-            WHERE ev.encoding MATCH ?                                           -- Match the cue vector
+            FROM {self._vector_schema} ev                                              -- From the engram vector index virtual table
+            JOIN {self._storage_schema} e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
+            WHERE ev.{self._schema.semantic_traces} MATCH ?                                           -- Match the cue vector
             ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
             LIMIT ?                                                             -- Limit to recall_limit * 2 episodes
             """,
@@ -659,10 +684,10 @@ class EngramStorageBank:
             list: Rows of episodes with encoding blobs for cosine scoring
         """
         return self._conn.execute(                                          # Attempt to use cosine similarity
-            "SELECT id, timestamp, date, content, encoding FROM episodes "
+            f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
             "ORDER BY rowid DESC LIMIT ? "
             "UNION ALL "
-            "SELECT id, timestamp, date, content, encoding FROM episodes "
+            f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
             "ORDER BY rowid ASC LIMIT ?",
             [half_pool, half_pool],
         ).fetchall()
@@ -683,12 +708,12 @@ class EngramStorageBank:
             list: Rows of matching episodes with raw FTS5 rank scores
         """
         return self._conn.execute(                                          # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
-            """
+            f"""
             SELECT e.id, e.timestamp, e.date, e.content,
                    fts.rank AS raw_rank
-            FROM engram_lexical fts
-            JOIN episodes e ON e.id = fts.rowid
-            WHERE engram_lexical MATCH ?
+            FROM {self._lexical_schema} fts
+            JOIN {self._storage_schema} e ON e.id = fts.rowid
+            WHERE {self._lexical_schema} MATCH ?
             ORDER BY fts.rank          -- most negative = best
             LIMIT ?
             """,
@@ -711,7 +736,7 @@ class EngramStorageBank:
         """
         try:
             rows = self._conn.execute(
-                "SELECT timestamp, content FROM episodes "
+                f"SELECT timestamp, content FROM {self._storage_schema} "
                 "WHERE date = ? ORDER BY timestamp",
                 [date_str],
             ).fetchall()
@@ -738,11 +763,11 @@ class EngramStorageBank:
             ep_row = self._conn.execute(
                 "SELECT COUNT(*) as total, "
                 "MIN(date) as oldest, MAX(date) as newest "
-                "FROM episodes"
+                f"FROM {self._storage_schema}"
             ).fetchone()
 
             buf_row = self._conn.execute(
-                "SELECT COUNT(*) as total FROM episodic_buffer"
+                f"SELECT COUNT(*) as total FROM {self._staging_schema}"
             ).fetchone()
 
             db_size_mb = round(Path(engram_gateway).stat().st_size / 1_048_576, 2) \
@@ -759,40 +784,7 @@ class EngramStorageBank:
             self.logger.error(f"EMC get_stats failed: {e}")
             return {}
 
- # ── Schema ————————————————————————————————————————————————————————————————
-    def build_schema(self) -> None:
-        """
-        Build the schema for the memory bank.
-        Generates the SQL table based on the injected EngramSchema.
-        """
-        try:
-            columns = []
-            for trace in self._schema.storage:                                  # Iterate over all defined traces in the schema
-                col_def = f"{trace.label} {trace.modality.value}"               # Define the column name and SQLite datatype (e.g., 'content TEXT')
-                
-                if trace.label == "id":                                         # If the field is the id, mark it as primary key
-                    col_def += " PRIMARY KEY"
-                elif trace.essential:                                           # If the field is essential, ensure it cannot be null
-                    col_def += " NOT NULL"
-                    
-                if trace.baseline is not None:                                  # If there is a baseline value, assign the SQLite default
-                    if trace.modality == EngramModality.TEXT:
-                        col_def += f" DEFAULT '{trace.baseline}'"               # Text defaults need quotes
-                    else:
-                        col_def += f" DEFAULT {trace.baseline}"                 # Numeric/boolean defaults do not
-                        
-                columns.append(col_def)                                         # Append the column definition to the list
-                
-            columns_sql = ",\n                    ".join(columns)               # Join all columns into a single string for the SQL statement
 
-            self._conn.execute(
-                f"""CREATE TABLE IF NOT EXISTS {self._storage_schema} (
-                    {columns_sql}
-                )"""
-            )
-            self._conn.commit()
-        except Exception as e:
-            self.logger.error(f"EMC build_schema failed: {e}")
  # ── Diagnostic stats —————————————————————————————————————————————————————
     def count_stored_engrams(self) -> int:
         """
