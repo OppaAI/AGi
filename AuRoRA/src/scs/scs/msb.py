@@ -58,6 +58,7 @@ from enum import Enum                       # For defining memory schema types
 import numpy as np                          # For fast vector math — normalization and cosine similarity
 import sqlite3                              # For engram connection factory
 import struct                               # For packing/unpacking semantic vectors (fp32)
+import re                                   # For lexical cue sanitization
 from pathlib import Path                    # For calculating database size — owned here, never passed back up
 
 # AGi libraries
@@ -331,8 +332,9 @@ def sanitize_lexical_cue(cue: str) -> str:
     Returns:
         str: FTS5-safe quoted token string, or empty string if query is blank.
     """
-    lexemes = cue.strip().split()                                    # Split cue into individual lexemes for FTS5 matching
-    return " ".join(f'"{lexeme}"' for lexeme in lexemes if lexeme)   # Wrap each lexeme in quotes — neutralizes FTS5 operators
+    clean_cue = re.sub(r'[^\w\s]', ' ', cue)                         # Strip punctuation to improve recall robustness
+    lexemes = clean_cue.strip().split()                              # Split cue into individual lexemes for FTS5 matching
+    return " ".join(f'"{lexeme}"' for lexeme in lexemes if lexeme)   # Wrap each lexeme in quotes — implied AND for precision
 
 def memory_convergence(
     semantic_results : list[dict],
@@ -382,25 +384,26 @@ def memory_convergence(
     semantic_miss = len(semantic_results)                                     # Penalty rank for episodes missed by semantic path
     lexical_miss = len(lexical_results)                                       # Penalty rank for episodes missed by lexical path
 
-    # Compute RRF score for each candidate
-    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — safe to prevent mutation to original pool
-        episode = dict(episode)                                               # Obtain a clone of the episode — prevent mutation of original episode
-        episode["rrf_score"] = (                                              # Calculate rrf score of each episode from the ranks of both paths
-            1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) +
-            1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))
-        )
-        episode_pool[episode["id"]] = episode                                 # Replace original episode entry with rrf score added
+    # Compute RRF score for each candidate and unify relevancy
+    for eid, episode in episode_pool.items():
+        # Get ranks (0-based, high penalty for miss)
+        s_rank = semantic_rank.get(eid, 1000)
+        l_rank = lexical_rank.get(eid, 1000)
+        
+        # RRF score for unified ranking
+        episode["rrf_score"] = (1.0 / (rrf_k + s_rank)) + (1.0 / (rrf_k + l_rank))
+        
+        # Retrieve original relevancy scores from source paths
+        # We preserve the best source relevancy rather than normalizing RRF to 1.0
+        # This ensures the RELEVANCE_THRESHOLD (0.25) remains an absolute quality gate
+        s_rel = next((e["relevancy"] for e in semantic_results if e["id"] == eid), 0.0)
+        l_rel = next((e["relevancy"] for e in lexical_results if e["id"] == eid), 0.0)
+        episode["relevancy"] = max(s_rel, l_rel)
 
-    # Sort descending by RRF score
-    sorted_episodes = sorted(episode_pool.values(),                           # Sort episodes by RRF score — best first
-                             key=lambda episode: episode["rrf_score"], 
-                             reverse=True)
-
-    # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-    max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # Computing best RRF score for normalization — guard against empty results
+    # Sort descending by RRF score — best ranking first
+    sorted_episodes = sorted(episode_pool.values(), key=lambda e: e["rrf_score"], reverse=True)
 
     for episode in sorted_episodes[:recall_limit]:                            # Surface top episodes up to recall limit
-        episode["relevancy"] = episode["rrf_score"] / max_rrf                 # Normalize RRF score to 0.0–1.0 relevancy
         episode.pop("_rank", None)                                            # Remove internal rank field before surfacing
         episode.pop("rrf_score", None)                                        # Remove internal RRF score before surfacing
     

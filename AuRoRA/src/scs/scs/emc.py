@@ -508,19 +508,9 @@ class EpisodicMemoryCortex:
                     # Primary: sqlite-vec L2 KNN (cosine-equivalent on unit-normalized vectors)
                     try:                                                                        # Attempt to use the engram vector index
                         cue_blob = pack_vector(cue_vector)                                      # Pack the cue vector as a binary blob via shared MSB utility
-                        semantic_candidates = self.engram.execute(                              # Query the engram vector index and retrieve the top recall_limit * 2 episodes
-                            """
-                            SELECT e.id, e.timestamp, e.date, e.content,                        -- Retrieve the episode ID, timestamp, date, and content
-                                   ev.distance                                                  -- Retrieve the semantic similarity between the cue and the episode
-                            FROM engram_vectors ev                                              -- From the engram vector index virtual table
-                            JOIN episodes e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
-                            WHERE ev.encoding MATCH ?                                           -- Match the cue vector
-                            ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
-                            LIMIT ?                                                             -- Limit to recall_limit * 2 episodes
-                            """,
-                            [cue_blob, recall_limit * 2],                                       # Retrieve the top recall_limit * 2 episodes
-                        ).fetchall()                                                            # Fetch all matching episode candidates
+                        semantic_candidates = self._esb.search_knn(cue_blob, recall_limit * 2)  # Use ESB helper for KNN search
                         if semantic_candidates:                                                 # If there are matching episodes,
+                            self.logger.debug(f"EMC semantic recall (KNN) → {len(semantic_candidates)} candidates | best_dist:{semantic_candidates[0]['distance']:.4f}")
                             for i, candidate in enumerate(semantic_candidates):                 # Iterate through each matching episode
                                 semantic_results.append({                                       # Add the matching episode to the semantic results
                                     "id"        : candidate["id"],                              # Add the episode ID
@@ -532,21 +522,13 @@ class EpisodicMemoryCortex:
                                 })
                     except Exception as e:                                                      # If the engram vector index query fails,
                         self.logger.debug(f"EMC engram vector index query failed, falling back to cosine: {e}") # Log the error
-     
+      
                 if not semantic_results:                                                        # When engram vector index is unavailable or semantic search returned no candidates
                     # Fallback: Cosine similarity
                     try:                                                                        # Attempt to use cosine similarity
-                        # Stratified sampling — half recent, half oldest
-                        # Bounds memory usage and ensures old memories score alongside recent ones
+                        # Stratified sampling via ESB helper
                         half_pool = (recall_limit * EMC.RECALL_POOL) // 2
-                        rows = self.engram.execute(
-                            "SELECT id, timestamp, date, content, encoding FROM episodes "
-                            "ORDER BY rowid DESC LIMIT ? "
-                            "UNION ALL "
-                            "SELECT id, timestamp, date, content, encoding FROM episodes "
-                            "ORDER BY rowid ASC LIMIT ?",
-                            [half_pool, half_pool],     
-                        ).fetchall()
+                        rows = self._esb.search_cosine_pool(half_pool)
 
                         scored = []
 
@@ -574,6 +556,8 @@ class EpisodicMemoryCortex:
         # ── PATH 2: Lexical — dentate gyrus pattern separation ────────────────
         try:
             lexical_results = self._lexical_search(query, recall_limit)
+            if lexical_results:
+                self.logger.debug(f"EMC lexical recall → {len(lexical_results)} candidates")
         except Exception as e:
             self.logger.debug(f"EMC lexical path failed: {e}")
      
@@ -585,21 +569,29 @@ class EpisodicMemoryCortex:
                 f"EMC recall → semantic:{len(semantic_results)} "
                 f"lexical:{len(lexical_results)} fused:{len(fused)}"
             )
+            for i, e in enumerate(fused):
+                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
             return fused
      
         if semantic_results:
             # Lexical unavailable — return semantic only, capped to recall_limit
-            results = sorted(semantic_results, key=lambda x: x["relevancy"], reverse=True)
+            results = sorted(semantic_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
             for r in results:
                 r.pop("_rank", None)
-            return results[:recall_limit]
+            self.logger.debug(f"EMC recall → semantic only ({len(results)})")
+            for i, e in enumerate(results):
+                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
+            return results
      
         if lexical_results:
             # Encoding engine unavailable — return lexical only, capped to recall_limit
-            results = sorted(lexical_results, key=lambda x: x["relevancy"], reverse=True)
+            results = sorted(lexical_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
             for r in results:
                 r.pop("_rank", None)
-            return results[:recall_limit]
+            self.logger.debug(f"EMC recall → lexical only ({len(results)})")
+            for i, e in enumerate(results):
+                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
+            return results
      
         self.logger.debug("EMC recall → no results from either path")
         return []
@@ -626,7 +618,7 @@ class EpisodicMemoryCortex:
     
         try:                                                                    # Attempt to execute the lexical search query
             # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
-            rows = self._esb.search(safe_query, recall_limit * 2)               # Fetch lexical search results from the engram
+            rows = self._esb.search_lexical(safe_query, recall_limit * 2)       # Use ESB helper for lexical search
     
             if not rows:                                                        # If no rows are found
                 return []                                                       # Return empty list
