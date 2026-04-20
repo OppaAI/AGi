@@ -320,11 +320,20 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
             )
         return False                                            # Signal failed activation — caller falls back to cosine similarity
 
+STOP_WORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
+    "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
+    "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
+    "their", "his", "her", "its", "me", "you", "him", "them", "us", "i", "can", 
+    "could", "would", "should", "will", "shall", "do", "does", "did", "have", 
+    "has", "had", "it", "this", "that", "those", "these"
+}
+
 def sanitize_lexical_cue(cue: str) -> str:
     """
-    Sanitize raw cue string for safe FTS5 MATCH usage.
-    Quotes each token to treat them as literal terms, neutralizing
-    FTS5 operators (*, -, ", parentheses, AND, OR, NOT).
+    Sanitize and tokenize a recall cue for FTS5 lexical matching.
+    Strips punctuation, filters stop-words, and joins keywords with OR
+    to improve pattern-separation recall while maintaining precision.
 
     Args:
         cue (str): Raw recall cue string from the caller.
@@ -332,9 +341,20 @@ def sanitize_lexical_cue(cue: str) -> str:
     Returns:
         str: FTS5-safe quoted token string, or empty string if query is blank.
     """
-    clean_cue = re.sub(r'[^\w\s]', ' ', cue)                         # Strip punctuation to improve recall robustness
-    lexemes = clean_cue.strip().split()                              # Split cue into individual lexemes for FTS5 matching
-    return " ".join(f'"{lexeme}"' for lexeme in lexemes if lexeme)   # Wrap each lexeme in quotes — implied AND for precision
+    clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # Strip punctuation and normalize case
+    lexemes = clean_cue.strip().split()                              # Split cue into individual lexemes
+    
+    # Extract keywords (non-stop-words longer than 1 character)
+    keywords = [kw for kw in lexemes if kw not in STOP_WORDS and len(kw) > 1]
+    
+    if not keywords:
+        # Fallback to original lexemes if no keywords remain
+        keywords = lexemes
+        
+    if not keywords:
+        return ""
+
+    return " OR ".join(f'"{kw}"' for kw in keywords if kw)           # Join keywords with OR for better recall robustness
 
 def memory_convergence(
     semantic_results : list[dict],

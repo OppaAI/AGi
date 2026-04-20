@@ -134,7 +134,12 @@ class CNC(Node):
         ROS2 subscription callback.
         Schedules async processing on the asyncio loop — never blocks.
         """
-        user_input = msg.data.strip()
+        try:
+            data = json.loads(msg.data.strip())
+            user_input = data.get("text", "").strip()
+        except json.JSONDecodeError:
+            user_input = msg.data.strip()
+
         if not user_input:
             return
 

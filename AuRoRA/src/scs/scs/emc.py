@@ -517,7 +517,7 @@ class EpisodicMemoryCortex:
                                     "timestamp" : candidate["timestamp"],                       # Add the episode timestamp (timestamp memory was induced)
                                     "date"      : candidate["date"],                            # Add the episode date (date memory was induced)
                                     "content"   : candidate["content"],                         # Add the episode content
-                                    "relevancy" : 1.0 / (1.0 + candidate["distance"]),          # Add the semantic similarity score
+                                    "relevancy" : max(0.0, 1.0 - (candidate["distance"]**2 / 2.0)), # Convert L2 distance to cosine similarity (assuming unit vectors)
                                     "_rank"     : i,                                            # Add the zero-indexed rank for memory convergence (0=closest, 1=second closest, etc.)
                                 })
                     except Exception as e:                                                      # If the engram vector index query fails,
