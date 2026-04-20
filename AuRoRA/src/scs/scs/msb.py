@@ -547,8 +547,8 @@ class EngramStorageBank:
                 else:
                     col_def += f" DEFAULT {trace.baseline}"
             columns.append(col_def)
-        return ",\n                        ".join(columns)
         self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
+        return ",\n                        ".join(columns)
 
     # ── Staging ───────────────────────────────────────────────────────────────
 
