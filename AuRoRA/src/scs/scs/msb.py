@@ -2,54 +2,30 @@
 MSB — Memory Storage Bank
 ==========================
 AuRoRA · Semantic Cognitive System (SCS)
- 
-Shared memory infrastructure layer — encoding, vector math, lexical search,
-storage utilities, and convergence fusion used across all memory cortices.
- 
-Responsibilities:
-    - Provide a shared encoding engine (semantic vector encoding) for EMC, SMC, PMC
-    - Provide shared vector math utilities (normalization, cosine similarity)
-    - Provide shared SQLite connection factory (WAL mode, row factory)
-    - Provide shared lexical search utilities (FTS5 query sanitization)
-    - Provide shared RRF memory convergence fusion for dual-path retrieval
- 
-Architecture:
-    Encoding:
-        EncodingEngine         — Sentence-transformers model wrapper with caching
-        encode()               — Encode a trace or cue into a semantic vector
- 
-    Vector Math:
-        unit_normalize()       — L2-normalize a vector for cosine-equivalent L2 search
-        semantic_match()       — Cosine similarity fallback (when sqlite-vec unavailable)
- 
-    Storage:
-        connect_engram()       — Connect to engram (SQLite) with WAL mode and row factory
-        activate_engram_index()— Load sqlite-vec extension into a connection
- 
-    Lexical:
-        sanitize_lexical_cue() — Sanitize a raw cue string for safe FTS5 MATCH usage
- 
-    Convergence:
-        memory_convergence()   — RRF fusion of semantic + lexical ranked result lists
- 
-    EngramStorageBank:
-        Storage primitive interface — speaks rows, blobs, counts.
-        Zero memory domain vocabulary. EMC, SMC, PMC supply meaning.
-        Each cortex gets its own ESB instance pointing at its own table prefix.
- 
-Used by:
-    EMC — Episodic Memory Cortex
-    SMC — Semantic Memory Cortex      (M2)
-    PMC — Procedural Memory Cortex    (M2)
- 
+
+Shared neural substrate for all memory cortices — EMC, SMC, PMC.
+
+MSB carries no memory domain knowledge of its own. It does not know what
+an episode is, what a skill is, or what a semantic concept means. It only
+knows how to encode thought into vectors, persist traces into engrams, and
+retrieve them by meaning or pattern. The cortices supply domain knowledge —
+MSB supplies the tissue they run on.
+
+Separated into its own layer so encoding models, vector math, SQLite
+connection strategy, and retrieval fusion logic are defined once and
+shared — not duplicated across every cortex that needs them.
+
 Terminology:
     encoding    — semantic vector representation of a memory trace
-    engram      — the memory store containing encoded episodes
-    FTS5        — SQLite FTS5 full-text search extension for lexical search
-    RRF         — Reciprocal Rank Fusion for combining semantic and lexical search
-    unit vector — vector with L2-norm = 1.0 (cosine sim ≡ L2 distance on unit vectors)
- 
-TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector math needed outside memory cortices
+    engram      — the persistent memory store for a cortex
+    FTS5        — SQLite full-text search for lexical pattern retrieval
+    RRF         — Reciprocal Rank Fusion — fuses semantic and lexical ranked
+                  results into a single relevancy-ordered list
+    unit vector — L2-normalized vector; cosine similarity becomes equivalent
+                  to L2 distance, enabling sqlite-vec KNN search
+
+TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if
+      vector math is needed outside memory cortices
 """
 
 # System libraries
@@ -61,42 +37,35 @@ import struct                               # For packing/unpacking semantic vec
 import re                                   # For lexical cue sanitization
 from pathlib import Path                    # For calculating database size — owned here, never passed back up
 
-# AGi libraries
-from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
-EMC = AGi.CNS.EMC                           # Channel for interfacing with Episodic Memory Cortex (EMC)
-
-# ===== ENGRAM PRIMITIVE STORAGE CONCEPTS =====
-# Note: This section defines the fundamental building blocks of engram schemas.
-# Each memory cortex (EMC, SMC, PMC) instantiates these concepts to define its own specific schemas.
 class EngramModality(Enum):
     """
     Defines the modality of engram memory traces (ie. the type of data stored).
     """
-    TEXT    = 'TEXT'    # String storage for lexical recall and encoding
-    INTEGER = 'INTEGER' # Integer storage for primary key and other integer values
-    REAL    = 'REAL'    # Real-number storage for storing encoding vector values (floats)
-    BLOB    = 'BLOB'    # Blob storage for storing packed semantic vectors
+    TEXT    = 'TEXT'        # String storage for lexical recall and encoding
+    INTEGER = 'INTEGER'     # Integer storage for primary key and other integer values
+    REAL    = 'REAL'        # Real-number storage for storing encoding vector values (floats)
+    BLOB    = 'BLOB'        # Blob storage for storing packed semantic vectors
 
 @dataclass
 class EngramTrace:
     """
     Define the schema for a single engram trace.
     """
-    label: str                       # Label of the engram field (ie. name of the data stored)
-    modality: EngramModality         # Modality of the engram field (ie. type of data stored)
-    essential: bool = False          # Whether the field is essential to the engram (default: False)
-    baseline: str | None = None      # Baseline value for the engram field (default: None)
-
+    label: str                       # Column name in SQL
+    modality: EngramModality         # Maps to SQL type via .value
+    essential: bool = False          # NOT NULL constraint if True
+    baseline: str | None = None      # DEFAULT value — raw SQL if starts with '(', quoted string otherwise
+ 
 @dataclass
 class EngramSchema:
     """
     Define the structure, storage schema, and search capabilities for an engram.
     """
-    storage: list[EngramTrace]                                  # The storage schema for the engram
-    staging: list[EngramTrace] | None = None                    # The staging schema for the engram (used for temporary storage)
-    semantic_traces: str | None = None                          # The semantic trace for the engram used for semantic search
-    lexical_traces: list[str] | None = None                     # The lexical fields for the engram used for lexical search
-    index_traces: list[str] | None = None                       # The index fields for the engram used for fast retrieval
+    storage: list[EngramTrace]                                  # Main engram storage table
+    staging: list[EngramTrace] | None = None                    # Crash-safe buffer table — optional
+    semantic_traces: str | None = None                          # Column name holding the encoding blob for semantic search
+    lexical_traces: list[str] | None = None                     # Columns fed into FTS5 index for lexical search
+    index_traces: list[str] | None = None                       # Columns with a standard B-tree index for fast retrieval
 
 # ===== ENCODING ENGINE =====
 class EncodingEngine:
