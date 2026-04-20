@@ -687,8 +687,8 @@ class EngramStorageBank:
             FROM {self._vector_schema} ev                                              -- From the engram vector index virtual table
             JOIN {self._storage_schema} e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
             WHERE ev.{self._schema.semantic_traces} MATCH ?                                           -- Match the cue vector
+            AND k = ?
             ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
-            LIMIT ?                                                             -- Limit to recall_limit * 2 episodes
             """,
             [cue_blob, limit],                                                  # Retrieve the top limit episodes
         ).fetchall()                                                            # Fetch all matching episode candidates
