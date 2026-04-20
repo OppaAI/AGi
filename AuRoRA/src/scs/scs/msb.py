@@ -53,14 +53,50 @@ TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector mat
 """
 
 # System libraries
-import numpy as np              # For fast vector math — normalization and cosine similarity
-import sqlite3                  # For engram connection factory
-import struct                   # For packing/unpacking semantic vectors (fp32)
-from pathlib import Path        # For calculating database size — owned here, never passed back up
+from dataclasses import dataclass, field    # For defining memory schema types
+from enum import Enum                       # For defining memory schema types
+import numpy as np                          # For fast vector math — normalization and cosine similarity
+import sqlite3                              # For engram connection factory
+import struct                               # For packing/unpacking semantic vectors (fp32)
+from pathlib import Path                    # For calculating database size — owned here, never passed back up
 
 # AGi libraries
-from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
-EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
+from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
+EMC = AGi.CNS.EMC                           # Channel for interfacing with Episodic Memory Cortex (EMC)
+
+# ===== ENGRAM PRIMITIVE STORAGE CONCEPTS =====
+# Note: This section defines the fundamental building blocks of engram schemas.
+# Each memory cortex (EMC, SMC, PMC) instantiates these concepts to define its own specific schemas.
+
+class EngramModality(Enum):
+    """
+    Defines the modality of engram memory traces (ie. the type of data stored).
+    """
+    TEXT    = 'TEXT'    # String storage for lexical recall and encoding
+    INTEGER = 'INTEGER' # Integer storage for primary key and other integer values
+    REAL    = 'REAL'    # Real-number storage for storing encoding vector values (floats)
+    BLOB    = 'BLOB'    # Blob storage for storing packed semantic vectors
+
+@dataclass
+class EngramTrace:
+    """
+    Define the schema for a single engram trace.
+    """
+    label: str                       # Label of the engram field (ie. name of the data stored)
+    modality: EngramModality         # Modality of the engram field (ie. type of data stored)
+    essential: bool = False          # Whether the field is essential to the engram (default: False)
+    baseline: str | None = None      # Baseline value for the engram field (default: None)
+
+@dataclass
+class EngramSchema:
+    """
+    Define the structure, storage schema, and search capabilities for an engram.
+    """
+    storage: list[EngramTrace]                                  # The storage schema for the engram
+    staging: list[EngramTrace] | None = None                    # The staging schema for the engram (used for temporary storage)
+    semantic_traces: str | None = None                          # The semantic trace for the engram used for semantic search
+    lexical_traces: list[str] | None = None                     # The lexical fields for the engram used for lexical search
+    index_traces: list[str] | None = None                       # The index fields for the engram used for fast retrieval
 
 class EncodingEngine:
     """
@@ -70,22 +106,24 @@ class EncodingEngine:
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger) -> None:
+    def __init__(self, logger, model_name: str) -> None:
         """
         Initialize the encoding engine with a logger.
         This method sets up the encoding engine core and cache for recent encodings.
         
         Args:
             logger: Logger instance for logging encoding engine operations
+            model_name (str): The specific embedding model to load (e.g. from HRP)
         """
-        self.logger     = logger                    # Retrieve logger from CNC for logging operations
-        self._core      = None                      # For holding the encoding engine instance for semantic encoding
-        self._cache: dict[str, list[float]] = {}    # For holding the cache of recent encodings to avoid redundant encoding
+        self.logger = logger                                # Retrieve logger from CNC for logging operations
+        self.model_name = model_name                        # Store the model name for dynamic formatting during encoding
+        self._core = None                                   # For holding the encoding engine instance for semantic encoding
+        self._cache: dict[str, list[float]] = {}            # For holding the cache of recent encodings to avoid redundant encoding
 
         try:                                                                        # Attempt to activate the encoding engine
             from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
-            self.logger.info("⏳ Activating Encoding Engine…")                      # Log the start of encoding engine activation
-            self._core = SentenceTransformer(EMC.ENCODING_ENGINE)                   # Activate encoding engine defined in homeostatic Regulation parameters
+            self.logger.info(f"⏳ Activating Encoding Engine ({model_name})…")      # Log the start of encoding engine activation
+            self._core = SentenceTransformer(self.model_name)                       # Activate the requested model
             self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
         except ImportError:                                                         # If missing the inferencer component of encoding engine,
             self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
@@ -137,17 +175,25 @@ class EncodingEngine:
             return self._cache[imprint]                                                 # Return the encoded vector in the cache
 
         try:                                                                            # Attempt to encode the trace
-            if is_cue:                                                                  # If the trace is a cue for memory recall,
-                encoded_trace: list[float] = self._core.encode_query(trace).tolist()    # Encode the cue for memory recall
-            else:                                                                       # If the trace is a memory trace to be stored,
-                encoded_trace: list[float] = self._core.encode_document(trace).tolist() # Encode the memory trace for storage
+            active_model = self.model_name.lower()                                      # Get the active model name to apply specific encoding rules
+
+            if "bge-small" in active_model:
+                if is_cue:
+                    trace = f"Represent this sentence for searching relevant passages: {trace}"
+                encoded_trace: list[float] = self._core.encode(trace).tolist()          # BGE-small uses manual prefixes
+            elif "embeddinggemma" in model_name:
+                prompt_name = "query" if is_cue else "document"
+                encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # EmbeddingGemma uses prompt configs
+            else:
+                encoded_trace: list[float] = self._core.encode(trace).tolist()          # Universal fallback for all other models
+                
             encoded_trace = unit_normalize(encoded_trace)                               # Unit-normalize for cosine-equivalent L2 search
 
             # Keep cache small — evict oldest if over the encoding cache limit
             if len(self._cache) >= EMC.ENCODING_CACHE_LIMIT:                            # If the cache is over the limit,
                 decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
                 del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
-            self._cache[imprint]: list[float] = encoded_trace                           # Add the new entry to the cache
+            self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
             return encoded_trace                                                        # Return the encoded vector
         except Exception as e:                                                          # If encoding fails,
             self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
@@ -716,7 +762,25 @@ class MemoryBank:
             self.logger.error(f"EMC get_stats failed: {e}")
             return {}
 
- # ── Stats ————————————————————————————————————————————————————————————————
+ # ── Schema ————————————————————————————————————————————————————————————————
+    def build_schema(self) -> None:
+        """
+        Build the schema for the memory bank.
+        """
+        try:
+            self._conn.execute(
+                f"""CREATE TABLE IF NOT EXISTS {self._storage_schema} (
+                    id INTEGER PRIMARY KEY,
+                    timestamp REAL,
+                    content TEXT,
+                    vector BLOB,
+                    encoding TEXT
+                )"""
+            )
+            self._conn.commit()
+        except Exception as e:
+            self.logger.error(f"EMC build_schema failed: {e}")
+ # ── Diagnostic stats —————————————————————————————————————————————————————
     def count_stored_engrams(self) -> int:
         """
         Count number of engrams stored in the memory bank.
