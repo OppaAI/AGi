@@ -215,9 +215,9 @@ def semantic_match(cue: list[float], episode: list[float]) -> float:
     Returns:
         float: Semantic relevancy score (0.0 – 1.0).
     """
-    if not cue or not episode or len(cue) != len(episode):                      # If either vector is empty or they have different lengths,
-        return 0.0                                                              # Return 0.0 as relevancy cannot be computed
-    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == cosine similarity on unit vectors
+    if not cue or not episode or len(cue) != len(episode):                      # Dimension guard — to avoid dimension mismatch or empty
+        return 0.0                                                              # Return 0.0 rather than exception
+    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == cosine sim — valid only on unit-normalized vectors
     
 def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     """
@@ -238,11 +238,11 @@ def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     Raises:
         sqlite3.Error: If connection cannot be established.
     """
-    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # Allow cross-thread engram access for concurrent cortex connections
-    engram_conn.row_factory = sqlite3.Row                              # Define the structure of query results of the engram
-    engram_conn.execute("PRAGMA journal_mode=WAL;")                    # Set up engram to allow retrieval and storing simultaneously
-    engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # Balance episode safety vs storing speed
-    engram_conn.commit()                                               # Apply the above settings into the engram
+    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # check_same_thread=False — allows concurrent access from different threads
+    engram_conn.row_factory = sqlite3.Row                              # Row objects allow column access by name
+    engram_conn.execute("PRAGMA journal_mode=WAL;")                    # WAL — concrrent reads during encoding cycle writes
+    engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # NORMAL — fsync on checkpoint only, not every writes
+    engram_conn.commit()                                               # Commit pragma changes before returning
     return engram_conn                                                 # Return the configured connection
 
 def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
@@ -620,80 +620,155 @@ class EngramStorageBank:
 
     # ── Search ────────────────────────────────────────────────────────────────
 
-    def search_knn(self, cue_blob: bytes, limit: int) -> list:
+    def search_knn(self, cue_blob: bytes, limit: int) -> list[dict]:
         """
-        Search the engram vector index for the top KNN episodes.
-        Primary semantic search path — sqlite-vec L2 distance KNN
-        (cosine-equivalent on unit-normalized vectors).
+        KNN semantic search via sqlite-vec L2 distance.
+        Returns shaped results ready for RRF fusion — no post-processing in caller.
 
         Args:
-            cue_blob : Binary blob of the encoded recall cue
-            limit    : Maximum number of candidates to return
+            cue_blob : fp32 binary blob of the encoded recall cue
+            limit    : Maximum candidates to return
 
         Returns:
-            list: Rows of matching episodes with distance scores
+            list[dict]: id, timestamp, date, content, relevancy, _rank
         """
-        return self._conn.execute(                                              # Query the engram vector index and retrieve the top recall_limit * 2 episodes
-            f"""
-            SELECT e.id, e.timestamp, e.date, e.content,                        -- Retrieve the episode ID, timestamp, date, and content
-                   ev.distance                                                  -- Retrieve the semantic similarity between the cue and the episode
-            FROM {self._vector_schema} ev                                              -- From the engram vector index virtual table
-            JOIN {self._storage_schema} e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
-            WHERE ev.{self._schema.semantic_traces} MATCH ?                                           -- Match the cue vector
-            AND k = ?
-            ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
-            """,
-            [cue_blob, limit],                                                  # Retrieve the top limit episodes
-        ).fetchall()                                                            # Fetch all matching episode candidates
+        try:
+            rows = self._conn.execute(
+                f"""
+                SELECT e.id, e.timestamp, e.date, e.content,
+                    ev.distance
+                FROM {self._vector_schema} ev
+                JOIN {self._storage_schema} e ON e.id = ev.rowid
+                WHERE ev.{self._schema.semantic_traces} MATCH ?
+                AND k = ?
+                ORDER BY ev.distance
+                """,
+                [cue_blob, limit],
+            ).fetchall()
 
-    def search_cosine_pool(self, half_pool: int) -> list:
+            if not rows:
+                return []
+
+            self.logger.debug(f"ESB KNN → {len(rows)} candidates | best_dist:{rows[0]['distance']:.4f}")
+
+            return [
+                {
+                    "id"        : row["id"],
+                    "timestamp" : row["timestamp"],
+                    "date"      : row["date"],
+                    "content"   : row["content"],
+                    "relevancy" : max(0.0, 1.0 - (row["distance"]**2 / 2.0)),  # L2 distance → cosine similarity on unit vectors
+                    "_rank"     : i,                                             # 0-based rank for RRF
+                }
+                for i, row in enumerate(rows)
+            ]
+        except Exception as e:
+            self.logger.debug(f"ESB KNN search failed: {e}")
+            return []
+
+    def search_cosine(self, cue_vector: list[float], recall_limit: int, recall_pool: int) -> list[dict]:
         """
-        Fetch a stratified pool of episodes for cosine similarity fallback.
-        Stratified sampling — half recent, half oldest.
-        Bounds memory usage and ensures old memories score alongside recent ones.
+        Brute-force cosine similarity fallback when sqlite-vec is unavailable.
+        Stratified sampling — half recent, half oldest — bounds RAM usage while
+        ensuring old memories score alongside recent ones.
 
         Args:
-            half_pool : Half the total pool size (recent + oldest)
+            cue_vector   : Encoded recall cue as float list
+            recall_limit : Maximum candidates to return
+            recall_pool  : Candidate pool multiplier — controls stratified sample size
 
         Returns:
-            list: Rows of episodes with encoding blobs for cosine scoring
+            list[dict]: id, timestamp, date, content, relevancy, _rank
         """
-        return self._conn.execute(                                          # Attempt to use cosine similarity
-            f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
-            "ORDER BY rowid DESC LIMIT ? "
-            "UNION ALL "
-            f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
-            "ORDER BY rowid ASC LIMIT ?",
-            [half_pool, half_pool],
-        ).fetchall()
+        try:
+            half_pool = (recall_limit * recall_pool) // 2                       # Stratified pool — half recent, half oldest
+            rows = self._conn.execute(
+                f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
+                "ORDER BY rowid DESC LIMIT ? "
+                "UNION ALL "
+                f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
+                "ORDER BY rowid ASC LIMIT ?",
+                [half_pool, half_pool],
+            ).fetchall()
 
-    def search_lexical(self, safe_query: str, limit: int) -> list:
+            scored = []
+            expected_bytes = len(cue_vector) * 4                                    # fp32 — 4 bytes per float
+            for row in rows:
+                if len(row["encoding"]) != expected_bytes:                          # Dimension mismatch — stale encoding from old model
+                    continue
+                engram_vec = unpack_vector(row["encoding"], len(cue_vector))        
+                score = semantic_match(cue_vector, engram_vec)                      # Dot product == cosine sim on unit vectors
+                if score > 0.0:
+                    scored.append((score, row))
+
+            scored.sort(key=lambda x: x[0], reverse=True)
+
+            return [
+                {
+                    "id"        : row["id"],
+                    "timestamp" : row["timestamp"],
+                    "date"      : row["date"],
+                    "content"   : row["content"],
+                    "relevancy" : score,
+                    "_rank"     : i,                                                # 0-based rank for RRF
+                }
+                for i, (score, row) in enumerate(scored[:recall_limit * 2])
+            ]
+        except Exception as e:
+            self.logger.debug(f"ESB cosine search failed: {e}")
+            return []
+
+    def search_lexical_normalized(self, query: str, recall_limit: int) -> list[dict]:
         """
-        Lexical pattern separation search via FTS5.
-        Dentate gyrus analogue — precise, keyword-driven engram retrieval.
-
-        FTS5 rank() is negative (more negative = better). We normalise to
-        a 0.0–1.0 relevancy score so RRF can treat both paths uniformly.
+        FTS5 lexical search with normalized relevancy scores.
+        Sanitizes raw query, executes FTS5 match, normalizes raw rank to 0.0-1.0
+        so results are shaped identically to semantic path for RRF fusion.
 
         Args:
-            safe_query : Sanitized FTS5 query string
-            limit      : Maximum candidates to return before RRF fusion
+            query        : Raw recall cue string — sanitized internally
+            recall_limit : Maximum candidates to return
 
         Returns:
-            list: Rows of matching episodes with raw FTS5 rank scores
+            list[dict]: id, timestamp, date, content, relevancy, _rank
         """
-        return self._conn.execute(                                          # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
-            f"""
-            SELECT e.id, e.timestamp, e.date, e.content,
-                   fts.rank AS raw_rank
-            FROM {self._lexical_schema} fts
-            JOIN {self._storage_schema} e ON e.id = fts.rowid
-            WHERE {self._lexical_schema} MATCH ?
-            ORDER BY fts.rank          -- most negative = best
-            LIMIT ?
-            """,
-            [safe_query, limit],
-        ).fetchall()
+        safe_query = sanitize_lexical_cue(query)                                    # Strip punctuation, filter stop words, join with OR
+        if not safe_query:
+            return []
+
+        try:
+            rows = self._conn.execute(
+                f"""
+                SELECT e.id, e.timestamp, e.date, e.content,
+                    fts.rank AS raw_rank
+                FROM {self._lexical_schema} fts
+                JOIN {self._storage_schema} e ON e.id = fts.rowid
+                WHERE {self._lexical_schema} MATCH ?
+                ORDER BY fts.rank
+                LIMIT ?
+                """,
+                [safe_query, recall_limit * 2],                                     # 2× limit — RRF culls to recall_limit after fusion
+            ).fetchall()
+
+            if not rows:
+                return []
+
+            raw_scores = [abs(row["raw_rank"]) for row in rows]
+            max_score  = max(raw_scores) if raw_scores else 1.0                     # Guard against empty — should never reach here
+
+            return [
+                {
+                    "id"        : row["id"],
+                    "timestamp" : row["timestamp"],
+                    "date"      : row["date"],
+                    "content"   : row["content"],
+                    "relevancy" : abs(row["raw_rank"]) / max_score if max_score else 0.0,  # FTS5 rank is negative — abs() then normalize to 0.0-1.0
+                    "_rank"     : i,                                                        # 0-based rank for RRF
+                }
+                for i, row in enumerate(rows)
+            ]
+        except Exception as e:
+            self.logger.debug(f"ESB lexical search failed: {e}")
+            return []
 
     # ── Retrieval ─────────────────────────────────────────────────────────────
 

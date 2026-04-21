@@ -476,174 +476,81 @@ class EpisodicMemoryCortex:
     def recall_episodes(self, query: str, recall_limit: int = 5) -> list[dict]:
         """
         Recall relevant episodes from episodic memory.
-        Runs semantic (engram vector similarity) and lexical (full-text pattern matching)
-        retrieval in parallel, fusing results via memory convergence scoring (RRF).
-     
+        Runs semantic and lexical retrieval, fusing results via RRF.
+
         Fallback chain:
             semantic + lexical  → RRF fusion          (both paths available)
             semantic only       → semantic results     (FTS5 unavailable)
             lexical only        → lexical results      (encoding engine unavailable)
             neither             → []                   (full degraded state)
-     
+
         Args:
-            query  : Recall cue string
-            recall_limit: Number of episodes to return (default 5)
-     
+            query        : Recall cue string
+            recall_limit : Number of episodes to return (default 5)
+
         Returns:
-            list[dict]: list of recalled episodes, sorted by descending relevancy.
+            list[dict]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
-        if not query or not query.strip():                                                      # If the query is empty or without meaningful content,
-            return []                                                                           # Do not recall any episodes
-     
-        semantic_results : list[dict] = []                                                      # For storing episodes matching semantic search
-        lexical_results  : list[dict] = []                                                      # For storing episodes matching lexical search
-     
-        # PATH 1: Semantic search via engram vector similarity
-        if self._encoding_engine.is_available:                                                  # If the encoding engine is available,
-            cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)          # Encode the query as a vector
-     
-            if cue_vector:                                                                      # If the query was encoded successfully,
-                if self._engram_index:                                                          # And if the engram vector index is available,
-                    # Primary: sqlite-vec L2 KNN (cosine-equivalent on unit-normalized vectors)
-                    try:                                                                        # Attempt to use the engram vector index
-                        cue_blob = pack_vector(cue_vector)                                      # Pack the cue vector as a binary blob via shared MSB utility
-                        semantic_candidates = self._esb.search_knn(cue_blob, recall_limit * 2)  # Use ESB helper for KNN search
-                        if semantic_candidates:                                                 # If there are matching episodes,
-                            self.logger.debug(f"EMC semantic recall (KNN) → {len(semantic_candidates)} candidates | best_dist:{semantic_candidates[0]['distance']:.4f}")
-                            for i, candidate in enumerate(semantic_candidates):                 # Iterate through each matching episode
-                                semantic_results.append({                                       # Add the matching episode to the semantic results
-                                    "id"        : candidate["id"],                              # Add the episode ID
-                                    "timestamp" : candidate["timestamp"],                       # Add the episode timestamp (timestamp memory was induced)
-                                    "date"      : candidate["date"],                            # Add the episode date (date memory was induced)
-                                    "content"   : candidate["content"],                         # Add the episode content
-                                    "relevancy" : max(0.0, 1.0 - (candidate["distance"]**2 / 2.0)), # Convert L2 distance to cosine similarity (assuming unit vectors)
-                                    "_rank"     : i,                                            # Add the zero-indexed rank for memory convergence (0=closest, 1=second closest, etc.)
-                                })
-                    except Exception as e:                                                      # If the engram vector index query fails,
-                        self.logger.debug(f"EMC engram vector index query failed, falling back to cosine: {e}") # Log the error
-      
-                if not semantic_results:                                                        # When engram vector index is unavailable or semantic search returned no candidates
-                    # Fallback: Cosine similarity
-                    try:                                                                        # Attempt to use cosine similarity
-                        # Stratified sampling via ESB helper
-                        half_pool = (recall_limit * EMC.RECALL_POOL) // 2
-                        rows = self._esb.search_cosine_pool(half_pool)
-
-                        scored = []
-
-                        for row in rows:            
-                            expected_bytes = len(cue_vector) * 4
-                            if len(row["encoding"]) != expected_bytes:
-                                continue      # skip mismatched dimension — stale encoding from old model
-                            engram_vec = unpack_vector(row["encoding"], len(cue_vector))    # Unpack engram vector via shared MSB utility
-                            score = semantic_match(cue_vector, engram_vec)                  # Compute cosine similarity via shared MSB utility
-                            if score > 0.0:
-                                scored.append((score, row))
-                        scored.sort(key=lambda x: x[0], reverse=True)
-                        for i, (score, row) in enumerate(scored[:recall_limit * 2]):
-                            semantic_results.append({
-                                "id"        : row["id"],
-                                "timestamp" : row["timestamp"],
-                                "date"      : row["date"],
-                                "content"   : row["content"],
-                                "relevancy" : score,
-                                "_rank"     : i,
-                            })
+        if not query or not query.strip():                                                      # Empty cue — nothing to recall
+            return []                                                                           
+    
+        semantic_results : list[dict] = []                                                      
+        lexical_results  : list[dict] = []                                                      
+    
+        # PATH 1: Semantic
+        if self._encoding_engine.is_available:                                                  # Encoding engine must be loaded for semantic path
+            cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)          # Encode cue — BGE instruction prefix applied internally
+    
+            if cue_vector:                                                                      # Empty vector means encoding failed — skip semantic path
+                if self._engram_index:                                                          # sqlite-vec available — use KNN
+                    try:                                                                        
+                        cue_blob = pack_vector(cue_vector)                                      
+                        semantic_results = self._esb.search_cosine(cue_vector, recall_limit, EMC.RECALL_POOL)
+                        self.logger.debug(f"EMC semantic recall (KNN) → {len(semantic_results)} candidates")
+                    except Exception as e:                                                      # KNN failed — fall through to cosine
+                        self.logger.debug(f"EMC KNN failed, falling back to cosine: {e}")      
+    
+                if not semantic_results:                                                        # KNN unavailable or returned nothing — cosine fallback
+                    try:                                                                        
+                        semantic_results = self._esb.search_cosine(cue_vector, recall_limit)    
+                        self.logger.debug(f"EMC semantic recall (cosine) → {len(semantic_results)} candidates")
                     except Exception as e:
                         self.logger.debug(f"EMC cosine fallback failed: {e}")   
-     
-        # ── PATH 2: Lexical — dentate gyrus pattern separation ────────────────
+    
+        # PATH 2: Lexical
         try:
-            lexical_results = self._lexical_search(query, recall_limit)
-            if lexical_results:
-                self.logger.debug(f"EMC lexical recall → {len(lexical_results)} candidates")
+            lexical_results = self._esb.search_lexical_normalized(query, recall_limit)          
+            self.logger.debug(f"EMC lexical recall → {len(lexical_results)} candidates")
         except Exception as e:
             self.logger.debug(f"EMC lexical path failed: {e}")
-     
-        # ── CONVERGENCE: RRF fusion through CA1 ───────────────────────────────
+    
+        # CONVERGENCE: RRF fusion
         if semantic_results and lexical_results:
-            # Both paths active — full memory convergence
-            fused = memory_convergence(semantic_results, lexical_results, recall_limit)     # Fuse results via shared MSB RRF utility
+            fused = memory_convergence(semantic_results, lexical_results, recall_limit)         
             self.logger.debug(
                 f"EMC recall → semantic:{len(semantic_results)} "
                 f"lexical:{len(lexical_results)} fused:{len(fused)}"
             )
-            for i, e in enumerate(fused):
-                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
             return fused
-     
+    
         if semantic_results:
-            # Lexical unavailable — return semantic only, capped to recall_limit
             results = sorted(semantic_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
             for r in results:
                 r.pop("_rank", None)
             self.logger.debug(f"EMC recall → semantic only ({len(results)})")
-            for i, e in enumerate(results):
-                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
             return results
-     
+    
         if lexical_results:
-            # Encoding engine unavailable — return lexical only, capped to recall_limit
             results = sorted(lexical_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
             for r in results:
                 r.pop("_rank", None)
             self.logger.debug(f"EMC recall → lexical only ({len(results)})")
-            for i, e in enumerate(results):
-                self.logger.debug(f"   [{i}] ep:{e['id']} rel:{e['relevancy']:.4f}")
             return results
-     
+    
         self.logger.debug("EMC recall → no results from either path")
         return []
-    
-    def _lexical_search(self, query: str, recall_limit: int) -> list[dict]:
-        """
-        Lexical pattern separation search via FTS5.
-        Dentate gyrus analogue — precise, keyword-driven engram retrieval.
-    
-        FTS5 rank() is negative (more negative = better). We normalise to
-        a 0.0–1.0 relevancy score so RRF can treat both paths uniformly.
-    
-        Args:
-            query   : Raw recall cue string (not encoded — FTS5 works on text)
-            recall_limit   : Maximum candidates to return before RRF fusion
-    
-        Returns:
-            list[dict] with keys: id, timestamp, date, content, relevancy
-                       sorted best-first (highest relevancy first)
-        """
-        safe_query = sanitize_lexical_cue(query)                                # Sanitize the query for safe FTS5 MATCH usage via shared MSB utility
-        if not safe_query:                                                      # If the query is empty or invalid
-            return []                                                           # Return empty list
-    
-        try:                                                                    # Attempt to execute the lexical search query
-            # Fetch 2× recall_limit candidates — RRF will cull to recall_limit after fusion
-            rows = self._esb.search_lexical(safe_query, recall_limit * 2)       # Use ESB helper for lexical search
-    
-            if not rows:                                                        # If no rows are found
-                return []                                                       # Return empty list
-    
-            # Normalise raw FTS5 rank to 0.0–1.0 relevancy
-            # raw_rank is negative; least negative = worst; most negative = best
-            raw_scores = [abs(row["raw_rank"]) for row in rows]                 # Get the absolute values of the raw ranks
-            max_score  = max(raw_scores) if raw_scores else 1.0                 # Get the maximum score
-    
-            results = []                                                        # Initialize the results list
-            for i, row in enumerate(rows):                                      # Iterate over the rows with their index
-                results.append({
-                    "id"        : row["id"],
-                    "timestamp" : row["timestamp"],
-                    "date"      : row["date"],
-                    "content"   : row["content"],
-                    "relevancy" : abs(row["raw_rank"]) / max_score if max_score else 0.0,
-                    "_rank"     : i,                                            # 0-based rank for RRF (best = 0)
-                })
-            return results                                                      # Return the results list
-    
-        except Exception as e:                                                  # If error occurs,
-            self.logger.debug(f"EMC lexical search failed: {e}")                # Log the exception
-            return []                                                           # Return empty list
-    
+
     def get_episodes_for_date(self, date_str: str) -> list[dict]:
         """
         Return all episodes for a given date in chronological order.
