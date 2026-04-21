@@ -85,26 +85,26 @@ class EncodingEngine:
             cache_limit     (int): Maximum number of entries in the LRU encoding cache
             imprint_limit   (int): Maximum number of characters to hash for the imprint
         """
-        self.logger                         = logger                # Logger passed in from cortex modules
-        self.encoding_engine: str           = encoding_engine       # Model name — used in SentenceTransformer() call
-        self.cache_limit: int               = cache_limit           # Max cache entries before LRU eviction
-        self.imprint_limit: int             = imprint_limit         # Chars hashed for cache key — shorter = more hits, more collisions
-        self._core                          = None                  # None until SentenceTransformer loads successfully
-        self._cache: dict[str, list[float]] = {}                    # imprint → encoded vector
+        self.logger                         = logger                # Stores the logger passed in from the cortex — used in encode() and activation logs
+        self.encoding_engine: str           = encoding_engine       # Stores the model name string — passed to SentenceTransformer() below
+        self.cache_limit: int               = cache_limit           # Stores max cache size — checked in encode() before every insert
+        self.imprint_limit: int             = imprint_limit         # Stores max chars to hash — longer text is truncated before hashing to make the cache key
+        self._core                          = None                  # The live SentenceTransformer model — None until load succeeds, encode() checks this before every inference call
+        self._cache: dict[str, list[float]] = {}                    # LRU encoding cache — maps imprint hash → float vector, avoids re-encoding identical or similar text
         
         try:                                                                        # Attempt to activate SentenceTransformer
-            from sentence_transformers import SentenceTransformer                   # Deferred import — optional dependency
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of SentenceTransformer activation
-            self._core = SentenceTransformer(self.encoding_engine)                  # Blocks until model loads into RAM
-            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of SentenceTransformer
-        except ImportError:                                                         # Package missing — falls back to keyword search only
-            self.logger.warning(                                                    # Log the warning of SentenceTransformer being offline and falling back to keyword search only
+            from sentence_transformers import SentenceTransformer                   # Deferred import — optional dependency, avoids hard crash if package is missing
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Logs before the blocking load — model can take seconds on Jetson
+            self._core = SentenceTransformer(self.encoding_engine)                  # Loads model weights into RAM — blocks until complete, sets _core to the live model
+            self.logger.info("✅ Encoding Engine activated")                        # Only reached if load succeeded — _core is now usable
+        except ImportError:                                                         # Triggers if sentence_transformers package is not installed
+            self.logger.warning(                                                    # Warns but does not crash — cortex continues with lexical-only recall
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                      # Model load failed — bad path, corrupt weights, OOM
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")
+        except Exception as e:                                                      # Catches everything else — bad model path, corrupted weights, out of memory
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # Logs the specific failure reason — _core stays None, same fallback behavior
             
     @property
     def is_available(self) -> bool:
@@ -114,7 +114,7 @@ class EncodingEngine:
         Returns:
             bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
         """
-        return self._core is not None            # True only if SentenceTransformer loaded without error
+        return self._core is not None            # Checks if SentenceTransformer loaded — None means load failed or was never attempted, any other value means model is live
 
     def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
@@ -132,30 +132,31 @@ class EncodingEngine:
         Returns:
             list[float]: The semantic encoding vector for the input trace
         """
-        if not self.is_available:                                                       # Caller checks this — defensive guard
+        if not self.is_available:                                                       # Calls the property above — if _core is None, skip everything and return empty
             self.logger.debug(                                                          # Log the SentenceTransformer being unavailable
                 "Encoding engine unavailable — semantic search inactive"
             )
-            return []                                                                   # Empty list signals caller to fall back to lexical
+            return []                                                                   # Empty list is the signal to callers — means "fall back to lexical, semantic is offline"
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Cache key — hash() sufficient, cache is session-scoped not persistent
-        if imprint in self._cache:                                                      # If the cache key is already in the cache,
-            return self._cache[imprint]                                                 # Cache hit — skip encoding
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Builds cache key — prefixed with 'cue' or 'episode' so the same text encoded for storage vs recall gets separate cache entries
+                                                                                        # trace[:self.imprint_limit] truncates before hashing — only first 300 chars checked, long texts still get cache hits if they share the same opening
+        if imprint in self._cache:                                                      # Looks up the key in the dict — O(1) hash lookup
+            return self._cache[imprint]                                                 # Cache hit — returns the stored vector directly, skips model inference entirely
 
         try:                                                                            # Attempt to embed the query or engram vector
-            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE asymmetric — cue gets instruction prefix, episode encodes as-is
-            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # Model inference — returns np.ndarray, .tolist() converts to float list
-            encoded_trace = unit_normalize(encoded_trace)                               # Normalize before storage — cosine sim via L2 distance requires unit vectors
-
+            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE instruction prefix — only applied to recall cues, tells the model this text is a query not a passage
+            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # Runs model inference — prepends prefix if cue, encodes raw if episode, .tolist() converts numpy array → Python float list
+            encoded_trace = unit_normalize(encoded_trace)                              # Normalizes the vector to unit length — required so L2 distance equals cosine similarity in sqlite-vec KNN search
+            
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= self.cache_limit:                                    # If cache is over the limit,
-                decayed_imprint: str = next(iter(self._cache))                          # dict preserves insertion order — first key is oldest
-                del self._cache[decayed_imprint]                                        # Evict oldest before adding new entry
-            self._cache[imprint] = encoded_trace                                        # Add the new entry to cache
-            return encoded_trace                                                        # Return the embedded vector
+            if len(self._cache) >= self.cache_limit:                                    # Cache is full — must evict before inserting or it grows forever
+                decayed_imprint: str = next(iter(self._cache))                          # Gets the first key in the dict — dicts preserve insertion order, so first = oldest entry
+                del self._cache[decayed_imprint]                                        # Removes the oldest entry — makes room for the new one
+            self._cache[imprint] = encoded_trace                                        # Stores the new vector under its imprint key — available for future cache hits
+            return encoded_trace                                                        # Returns the freshly encoded and normalized vector to the caller
         except Exception as e:                                                          # If embedding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # Log the embedding error
-            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
+            self.logger.debug(f"Encoding error: {e}")                                   # Logs what went wrong — debug level, not warning, inference errors are transient
+            return []                                                                   # Same empty list signal as the unavailable guard above — caller falls back to lexical
             
 def unit_normalize(vector: list[float]) -> list[float]:
     """
