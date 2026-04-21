@@ -2,54 +2,30 @@
 MSB — Memory Storage Bank
 ==========================
 AuRoRA · Semantic Cognitive System (SCS)
- 
-Shared memory infrastructure layer — encoding, vector math, lexical search,
-storage utilities, and convergence fusion used across all memory cortices.
- 
-Responsibilities:
-    - Provide a shared encoding engine (semantic vector encoding) for EMC, SMC, PMC
-    - Provide shared vector math utilities (normalization, cosine similarity)
-    - Provide shared SQLite connection factory (WAL mode, row factory)
-    - Provide shared lexical search utilities (FTS5 query sanitization)
-    - Provide shared RRF memory convergence fusion for dual-path retrieval
- 
-Architecture:
-    Encoding:
-        EncodingEngine         — Sentence-transformers model wrapper with caching
-        encode()               — Encode a trace or cue into a semantic vector
- 
-    Vector Math:
-        unit_normalize()       — L2-normalize a vector for cosine-equivalent L2 search
-        semantic_match()       — Cosine similarity fallback (when sqlite-vec unavailable)
- 
-    Storage:
-        connect_engram()       — Connect to engram (SQLite) with WAL mode and row factory
-        activate_engram_index()— Load sqlite-vec extension into a connection
- 
-    Lexical:
-        sanitize_lexical_cue() — Sanitize a raw cue string for safe FTS5 MATCH usage
- 
-    Convergence:
-        memory_convergence()   — RRF fusion of semantic + lexical ranked result lists
- 
-    EngramStorageBank:
-        Storage primitive interface — speaks rows, blobs, counts.
-        Zero memory domain vocabulary. EMC, SMC, PMC supply meaning.
-        Each cortex gets its own ESB instance pointing at its own table prefix.
- 
-Used by:
-    EMC — Episodic Memory Cortex
-    SMC — Semantic Memory Cortex      (M2)
-    PMC — Procedural Memory Cortex    (M2)
- 
+
+Shared neural substrate for all memory cortices — EMC, SMC, PMC.
+
+MSB carries no memory domain knowledge of its own. It does not know what
+an episode is, what a skill is, or what a semantic concept means. It only
+knows how to encode thought into vectors, persist traces into engrams, and
+retrieve them by meaning or pattern. The cortices supply domain knowledge —
+MSB supplies the tissue they run on.
+
+Separated into its own layer so encoding models, vector math, SQLite
+connection strategy, and retrieval fusion logic are defined once and
+shared — not duplicated across every cortex that needs them.
+
 Terminology:
     encoding    — semantic vector representation of a memory trace
-    engram      — the memory store containing encoded episodes
-    FTS5        — SQLite FTS5 full-text search extension for lexical search
-    RRF         — Reciprocal Rank Fusion for combining semantic and lexical search
-    unit vector — vector with L2-norm = 1.0 (cosine sim ≡ L2 distance on unit vectors)
- 
-TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if vector math needed outside memory cortices
+    engram      — the persistent memory store for a cortex
+    FTS5        — SQLite full-text search for lexical pattern retrieval
+    RRF         — Reciprocal Rank Fusion — fuses semantic and lexical ranked
+                  results into a single relevancy-ordered list
+    unit vector — L2-normalized vector; cosine similarity becomes equivalent
+                  to L2 distance, enabling sqlite-vec KNN search
+
+TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if
+      vector math is needed outside memory cortices
 """
 
 # System libraries
@@ -61,44 +37,36 @@ import struct                               # For packing/unpacking semantic vec
 import re                                   # For lexical cue sanitization
 from pathlib import Path                    # For calculating database size — owned here, never passed back up
 
-# AGi libraries
-from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
-EMC = AGi.CNS.EMC                           # Channel for interfacing with Episodic Memory Cortex (EMC)
-
-# ===== ENGRAM PRIMITIVE STORAGE CONCEPTS =====
-# Note: This section defines the fundamental building blocks of engram schemas.
-# Each memory cortex (EMC, SMC, PMC) instantiates these concepts to define its own specific schemas.
 class EngramModality(Enum):
     """
     Defines the modality of engram memory traces (ie. the type of data stored).
     """
-    TEXT    = 'TEXT'    # String storage for lexical recall and encoding
-    INTEGER = 'INTEGER' # Integer storage for primary key and other integer values
-    REAL    = 'REAL'    # Real-number storage for storing encoding vector values (floats)
-    BLOB    = 'BLOB'    # Blob storage for storing packed semantic vectors
+    TEXT    = 'TEXT'        # String storage for lexical recall and encoding
+    INTEGER = 'INTEGER'     # Integer storage for primary key and other integer values
+    REAL    = 'REAL'        # Real-number storage for storing encoding vector values (floats)
+    BLOB    = 'BLOB'        # Blob storage for storing packed semantic vectors
 
 @dataclass
 class EngramTrace:
     """
     Define the schema for a single engram trace.
     """
-    label: str                       # Label of the engram field (ie. name of the data stored)
-    modality: EngramModality         # Modality of the engram field (ie. type of data stored)
-    essential: bool = False          # Whether the field is essential to the engram (default: False)
-    baseline: str | None = None      # Baseline value for the engram field (default: None)
-
+    label: str                       # Column name in SQL
+    modality: EngramModality         # Maps to SQL type via .value
+    essential: bool = False          # NOT NULL constraint if True
+    baseline: str | None = None      # DEFAULT value — raw SQL if starts with '(', quoted string otherwise
+ 
 @dataclass
 class EngramSchema:
     """
     Define the structure, storage schema, and search capabilities for an engram.
     """
-    storage: list[EngramTrace]                                  # The storage schema for the engram
-    staging: list[EngramTrace] | None = None                    # The staging schema for the engram (used for temporary storage)
-    semantic_traces: str | None = None                          # The semantic trace for the engram used for semantic search
-    lexical_traces: list[str] | None = None                     # The lexical fields for the engram used for lexical search
-    index_traces: list[str] | None = None                       # The index fields for the engram used for fast retrieval
+    storage: list[EngramTrace]                                  # Main engram storage table
+    staging: list[EngramTrace] | None = None                    # Crash-safe buffer table — optional
+    semantic_traces: str | None = None                          # Column name holding the encoding blob for semantic search
+    lexical_traces: list[str] | None = None                     # Columns fed into FTS5 index for keyword search
+    index_traces: list[str] | None = None                       # Columns with a standard B-tree index for fast retrieval
 
-# ===== ENCODING ENGINE =====
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -109,7 +77,6 @@ class EncodingEngine:
 
     def __init__(self, logger, encoding_engine: str, cache_limit: int = 256, imprint_limit: int = 300) -> None:
         """
-        Initialize the encoding engine with a logger.
         This method sets up the encoding engine core and cache for recent encodings.
         
         Args:
@@ -118,38 +85,36 @@ class EncodingEngine:
             cache_limit     (int): Maximum number of entries in the LRU encoding cache
             imprint_limit   (int): Maximum number of characters to hash for the imprint
         """
-        self.logger                         = logger                # Retrieve logger from CNC for logging operations
-        self.encoding_engine: str           = encoding_engine       # Store the model name for dynamic formatting during encoding
-        self.cache_limit: int               = cache_limit           # Maximum number of imprints to hold in cache to control memory usage
-        self.imprint_limit: int             = imprint_limit         # Maximum length of the imprint to control cache hit rate vs false positive risk
-        self._core                          = None                  # For holding the encoding engine instance for semantic encoding
-        self._cache: dict[str, list[float]] = {}                    # For holding the cache of recent encodings to avoid redundant encoding
-
-        try:                                                                        # Attempt to activate the encoding engine
-            from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of encoding engine activation
-            self._core = SentenceTransformer(self.encoding_engine)                  # Activate the requested model
-            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
-        except ImportError:                                                         # If missing the inferencer component of encoding engine,
-            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
+        self.logger                         = logger                # Logger passed in from cortex modules
+        self.encoding_engine: str           = encoding_engine       # Model name — used in SentenceTransformer() call
+        self.cache_limit: int               = cache_limit           # Max cache entries before LRU eviction
+        self.imprint_limit: int             = imprint_limit         # Chars hashed for cache key — shorter = more hits, more collisions
+        self._core                          = None                  # None until SentenceTransformer loads successfully
+        self._cache: dict[str, list[float]] = {}                    # imprint → encoded vector
+        
+        try:                                                                        # Attempt to activate SentenceTransformer
+            from sentence_transformers import SentenceTransformer                   # Deferred import — optional dependency
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of SentenceTransformer activation
+            self._core = SentenceTransformer(self.encoding_engine)                  # Blocks until model loads into RAM
+            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of SentenceTransformer
+        except ImportError:                                                         # Package missing — falls back to keyword search only
+            self.logger.warning(                                                    # Log the warning of SentenceTransformer being offline and falling back to keyword search only
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                      # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # Log the error during activation of encoding engine
-
+        except Exception as e:                                                      # Model load failed — bad path, corrupt weights, OOM
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")
+            
     @property
     def is_available(self) -> bool:
         """
-        Check if encoding engine is loaded successfully and ready for encoding.
-        This is used by memory cortices to determine whether semantic search is available,
-        or to fall back to solely lexical search when the engine is unavailable.
+        Returns True if encoding engine loaded successfully and ready for encoding.
 
         Returns:
             bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
         """
-        return self._core is not None            # Encoding engine is available if the core was successfully loaded during initialization
+        return self._core is not None            # True only if SentenceTransformer loaded without error
 
     def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
@@ -157,7 +122,7 @@ class EncodingEngine:
         Uses caching to avoid redundant encoding of identical or similar texts.
         Caches recent encodings to speed up subsequent recall.
         If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting the caller to fall back to lexical recall.
+        prompting the caller to fall back to lexical search.
         
         Args:
             trace (str): The given memory trace to encode (e.g. episode content).
@@ -165,36 +130,33 @@ class EncodingEngine:
                              This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
 
         Returns:
-            list[float]: The semantic encoding vector for the input trace, 
-                         or an empty list if the encoding engine is unavailable.
-                         Empty list signals the caller to fall back to lexical recall.
+            list[float]: The semantic encoding vector for the input trace
         """
-        if not self.is_available:                                                       # If encoding engine is unavailable,
-            self.logger.debug(                                                          # Log the debug message about encoding engine being unavailable
+        if not self.is_available:                                                       # Caller checks this — defensive guard
+            self.logger.debug(                                                          # Log the SentenceTransformer being unavailable
                 "Encoding engine unavailable — semantic search inactive"
             )
-            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
+            return []                                                                   # Empty list signals caller to fall back to lexical
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique imprint hash and label the encoding type
-        if imprint in self._cache:                                                      # If the imprint is already in the cache,
-            return self._cache[imprint]                                                 # Return the encoded vector in the cache
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique cache key and label the encoding type
+        if imprint in self._cache:                                                      # If the cache key is already in the cache,
+            return self._cache[imprint]                                                 # Cache hit — skip encoding
 
-        try:                                                                            # Attempt to encode the trace
-            prompt_name = "query" if is_cue else "document"                             # Assign the appropriate prompt name based on whether the trace is a cue or an episode to be encoded
-            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Encode the trace using the encoding engine
-            encoded_trace = unit_normalize(encoded_trace)                               # Unit-normalize for cosine-equivalent L2 search
+        try:                                                                            # Attempt to embed the query or engram vector
+            prompt_name = "query" if is_cue else "document"                             # Asymmetric embedding — query and engram use different embedding call
+            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Returns np.ndarray — .tolist() for JSON-safe float list
+            encoded_trace = unit_normalize(encoded_trace)                               # Normalize before storage — cosine sim via L2 distance requires unit vectors
 
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= self.cache_limit:                                    # If the cache is over the limit,
-                decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
-                del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
-            self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
-            return encoded_trace                                                        # Return the encoded vector
-        except Exception as e:                                                          # If encoding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
+            if len(self._cache) >= self.cache_limit:                                    # If cache is over the limit,
+                decayed_imprint: str = next(iter(self._cache))                          # dict preserves insertion order — first key is oldest
+                del self._cache[decayed_imprint]                                        # Evict oldest before adding new entry
+            self._cache[imprint] = encoded_trace                                        # Add the new entry to cache
+            return encoded_trace                                                        # Return the embedded vector
+        except Exception as e:                                                          # If embedding fails,
+            self.logger.debug(f"Encoding error: {e}")                                   # Log the embedding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
-
-# ===== VECTOR OPERATIONS =====
+            
 def unit_normalize(vector: list[float]) -> list[float]:
     """
     Ensure encoding engine conduct semantic search properly by
@@ -404,26 +366,25 @@ def memory_convergence(
     semantic_miss = len(semantic_results)                                     # Penalty rank for episodes missed by semantic path
     lexical_miss = len(lexical_results)                                       # Penalty rank for episodes missed by lexical path
 
-    # Compute RRF score for each candidate and unify relevancy
-    for eid, episode in episode_pool.items():
-        # Get ranks (0-based, high penalty for miss)
-        s_rank = semantic_rank.get(eid, 1000)
-        l_rank = lexical_rank.get(eid, 1000)
-        
-        # RRF score for unified ranking
-        episode["rrf_score"] = (1.0 / (rrf_k + s_rank)) + (1.0 / (rrf_k + l_rank))
-        
-        # Retrieve original relevancy scores from source paths
-        # We preserve the best source relevancy rather than normalizing RRF to 1.0
-        # This ensures the RELEVANCE_THRESHOLD (0.25) remains an absolute quality gate
-        s_rel = next((e["relevancy"] for e in semantic_results if e["id"] == eid), 0.0)
-        l_rel = next((e["relevancy"] for e in lexical_results if e["id"] == eid), 0.0)
-        episode["relevancy"] = max(s_rel, l_rel)
+    # Compute RRF score for each candidate
+    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — safe to prevent mutation to original pool
+        episode = dict(episode)                                               # Obtain a clone of the episode — prevent mutation of original episode
+        episode["rrf_score"] = (                                              # Calculate rrf score of each episode from the ranks of both paths
+            1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) +
+            1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))
+        )
+        episode_pool[episode["id"]] = episode                                 # Replace original episode entry with rrf score added
 
-    # Sort descending by RRF score — best ranking first
-    sorted_episodes = sorted(episode_pool.values(), key=lambda e: e["rrf_score"], reverse=True)
+    # Sort descending by RRF score
+    sorted_episodes = sorted(episode_pool.values(),                           # Sort episodes by RRF score — best first
+                             key=lambda episode: episode["rrf_score"], 
+                             reverse=True)
 
+    # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
+    max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # Computing best RRF score for normalization — guard against empty results
+ 
     for episode in sorted_episodes[:recall_limit]:                            # Surface top episodes up to recall limit
+        episode["relevancy"] = episode["rrf_score"] / max_rrf                 # Normalize RRF score to 0.0–1.0 relevancy
         episode.pop("_rank", None)                                            # Remove internal rank field before surfacing
         episode.pop("rrf_score", None)                                        # Remove internal RRF score before surfacing
     
@@ -548,8 +509,8 @@ class EngramStorageBank:
                 else:
                     col_def += f" DEFAULT {trace.baseline}"
             columns.append(col_def)
+        self.logger.debug(f"MSB schema columns built — {len(columns)} fields")             # Log the initialization of the FTS5 lexical index
         return ",\n                        ".join(columns)
-        self.logger.debug("EMC FTS5 lexical index initialized")             # Log the initialization of the FTS5 lexical index
 
     # ── Staging ───────────────────────────────────────────────────────────────
 
@@ -688,8 +649,8 @@ class EngramStorageBank:
             FROM {self._vector_schema} ev                                              -- From the engram vector index virtual table
             JOIN {self._storage_schema} e ON e.id = ev.rowid                                  -- Join with the episodes table using the row ID
             WHERE ev.{self._schema.semantic_traces} MATCH ?                                           -- Match the cue vector
+            AND k = ?
             ORDER BY ev.distance                                                -- Order by ascending order of semantic similarity (closest first)
-            LIMIT ?                                                             -- Limit to recall_limit * 2 episodes
             """,
             [cue_blob, limit],                                                  # Retrieve the top limit episodes
         ).fetchall()                                                            # Fetch all matching episode candidates
@@ -808,7 +769,7 @@ class EngramStorageBank:
             return {}
 
 
- # ── Diagnostic stats —————————————————————————————————————————————————————
+    # ── Diagnostic stats —————————————————————————————————————————————————————
     def count_stored_engrams(self) -> int:
         """
         Count number of engrams stored in the memory bank.

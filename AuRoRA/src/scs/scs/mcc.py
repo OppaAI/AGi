@@ -259,7 +259,8 @@ class MemoryCoordinationCore:
             f"   WMC: {wmc_stats['pmt_count']} PMTs ({wmc_stats['slot_occupancy']}%) | "
             f"{wmc_stats['sustained_chunks']}/{wmc_stats['global_chunk_limit']} chunks ({wmc_stats['chunk_occupancy']}%)\n"
             f"   EMC: {emc_stats.get('episodes', 0)} episodes | "
-            f"{emc_stats.get('buffer_pending', 0)} pending embed | "
+            f"{emc_stats.get('binding_pending', 0)} binding | "
+            f"{emc_stats.get('buffer_total', 0)} staged | "
             f"{emc_stats.get('db_size_mb', 0)} MB"
         )
 
