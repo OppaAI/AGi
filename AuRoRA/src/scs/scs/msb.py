@@ -261,9 +261,9 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
         bool: True if engram vector index activated, False otherwise.
     """
     try:                                                        # Attempt to activate engram vector index
-        import sqlite_vec                                       # Load sqlite-vec extension for engram vector index
-        sqlite_vec.load(engram_conn)                            # Activate vector index on the engram connection
-        return True                                             # Signal successful activation
+        import sqlite_vec                                       # Deferred import — optional dependency
+        sqlite_vec.load(engram_conn)                            # Loads vec0 virtual table support into this connection
+        return True                                             # Signal successful activation of sqlite-vec
     except Exception as e:                                      # If sqlite-vec fails to load,
         if logger:                                              # If a logger is provided,
             logger.warning(                                     # Log the fallback to cosine similarity due to engram vector index unavailability
@@ -273,7 +273,7 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
             )
         return False                                            # Signal failed activation — caller falls back to cosine similarity
 
-STOP_WORDS = {
+LEXICAL_FILTER_WORDS = {                                        # Filtered before FTS5 query — common words that match everything and hurt precision
     "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
     "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
     "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
@@ -294,20 +294,20 @@ def sanitize_lexical_cue(cue: str) -> str:
     Returns:
         str: FTS5-safe quoted token string, or empty string if query is blank.
     """
-    clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # Strip punctuation and normalize case
-    lexemes = clean_cue.strip().split()                              # Split cue into individual lexemes
+    clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # Punctuation → space, lowercase — FTS5 MATCH rejects special chars
+    lexemes = clean_cue.strip().split()                              # Whitespace tokenization — FTS5 handles stemming internally
     
     # Extract keywords (non-stop-words longer than 1 character)
-    keywords = [kw for kw in lexemes if kw not in STOP_WORDS and len(kw) > 1]
+    terms = [kw for kw in lexemes if kw not in LEXICAL_FILTER_WORDS and len(kw) > 1]    # Filter stop words and single chars — improves FTS5 precision
     
-    if not keywords:
-        # Fallback to original lexemes if no keywords remain
-        keywords = lexemes
+    # Fallback to original lexemes if no terms remain
+    if not terms:                                                    # All words were stop words — fall back to full token list
+        terms = lexemes
         
-    if not keywords:
+    if not terms:                                                    # Empty cue — caller skips lexical path
         return ""
 
-    return " OR ".join(f'"{kw}"' for kw in keywords if kw)           # Join keywords with OR for better recall robustness
+    return " OR ".join(f'"{kw}"' for kw in keywords if kw)           # OR join — any keyword match surfaces the episode
 
 def memory_convergence(
     semantic_results : list[dict],
@@ -342,9 +342,9 @@ def memory_convergence(
                     with 'relevancy' set to normalised RRF score (0.0–1.0)
     """
     # Build rank lookup schemas and episode pool — 0-based, best = 0
-    episode_pool: dict[int, dict] = {}                                        # Union pool of all candidate episodes from both paths
-    semantic_rank: dict[int, int] = {}                                        # Semantic rank lookup — episode_id → 0-based rank
-    lexical_rank: dict[int, int] = {}                                         # Lexical rank lookup  — episode_id → 0-based rank
+    episode_pool: dict[int, dict] = {}                                        # Union of all candidates from both paths — keyed by episode id
+    semantic_rank: dict[int, int] = {}                                        # episode_id → 0-based rank in semantic results
+    lexical_rank: dict[int, int] = {}                                         # episode_id → 0-based rank in lexical results
 
     for rank, episode in enumerate(semantic_results):                         # Iterate through each semantic match results
         semantic_rank[episode["id"]] = rank                                   # Store semantic rank — 0-based, best = 0
@@ -352,22 +352,22 @@ def memory_convergence(
 
     for rank, episode in enumerate(lexical_results):                          # Iterate through each lexical match results
         lexical_rank[episode["id"]] = rank                                    # Store lexical rank — 0-based, best = 0
-        episode_pool.setdefault(episode["id"], episode)                       # Add episode to pool if not already from semantic path
+        episode_pool.setdefault(episode["id"], episode)                       # Add episode to pool if not already, semantic path takes precedence as default
 
-    semantic_miss = len(semantic_results)                                     # Penalty rank for episodes missed by semantic path
-    lexical_miss = len(lexical_results)                                       # Penalty rank for episodes missed by lexical path
-
+    semantic_miss = len(semantic_results)                                     # Penalty rank for episodes absent from semantic results
+    lexical_miss = len(lexical_results)                                       # Penalty rank for episodes absent from lexical results
+    
     # Compute RRF score for each candidate
-    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — safe to prevent mutation to original pool
-        episode = dict(episode)                                               # Obtain a clone of the episode — prevent mutation of original episode
-        episode["rrf_score"] = (                                              # Calculate rrf score of each episode from the ranks of both paths
+    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — # list() — snapshot prevents mutation during iteration
+        episode = dict(episode)                                               # dict() — clone prevents mutating the original pool entry
+        episode["rrf_score"] = (                                              # Calculate rrf score — RRF formula: 1/(k+rank_semantic) + 1/(k+rank_lexical)
             1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) +
             1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))
         )
         episode_pool[episode["id"]] = episode                                 # Replace original episode entry with rrf score added
 
     # Sort descending by RRF score
-    sorted_episodes = sorted(episode_pool.values(),                           # Sort episodes by RRF score — best first
+    sorted_episodes = sorted(episode_pool.values(),                           # Sort descending — highest RRF score first
                              key=lambda episode: episode["rrf_score"], 
                              reverse=True)
 
@@ -376,8 +376,8 @@ def memory_convergence(
  
     for episode in sorted_episodes[:recall_limit]:                            # Surface top episodes up to recall limit
         episode["relevancy"] = episode["rrf_score"] / max_rrf                 # Normalize RRF score to 0.0–1.0 relevancy
-        episode.pop("_rank", None)                                            # Remove internal rank field before surfacing
-        episode.pop("rrf_score", None)                                        # Remove internal RRF score before surfacing
+        episode.pop("_rank", None)                                            # Strip internal rank field before surfacing
+        episode.pop("rrf_score", None)                                        # Strip internal RRF score before surfacing
     
     return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
 
@@ -538,7 +538,7 @@ class EngramStorageBank:
             list: Rows of unencoded episodes
         """
         return self._conn.execute(                                          # Query the engram for unencoded episodes
-            f"SELECT id, timestamp, date, content "                          # Collect the index, timestamp, date, and content
+            f"SELECT id, timestamp, date, content "                         # Collect the index, timestamp, date, and content
             f"FROM {self._staging_schema} "                                 # All episodes in the episodic buffer is unencoded by definition
             "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
             [batch_size, offset]                                            # Process episodes by batch size
