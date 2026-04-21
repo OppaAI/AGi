@@ -29,8 +29,8 @@ TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if
 """
 
 # System libraries
-from dataclasses import dataclass, field    # For defining memory schema types
-from enum import Enum                       # For defining memory schema types
+from dataclasses import dataclass, field    # Dataclass for EngramTrace/EngramSchema, field for default_factory
+from enum import Enum                       # Enum base for EngramModality type definitions
 import numpy as np                          # For fast vector math — normalization and cosine similarity
 import sqlite3                              # For engram connection factory
 import struct                               # For packing/unpacking semantic vectors (fp32)
@@ -41,31 +41,31 @@ class EngramModality(Enum):
     """
     Defines the modality of engram memory traces (ie. the type of data stored).
     """
-    TEXT    = 'TEXT'        # String storage for lexical recall and encoding
-    INTEGER = 'INTEGER'     # Integer storage for primary key and other integer values
-    REAL    = 'REAL'        # Real-number storage for storing encoding vector values (floats)
-    BLOB    = 'BLOB'        # Blob storage for storing packed semantic vectors
+    TEXT    = 'TEXT'        # Maps to SQLite TEXT type — stores strings (content, timestamps, dates)
+    INTEGER = 'INTEGER'     # Maps to SQLite INTEGER type — stores whole numbers (primary keys, counts)
+    REAL    = 'REAL'        # Maps to SQLite REAL type — stores floating point numbers (scores, floats)
+    BLOB    = 'BLOB'        # Maps to SQLite BLOB type — stores raw bytes (packed encoding vectors)
 
 @dataclass
 class EngramTrace:
     """
     Define the schema for a single engram trace.
     """
-    label: str                       # Column name in SQL
-    modality: EngramModality         # Maps to SQL type via .value
-    essential: bool = False          # NOT NULL constraint if True
-    baseline: str | None = None      # DEFAULT value — raw SQL if starts with '(', quoted string otherwise
+    label: str                       # The SQL column name — e.g. "content", "timestamp", "encoding"
+    modality: EngramModality         # The SQL column type — calls .value to get the raw string e.g. 'TEXT'
+    essential: bool = False          # If True, adds NOT NULL constraint — column must have a value on insert
+    baseline: str | None = None      # If set, adds DEFAULT — raw SQL expression if starts with '(', quoted string otherwise
  
 @dataclass
 class EngramSchema:
     """
     Define the structure, storage schema, and search capabilities for an engram.
     """
-    storage: list[EngramTrace]                                  # Main engram storage table
-    staging: list[EngramTrace] | None = None                    # Crash-safe buffer table — optional
-    semantic_traces: str | None = None                          # Column name holding the encoding blob for semantic search
-    lexical_traces: list[str] | None = None                     # Columns fed into FTS5 index for keyword search
-    index_traces: list[str] | None = None                       # Columns with a standard B-tree index for fast retrieval
+    storage: list[EngramTrace]                                  # Defines columns for the main episodes table — every cortex needs this
+    staging: list[EngramTrace] | None = None                    # Defines columns for the crash-safe buffer table — optional, EMC uses it, SMC may not
+    semantic_traces: str | None = None                          # Names the BLOB column that holds the encoding vector — tells MSB which column to KNN search against
+    lexical_traces: list[str] | None = None                     # Names the text columns to feed into FTS5 — tells MSB what to keyword-search
+    index_traces: list[str] | None = None                       # Names columns to put a B-tree index on — speeds up WHERE/ORDER BY on those columns
 
 class EncodingEngine:
     """
