@@ -64,10 +64,9 @@ class EngramSchema:
     storage: list[EngramTrace]                                  # Main engram storage table
     staging: list[EngramTrace] | None = None                    # Crash-safe buffer table — optional
     semantic_traces: str | None = None                          # Column name holding the encoding blob for semantic search
-    lexical_traces: list[str] | None = None                     # Columns fed into FTS5 index for lexical search
+    lexical_traces: list[str] | None = None                     # Columns fed into FTS5 index for keyword search
     index_traces: list[str] | None = None                       # Columns with a standard B-tree index for fast retrieval
 
-# ===== ENCODING ENGINE =====
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -78,7 +77,6 @@ class EncodingEngine:
 
     def __init__(self, logger, encoding_engine: str, cache_limit: int = 256, imprint_limit: int = 300) -> None:
         """
-        Initialize the encoding engine with a logger.
         This method sets up the encoding engine core and cache for recent encodings.
         
         Args:
@@ -87,38 +85,36 @@ class EncodingEngine:
             cache_limit     (int): Maximum number of entries in the LRU encoding cache
             imprint_limit   (int): Maximum number of characters to hash for the imprint
         """
-        self.logger                         = logger                # Retrieve logger from CNC for logging operations
-        self.encoding_engine: str           = encoding_engine       # Store the model name for dynamic formatting during encoding
-        self.cache_limit: int               = cache_limit           # Maximum number of imprints to hold in cache to control memory usage
-        self.imprint_limit: int             = imprint_limit         # Maximum length of the imprint to control cache hit rate vs false positive risk
-        self._core                          = None                  # For holding the encoding engine instance for semantic encoding
-        self._cache: dict[str, list[float]] = {}                    # For holding the cache of recent encodings to avoid redundant encoding
-
-        try:                                                                        # Attempt to activate the encoding engine
-            from sentence_transformers import SentenceTransformer                   # Load inferencing component of encoding engine
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of encoding engine activation
-            self._core = SentenceTransformer(self.encoding_engine)                  # Activate the requested model
-            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of encoding engine
-        except ImportError:                                                         # If missing the inferencer component of encoding engine,
-            self.logger.warning(                                                    # Log the warning about encoding engine being offline and falling back to lexical retrieval
+        self.logger                         = logger                # Logger passed in from cortex modules
+        self.encoding_engine: str           = encoding_engine       # Model name — used in SentenceTransformer() call
+        self.cache_limit: int               = cache_limit           # Max cache entries before LRU eviction
+        self.imprint_limit: int             = imprint_limit         # Chars hashed for cache key — shorter = more hits, more collisions
+        self._core                          = None                  # None until SentenceTransformer loads successfully
+        self._cache: dict[str, list[float]] = {}                    # imprint → encoded vector
+        
+        try:                                                                        # Attempt to activate SentenceTransformer
+            from sentence_transformers import SentenceTransformer                   # Deferred import — optional dependency
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Log the start of SentenceTransformer activation
+            self._core = SentenceTransformer(self.encoding_engine)                  # Blocks until model loads into RAM
+            self.logger.info("✅ Encoding Engine activated")                        # Log the successful activation of SentenceTransformer
+        except ImportError:                                                         # Package missing — falls back to keyword search only
+            self.logger.warning(                                                    # Log the warning of SentenceTransformer being offline and falling back to keyword search only
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                      # If other errors during activation,
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # Log the error during activation of encoding engine
-
+        except Exception as e:                                                      # Model load failed — bad path, corrupt weights, OOM
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")
+            
     @property
     def is_available(self) -> bool:
         """
-        Check if encoding engine is loaded successfully and ready for encoding.
-        This is used by memory cortices to determine whether semantic search is available,
-        or to fall back to solely lexical search when the engine is unavailable.
+        Returns True if encoding engine loaded successfully and ready for encoding.
 
         Returns:
             bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
         """
-        return self._core is not None            # Encoding engine is available if the core was successfully loaded during initialization
+        return self._core is not None            # True only if SentenceTransformer loaded without error
 
     def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
@@ -126,7 +122,7 @@ class EncodingEngine:
         Uses caching to avoid redundant encoding of identical or similar texts.
         Caches recent encodings to speed up subsequent recall.
         If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting the caller to fall back to lexical recall.
+        prompting the caller to fall back to lexical search.
         
         Args:
             trace (str): The given memory trace to encode (e.g. episode content).
@@ -134,36 +130,33 @@ class EncodingEngine:
                              This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
 
         Returns:
-            list[float]: The semantic encoding vector for the input trace, 
-                         or an empty list if the encoding engine is unavailable.
-                         Empty list signals the caller to fall back to lexical recall.
+            list[float]: The semantic encoding vector for the input trace
         """
-        if not self.is_available:                                                       # If encoding engine is unavailable,
-            self.logger.debug(                                                          # Log the debug message about encoding engine being unavailable
+        if not self.is_available:                                                       # Caller checks this — defensive guard
+            self.logger.debug(                                                          # Log the SentenceTransformer being unavailable
                 "Encoding engine unavailable — semantic search inactive"
             )
-            return []                                                                   # Return empty list to signal that semantic recall cannot be performed
+            return []                                                                   # Empty list signals caller to fall back to lexical
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique imprint hash and label the encoding type
-        if imprint in self._cache:                                                      # If the imprint is already in the cache,
-            return self._cache[imprint]                                                 # Return the encoded vector in the cache
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique cache key and label the encoding type
+        if imprint in self._cache:                                                      # If the cache key is already in the cache,
+            return self._cache[imprint]                                                 # Cache hit — skip encoding
 
-        try:                                                                            # Attempt to encode the trace
-            prompt_name = "query" if is_cue else "document"                             # Assign the appropriate prompt name based on whether the trace is a cue or an episode to be encoded
-            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Encode the trace using the encoding engine
-            encoded_trace = unit_normalize(encoded_trace)                               # Unit-normalize for cosine-equivalent L2 search
+        try:                                                                            # Attempt to embed the query or engram vector
+            prompt_name = "query" if is_cue else "document"                             # Asymmetric embedding — query and engram use different embedding call
+            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Returns np.ndarray — .tolist() for JSON-safe float list
+            encoded_trace = unit_normalize(encoded_trace)                               # Normalize before storage — cosine sim via L2 distance requires unit vectors
 
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= self.cache_limit:                                    # If the cache is over the limit,
-                decayed_imprint: str = next(iter(self._cache))                          # Retrieve the decayed imprint (oldest entry)
-                del self._cache[decayed_imprint]                                        # Remove the decayed entry from the cache
-            self._cache[imprint] = encoded_trace                                        # Add the new entry to the cache
-            return encoded_trace                                                        # Return the encoded vector
-        except Exception as e:                                                          # If encoding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # Log the debug message about encoding error
+            if len(self._cache) >= self.cache_limit:                                    # If cache is over the limit,
+                decayed_imprint: str = next(iter(self._cache))                          # dict preserves insertion order — first key is oldest
+                del self._cache[decayed_imprint]                                        # Evict oldest before adding new entry
+            self._cache[imprint] = encoded_trace                                        # Add the new entry to cache
+            return encoded_trace                                                        # Return the embedded vector
+        except Exception as e:                                                          # If embedding fails,
+            self.logger.debug(f"Encoding error: {e}")                                   # Log the embedding error
             return []                                                                   # Return empty list to signal that semantic recall cannot be performed
-
-# ===== VECTOR OPERATIONS =====
+            
 def unit_normalize(vector: list[float]) -> list[float]:
     """
     Ensure encoding engine conduct semantic search properly by
