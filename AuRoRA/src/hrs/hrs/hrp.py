@@ -41,12 +41,12 @@ class AGi:                                       # Amazing Grace infrastructure
         ENGRAM_COMPLEX: str    = "engram.db"     # [STATIC]    Engram complex where long-term memories storage
         UNITS_PER_CHUNK: int    = 4              # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
 
-        class SMC:                                                     # Semantic Memory Cortex
-            ENCODING_ENGINE: str        = "google/embeddinggemma-300m-qat-q4_0-unquantized" # [STATIC] Encoding engine for semantic memory
-            ENCODING_DIM: int           = 768                          # [STATIC]  Dimensionality of the encoding vectors from the encoding engine
+        class SMC:                               # Semantic Memory Cortex
+            ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5" # [STATIC] Encoding engine for semantic memory
+            ENCODING_DIM: int           = 768    # [STATIC]  Dimensionality of the encoding vectors from the encoding engine
 
         class EMC:                               # Episodic Memory Cortex
-            ENCODING_ENGINE: str        = "google/embeddinggemma-300m-qat-q4_0-unquantized"  # [STATIC] Encoding engine for episodic memory
+            ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5"  # [STATIC] Encoding engine for episodic memory
             ENCODING_CACHE_LIMIT: int   = 256    # [INTRINSIC] Maximum number of imprints held in encoding cache to control memory usage
             ENCODING_CYCLE_TIMEOUT: float = 30.0 # [INTRINSIC] Time period for theta rhythm to wake up (Currently not used, triggered only with new PMT)
             ENCODING_IMPRINT_LIMIT: int = 300    # [INTRINSIC] Maximum length of imprints to control cache hit rate vs false positive risk

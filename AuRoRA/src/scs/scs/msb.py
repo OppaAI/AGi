@@ -138,13 +138,13 @@ class EncodingEngine:
             )
             return []                                                                   # Empty list signals caller to fall back to lexical
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Create a unique cache key and label the encoding type
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Cache key — hash() sufficient, cache is session-scoped not persistent
         if imprint in self._cache:                                                      # If the cache key is already in the cache,
             return self._cache[imprint]                                                 # Cache hit — skip encoding
 
         try:                                                                            # Attempt to embed the query or engram vector
-            prompt_name = "query" if is_cue else "document"                             # Asymmetric embedding — query and engram use different embedding call
-            encoded_trace: list[float] = self._core.encode(trace, prompt_name=prompt_name).tolist() # Returns np.ndarray — .tolist() for JSON-safe float list
+            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE asymmetric — cue gets instruction prefix, episode encodes as-is
+            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # Model inference — returns np.ndarray, .tolist() converts to float list
             encoded_trace = unit_normalize(encoded_trace)                               # Normalize before storage — cosine sim via L2 distance requires unit vectors
 
             # Keep cache small — evict oldest if over the encoding cache limit
@@ -159,29 +159,20 @@ class EncodingEngine:
             
 def unit_normalize(vector: list[float]) -> list[float]:
     """
-    Ensure encoding engine conduct semantic search properly by
-    unit-normalizing a vector so that L2 distance search is equivalent to cosine similarity.
-
-    sqlite-vec uses Euclidean (L2) distance, not cosine similarity. For unit vectors,
-    cosine_sim(a, b) == 1 - L2(a, b)² / 2, so normalizing before insert/query makes
-    L2 nearest-neighbor search semantically equivalent to cosine nearest-neighbor search.
-
-    BGE-base outputs near-unit vectors, but normalization may be eroded by dtype
-    conversion or serialization. This function is a zero-cost safety net: already
-    unit-normalized vectors (‖v‖ ≈ 1.0 within 1e-6) are returned as-is. Zero vectors
-    are returned unchanged to avoid division by zero.
+    Unit-normalize a vector so L2 distance search is cosine-equivalent.
+    Already-normalized vectors and zero vectors are returned unchanged.
 
     Args:
-        vector: A float vector, e.g. from an embedding model.
+        vector (list[float]): Vector to normalize
 
     Returns:
-        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero.
+        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero
     """
-    vector_array = np.array(vector)                                                # Convert to NumPy array for fast vector math
-    vector_mag = np.linalg.norm(vector_array)                                      # Compute L2-norm - Euclidean magnitude of the vector
-    if abs(vector_mag - 1.0) < 1e-6:                                               # If the vector is already unit-normalized,
-        return vector                                                              # Return the original vector as-is
-    return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Return unit-normalized vector if magnitude larger than 0, otherwise return original vector
+    vector_array = np.array(vector)                                                # list[float] → ndarray for vectorized math
+    vector_mag = np.linalg.norm(vector_array)                                      # L2-norm — Euclidean length of the vector
+    if abs(vector_mag - 1.0) < 1e-6:                                               # Already unit — dtype conversion rarely erodes past 1e-6
+        return vector                                                              # Return original — no copy needed
+    return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Zero vector guard — division by zero would corrupt the engram
 
 def pack_vector(vector: list[float]) -> bytes:
     """
@@ -194,7 +185,7 @@ def pack_vector(vector: list[float]) -> bytes:
     Returns:
         bytes: Binary blob of fp32 values.
     """
-    return struct.pack(f"{len(vector)}f", *vector)                              # Pack encoded vector as fp32 binary for engram storage
+    return struct.pack(f"{len(vector)}f", *vector)              # fp32 little-endian binary — matches sqlite-vec storage format
 
 def unpack_vector(blob: bytes, dim: int) -> list[float]:
     """
@@ -208,7 +199,7 @@ def unpack_vector(blob: bytes, dim: int) -> list[float]:
     Returns:
         list[float]: Unpacked float vector.
     """
-    return list(struct.unpack(f"{dim}f", blob))                                 # Unpack fp32 binary blob back into a float vector
+    return list(struct.unpack(f"{dim}f", blob))                 # Dim must match original vector length — mismatched dim silently corrupts
 
 def semantic_match(cue: list[float], episode: list[float]) -> float:
     """
