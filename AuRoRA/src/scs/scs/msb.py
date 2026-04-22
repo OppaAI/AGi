@@ -29,43 +29,43 @@ TODO: migrate pack_vector, unpack_vector, unit_normalize to hrs.py if
 """
 
 # System libraries
-from dataclasses import dataclass, field    # Dataclass for EngramTrace/EngramSchema, field for default_factory
-from enum import Enum                       # Enum base for EngramModality type definitions
-import numpy as np                          # For fast vector math — normalization and cosine similarity
-import sqlite3                              # For engram connection factory
-import struct                               # For packing/unpacking semantic vectors (fp32)
-import re                                   # For lexical cue sanitization
-from pathlib import Path                    # For calculating database size — owned here, never passed back up
+from dataclasses import dataclass, field    # dataclass for EngramTrace/EngramSchema, field for default_factory
+from enum import Enum                       # enum base for EngramModality type definitions
+import numpy as np                          # for fast vector math — normalization and cosine similarity
+import sqlite3                              # for engram connection factory
+import struct                               # for packing/unpacking semantic vectors (fp32)
+import re                                   # for lexical cue sanitization
+from pathlib import Path                    # for calculating database size — owned here, never passed back up
 
 class EngramModality(Enum):
     """
-    Defines the modality of engram memory traces (ie. the type of data stored).
+    Defines the modality of engram memory traces (i.e., the type of data stored).
     """
-    TEXT    = 'TEXT'        # Maps to SQLite TEXT type — stores strings (content, timestamps, dates)
-    INTEGER = 'INTEGER'     # Maps to SQLite INTEGER type — stores whole numbers (primary keys, counts)
-    REAL    = 'REAL'        # Maps to SQLite REAL type — stores floating point numbers (scores, floats)
-    BLOB    = 'BLOB'        # Maps to SQLite BLOB type — stores raw bytes (packed encoding vectors)
+    TEXT    = 'TEXT'        # SQLite TEXT type — stores strings
+    INTEGER = 'INTEGER'     # SQLite INTEGER type — stores whole numbers
+    REAL    = 'REAL'        # SQLite REAL type — stores floating point numbers
+    BLOB    = 'BLOB'        # SQLite BLOB type — stores raw bytes (packed vectors)
 
 @dataclass
 class EngramTrace:
     """
     Define the schema for a single engram trace.
     """
-    label: str                       # The SQL column name — e.g. "content", "timestamp", "encoding"
-    modality: EngramModality         # The SQL column type — calls .value to get the raw string e.g. 'TEXT'
-    essential: bool = False          # If True, adds NOT NULL constraint — column must have a value on insert
-    baseline: str | None = None      # If set, adds DEFAULT — raw SQL expression if starts with '(', quoted string otherwise
+    label: str                       # SQL column name — e.g. "content", "encoding"
+    modality: EngramModality         # SQL column type — .value drops into CREATE TABLE as raw SQL
+    essential: bool = False          # adds NOT NULL constraint if True
+    baseline: str | None = None      # set adds DEFAULT — raw SQL if starts with '(', quoted string otherwise
  
 @dataclass
 class EngramSchema:
     """
     Define the structure, storage schema, and search capabilities for an engram.
     """
-    storage: list[EngramTrace]                                  # Defines columns for the main episodes table — every cortex needs this
-    staging: list[EngramTrace] | None = None                    # Defines columns for the crash-safe buffer table — optional, EMC uses it, SMC may not
-    semantic_traces: str | None = None                          # Names the BLOB column that holds the encoding vector — tells MSB which column to KNN search against
-    lexical_traces: list[str] | None = None                     # Names the text columns to feed into FTS5 — tells MSB what to keyword-search
-    index_traces: list[str] | None = None                       # Names columns to put a B-tree index on — speeds up WHERE/ORDER BY on those columns
+    storage: list[EngramTrace]                      # column defintions for the main storage table
+    staging: list[EngramTrace] | None = None        # column defintions for the crash-safe staging table — optional
+    semantic_traces: str | None = None              # column name holding the encoding BLOB — used for KNN vector search
+    lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
+    index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
 
 class EncodingEngine:
     """
@@ -85,26 +85,26 @@ class EncodingEngine:
             cache_limit     (int): Maximum number of entries in the LRU encoding cache
             imprint_limit   (int): Maximum number of characters to hash for the imprint
         """
-        self.logger                         = logger                # Stores the logger passed in from the cortex — used in encode() and activation logs
-        self.encoding_engine: str           = encoding_engine       # Stores the model name string — passed to SentenceTransformer() below
-        self.cache_limit: int               = cache_limit           # Stores max cache size — checked in encode() before every insert
-        self.imprint_limit: int             = imprint_limit         # Stores max chars to hash — longer text is truncated before hashing to make the cache key
-        self._core                          = None                  # The live SentenceTransformer model — None until load succeeds, encode() checks this before every inference call
-        self._cache: dict[str, list[float]] = {}                    # LRU encoding cache — maps imprint hash → float vector, avoids re-encoding identical or similar text
+        self.logger                         = logger                # logger from cortex — used throughout this class
+        self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
+        self.cache_limit: int               = cache_limit           # max cache entries before LRU eviction
+        self.imprint_limit: int             = imprint_limit         # max chars hashed for cache key
+        self._core                          = None                  # live SentenceTransformer model — None until load succeeds
+        self._cache: dict[str, list[float]] = {}                    # LRU cache — maps imprint hash → float vector
         
-        try:                                                                        # Attempt to activate SentenceTransformer
-            from sentence_transformers import SentenceTransformer                   # Deferred import — optional dependency, avoids hard crash if package is missing
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # Logs before the blocking load — model can take seconds on Jetson
-            self._core = SentenceTransformer(self.encoding_engine)                  # Loads model weights into RAM — blocks until complete, sets _core to the live model
-            self.logger.info("✅ Encoding Engine activated")                        # Only reached if load succeeded — _core is now usable
-        except ImportError:                                                         # Triggers if sentence_transformers package is not installed
-            self.logger.warning(                                                    # Warns but does not crash — cortex continues with lexical-only recall
+        try:                                                                        # attempt to activate SentenceTransformer
+            from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # logs before the blocking load
+            self._core = SentenceTransformer(self.encoding_engine)                  # loads model weights into RAM — blocks until complete
+            self.logger.info("✅ Encoding Engine activated")                        # only reached if load succeeded
+        except ImportError:                                                         # triggers if sentence_transformers package not installed
+            self.logger.warning(                                                    # package not installed — _core stays None
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                      # Catches everything else — bad model path, corrupted weights, out of memory
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # Logs the specific failure reason — _core stays None, same fallback behavior
+        except Exception as e:                                                      # bad model path, corrupted weights, OOM — _core stays None
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # logs specific failure with reason
             
     @property
     def is_available(self) -> bool:
@@ -114,7 +114,7 @@ class EncodingEngine:
         Returns:
             bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
         """
-        return self._core is not None            # Checks if SentenceTransformer loaded — None means load failed or was never attempted, any other value means model is live
+        return self._core is not None            # True only if SentenceTransformer loaded successfully
 
     def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
@@ -132,31 +132,30 @@ class EncodingEngine:
         Returns:
             list[float]: The semantic encoding vector for the input trace
         """
-        if not self.is_available:                                                       # Calls the property above — if _core is None, skip everything and return empty
-            self.logger.debug(                                                          # Log the SentenceTransformer being unavailable
+        if not self.is_available:                                                       # _core is None, skip encoding entirely
+            self.logger.debug(                                                          # log the SentenceTransformer being unavailable
                 "Encoding engine unavailable — semantic search inactive"
             )
-            return []                                                                   # Empty list is the signal to callers — means "fall back to lexical, semantic is offline"
+            return []                                                                   # empty list signals fallback to lexical search
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# Builds cache key — prefixed with 'cue' or 'episode' so the same text encoded for storage vs recall gets separate cache entries
-                                                                                        # trace[:self.imprint_limit] truncates before hashing — only first 300 chars checked, long texts still get cache hits if they share the same opening
-        if imprint in self._cache:                                                      # Looks up the key in the dict — O(1) hash lookup
-            return self._cache[imprint]                                                 # Cache hit — returns the stored vector directly, skips model inference entirely
+        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# cache key — prefixed by types so same text encodes separately as cue vs episode
+        if imprint in self._cache:                                                      # O(1) hash lookup
+            return self._cache[imprint]                                                 # cache hit — skips model inference
 
-        try:                                                                            # Attempt to embed the query or engram vector
-            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE instruction prefix — only applied to recall cues, tells the model this text is a query not a passage
-            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # Runs model inference — prepends prefix if cue, encodes raw if episode, .tolist() converts numpy array → Python float list
-            encoded_trace = unit_normalize(encoded_trace)                              # Normalizes the vector to unit length — required so L2 distance equals cosine similarity in sqlite-vec KNN search
+        try:                                                                            # attempt to embed the query or engram vector
+            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE instruction prefix — applied to recall cues only , not stored episodes
+            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
+            encoded_trace = unit_normalize(encoded_trace)                               # normalizes to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= self.cache_limit:                                    # Cache is full — must evict before inserting or it grows forever
-                decayed_imprint: str = next(iter(self._cache))                          # Gets the first key in the dict — dicts preserve insertion order, so first = oldest entry
-                del self._cache[decayed_imprint]                                        # Removes the oldest entry — makes room for the new one
-            self._cache[imprint] = encoded_trace                                        # Stores the new vector under its imprint key — available for future cache hits
-            return encoded_trace                                                        # Returns the freshly encoded and normalized vector to the caller
-        except Exception as e:                                                          # If embedding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # Logs what went wrong — debug level, not warning, inference errors are transient
-            return []                                                                   # Same empty list signal as the unavailable guard above — caller falls back to lexical
+            if len(self._cache) >= self.cache_limit:                                    # cache full — must evict before inserting
+                decayed_imprint: str = next(iter(self._cache))                          # first key = oldest — dicts preserve insertion order
+                del self._cache[decayed_imprint]                                        # evicts oldest entry
+            self._cache[imprint] = encoded_trace                                        # stores new vector under imprint key
+            return encoded_trace                                                        # returns encoded and normalized vector
+        except Exception as e:                                                          # ff embedding fails,
+            self.logger.debug(f"Encoding error: {e}")                                   # logs encoding errors with reason
+            return []                                                                   # same empty list fallback as unavailable guard
             
 def unit_normalize(vector: list[float]) -> list[float]:
     """
@@ -169,11 +168,11 @@ def unit_normalize(vector: list[float]) -> list[float]:
     Returns:
         list[float]: A unit-normalized copy of vector, or vector itself if already normalized or zero
     """
-    vector_array = np.array(vector)                                                # list[float] → ndarray for vectorized math
-    vector_mag = np.linalg.norm(vector_array)                                      # L2-norm — Euclidean length of the vector
-    if abs(vector_mag - 1.0) < 1e-6:                                               # Already unit — dtype conversion rarely erodes past 1e-6
-        return vector                                                              # Return original — no copy needed
-    return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # Zero vector guard — division by zero would corrupt the engram
+    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
+    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
+    if abs(vector_mag - 1.0) < 1e-6:                                               # tolerance check — exact == 1.0 unreliable with floats
+        return vector                                                              # already unit length — skip normalization
+    return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # divide each element by magnitude → unit vector; zero vector guard
 
 def pack_vector(vector: list[float]) -> bytes:
     """
@@ -186,7 +185,7 @@ def pack_vector(vector: list[float]) -> bytes:
     Returns:
         bytes: Binary blob of fp32 values.
     """
-    return struct.pack(f"{len(vector)}f", *vector)              # fp32 little-endian binary — matches sqlite-vec storage format
+    return struct.pack(f"{len(vector)}f", *vector)              # packs float list into fp32 binary blob — e.g. "384f" for 384 floats
 
 def unpack_vector(blob: bytes, dim: int) -> list[float]:
     """
@@ -200,7 +199,7 @@ def unpack_vector(blob: bytes, dim: int) -> list[float]:
     Returns:
         list[float]: Unpacked float vector.
     """
-    return list(struct.unpack(f"{dim}f", blob))                 # Dim must match original vector length — mismatched dim silently corrupts
+    return list(struct.unpack(f"{dim}f", blob))                 # reverses pack_vector — dim must match original or values corrupt silently
 
 def semantic_match(cue: list[float], episode: list[float]) -> float:
     """
@@ -216,9 +215,9 @@ def semantic_match(cue: list[float], episode: list[float]) -> float:
     Returns:
         float: Semantic relevancy score (0.0 – 1.0).
     """
-    if not cue or not episode or len(cue) != len(episode):                      # Dimension guard — to avoid dimension mismatch or empty
-        return 0.0                                                              # Return 0.0 rather than exception
-    return float(np.dot(np.array(cue), np.array(episode)))                      # Dot product == cosine sim — valid only on unit-normalized vectors
+    if not cue or not episode or len(cue) != len(episode):      # guards empty vectors and dimension mismatch
+        return 0.0                                              # no match rather than exception
+    return float(np.dot(np.array(cue), np.array(episode)))      # dot product == cosine sim on unit-normalized vectors
     
 def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     """
@@ -239,12 +238,12 @@ def connect_engram(gateway: str, logger=None) -> sqlite3.Connection:
     Raises:
         sqlite3.Error: If connection cannot be established.
     """
-    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # check_same_thread=False — allows concurrent access from different threads
-    engram_conn.row_factory = sqlite3.Row                              # Row objects allow column access by name
-    engram_conn.execute("PRAGMA journal_mode=WAL;")                    # WAL — concrrent reads during encoding cycle writes
-    engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # NORMAL — fsync on checkpoint only, not every writes
-    engram_conn.commit()                                               # Commit pragma changes before returning
-    return engram_conn                                                 # Return the configured connection
+    engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # opens SQLite file at given path — check_same_thread=False allows access from multiple threads
+    engram_conn.row_factory = sqlite3.Row                              # rows returned as dict-like objects — columns accessible by name instead of index
+    engram_conn.execute("PRAGMA journal_mode=WAL;")                    # WAL mode — concurrent reads allowed during writes
+    engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # fsync on checkpoint only — faster writes, safe enough for embedded
+    engram_conn.commit()                                               # commit pragma changes before returning
+    return engram_conn                                                 # return the configured connection
 
 def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
     """
@@ -261,20 +260,20 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
     Returns:
         bool: True if engram vector index activated, False otherwise.
     """
-    try:                                                        # Attempt to activate engram vector index
-        import sqlite_vec                                       # Deferred import — optional dependency
-        sqlite_vec.load(engram_conn)                            # Loads vec0 virtual table support into this connection
-        return True                                             # Signal successful activation of sqlite-vec
-    except Exception as e:                                      # If sqlite-vec fails to load,
-        if logger:                                              # If a logger is provided,
-            logger.warning(                                     # Log the fallback to cosine similarity due to engram vector index unavailability
+    try:                                                        # attempt to activate engram vector index
+        import sqlite_vec                                       # deferred import — avoids hard crash if package missing
+        sqlite_vec.load(engram_conn)                            # loads vec0 virtual table support into this connection
+        return True                                             # signals KNN search is available
+    except Exception as e:                                      # if sqlite-vec fails to load,
+        if logger:                                              # if a logger is provided,
+            logger.warning(                                     # log the fallback to cosine similarity due to engram vector index unavailability
                 f"⚠️ engram vector index not available, falling back to unindexed cosine similarity\n"
                 f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
                 f"   Reason: {e}"
             )
-        return False                                            # Signal failed activation — caller falls back to cosine similarity
+        return False                                            # signals caller to fall back to cosine similarity
 
-LEXICAL_FILTER_WORDS = {                                        # Filtered before FTS5 query — common words that match everything and hurt precision
+LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in sanitize_lexical_cue
     "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
     "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
     "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
@@ -295,20 +294,21 @@ def sanitize_lexical_cue(cue: str) -> str:
     Returns:
         str: FTS5-safe quoted token string, or empty string if query is blank.
     """
-    clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # Punctuation → space, lowercase — FTS5 MATCH rejects special chars
-    lexemes = clean_cue.strip().split()                              # Whitespace tokenization — FTS5 handles stemming internally
+    clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # strip punctuation → space, lowercases — FTS5 MATCH rejects special chars
+    lexemes = clean_cue.strip().split()                              # splits on whitespace → list of tokens
     
     # Extract keywords (non-stop-words longer than 1 character)
-    terms = [kw for kw in lexemes if kw not in LEXICAL_FILTER_WORDS and len(kw) > 1]    # Filter stop words and single chars — improves FTS5 precision
+    terms = [kw for kw in lexemes if kw not in LEXICAL_FILTER_WORDS and len(kw) > 1]    # filter stop words and single chars
     
     # Fallback to original lexemes if no terms remain
-    if not terms:                                                    # All words were stop words — fall back to full token list
+    if not terms:                                                    # all words were stop words — fall back to full token list
         terms = lexemes
         
-    if not terms:                                                    # Empty cue — caller skips lexical path
+    if not terms:                                                    # cue was empty or whitespace only — caller skips lexical path
         return ""
 
-    return " OR ".join(f'"{kw}"' for kw in keywords if kw)           # OR join — any keyword match surfaces the episode
+    return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the episode
+
 
 def memory_convergence(
     semantic_results : list[dict],
@@ -343,46 +343,46 @@ def memory_convergence(
                     with 'relevancy' set to normalised RRF score (0.0–1.0)
     """
     # Build rank lookup schemas and episode pool — 0-based, best = 0
-    episode_pool: dict[int, dict] = {}                                        # Union of all candidates from both paths — keyed by episode id
+    episode_pool: dict[int, dict] = {}                                        # union of all candidates from both paths — keyed by episode id
     semantic_rank: dict[int, int] = {}                                        # episode_id → 0-based rank in semantic results
     lexical_rank: dict[int, int] = {}                                         # episode_id → 0-based rank in lexical results
 
-    for rank, episode in enumerate(semantic_results):                         # Iterate through each semantic match results
-        semantic_rank[episode["id"]] = rank                                   # Store semantic rank — 0-based, best = 0
-        episode_pool[episode["id"]] = episode                                 # Add episode to pool for later retrieval
+    for rank, episode in enumerate(semantic_results):                         # enumerate gives 0-based rank alongside each episode
+        semantic_rank[episode["id"]] = rank                                   # stores rank by id — look up during RRF scoring
+        episode_pool[episode["id"]] = episode                                 # add episode to union pool
 
-    for rank, episode in enumerate(lexical_results):                          # Iterate through each lexical match results
-        lexical_rank[episode["id"]] = rank                                    # Store lexical rank — 0-based, best = 0
-        episode_pool.setdefault(episode["id"], episode)                       # Add episode to pool if not already, semantic path takes precedence as default
+    for rank, episode in enumerate(lexical_results):                          # iterate through each lexical match results
+        lexical_rank[episode["id"]] = rank                                    # stores rank by id — looked up during RRF scoring
+        episode_pool.setdefault(episode["id"], episode)                       # setdefault — only add episode if id not already, semantic path takes precedence
 
-    semantic_miss = len(semantic_results)                                     # Penalty rank for episodes absent from semantic results
-    lexical_miss = len(lexical_results)                                       # Penalty rank for episodes absent from lexical results
+    semantic_miss = len(semantic_results)                                     # penalty rank for episodes absent from semantic results
+    lexical_miss = len(lexical_results)                                       # penalty rank for episodes absent from lexical results
     
     # Compute RRF score for each candidate
-    for episode in list(episode_pool.values()):                               # Iterate through a clone of episode pool — # list() — snapshot prevents mutation during iteration
-        episode = dict(episode)                                               # dict() — clone prevents mutating the original pool entry
-        episode["rrf_score"] = (                                              # Calculate rrf score — RRF formula: 1/(k+rank_semantic) + 1/(k+rank_lexical)
-            1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) +
-            1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))
+    for episode in list(episode_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
+        episode = dict(episode)                                               # dict() clone entry — prevents mutating the original pool entry
+        episode["rrf_score"] = (                                              # RRF formula — higher score = stronger combined rank
+            1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) + # .get() returns penalty rank if episode missing from semantic
+            1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))     # .get() returns penalty rank if episode missing from lexical
         )
-        episode_pool[episode["id"]] = episode                                 # Replace original episode entry with rrf score added
+        episode_pool[episode["id"]] = episode                                 # writes cloned episode with rrf_score back into pool
 
     # Sort descending by RRF score
-    sorted_episodes = sorted(episode_pool.values(),                           # Sort descending — highest RRF score first
-                             key=lambda episode: episode["rrf_score"], 
-                             reverse=True)
+    sorted_episodes = sorted(episode_pool.values(),                           # sorts all candidates by rrf_score descending
+                             key=lambda episode: episode["rrf_score"],        # uses rrf_score as the sorting key
+                             reverse=True)                                    # sorts in descending order
 
     # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-    max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # Computing best RRF score for normalization — guard against empty results
+    max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # best score for normalization — guard against empty list
  
-    for episode in sorted_episodes[:recall_limit]:                            # Surface top episodes up to recall limit
-        episode["relevancy"] = episode["rrf_score"] / max_rrf                 # Normalize RRF score to 0.0–1.0 relevancy
-        episode.pop("_rank", None)                                            # Strip internal rank field before surfacing
-        episode.pop("rrf_score", None)                                        # Strip internal RRF score before surfacing
+    for episode in sorted_episodes[:recall_limit]:                            # only processes top episodes up to recall limit
+        episode["relevancy"] = episode["rrf_score"] / max_rrf                 # normalize RRF score to 0.0–1.0
+        episode.pop("_rank", None)                                            # strip internal rank field before surfacing to caller
+        episode.pop("rrf_score", None)                                        # strip internal RRF score before surfacing to caller
     
     return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
 
-class EngramStorageBank:
+class MemoryBank:
     """
     Memory Bank (MB) — memory storage bank abstraction layer.
     Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
@@ -404,24 +404,25 @@ class EngramStorageBank:
 
     def __init__(
         self,
+        logger,
         memory_type: str,
         engram_conn: sqlite3.Connection,
         engram_schema: EngramSchema,
         engram_dim: int,
         engram_index: bool,
-        logger,
     ) -> None:
 
-        self._storage_schema = f"{memory_type}_storage"                 # Schema of engram storage
-        self._staging_schema = f"{memory_type}_staging"                 # Schema of staging buffer
-        self._vector_schema  = f"{memory_type}_vector"                  # Schema of semantic search index
-        self._lexical_schema = f"{memory_type}_lexical"                 # Schema of lexical search index
+        self.logger        = logger                             # logger instance passed from caller
 
-        self._conn         = engram_conn
-        self._schema       = engram_schema                              # Store the engram schema for dynamic table generation
-        self._engram_dim   = engram_dim
-        self._engram_index = engram_index
-        self.logger        = logger
+        self._storage_schema = f"{memory_type}_storage"         # table name for main storge
+        self._staging_schema = f"{memory_type}_staging"         # table name for crash-safe buffer
+        self._vector_schema  = f"{memory_type}_vector"          # virtual table name for KNN search
+        self._lexical_schema = f"{memory_type}_lexical"         # virtual table name for FTS5 search
+        
+        self._conn         = engram_conn                        # open SQLite connection — shared across all class methods
+        self._schema       = engram_schema                      # injected schema — drives dynamic table generation
+        self._engram_dim   = engram_dim                         # vector dimension — used in vec0 CREATE VIRTUAL TABLE
+        self._engram_index = engram_index                       # True if sqlite-vec loaded — gates vector table creation and KNN search
 
     # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -431,7 +432,16 @@ class EngramStorageBank:
         This method dynamically creates tables and indexes based on the injected EngramSchema.
         """
         try:
-            # 1. Build Staging Table (if defined)
+
+            # 1. Build Storage Table
+            storage_cols = self._build_columns_sql(self._schema.storage)
+            self._conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._storage_schema} (
+                    {storage_cols}
+                )
+            """)
+   
+            # 2. Build Staging Table (if defined)
             if self._schema.staging:
                 staging_cols = self._build_columns_sql(self._schema.staging)
                 self._conn.execute(f"""
@@ -439,14 +449,6 @@ class EngramStorageBank:
                         {staging_cols}
                     )
                 """)
-
-            # 2. Build Storage Table
-            storage_cols = self._build_columns_sql(self._schema.storage)
-            self._conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self._storage_schema} (
-                    {storage_cols}
-                )
-            """)
 
             # 3. Build Indexes
             if self._schema.index_traces:
