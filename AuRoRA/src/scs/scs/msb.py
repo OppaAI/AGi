@@ -116,28 +116,26 @@ class EncodingEngine:
     @property
     def is_available(self) -> bool:
         """
-        Returns the availability of the encoding engine.
-
+        Returns True if the encoding engine is loaded and ready.
+    
         Returns:
-            bool: True if ready for encoding, False if failed to load (e.g. missing inferencing component).
+            bool: True if ready for encoding, False if failed to load.
         """
         return self._core is not None            # True only if SentenceTransformer loaded successfully
 
     def encode(self, trace: str, is_cue: bool = False) -> list[float]:
         """
-        Encodes the given memory trace into a semantic vector for storage or recall.
-        Uses caching to avoid redundant encoding of identical or similar texts.
+        Encodes a memory trace into a semantic vector for storage or recall.
         Primes recent encodings to speed up subsequent recall.
-        If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
-        prompting the caller to fall back to lexical search.
+        Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical search.
         
         Args:
-            trace (str): The given memory trace to encode (e.g. episode content).
-            is_cue (bool): Whether the trace is a recall cue (True) or an episode to be stored (False).
-                             This allows for separate caching of cue and episode encodings, which may have different patterns of repetition.
+        trace  (str) : Memory trace to encode — episode content or recall cue
+        is_cue (bool): If True, prepends BGE instruction prefix before encoding — cues and episodes
+                       encode differently so identical text gets separate prime entries
 
         Returns:
-            list[float]: The semantic encoding vector for the input trace
+            list[float]:  Semantic encoding vector, or empty list if engine unavailable
         """
         if not self.is_available:                                                       # _core is None, skip encoding entirely
             self.logger.debug(                                                          # log the SentenceTransformer being unavailable
@@ -145,22 +143,22 @@ class EncodingEngine:
             )
             return []                                                                   # empty list signals fallback to lexical search
 
-        prime_key = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.prime_key_limit])}"# cache key — prefixed by types so same text encodes separately as cue vs episode
-        if prime_key in self._prime:                                                      # O(1) hash lookup
-            return self._prime[prime_key]                                                 # cache hit — skips model inference
+        prime_key = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.prime_key_limit])}"# prime key — prefixed by types so same text encodes separately as cue vs episode
+        if prime_key in self._prime:                                                      # O(1) dict lookup
+            return self._prime[prime_key]                                                 # prime hit — skips model inference
 
         try:                                                                            # attempt to embed the query or engram vector
-            cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE instruction prefix — applied to recall cues only , not stored episodes
+            cue_prefix = "Represent this sentence for searching relevant passages: "    # BGE instruction prefix — applied to recall cues only , not stored episodes
             encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
             encoded_trace = normalize_vector(encoded_trace)                               # normalizes to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
-            if len(self._prime) >= self.prime_limit:                                    # cache full — must evict before inserting
+            if len(self._prime) >= self.prime_limit:                                    # prime full — must evict before inserting
                 decayed_prime_key: str = next(iter(self._prime))                          # first key = oldest — dicts preserve insertion order
                 del self._prime[decayed_prime_key]                                        # evicts oldest entry
             self._prime[prime_key] = encoded_trace                                        # stores new vector under prime key
             return encoded_trace                                                        # returns encoded and normalized vector
-        except Exception as e:                                                          # ff embedding fails,
+        except Exception as e:                                                          # if embedding fails,
             self.logger.debug(f"Encoding error: {e}")                                   # logs encoding errors with reason
             return []                                                                   # same empty list fallback as unavailable guard
             
