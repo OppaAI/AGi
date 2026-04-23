@@ -16,17 +16,19 @@ connection strategy, and retrieval fusion logic are defined once and
 shared — not duplicated across every cortex that needs them.
 
 Terminology:
-    blueprint   — EngramSchema instance defining the structure of a memory bank
-    encoding    — semantic vector representation of a memory trace
-    engram      — a single stored memory trace in the engram store
-    FTS5        — SQLite full-text search for lexical pattern retrieval
-    memory bank — the persistent storage layer holding all engrams for a cortex
-    RRF         — Reciprocal Rank Fusion — fuses semantic and lexical ranked
-                  results into a single relevancy-ordered list
-    transcript  — SQL column definition string generated from a blueprint
-    unit vector — L2-normalized vector; cosine similarity becomes equivalent
-                  to L2 distance, enabling sqlite-vec KNN search
-
+    blueprint       — EngramSchema instance defining the structure of a memory bank
+    encoding        — semantic vector representation of a memory trace
+    engram          — one physical stored memory record
+    engram complex  — the SQLite database holding all engrams across cortices
+    FTS5            — SQLite full-text search for lexical pattern retrieval
+    memory          — the contextual meaning of an engram
+    memory bank     — the abstraction layer managing the engram complex
+    RRF             — Reciprocal Rank Fusion — fuses semantic and lexical ranked
+                      results into a single relevancy-ordered list
+    transcript      — SQL column definition string generated from a blueprint
+    unit vector     — L2-normalized vector; cosine similarity becomes equivalent
+                      to L2 distance, enabling sqlite-vec KNN search
+                  
 TODO: migrate pack_vector, unpack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
 """
