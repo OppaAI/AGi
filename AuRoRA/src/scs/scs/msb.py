@@ -16,11 +16,14 @@ connection strategy, and retrieval fusion logic are defined once and
 shared — not duplicated across every cortex that needs them.
 
 Terminology:
+    blueprint   — EngramSchema instance defining the structure of a memory bank
     encoding    — semantic vector representation of a memory trace
-    engram      — the persistent memory store for a cortex
+    engram      — a single stored memory trace in the engram store
     FTS5        — SQLite full-text search for lexical pattern retrieval
+    memory bank — the persistent storage layer holding all engrams for a cortex
     RRF         — Reciprocal Rank Fusion — fuses semantic and lexical ranked
                   results into a single relevancy-ordered list
+    transcript  — SQL column definition string generated from a blueprint
     unit vector — L2-normalized vector; cosine similarity becomes equivalent
                   to L2 distance, enabling sqlite-vec KNN search
 
@@ -251,7 +254,7 @@ def activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
     Returns True if successfully activated, False on failure.
     
     Vec0 virtual tables provide L2 distance KNN search over encoded episodes.
-    Graceful fallback to Python cosine similarity if index unavailable.
+    Graceful fallback to cosine similarity if index unavailable.
     
     Args:
         engram_conn: An open engram connection.
@@ -420,13 +423,13 @@ class MemoryBank:
         self._lexical_schema = f"{memory_type}_lexical"         # virtual table name for FTS5 search
         
         self._conn         = engram_conn                        # open SQLite connection — shared across all class methods
-        self._schema       = engram_schema                      # injected schema — drives dynamic table generation
+        self._blueprint    = engram_schema                      # injected schema blueprint — drives dynamic table generation
         self._engram_dim   = engram_dim                         # vector dimension — used in vec0 CREATE VIRTUAL TABLE
         self._engram_index = engram_index                       # True if sqlite-vec loaded — gates vector table creation and KNN search
 
     # ── Schema ────────────────────────────────────────────────────────────────
 
-    def init_schema(self) -> None:
+    def build_schema(self) -> None:
         """
         Initialize the schema of the engram.
         This method dynamically creates tables and indexes based on the injected EngramSchema.
@@ -434,59 +437,58 @@ class MemoryBank:
         try:
 
             # 1. Build Storage Table
-            storage_cols = self._build_columns_sql(self._schema.storage)
-            self._conn.execute(f"""
+            storage_transcript = self._transcribe_traces(self._blueprint.storage)            # converts main storage EngramTrace list → SQL column definition string
+            self._conn.execute(f"""                                                          # create table according to the given blueprint
                 CREATE TABLE IF NOT EXISTS {self._storage_schema} (
-                    {storage_cols}
+                    {storage_transcript}
                 )
             """)
    
             # 2. Build Staging Table (if defined)
-            if self._schema.staging:
-                staging_cols = self._build_columns_sql(self._schema.staging)
-                self._conn.execute(f"""
+            if self._blueprint.staging:                                                       # staging is optional — not all cortices need a buffer
+                staging_transcript = self._transcribe_traces(self._blueprint.staging)         # converts staging EngramTrace list → SQL column definition string
+                self._conn.execute(f"""                                                       # create table according to the given blueprint
                     CREATE TABLE IF NOT EXISTS {self._staging_schema} (
-                        {staging_cols}
+                        {staging_transcript}
                     )
                 """)
 
             # 3. Build Indexes
-            if self._schema.index_traces:
-                for trace in self._schema.index_traces:
-                    self._conn.execute(f"""
+            if self._blueprint.index_traces:                                                   # optional — only if cortex defined index columns
+                for trace in self._blueprint.index_traces:                                     # one B-tree index per column
+                    self._conn.execute(f"""                                                    # create index for fast retrieval
                         CREATE INDEX IF NOT EXISTS idx_{self._storage_schema}_{trace}
                         ON {self._storage_schema}({trace})
                     """)
-            
-            self._conn.commit()
+            self._conn.commit()                                                                # commits tables and indexes together
 
             # 4. Build Vector Search Virtual Table
-            if self._engram_index and self._schema.semantic_traces:
-                semantic_col = self._schema.semantic_traces
-                self._conn.execute(f"""
+            if self._engram_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
+                semantic_col = self._blueprint.semantic_traces                                 # column name holding the encoding BLOB
+                self._conn.execute(f"""                                                        # creates vec0 virtual table for KNN search
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
                         {semantic_col} FLOAT[{self._engram_dim}]
                     )
                 """)
-                self._conn.commit()
-                self.logger.debug(f"EMC engram vector index initialized for {self._vector_schema}")
+                self._conn.commit()                                                            # commits the virtual table to the memory bank
+                self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")    # log the successful initialization of engram vector index
 
             # 5. Build Lexical Search Virtual Table (FTS5)
-            if self._schema.lexical_traces:
-                lexical_cols = ", ".join(self._schema.lexical_traces)
-                self._conn.execute(f"""
+            if self._blueprint.lexical_traces:                                                 # only if cortex defined lexical columns
+                lexical_transcript = ", ".join(self._blueprint.lexical_traces)                 # joins column names into comma-separated string for FTS5 definition
+                self._conn.execute(f"""                                                        # creates FTS5 virtual table for keyword search
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._lexical_schema} USING fts5(
-                       {lexical_cols},
+                       {lexical_transcript},
                        tokenize='porter unicode61'
                     )
                 """)
-                self._conn.commit()
+                self._conn.commit()                                                            # commits the virtual table to the memory bank
                 
-        except sqlite3.Error as e:
-            self.logger.error(f"Engram schema initialization failed: {e}")
-            raise
+        except sqlite3.Error as e:                                                             # if error occurs during building schema
+            self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
+            raise                                                                              # re-raises — schema failure is unrecoverable, cortex cannot function
 
-    def _build_columns_sql(self, traces: list[EngramTrace]) -> str:
+    def _transcribe_traces(self, traces: list[EngramTrace]) -> str:
         """Helper to generate SQL column definitions from a list of EngramTraces."""
         columns = []
         for trace in traces:
@@ -602,7 +604,7 @@ class MemoryBank:
             encoding_blob : Binary encoding blob of the episode
         """
         conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
-            f"INSERT INTO {self._vector_schema} (rowid, {self._schema.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
+            f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
             [episode_id, encoding_blob],                                        # With the episode ID and encoding
         )
 
@@ -617,7 +619,7 @@ class MemoryBank:
             content    : Raw content of the episode
         """
         conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
-            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._schema.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
+            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
             [episode_id, content],                                              # With the episode ID and content
         )
 
@@ -642,7 +644,7 @@ class MemoryBank:
                     ev.distance
                 FROM {self._vector_schema} ev
                 JOIN {self._storage_schema} e ON e.id = ev.rowid
-                WHERE ev.{self._schema.semantic_traces} MATCH ?
+                WHERE ev.{self._blueprint.semantic_traces} MATCH ?
                 AND k = ?
                 ORDER BY ev.distance
                 """,
