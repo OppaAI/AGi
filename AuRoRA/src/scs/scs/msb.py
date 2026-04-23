@@ -23,6 +23,8 @@ Terminology:
     FTS5            — SQLite full-text search for lexical pattern retrieval
     memory          — the contextual meaning of an engram
     memory bank     — the abstraction layer managing the engram complex
+    prime           — LRU encoding cache mapping prime keys to encoding vectors
+    prime key       — truncated hash of a memory trace used for prime lookup
     RRF             — Reciprocal Rank Fusion — fuses semantic and lexical ranked
                       results into a single relevancy-ordered list
     transcript      — SQL column definition string generated from a blueprint
@@ -44,7 +46,7 @@ from pathlib import Path                    # for calculating database size — 
 
 class EngramModality(Enum):
     """
-    Defines the modality of engram memory traces (i.e., the type of data stored).
+    Defines the modality of a single trace (i.e., the type of data stored).
     """
     TEXT    = 'TEXT'        # SQLite TEXT type — stores strings
     INTEGER = 'INTEGER'     # SQLite INTEGER type — stores whole numbers
@@ -54,7 +56,7 @@ class EngramModality(Enum):
 @dataclass
 class EngramTrace:
     """
-    Define the schema for a single engram trace.
+    Defines a single trace in an engram blueprint.
     """
     label: str                       # SQL column name — e.g. "content", "encoding"
     modality: EngramModality         # SQL column type — .value drops into CREATE TABLE as raw SQL
@@ -64,7 +66,7 @@ class EngramTrace:
 @dataclass
 class EngramSchema:
     """
-    Define the structure, storage schema, and search capabilities for an engram.
+    Defines the full structure of an engram complex's trace storage and search indexes.
     """
     storage: list[EngramTrace]                      # column defintions for the main storage table
     staging: list[EngramTrace] | None = None        # column defintions for the crash-safe staging table — optional
@@ -76,26 +78,26 @@ class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
     Shared across EMC, SMC, and PMC — loaded once per cortex initialization.
-    Primes recent encodings to avoid redundant encoding of identical or similar episodes
+    Primes recent encodings to avoid redundant encoding of identical or similar memory traces
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger, encoding_engine: str, cache_limit: int = 256, imprint_limit: int = 300) -> None:
+    def __init__(self, logger, encoding_engine: str, prime_limit: int = 256, prime_key_limit: int = 300) -> None:
         """
-        Initializes the encoding engine core and cache for recent encodings.
+        Initializes the encoding engine core and prime for recent encodings.
         
         Args:
             logger               : Logger instance for logging encoding engine operations
             encoding_engine (str): The specific embedding model to load (e.g. from HRP)
-            cache_limit     (int): Maximum number of entries in the LRU encoding cache
-            imprint_limit   (int): Maximum number of characters to hash for the imprint
+            prime_limit (int)    : Maximum number of entries in the LRU encoding prime
+            prime_key_limit(int)    : Maximum number of characters to hash for the prime_key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
-        self.cache_limit: int               = cache_limit           # max cache entries before LRU eviction
-        self.imprint_limit: int             = imprint_limit         # max chars hashed for cache key
+        self.prime_limit: int               = prime_limit           # max cache entries before LRU eviction
+        self.prime_key_limit: int             = prime_key_limit         # max chars hashed for cache key
         self._core                          = None                  # live SentenceTransformer model — None until load succeeds
-        self._cache: dict[str, list[float]] = {}                    # LRU cache — maps imprint hash → float vector
+        self._prime: dict[str, list[float]] = {}                    # LRU cache — maps prime_key hash → float vector
         
         try:                                                                        # attempt to activate SentenceTransformer
             from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
@@ -125,7 +127,7 @@ class EncodingEngine:
         """
         Encodes the given memory trace into a semantic vector for storage or recall.
         Uses caching to avoid redundant encoding of identical or similar texts.
-        Caches recent encodings to speed up subsequent recall.
+        Primes recent encodings to speed up subsequent recall.
         If encoding engine is unavailable, returns an empty list to signal that semantic encoding cannot be performed, 
         prompting the caller to fall back to lexical search.
         
@@ -143,20 +145,20 @@ class EncodingEngine:
             )
             return []                                                                   # empty list signals fallback to lexical search
 
-        imprint = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.imprint_limit])}"# cache key — prefixed by types so same text encodes separately as cue vs episode
-        if imprint in self._cache:                                                      # O(1) hash lookup
-            return self._cache[imprint]                                                 # cache hit — skips model inference
+        prime_key = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.prime_key_limit])}"# cache key — prefixed by types so same text encodes separately as cue vs episode
+        if prime_key in self._prime:                                                      # O(1) hash lookup
+            return self._prime[prime_key]                                                 # cache hit — skips model inference
 
         try:                                                                            # attempt to embed the query or engram vector
             cue_prefix = f"Represent this sentence for searching relevant passages: "   # BGE instruction prefix — applied to recall cues only , not stored episodes
             encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
             encoded_trace = normalize_vector(encoded_trace)                               # normalizes to unit length — required so L2 == cosine sim in sqlite-vec
             
-            # Keep cache small — evict oldest if over the encoding cache limit
-            if len(self._cache) >= self.cache_limit:                                    # cache full — must evict before inserting
-                decayed_imprint: str = next(iter(self._cache))                          # first key = oldest — dicts preserve insertion order
-                del self._cache[decayed_imprint]                                        # evicts oldest entry
-            self._cache[imprint] = encoded_trace                                        # stores new vector under imprint key
+            # Keep prime small — evict oldest if over the encoding prime limit
+            if len(self._prime) >= self.prime_limit:                                    # cache full — must evict before inserting
+                decayed_prime_key: str = next(iter(self._prime))                          # first key = oldest — dicts preserve insertion order
+                del self._prime[decayed_prime_key]                                        # evicts oldest entry
+            self._prime[prime_key] = encoded_trace                                        # stores new vector under prime key
             return encoded_trace                                                        # returns encoded and normalized vector
         except Exception as e:                                                          # ff embedding fails,
             self.logger.debug(f"Encoding error: {e}")                                   # logs encoding errors with reason
