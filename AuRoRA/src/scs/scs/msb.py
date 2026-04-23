@@ -84,20 +84,20 @@ class EncodingEngine:
 
     def __init__(self, logger, encoding_engine: str, prime_limit: int = 256, prime_key_limit: int = 300) -> None:
         """
-        Initializes the encoding engine core and prime for recent encodings.
-        
+        Initializes the encoding engine and encoding prime for recent memory traces.
+    
         Args:
-            logger               : Logger instance for logging encoding engine operations
-            encoding_engine (str): The specific embedding model to load (e.g. from HRP)
-            prime_limit (int)    : Maximum number of entries in the LRU encoding prime
-            prime_key_limit(int)    : Maximum number of characters to hash for the prime_key
+            logger                   : Logger instance passed from the cortex
+            encoding_engine (str)    : Embedding model to load (e.g. from HRP)
+            prime_limit     (int)    : Maximum number of entries in the encoding prime
+            prime_key_limit (int)    : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
-        self.prime_limit: int               = prime_limit           # max cache entries before LRU eviction
-        self.prime_key_limit: int             = prime_key_limit         # max chars hashed for cache key
+        self.prime_limit: int               = prime_limit           # max prime entries before LRU eviction
+        self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until load succeeds
-        self._prime: dict[str, list[float]] = {}                    # LRU cache — maps prime_key hash → float vector
+        self._prime: dict[str, list[float]] = {}                    # encodig prime — maps prime key → float vector
         
         try:                                                                        # attempt to activate SentenceTransformer
             from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
