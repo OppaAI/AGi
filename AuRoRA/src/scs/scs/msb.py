@@ -245,7 +245,7 @@ class EngramComplex:
         self._conn: sqlite3.Connection  = self._connect()         # opens and configures SQLite connection
         self._vector_dim: int           = dim                     # vector dimension — used in vec0 CREATE VIRTUAL TABLE
         self._vector_index: bool        = self._activate_index()  # True if sqlite-vec loaded successfully
-        self.build_schema()                                       # creates all tables and indexes from blueprint
+        self._build_schema()                                      # creates all tables and indexes from blueprint
 
     def _connect_ecx(self) -> sqlite3.Connection:
         """
@@ -291,16 +291,15 @@ class EngramComplex:
                 )
             return False                                            # signals caller to fall back to cosine similarity
 
-    def build_schema(self) -> None:
+    def _build_schema(self) -> None:
         """
-        Initialize the schema of the engram.
-        This method dynamically creates tables and indexes based on the injected EngramSchema.
+        Builds all tables and indexes for the engram complex from the blueprint.
         """
         try:
 
             # 1. Build Storage Table
-            storage_transcript = self._transcribe_traces(self._blueprint.storage)            # converts main storage EngramTrace list → SQL column definition string
-            self._conn.execute(f"""                                                          # create table according to the given blueprint
+            storage_transcript = self._transcribe_traces(self._blueprint.storage)            # converts main storage trace → SQL column definition string
+            self._conn.execute(f"""                                                          # creates storage table from blueprint
                 CREATE TABLE IF NOT EXISTS {self._storage_schema} (
                     {storage_transcript}
                 )
@@ -308,8 +307,8 @@ class EngramComplex:
    
             # 2. Build Staging Table (if defined)
             if self._blueprint.staging:                                                       # staging is optional — not all cortices need a buffer
-                staging_transcript = self._transcribe_traces(self._blueprint.staging)         # converts staging EngramTrace list → SQL column definition string
-                self._conn.execute(f"""                                                       # create table according to the given blueprint
+                staging_transcript = self._transcribe_traces(self._blueprint.staging)         # converts staging traces → SQL column definition string
+                self._conn.execute(f"""                                                       # creates staging table from blueprint
                     CREATE TABLE IF NOT EXISTS {self._staging_schema} (
                         {staging_transcript}
                     )
@@ -333,7 +332,7 @@ class EngramComplex:
                     )
                 """)
                 self._conn.commit()                                                            # commits the virtual table to the memory bank
-                self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")    # log the successful initialization of engram vector index
+                self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")# log the successful initialization of engram vector index
 
             # 5. Build Lexical Search Virtual Table (FTS5)
             if self._blueprint.lexical_traces:                                                 # only if cortex defined lexical columns
@@ -348,8 +347,40 @@ class EngramComplex:
                 
         except sqlite3.Error as e:                                                             # if error occurs during building schema
             self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
-            raise                                                                              # re-raises — schema failure is unrecoverable, cortex cannot function
+            raise                                                                              # re-raises — schema failure is unrecoverable
 
+    def _transcribe_traces(self, traces: list[EngramTrace]) -> str:
+        """
+        Transcribes a list of EngramTraces into a SQL column definition string.
+    
+        Args:
+            traces (list[EngramTrace]): List of engram traces to transcribe.
+    
+        Returns:
+            str: SQL column transcript — e.g. "id INTEGER PRIMARY KEY, content TEXT NOT NULL"
+        """
+        transcripts = []                                                                        # collects completed column definitions
+        for trace in traces:                                                                    # one SQL column definition per trace
+            transcript = f"{trace.label} {trace.modality.value}"                                # base definition — e.g. "content TEXT"
+            if trace.label == "id":                                                             # id always primary key — checked by label convention
+                # Ensure SQLite correctly auto-increments INTEGER PRIMARY KEY
+                transcript += " PRIMARY KEY"                                                    # id column always gets PRIMARY KEY
+                if trace.modality == EngramModality.INTEGER:                                    # if primary key is INTEGER
+                    transcript += " AUTOINCREMENT"                                              # INTEGER PRIMARY KEY triggers SQLite rowid alias + autoincrement
+            elif trace.essential:                                                               # essential traces require a value on insert
+                transcript  += " NOT NULL"                                                      # add NULL value to essential traces
+                
+            if trace.baseline is not None:                                                      # baseline set → DEFAULT clause
+                if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):
+                    transcript += f" DEFAULT '{trace.baseline}'"                                # String literal — wraps in quotes
+                else:
+                    transcript += f" DEFAULT {trace.baseline}"                                  # raw SQL expression — e.g. (datetime('now'))
+                    
+            transcripts.append(transcript)                                                      # adds completed column transcript to list
+            
+        self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # log number of traces transcribed
+        return ",\n                        ".join(transcripts)                                  # Comma-separated column definitions for CREATE TABLE
+        
     def semantic_match(cue: list[float], episode: list[float]) -> float:
         """
         Measures semantic relevancy between a recall cue and a stored episode.
@@ -466,25 +497,6 @@ class EngramComplex:
         
         return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
 
-    def _transcribe_traces(self, traces: list[EngramTrace]) -> str:
-        """Helper to generate SQL column definitions from a list of EngramTraces."""
-        columns = []
-        for trace in traces:
-            col_def = f"{trace.label} {trace.modality.value}"
-            if trace.label == "id":
-                # Ensure SQLite correctly auto-increments INTEGER PRIMARY KEY
-                col_def += " PRIMARY KEY AUTOINCREMENT" if trace.modality == EngramModality.INTEGER else " PRIMARY KEY"
-            elif trace.essential:
-                col_def += " NOT NULL"
-                
-            if trace.baseline is not None:
-                if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):
-                    col_def += f" DEFAULT '{trace.baseline}'"
-                else:
-                    col_def += f" DEFAULT {trace.baseline}"
-            columns.append(col_def)
-        self.logger.debug(f"MSB schema columns built — {len(columns)} fields")             # Log the initialization of the FTS5 lexical index
-        return ",\n                        ".join(columns)
 
     # ── Staging ───────────────────────────────────────────────────────────────
 
