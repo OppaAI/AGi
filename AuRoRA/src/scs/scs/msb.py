@@ -361,25 +361,25 @@ class EngramComplex:
         """
         transcripts = []                                                                        # collects completed column definitions
         for trace in traces:                                                                    # one SQL column definition per trace
-            transcript = f"{trace.label} {trace.modality.value}"                                # base definition — e.g. "content TEXT"
-            if trace.label == "id":                                                             # id always primary key — checked by label convention
+            transcript = f"{trace.label} {trace.modality.value}"                                # base definition — .value pulls raw string from Enum e.g. "content TEXT"
+            if trace.label == "id":                                                             # naming convention — "id" always becomes primary key
                 # Ensure SQLite correctly auto-increments INTEGER PRIMARY KEY
-                transcript += " PRIMARY KEY"                                                    # id column always gets PRIMARY KEY
-                if trace.modality == EngramModality.INTEGER:                                    # if primary key is INTEGER
-                    transcript += " AUTOINCREMENT"                                              # INTEGER PRIMARY KEY triggers SQLite rowid alias + autoincrement
-            elif trace.essential:                                                               # essential traces require a value on insert
-                transcript  += " NOT NULL"                                                      # add NULL value to essential traces
+                transcript += " PRIMARY KEY"                                                    # uniquely identifies every row
+                if trace.modality == EngramModality.INTEGER:                                    # only INTEGER can auto-assign rowid in SQLite
+                    transcript += " AUTOINCREMENT"                                              # auto-increments on INSERT, never reuses deleted IDs
+            elif trace.essential:                                                               # skipped if label is "id"
+                transcript  += " NOT NULL"                                                      # SQLite rejects INSERT if column is empty
                 
-            if trace.baseline is not None:                                                      # baseline set → DEFAULT clause
-                if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):
-                    transcript += f" DEFAULT '{trace.baseline}'"                                # String literal — wraps in quotes
-                else:
-                    transcript += f" DEFAULT {trace.baseline}"                                  # raw SQL expression — e.g. (datetime('now'))
+            if trace.baseline is not None:                                                      # runs for any trace with a default value set
+                if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):# TEXT type and not a raw SQL expression — needs quotes
+                    transcript += f" DEFAULT '{trace.baseline}'"                                # quoted string literal — e.g. DEFAULT 'active'
+                else:                                                                           # only runs if label is not "id"
+                    transcript += f" DEFAULT {trace.baseline}"                                  # raw SQL or non-TEXT — e.g. DEFAULT (datetime('now'))
                     
-            transcripts.append(transcript)                                                      # adds completed column transcript to list
+            transcripts.append(transcript)                                                      # adds finished column string to list
             
-        self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # log number of traces transcribed
-        return ",\n                        ".join(transcripts)                                  # Comma-separated column definitions for CREATE TABLE
+        self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # logs column count for debug verification
+        return ",\n                        ".join(transcripts)                                  # joins all into one SQL string for CREATE TABLE
         
     def semantic_match(cue: list[float], episode: list[float]) -> float:
         """
