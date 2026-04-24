@@ -74,6 +74,48 @@ class EngramSchema:
     lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
     index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
 
+# TODO: migrate pack_vector, unpack_vector, normalize_vector to hrs.py if vector math is needed outside memory cortices
+def normalize_vector(vector: list[float]) -> list[float]:
+    """
+    Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
+    Already-normalized vectors and empty vectors are returned unchanged.
+
+    Args:
+        vector (list[float]): Vector to normalize
+
+    Returns:
+        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or empty
+    """
+    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
+    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
+    if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
+        return (vector_array / vector_mag).tolist()                                # already unit length — skip normalization
+    return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
+    
+def pack_vector(vector: list[float]) -> bytes:
+"""
+Packs an encoding vector into binary blob for engram storage.
+
+Args:
+    vector (list[float]): Semantic encoding vector.
+
+Returns:
+    bytes: Binary blob of fp32 values.
+"""
+return struct.pack(f"{len(vector)}f", *vector)              # packs float list into fp32 binary blob — e.g. "384f" for 384 floats
+
+def unpack_vector(blob: bytes, dim: int) -> list[float]:
+"""
+Unpacks a binary blob back into an encoding vector.
+
+Args:
+    blob (bytes): Binary blob stored in the engram.
+    dim  (int)  : Expected vector dimension.
+
+Returns:
+    list[float]: Unpacked float vector.
+"""
+return list(struct.unpack(f"{dim}f", blob))                 # reverses pack_vector — dim must match original or values corrupt silently
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -160,8 +202,7 @@ class EncodingEngine:
             return encoded_trace                                                        # returns encoded and normalized vector
         except Exception as e:                                                          # if embedding fails,
             self.logger.debug(f"Encoding error: {e}")                                   # logs encoding errors with reason
-            return []                                                                   # same empty list fallback as unavailable guard
-            
+            return []                                                                   # same empty list fallback as unavailable guard         
 
 class EngramComplex:
     """
@@ -308,48 +349,6 @@ class EngramComplex:
         except sqlite3.Error as e:                                                             # if error occurs during building schema
             self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
             raise                                                                              # re-raises — schema failure is unrecoverable, cortex cannot function
-
-    def normalize_vector(vector: list[float]) -> list[float]:
-        """
-        Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
-        Already-normalized vectors and empty vectors are returned unchanged.
-
-        Args:
-            vector (list[float]): Vector to normalize
-
-        Returns:
-            list[float]: A unit-normalized copy of vector, or vector itself if already normalized or empty
-        """
-        vector_array = np.array(vector)                                                # list → ndarray for vectorized math
-        vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
-        if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-            return (vector_array / vector_mag).tolist()                                # already unit length — skip normalization
-        return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
-
-    def pack_vector(vector: list[float]) -> bytes:
-        """
-        Packs an encoding vector into binary blob for engram storage.
-
-        Args:
-            vector (list[float]): Semantic encoding vector.
-
-        Returns:
-            bytes: Binary blob of fp32 values.
-        """
-        return struct.pack(f"{len(vector)}f", *vector)              # packs float list into fp32 binary blob — e.g. "384f" for 384 floats
-
-    def unpack_vector(blob: bytes, dim: int) -> list[float]:
-        """
-        Unpacks a binary blob back into an encoding vector.
-
-        Args:
-            blob (bytes): Binary blob stored in the engram.
-            dim  (int)  : Expected vector dimension.
-
-        Returns:
-            list[float]: Unpacked float vector.
-        """
-        return list(struct.unpack(f"{dim}f", blob))                 # reverses pack_vector — dim must match original or values corrupt silently
 
     def semantic_match(cue: list[float], episode: list[float]) -> float:
         """
