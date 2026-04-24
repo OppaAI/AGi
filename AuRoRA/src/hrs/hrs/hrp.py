@@ -38,8 +38,8 @@ class AGi:                                       # Amazing Grace infrastructure
         CORTICAL_CAPACITY: int = 8192            # [STATIC]    Total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int = 512             # [INTRINSIC] Cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str    = "cns"           # [STATIC]    Neural gateway endpoint for inter-cortical communication
-        ENGRAM_COMPLEX: str    = "engram.db"     # [STATIC]    Engram complex where long-term memories storage
-        UNITS_PER_CHUNK: int    = 4              # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
+        ENGRAM_COMPLEX: str    = "engram_complex.db"    # [STATIC]    Engram complex where long-term memories storage
+        UNITS_PER_CHUNK: int   = 4               # [STATIC]    Number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
 
         class SMC:                               # Semantic Memory Cortex
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5" # [STATIC] Encoding engine for semantic memory

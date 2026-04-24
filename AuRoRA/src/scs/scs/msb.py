@@ -163,64 +163,54 @@ class EncodingEngine:
             return []                                                                   # same empty list fallback as unavailable guard
             
 
-class MemoryBank:
+class EngramComplex:
     """
-    Memory Bank (MB) — memory storage bank abstraction layer.
+    Engram Complex (ECX) — memory storage bank abstraction layer.
     Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
     search, and retrieval. The memory cortex never touches SQL directly.
 
-    Shared engram file (memory_bank.db) — EMC tables only at this stage.
-    SMC and PMC will extend with their own tables in M2.
-
-    Backend today: SQLite + sqlite-vec
-    Backend future: Qdrant, pgvector, or other vector DB — swap here only,
-                    EMC cognitive logic untouched.
-
-    Args:
-        engram_conn      : Open SQLite connection (WAL + row_factory configured)
-        engram_dim       : Vector dimension of the encoding engine (e.g. 384 for BGE-small)
-        engram_index     : Whether sqlite-vec vector index is active
-        logger           : Logger instance for logging operations
+    TODO: extend engram complex with SMC and PMC tables in M2.
+    TODO: backend swap — Qdrant, pgvector, or other vector DB — swap here only,
+          cortex cognitive logic untouched.
     """
     
-    LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in sanitize_lexical_cue
-        "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
-        "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
-        "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
-        "their", "his", "her", "its", "me", "you", "him", "them", "us", "i", "can", 
-        "could", "would", "should", "will", "shall", "do", "does", "did", "have", 
-        "has", "had", "it", "this", "that", "those", "these"
-    }
+    LEXICAL_FILTER_WORDS = {                                                            # set literal — O(1) membership test in sanitize_lexical_cue
+            "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
+            "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
+            "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
+            "their", "his", "her", "its", "me", "you", "him", "them", "us", "i", "can", 
+            "could", "would", "should", "will", "shall", "do", "does", "did", "have", 
+            "has", "had", "it", "this", "that", "those", "these"
+        }
 
-    def __init__(
-        self,
-        logger,
-        memory_type: str,
-        engram_gateway: str,
-        engram_schema: EngramSchema,
-        engram_dim: int,
-    ) -> None:
-        self.logger          = logger                                               # logger instance passed from caller
-        self._storage_schema = f"{memory_type}_storage"                             # table name for main storage
-        self._staging_schema = f"{memory_type}_staging"                             # table name for crash-safe buffer
-        self._vector_schema  = f"{memory_type}_vector"                              # virtual table name for KNN search
-        self._lexical_schema = f"{memory_type}_lexical"                             # virtual table name for FTS5 search
-        self._blueprint      = engram_schema                                        # blueprint driving dynamic table generation
-        self._engram_dim     = engram_dim                                           # vector dimension — used in vec0 CREATE VIRTUAL TABLE
-        self._conn           = self._connect_memory_bank(engram_gateway, logger)          # opens and configures SQLite connection
-        self._engram_index   = self._activate_engram_index(self._conn, logger)            # True if sqlite-vec loaded successfully
-        self.build_schema()                                                         # creates all tables and indexes from blueprint
-
-    # ── Schema ────────────────────────────────────────────────────────────────
-    def _connect_memory_bank(gateway: str, logger=None) -> sqlite3.Connection:
+    def __init__(self, logger, cortex: str, gateway: str, schema: EngramSchema, dim: int) -> None:
         """
-        Opens and configures a connection to the memory bank for concurrent cortex access.
-        WAL mode allows concurrent reads during writes.
-        NORMAL synchronous mode balances safety vs write speed.
+        Initializes the memory bank, connects to the engram complex, and builds the schema.
 
         Args:
-            gateway (str): Gateway to the engram 
-            logger       : Optional logger for error reporting.
+            logger                  : Logger instance passed from the cortex
+            cortex (str)            : The cortex which this engrma complex belongs to (e.g. "emc", "smc", "pmc")
+            gateway (str)           : Gateway to access the engram complex
+            schema (EngramSchema)   : Blueprint defining the engram complex structure
+            dim (int)               : Vector dimension of the engram complex
+        """
+        self.logger                     = logger                  # logger instance passed from caller
+        self._storage_schema: str       = f"{cortex}_storage"     # table name for main storage
+        self._staging_schema: str       = f"{cortex}_staging"     # table name for crash-safe buffer
+        self._vector_schema: str        = f"{cortex}_vector"      # virtual table name for KNN search
+        self._lexical_schema: str       = f"{cortex}_lexical"     # virtual table name for FTS5 search
+        self._gateway: str              = gateway                 # gateway to access the engram complex
+        self._blueprint: EngramSchema   = schema                  # blueprint driving dynamic table generation
+        self._conn: sqlite3.Connection  = self._connect()         # opens and configures SQLite connection
+        self._vector_dim: int           = dim                     # vector dimension — used in vec0 CREATE VIRTUAL TABLE
+        self._vector_index: bool        = self._activate_index()  # True if sqlite-vec loaded successfully
+        self.build_schema()                                       # creates all tables and indexes from blueprint
+
+    def _connect_ecx(self) -> sqlite3.Connection:
+        """
+        Establishes connection to the engram complex for concurrent cortex access.
+        WAL mode allows concurrent reads during writes.
+        NORMAL synchronous mode balances safety vs write speed.
 
         Returns:
             sqlite3.Connection: Configured connection with WAL mode and row factory.
@@ -228,41 +218,38 @@ class MemoryBank:
         Raises:
             sqlite3.Error: If connection cannot be established.
         """
-        engram_conn = sqlite3.connect(gateway, check_same_thread=False)    # opens SQLite file at given path — check_same_thread=False allows access from multiple threads
-        engram_conn.row_factory = sqlite3.Row                              # rows returned as dict-like objects — columns accessible by name instead of index
-        engram_conn.execute("PRAGMA journal_mode=WAL;")                    # WAL mode — concurrent reads allowed during writes
-        engram_conn.execute("PRAGMA synchronous=NORMAL;")                  # fsync on checkpoint only — faster writes, safe enough for embedded
-        engram_conn.commit()                                               # commit pragma changes before returning
-        return engram_conn                                                 # return the configured connection
+        try:
+            ecx_conn = sqlite3.connect(self._gateway, check_same_thread=False)  # opens SQLite file at given path — check_same_thread=False allows access from multiple threads
+            ecx_conn.row_factory = sqlite3.Row                                  # rows returned as dict-like objects — columns accessible by name instead of index
+            ecx_conn.execute("PRAGMA journal_mode=WAL;")                        # WAL mode — concurrent reads allowed during writes
+            ecx_conn.execute("PRAGMA synchronous=NORMAL;")                      # fsync on checkpoint only — faster writes, safe enough for embedded
+            ecx_conn.commit()                                                   # commits pragma changes before returning
+            return ecx_conn                                                     # return the configured connection
+        except sqlite3.Error as e:                                              # if error during connection to database,
+            self.logger.error(f"Engram complex connection failed: {e}")         # logs failure before re-raising
+            raise                                                               # re-raise to let caller handle the error
 
-    def _activate_engram_index(engram_conn: sqlite3.Connection, logger=None) -> bool:
+    def _activate_vector_index(self) -> bool:
         """
-        Activate the engram vector index for KNN semantic search.
-        Returns True if successfully activated, False on failure.
-        
-        Vec0 virtual tables provide L2 distance KNN search over encoded episodes.
+        Activates the vector index for semantic search.
         Graceful fallback to cosine similarity if index unavailable.
         
-        Args:
-            engram_conn: An open engram connection.
-            logger     : Optional logger for warning on failure.
-        
         Returns:
-            bool: True if engram vector index activated, False otherwise.
+            bool: True if vector index activated, False otherwise.
         """
         try:                                                        # attempt to activate engram vector index
             import sqlite_vec                                       # deferred import — avoids hard crash if package missing
-            sqlite_vec.load(engram_conn)                            # loads vec0 virtual table support into this connection
+            sqlite_vec.load(self._conn)                             # loads vec0 virtual table support into this connection
             return True                                             # signals KNN search is available
         except Exception as e:                                      # if sqlite-vec fails to load,
-            if logger:                                              # if a logger is provided,
-                logger.warning(                                     # log the fallback to cosine similarity due to engram vector index unavailability
+            if self.logger:                                         # if a logger is provided,
+                self.logger.warning(                                # log the fallback to cosine similarity due to engram vector index unavailability
                     f"⚠️ engram vector index not available, falling back to unindexed cosine similarity\n"
                     f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
                     f"   Reason: {e}"
                 )
-            return False   
-                                                 # signals caller to fall back to cosine similarity
+            return False                                            # signals caller to fall back to cosine similarity
+
     def build_schema(self) -> None:
         """
         Initialize the schema of the engram.
@@ -335,9 +322,9 @@ class MemoryBank:
         """
         vector_array = np.array(vector)                                                # list → ndarray for vectorized math
         vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
-        if abs(vector_mag - 1.0) < 1e-6:                                               # tolerance check — exact == 1.0 unreliable with floats
-            return vector                                                              # already unit length — skip normalization
-        return (vector_array / vector_mag).tolist() if vector_mag > 0.0 else vector    # divide each element by magnitude → unit vector; zero vector guard
+        if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
+            return (vector_array / vector_mag).tolist()                                # already unit length — skip normalization
+        return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
 
     def pack_vector(vector: list[float]) -> bytes:
         """
@@ -458,7 +445,7 @@ class MemoryBank:
         
         # Compute RRF score for each candidate
         for episode in list(episode_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
-            episode = dict(episode)                                               # dict() clone entry — prevents mutating the original pool entry
+            episode = episode.copy()                                              # clone entry — prevents mutating the original pool entry
             episode["rrf_score"] = (                                              # RRF formula — higher score = stronger combined rank
                 1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) + # .get() returns penalty rank if episode missing from semantic
                 1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))     # .get() returns penalty rank if episode missing from lexical
