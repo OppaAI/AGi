@@ -60,7 +60,7 @@ class EngramTrace:
     """
     label: str                       # SQL column name — e.g. "content", "encoding"
     modality: EngramModality         # SQL column type — .value drops into CREATE TABLE as raw SQL
-    essential: bool = False          # adds NOT NULL constraint if True
+    essential: bool = False          # add NOT NULL constraint if True
     baseline: str | None = None      # set adds DEFAULT — raw SQL if starts with '(', quoted string otherwise
  
 @dataclass
@@ -68,8 +68,8 @@ class EngramSchema:
     """
     Defines the full structure of an engram complex's trace storage and search indexes.
     """
-    storage: list[EngramTrace]                      # column defintions for the main storage table
-    staging: list[EngramTrace] | None = None        # column defintions for the crash-safe staging table — optional
+    storage: list[EngramTrace]                      # column definitions for the main storage table
+    staging: list[EngramTrace] | None = None        # column definitions for the crash-safe staging table — optional
     semantic_traces: str | None = None              # column name holding the encoding BLOB — used for KNN vector search
     lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
     index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
@@ -102,7 +102,7 @@ Args:
 Returns:
     bytes: Binary blob of fp32 values.
 """
-return struct.pack(f"{len(vector)}f", *vector)              # packs float list into fp32 binary blob — e.g. "384f" for 384 floats
+return struct.pack(f"{len(vector)}f", *vector)              # pack float list into fp32 binary blob — e.g. "384f" for 384 floats
 
 def unpack_vector(blob: bytes, dim: int) -> list[float]:
 """
@@ -115,7 +115,7 @@ Args:
 Returns:
     list[float]: Unpacked float vector.
 """
-return list(struct.unpack(f"{dim}f", blob))                 # reverses pack_vector — dim must match original or values corrupt silently
+return list(struct.unpack(f"{dim}f", blob))                 # reverse pack_vector — dim must match original or values corrupt silently
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -143,17 +143,17 @@ class EncodingEngine:
         
         try:                                                                        # attempt to activate SentenceTransformer
             from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # logs before the blocking load
-            self._core = SentenceTransformer(self.encoding_engine)                  # loads model weights into RAM — blocks until complete
+            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # log before the blocking load
+            self._core = SentenceTransformer(self.encoding_engine)                  # load model weights into RAM — blocks until complete
             self.logger.info("✅ Encoding Engine activated")                        # only reached if load succeeded
-        except ImportError:                                                         # triggers if sentence_transformers package not installed
+        except ImportError:                                                         # trigger if sentence_transformers package not installed
             self.logger.warning(                                                    # package not installed — _core stays None
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
         except Exception as e:                                                      # bad model path, corrupted weights, OOM — _core stays None
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # logs specific failure with reason
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # log specific failure with reason
             
     @property
     def is_available(self) -> bool:
@@ -192,16 +192,16 @@ class EncodingEngine:
         try:                                                                            # attempt to embed the query or engram vector
             cue_prefix = "Represent this sentence for searching relevant passages: "    # BGE instruction prefix — applied to recall cues only , not stored episodes
             encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
-            encoded_trace = normalize_vector(encoded_trace)                               # normalizes to unit length — required so L2 == cosine sim in sqlite-vec
+            encoded_trace = normalize_vector(encoded_trace)                               # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
             if len(self._prime) >= self.prime_limit:                                    # prime full — must evict before inserting
-                decayed_prime_key: str = next(iter(self._prime))                          # first key = oldest — dicts preserve insertion order
-                del self._prime[decayed_prime_key]                                        # evicts oldest entry
-            self._prime[prime_key] = encoded_trace                                        # stores new vector under prime key
-            return encoded_trace                                                        # returns encoded and normalized vector
+                decayed_prime_key: str = next(iter(self._prime))                        # first key = oldest — dicts preserve insertion order
+                del self._prime[decayed_prime_key]                                      # evict oldest entry
+            self._prime[prime_key] = encoded_trace                                      # store new vector under prime key
+            return encoded_trace                                                        # return encoded and normalized vector
         except Exception as e:                                                          # if embedding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # logs encoding errors with reason
+            self.logger.debug(f"Encoding error: {e}")                                   # log encoding errors with reason
             return []                                                                   # same empty list fallback as unavailable guard         
 
 class EngramComplex:
@@ -215,7 +215,7 @@ class EngramComplex:
           cortex cognitive logic untouched.
     """
     
-    LEXICAL_FILTER_WORDS = {                                                            # set literal — O(1) membership test in sanitize_lexical_cue
+    LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in sanitize_lexical_cue
             "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
             "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
             "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
@@ -242,10 +242,10 @@ class EngramComplex:
         self._lexical_schema: str       = f"{cortex}_lexical"     # virtual table name for FTS5 search
         self._gateway: str              = gateway                 # gateway to access the engram complex
         self._blueprint: EngramSchema   = schema                  # blueprint driving dynamic table generation
-        self._conn: sqlite3.Connection  = self._connect()         # opens and configures SQLite connection
+        self._conn: sqlite3.Connection  = self._connect()         # open and configure SQLite connection
         self._vector_dim: int           = dim                     # vector dimension — used in vec0 CREATE VIRTUAL TABLE
         self._vector_index: bool        = self._activate_index()  # True if sqlite-vec loaded successfully
-        self._build_schema()                                      # creates all tables and indexes from blueprint
+        self._build_schema()                                      # create all tables and indexes from blueprint
 
     def _connect_ecx(self) -> sqlite3.Connection:
         """
@@ -260,14 +260,14 @@ class EngramComplex:
             sqlite3.Error: If connection cannot be established.
         """
         try:
-            ecx_conn = sqlite3.connect(self._gateway, check_same_thread=False)  # opens SQLite file at given path — check_same_thread=False allows access from multiple threads
+            ecx_conn = sqlite3.connect(self._gateway, check_same_thread=False)  # open SQLite file at given path — check_same_thread=False allows access from multiple threads
             ecx_conn.row_factory = sqlite3.Row                                  # rows returned as dict-like objects — columns accessible by name instead of index
             ecx_conn.execute("PRAGMA journal_mode=WAL;")                        # WAL mode — concurrent reads allowed during writes
             ecx_conn.execute("PRAGMA synchronous=NORMAL;")                      # fsync on checkpoint only — faster writes, safe enough for embedded
-            ecx_conn.commit()                                                   # commits pragma changes before returning
+            ecx_conn.commit()                                                   # commit pragma changes before returning
             return ecx_conn                                                     # return the configured connection
         except sqlite3.Error as e:                                              # if error during connection to database,
-            self.logger.error(f"Engram complex connection failed: {e}")         # logs failure before re-raising
+            self.logger.error(f"Engram complex connection failed: {e}")         # log failure before re-raising
             raise                                                               # re-raise to let caller handle the error
 
     def _activate_vector_index(self) -> bool:
@@ -280,8 +280,8 @@ class EngramComplex:
         """
         try:                                                        # attempt to activate engram vector index
             import sqlite_vec                                       # deferred import — avoids hard crash if package missing
-            sqlite_vec.load(self._conn)                             # loads vec0 virtual table support into this connection
-            return True                                             # signals KNN search is available
+            sqlite_vec.load(self._conn)                             # load vec0 virtual table support into this connection
+            return True                                             # signal KNN search is available
         except Exception as e:                                      # if sqlite-vec fails to load,
             if self.logger:                                         # if a logger is provided,
                 self.logger.warning(                                # log the fallback to cosine similarity due to engram vector index unavailability
@@ -298,56 +298,56 @@ class EngramComplex:
         try:
 
             # 1. Build Storage Table
-            storage_transcript = self._transcribe_traces(self._blueprint.storage)            # converts main storage trace → SQL column definition string
-            self._conn.execute(f"""                                                          # creates storage table from blueprint
+            storage_transcript: str = self._transcribe_traces(self._blueprint.storage)       # convert main storage trace → SQL column definition string
+            self._conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self._storage_schema} (
                     {storage_transcript}
                 )
-            """)
+            """)                                                                              # create storage table from blueprint
    
             # 2. Build Staging Table (if defined)
             if self._blueprint.staging:                                                       # staging is optional — not all cortices need a buffer
-                staging_transcript = self._transcribe_traces(self._blueprint.staging)         # converts staging traces → SQL column definition string
-                self._conn.execute(f"""                                                       # creates staging table from blueprint
+                staging_transcript: str = self._transcribe_traces(self._blueprint.staging)    # convert staging traces → SQL column definition string
+                self._conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self._staging_schema} (
                         {staging_transcript}
                     )
-                """)
+                """)                                                                           # create staging table from blueprint
 
             # 3. Build Indexes
             if self._blueprint.index_traces:                                                   # optional — only if cortex defined index columns
                 for trace in self._blueprint.index_traces:                                     # one B-tree index per column
-                    self._conn.execute(f"""                                                    # create index for fast retrieval
+                    self._conn.execute(f"""
                         CREATE INDEX IF NOT EXISTS idx_{self._storage_schema}_{trace}
                         ON {self._storage_schema}({trace})
-                    """)
-            self._conn.commit()                                                                # commits tables and indexes together
+                    """)                                                                       # create index for fast retrieval
+            self._conn.commit()                                                                # commit tables and indexes together
 
             # 4. Build Vector Search Virtual Table
             if self._engram_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
                 semantic_col = self._blueprint.semantic_traces                                 # column name holding the encoding BLOB
-                self._conn.execute(f"""                                                        # creates vec0 virtual table for KNN search
+                self._conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
                         {semantic_col} FLOAT[{self._engram_dim}]
                     )
-                """)
-                self._conn.commit()                                                            # commits the virtual table to the memory bank
+                """)                                                                           # create vec0 virtual table for KNN search
+                self._conn.commit()                                                            # commit the virtual table to the memory bank
                 self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")# log the successful initialization of engram vector index
 
             # 5. Build Lexical Search Virtual Table (FTS5)
             if self._blueprint.lexical_traces:                                                 # only if cortex defined lexical columns
-                lexical_transcript = ", ".join(self._blueprint.lexical_traces)                 # joins column names into comma-separated string for FTS5 definition
-                self._conn.execute(f"""                                                        # creates FTS5 virtual table for keyword search
+                lexical_transcript = ", ".join(self._blueprint.lexical_traces)                 # join column names into comma-separated string for FTS5 definition
+                self._conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._lexical_schema} USING fts5(
                        {lexical_transcript},
                        tokenize='porter unicode61'
                     )
-                """)
-                self._conn.commit()                                                            # commits the virtual table to the memory bank
+                """)                                                                           # create FTS5 virtual table for keyword search
+                self._conn.commit()                                                            # commit the virtual table to the memory bank
                 
         except sqlite3.Error as e:                                                             # if error occurs during building schema
             self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
-            raise                                                                              # re-raises — schema failure is unrecoverable
+            raise                                                                              # re-raise — schema failure is unrecoverable
 
     def _transcribe_traces(self, traces: list[EngramTrace]) -> str:
         """
@@ -359,7 +359,7 @@ class EngramComplex:
         Returns:
             str: SQL column transcript — e.g. "id INTEGER PRIMARY KEY, content TEXT NOT NULL"
         """
-        transcripts = []                                                                        # collects completed column definitions
+        transcripts: list[str] = []                                                             # collect completed column definitions
         for trace in traces:                                                                    # one SQL column definition per trace
             transcript = f"{trace.label} {trace.modality.value}"                                # base definition — .value pulls raw string from Enum e.g. "content TEXT"
             if trace.label == "id":                                                             # naming convention — "id" always becomes primary key
@@ -374,12 +374,12 @@ class EngramComplex:
                 if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):# TEXT type and not a raw SQL expression — needs quotes
                     transcript += f" DEFAULT '{trace.baseline}'"                                # quoted string literal — e.g. DEFAULT 'active'
                 else:                                                                           # raw SQL or non-TEXT — e.g. DEFAULT (datetime('now'))
-                    transcript += f" DEFAULT {trace.baseline}"                                  # add without the quote
+                    transcript += f" DEFAULT {trace.baseline}"                                  # add without quotes
                     
-            transcripts.append(transcript)                                                      # add without quotes — raw SQL or non-TEXT e.g. DEFAULT (datetime('now')
+            transcripts.append(transcript)                                                      # add completed column definition to list
             
-        self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # logs column count for debug verification
-        return ",\n                        ".join(transcripts)                                  # joins all into one SQL string for CREATE TABLE
+        self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # log column count for debug verification
+        return ",\n                        ".join(transcripts)                                  # join all into one SQL string for CREATE TABLE
 
     def stage_engram(self, engram: dict) -> int:
         """
@@ -387,37 +387,97 @@ class EngramComplex:
         Crash-safe — engram persists until explicitly deleted after processing.
 
         Args:
-            engram (dict): Engram to stage — keys map to transcript labels, values to trace content.
+            engram (dict): Engram to stage — keys map to transcript labels, values to trace content
     
         Returns:
             int: staging_id for deletion after processing
         """
-        staging_id = conn.execute(                                              # Insert the episode into the episodic buffer
-            f"INSERT INTO {self._staging_schema} (timestamp, date, content) "
-            "VALUES (?, ?, ?)",
-            [episode["timestamp"], episode["date"], episode["content"]],
+        labels: str     = ", ".join(engram.keys())                              # transcript label list from engram — e.g. "timestamp, date, content"
+        slots: str      = ", ".join([ "?"] * len(engram))                       # one ? per trace — e.g. "?, ?, ?"
+        staging_id: int = self._conn.execute(                                   # INSERT built dynamically from transcript labels
+            f"INSERT INTO {self._staging_schema} ({labels}) VALUES ({slots})",  # trace content in same order as labels
+            list(engram.values()),
         )
-        conn.commit()                                                           # Commit the transaction
-        return staging_id.lastrowid                                             # Capture staging index for deletion after encoding
+        self._conn.commit()                                                     # commit before returning — crash-safe
+        return staging_id.lastrowid                                             # return staging_id for deletion after processing
 
-    def get_unencoded(self, batch_size: int, offset: int) -> list:
+    def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
         """
-        Fetch a batch of unencoded episodes from the episodic buffer.
-        Used during recovery to drain episodic_buffer back into binding stream.
+        Retrieve a batch of staged engrams from the buffer pending processing.
 
         Args:
-            batch_size : Maximum number of episodes to fetch per batch
-            offset     : Batch offset for pagination
+            batch_size (int): Maximum number of engrams to retrieve per batch
+            offset     (int): Batch offset for pagination
 
         Returns:
-            list: Rows of unencoded episodes
+            list: Staged engrams in the buffer
         """
-        return self._conn.execute(                                          # Query the engram for unencoded episodes
-            f"SELECT id, timestamp, date, content "                         # Collect the index, timestamp, date, and content
-            f"FROM {self._staging_schema} "                                 # All episodes in the episodic buffer is unencoded by definition
-            "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
-            [batch_size, offset]                                            # Process episodes by batch size
-        ).fetchall()                                                        # Fetch all the unencoded episodes
+        return self._conn.execute(                                          # query staging table for pending engrams
+            f"SELECT * FROM {self._staging_schema} "                        # all traces returned — cortex knows its own schema
+            "ORDER BY id LIMIT ? OFFSET ?",                                 # oldest first — paginated by batch_size and offset
+            [batch_size, offset]                                            # bind batch_size and offset to placeholders
+        ).fetchall()                                                        # return all rows in the batch
+
+    def decay_staged_engram(self, staging_id: int) -> None:
+        """
+        Decay a staged engram from the buffer after processing.
+
+        Args:
+            staging_id (int): staging_id of the engram to decay.
+        """
+        self._conn.execute(                                                 # remove staged engram from buffer by staging_id
+            f"DELETE FROM {self._staging_schema} WHERE id=?",               # match by staging_id — only decays the target engram
+            [staging_id],                                                   # placeholder for staging_id
+        )
+        self._conn.commit()                                                 # commit decay before returning
+
+    def insert_episode(self, conn: sqlite3.Connection, episode: dict, encoding_blob: bytes) -> int:
+        """
+        Insert an encoded episode into the episodes table.
+
+        Args:
+            conn          : Encoder connection for writing
+            episode       : Episode dict with timestamp, date, content
+            encoding_blob : Binary encoding blob of the episode
+
+        Returns:
+            int: episode_id of the inserted episode
+        """
+        engram_id = conn.execute(                                               # Insert the episode into engram
+            f"INSERT INTO {self._storage_schema} (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
+            [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
+        )
+        return engram_id.lastrowid                                              # Get the ID of the inscribed episode
+
+    def insert_vector(self, conn: sqlite3.Connection, episode_id: int, encoding_blob: bytes) -> None:
+        """
+        Insert an episode encoding into the engram vector index.
+        Only called if engram vector index is activated.
+
+        Args:
+            conn          : Encoder connection for writing
+            episode_id    : ID of the episode to index
+            encoding_blob : Binary encoding blob of the episode
+        """
+        conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
+            f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
+            [episode_id, encoding_blob],                                        # With the episode ID and encoding
+        )
+
+    def insert_lexical(self, conn: sqlite3.Connection, episode_id: int, content: str) -> None:
+        """
+        Insert episode content into the FTS5 lexical index.
+        rowid must match episodes.id so JOIN works during recall.
+
+        Args:
+            conn       : Encoder connection for writing
+            episode_id : ID of the episode to index
+            content    : Raw content of the episode
+        """
+        conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
+            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
+            [episode_id, content],                                              # With the episode ID and content
+        )
 
     def get_buffer_count(self) -> int:
         """
@@ -430,19 +490,6 @@ class EngramComplex:
             f"SELECT COUNT(*) FROM {self._staging_schema}"
         ).fetchone()[0]
 
-    def delete_staged(self, conn: sqlite3.Connection, staging_id: int) -> None:
-        """
-        Remove a staged episode from the episodic buffer after synaptic consolidation.
-
-        Args:
-            conn       : Encoder connection (separate from main engram connection)
-            staging_id : ID of the staged episode to remove
-        """
-        conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
-            f"DELETE FROM {self._staging_schema} WHERE id=?",                       # Remove the episode from episodic buffer
-            [staging_id],                                                       # Using the episode ID
-        )
-        
     def semantic_match(cue: list[float], episode: list[float]) -> float:
         """
         Measures semantic relevancy between a recall cue and a stored episode.
@@ -558,58 +605,6 @@ class EngramComplex:
             episode.pop("rrf_score", None)                                        # strip internal RRF score before surfacing to caller
         
         return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
-
-    # ── Consolidation ─────────────────────────────────────────────────────────
-
-    def insert_episode(self, conn: sqlite3.Connection, episode: dict, encoding_blob: bytes) -> int:
-        """
-        Insert an encoded episode into the episodes table.
-
-        Args:
-            conn          : Encoder connection for writing
-            episode       : Episode dict with timestamp, date, content
-            encoding_blob : Binary encoding blob of the episode
-
-        Returns:
-            int: episode_id of the inserted episode
-        """
-        engram_id = conn.execute(                                               # Insert the episode into engram
-            f"INSERT INTO {self._storage_schema} (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
-            [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
-        )
-        return engram_id.lastrowid                                              # Get the ID of the inscribed episode
-
-    def insert_vector(self, conn: sqlite3.Connection, episode_id: int, encoding_blob: bytes) -> None:
-        """
-        Insert an episode encoding into the engram vector index.
-        Only called if engram vector index is activated.
-
-        Args:
-            conn          : Encoder connection for writing
-            episode_id    : ID of the episode to index
-            encoding_blob : Binary encoding blob of the episode
-        """
-        conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
-            f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
-            [episode_id, encoding_blob],                                        # With the episode ID and encoding
-        )
-
-    def insert_lexical(self, conn: sqlite3.Connection, episode_id: int, content: str) -> None:
-        """
-        Insert episode content into the FTS5 lexical index.
-        rowid must match episodes.id so JOIN works during recall.
-
-        Args:
-            conn       : Encoder connection for writing
-            episode_id : ID of the episode to index
-            content    : Raw content of the episode
-        """
-        conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
-            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
-            [episode_id, content],                                              # With the episode ID and content
-        )
-
-    # ── Search ────────────────────────────────────────────────────────────────
 
     def search_knn(self, cue_blob: bytes, limit: int) -> list[dict]:
         """
@@ -825,20 +820,18 @@ class EngramComplex:
             self.logger.error(f"EMC get_stats failed: {e}")
             return {}
 
-
-    # ── Diagnostic stats —————————————————————————————————————————————————————
+    def count_staged_engrams(self) -> int:
+        """
+        Count number of engrams staged in the buffer pending processing.
+        """
+        return self._conn.execute(                              # return count of engrams in staging schema
+            f"SELECT COUNT(*) FROM {self._staging_schema}"      # query staging schema for count
+        ).fetchone()[0]                                         # first element is the count
+        
     def count_stored_engrams(self) -> int:
         """
         Count number of engrams stored in the memory bank.
         """
         return self._conn.execute(                              # Return count of engrams in storage schema
             f"SELECT COUNT(*) FROM {self._storage_schema}"      # Query engram storage schema for count
-        ).fetchone()[0]                                         # Return first element of result tuple
-
-    def count_staged_engrams(self) -> int:
-        """
-        Count number of engrams staged in the buffer pending for storage.
-        """
-        return self._conn.execute(                              # Return count of engrams in staging schema
-            f"SELECT COUNT(*) FROM {self._staging_schema}"      # Query engram staging schema for count
         ).fetchone()[0]                                         # Return first element of result tuple
