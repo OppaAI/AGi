@@ -373,13 +373,75 @@ class EngramComplex:
             if trace.baseline is not None:                                                      # runs for any trace with a default value set
                 if trace.modality == EngramModality.TEXT and not trace.baseline.startswith('('):# TEXT type and not a raw SQL expression — needs quotes
                     transcript += f" DEFAULT '{trace.baseline}'"                                # quoted string literal — e.g. DEFAULT 'active'
-                else:                                                                           # only runs if label is not "id"
-                    transcript += f" DEFAULT {trace.baseline}"                                  # raw SQL or non-TEXT — e.g. DEFAULT (datetime('now'))
+                else:                                                                           # raw SQL or non-TEXT — e.g. DEFAULT (datetime('now'))
+                    transcript += f" DEFAULT {trace.baseline}"                                  # add without the quote
                     
-            transcripts.append(transcript)                                                      # adds finished column string to list
+            transcripts.append(transcript)                                                      # add without quotes — raw SQL or non-TEXT e.g. DEFAULT (datetime('now')
             
         self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # logs column count for debug verification
         return ",\n                        ".join(transcripts)                                  # joins all into one SQL string for CREATE TABLE
+
+    def stage_engram(self, engram: dict) -> int:
+        """
+        Stage an engram into the buffer pending processing.
+        Crash-safe — engram persists until explicitly deleted after processing.
+
+        Args:
+            engram (dict): Engram to stage — keys map to transcript labels, values to trace content.
+    
+        Returns:
+            int: staging_id for deletion after processing
+        """
+        staging_id = conn.execute(                                              # Insert the episode into the episodic buffer
+            f"INSERT INTO {self._staging_schema} (timestamp, date, content) "
+            "VALUES (?, ?, ?)",
+            [episode["timestamp"], episode["date"], episode["content"]],
+        )
+        conn.commit()                                                           # Commit the transaction
+        return staging_id.lastrowid                                             # Capture staging index for deletion after encoding
+
+    def get_unencoded(self, batch_size: int, offset: int) -> list:
+        """
+        Fetch a batch of unencoded episodes from the episodic buffer.
+        Used during recovery to drain episodic_buffer back into binding stream.
+
+        Args:
+            batch_size : Maximum number of episodes to fetch per batch
+            offset     : Batch offset for pagination
+
+        Returns:
+            list: Rows of unencoded episodes
+        """
+        return self._conn.execute(                                          # Query the engram for unencoded episodes
+            f"SELECT id, timestamp, date, content "                         # Collect the index, timestamp, date, and content
+            f"FROM {self._staging_schema} "                                 # All episodes in the episodic buffer is unencoded by definition
+            "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
+            [batch_size, offset]                                            # Process episodes by batch size
+        ).fetchall()                                                        # Fetch all the unencoded episodes
+
+    def get_buffer_count(self) -> int:
+        """
+        Return count of episodes currently staged in episodic buffer.
+
+        Returns:
+            int: Number of unencoded episodes in episodic buffer
+        """
+        return self._conn.execute(
+            f"SELECT COUNT(*) FROM {self._staging_schema}"
+        ).fetchone()[0]
+
+    def delete_staged(self, conn: sqlite3.Connection, staging_id: int) -> None:
+        """
+        Remove a staged episode from the episodic buffer after synaptic consolidation.
+
+        Args:
+            conn       : Encoder connection (separate from main engram connection)
+            staging_id : ID of the staged episode to remove
+        """
+        conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
+            f"DELETE FROM {self._staging_schema} WHERE id=?",                       # Remove the episode from episodic buffer
+            [staging_id],                                                       # Using the episode ID
+        )
         
     def semantic_match(cue: list[float], episode: list[float]) -> float:
         """
@@ -496,72 +558,6 @@ class EngramComplex:
             episode.pop("rrf_score", None)                                        # strip internal RRF score before surfacing to caller
         
         return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
-
-
-    # ── Staging ───────────────────────────────────────────────────────────────
-
-    def insert_staged(self, conn: sqlite3.Connection, episode: dict) -> int:
-        """
-        Insert an episode into the episodic buffer (crash-safe staging).
-        Returns the staging_id for deletion after synaptic consolidation.
-
-        Args:
-            conn    : Encoder connection (separate from main engram connection)
-            episode : Episode dict with timestamp, date, content
-
-        Returns:
-            int: staging_id of the inserted episode
-        """
-        staging_id = conn.execute(                                              # Insert the episode into the episodic buffer
-            f"INSERT INTO {self._staging_schema} (timestamp, date, content) "
-            "VALUES (?, ?, ?)",
-            [episode["timestamp"], episode["date"], episode["content"]],
-        )
-        conn.commit()                                                           # Commit the transaction
-        return staging_id.lastrowid                                             # Capture staging index for deletion after encoding
-
-    def get_unencoded(self, batch_size: int, offset: int) -> list:
-        """
-        Fetch a batch of unencoded episodes from the episodic buffer.
-        Used during recovery to drain episodic_buffer back into binding stream.
-
-        Args:
-            batch_size : Maximum number of episodes to fetch per batch
-            offset     : Batch offset for pagination
-
-        Returns:
-            list: Rows of unencoded episodes
-        """
-        return self._conn.execute(                                          # Query the engram for unencoded episodes
-            f"SELECT id, timestamp, date, content "                         # Collect the index, timestamp, date, and content
-            f"FROM {self._staging_schema} "                                 # All episodes in the episodic buffer is unencoded by definition
-            "ORDER BY id LIMIT ? OFFSET ?",                                 # Sort by id and limit the results
-            [batch_size, offset]                                            # Process episodes by batch size
-        ).fetchall()                                                        # Fetch all the unencoded episodes
-
-    def get_buffer_count(self) -> int:
-        """
-        Return count of episodes currently staged in episodic buffer.
-
-        Returns:
-            int: Number of unencoded episodes in episodic buffer
-        """
-        return self._conn.execute(
-            f"SELECT COUNT(*) FROM {self._staging_schema}"
-        ).fetchone()[0]
-
-    def delete_staged(self, conn: sqlite3.Connection, staging_id: int) -> None:
-        """
-        Remove a staged episode from the episodic buffer after synaptic consolidation.
-
-        Args:
-            conn       : Encoder connection (separate from main engram connection)
-            staging_id : ID of the staged episode to remove
-        """
-        conn.execute(                                                           # Remove the episode from episodic buffer after synaptic consolidation
-            f"DELETE FROM {self._staging_schema} WHERE id=?",                       # Remove the episode from episodic buffer
-            [staging_id],                                                       # Using the episode ID
-        )
 
     # ── Consolidation ─────────────────────────────────────────────────────────
 
