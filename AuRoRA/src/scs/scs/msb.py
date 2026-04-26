@@ -29,20 +29,21 @@ Terminology:
                       results into a single relevancy-ordered list
     transcript      — SQL column definition string generated from a blueprint
     unit vector     — L2-normalized vector; cosine similarity becomes equivalent
-                      to L2 distance, enabling sqlite-vec KNN search
-                  
+                      to L2 distance, enabling sqlite-vec KNN search  
+    
 TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
 """
 
 # System libraries
-from dataclasses import dataclass, field    # dataclass for EngramTrace/EngramSchema, field for default_factory
+from dataclasses import dataclass           # dataclass for EngramTrace/EngramSchema
 from enum import Enum                       # enum base for EngramModality type definitions
+import hashlib                              # for prime key generation
 import numpy as np                          # for fast vector math — normalization
+from pathlib import Path                    # for calculating database size — owned here, never passed back up
+import re                                   # for lexical cue sanitization
 import sqlite3                              # for engram connection factory
 import struct                               # for packing semantic vectors (fp32)
-import re                                   # for lexical cue sanitization
-from pathlib import Path                    # for calculating database size — owned here, never passed back up
 
 class EngramModality(Enum):
     """
@@ -73,6 +74,15 @@ class EngramSchema:
     semantic_traces: str | None = None              # column name holding the encoding BLOB — used for KNN vector search
     lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
     index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
+
+@dataclass
+class RecallCue:
+    """
+    Defines a recall cue for engram retrieval.
+    Bundles the encoded vector and raw text for dual-path recall.
+    """
+    vector: list[float]     # encoded semantic vector — passed to semantic recall
+    text: str               # raw cue text — passed to lexical recall
 
 # TODO: migrate pack_vector, unpack_vector, normalize_vector to hrs.py if vector math is needed outside memory cortices
 def normalize_vector(vector: list[float]) -> list[float]:
@@ -119,7 +129,7 @@ class EncodingEngine:
         Args:
             logger                   : Logger instance passed from the cortex
             encoding_engine (str)    : Embedding model to load (e.g. from HRP)
-            prime_limit     (int)    : Maximum number of entries in the encoding prime
+            prime_limit (int)        : Maximum number of entries in the encoding prime
             prime_key_limit (int)    : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
@@ -127,7 +137,7 @@ class EncodingEngine:
         self.prime_limit: int               = prime_limit           # max prime entries before LRU eviction
         self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until load succeeds
-        self._prime: dict[str, list[float]] = {}                    # encodig prime — maps prime key → float vector
+        self._prime: dict[str, list[float]] = {}                    # encoding prime — maps prime key → float vector
         
         try:                                                                        # attempt to activate SentenceTransformer
             from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
@@ -153,44 +163,57 @@ class EncodingEngine:
         """
         return self._core is not None            # True only if SentenceTransformer loaded successfully
 
-    def encode(self, trace: str, is_cue: bool = False) -> list[float]:
+    def encode_engram(self, trace: str) -> list[float]:
         """
         Encodes a memory trace into a semantic vector for storage or recall.
         Primes recent encodings to speed up subsequent recall.
         Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical recall.
         
         Args:
-        trace  (str) : Memory trace to encode — engram content or recall cue
-        is_cue (bool): If True, prepends BGE instruction prefix before encoding — cues and engrams
-                       encode differently so identical text gets separate prime entries
+            trace (str) : Memory trace to encode
 
         Returns:
             list[float]:  Semantic encoding vector, or empty list if engine unavailable
         """
-        if not self.is_available:                                                       # _core is None, skip encoding entirely
-            self.logger.debug(                                                          # log the SentenceTransformer being unavailable
+        if not self.is_available:                                                           # _core is None, skip encoding entirely
+            self.logger.debug(                                                              # log the SentenceTransformer being unavailable
                 "Encoding engine unavailable — semantic recall inactive"
             )
-            return []                                                                   # empty list signals fallback to lexical recall
+            return []                                                                       # empty list signals fallback to lexical recall
 
-        prime_key = f"{'cue' if is_cue else 'engram'}:{hash(trace[:self.prime_key_limit])}"# prime key — prefixed by types so same text encodes separately as cue vs engram
-        if prime_key in self._prime:                                                      # O(1) dict lookup
-            return self._prime[prime_key]                                                 # prime hit — skips model inference
+        prime_key: str = f"engram:{hashlib.md5(trace[:self.prime_key_limit].encode()).hexdigest()}"  # deterministic prime key — stable across restarts
+        if prime_key in self._prime:                                                        # O(1) dict lookup
+            return self._prime[prime_key]                                                   # prime hit — skips model inference
 
-        try:                                                                            # attempt to embed the query or engram vector
-            cue_prefix = "Represent this sentence for searching relevant passages: "    # BGE instruction prefix — applied to recall cues only , not stored engrams
-            encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
-            encoded_trace = normalize_vector(encoded_trace)                               # normalize to unit length — required so L2 == cosine sim in sqlite-vec
+        try:                                                                                # attempt to embed the query or engram vector
+            encoded_trace: list[float] = self._core.encode(trace).tolist()                  # model inference — .tolist() converts ndarray → float list
+            encoded_trace = normalize_vector(encoded_trace)                                 # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
-            if len(self._prime) >= self.prime_limit:                                    # prime full — must evict before inserting
-                decayed_prime_key: str = next(iter(self._prime))                        # first key = oldest — dicts preserve insertion order
-                del self._prime[decayed_prime_key]                                      # evict oldest entry
-            self._prime[prime_key] = encoded_trace                                      # store new vector under prime key
-            return encoded_trace                                                        # return encoded and normalized vector
-        except Exception as e:                                                          # if embedding fails,
-            self.logger.debug(f"Encoding error: {e}")                                   # log encoding errors with reason
-            return []                                                                   # same empty list fallback as unavailable guard         
+            if len(self._prime) >= self.prime_limit:                                        # prime full — must evict before inserting
+                decayed_prime_key: str = next(iter(self._prime))                            # first key = oldest — dicts preserve insertion order
+                del self._prime[decayed_prime_key]                                          # evict oldest entry
+            self._prime[prime_key] = encoded_trace                                          # store new vector under prime key
+            return encoded_trace                                                            # return encoded and normalized vector
+        except Exception as e:                                                              # if embedding fails,
+            self.logger.debug(f"Encoding error: {e}")                                       # log encoding errors with reason
+            return []                                                                       # same empty list fallback as unavailable guard
+    
+    def encode_cue(self, cue: str) -> RecallCue:
+        """
+        Encodes a recall cue and store with raw cue for dual-path retrieval.
+
+        Args:
+            cue (str) : Recall cue to encode
+
+        Returns:
+            RecallCue : Encoded vector and raw cue for dual-path retrieval
+        """
+        cue_prefix: str = "Represent this sentence for searching relevant passages: "       # BGE instruction prefix — applied to recall cues only, not stored engrams
+        return RecallCue(                                                                   # return a RecallCue for dual-path retrieval
+            vector=self.encode_engram(cue_prefix + cue),                                    # encode with BGE prefix — separate prime entry from storage encoding
+            text=cue                                                                        # raw cue text preserved for lexical fallback
+        )
 
 class EngramComplex:
     """
@@ -409,7 +432,7 @@ class EngramComplex:
 
         Args:
             batch_size (int): Maximum number of engrams to retrieve per batch
-            offset     (int): Batch offset for pagination
+            offset (int)    : Batch offset for pagination
 
         Returns:
             list: Staged engrams in the buffer
@@ -440,7 +463,7 @@ class EngramComplex:
 
         Args:
             engram_id (int) : ID of the inscribed engram
-            blob      (bytes): Binary encoding blob of the engram
+            blob (bytes)    : Binary encoding blob of the engram
         """
         self._conn.execute(                                                 # insert encoding into vector index for KNN semantic recall
             f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",
@@ -454,7 +477,7 @@ class EngramComplex:
 
         Args:
             engram_id (int) : ID of the inscribed engram
-            content   (str) : Trace content to index for lexical recall
+            content (str)   : Trace content to index for lexical recall
         """
         self._conn.execute(                                                 # insert content into FTS5 index for lexical recall
             f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",
@@ -462,22 +485,21 @@ class EngramComplex:
         )
         self._conn.commit()                                                 # commit before returning
 
-    def recall_engram(self, cue_vector: list[float], cue_text: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def recall_engram(self, cue: RecallCue, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams by fusing semantic and lexical matches.
         Cortex encodes the cue before calling — MSB owns retrieval only.
 
         Args:
-            cue_vector (list[float])            : Encoded recall cue as float vector.
-            cue_text   (str)                    : Raw recall cue string for lexical search.
-            depth      (int)                    : Number of engrams to recall.
-            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
+            cue (RecallCue)                     : Encoded recall cue as float vector and raw cue text.
+            depth (int)                         : Number of engrams to recall.
+            date_range (tuple[str, str] | None) : Optional, ISO date range (start, end) inclusive — filters recall to that period.
 
         Returns:
             list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
         """
-        semantic_matches = self._semantic_recall(cue_vector, depth, date_range)     # recall by meaning
-        lexical_matches  = self._lexical_recall(cue_text, depth, date_range)        # recall by keyword
+        semantic_matches = self._semantic_recall(cue.vector, depth, date_range)     # recall by meaning
+        lexical_matches  = self._lexical_recall(cue.text, depth, date_range)        # recall by keyword
         return self._memory_convergence(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
 
     def _semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
@@ -487,25 +509,30 @@ class EngramComplex:
         Args:
             cue (list[float])                   : Encoded recall cue as float vector.
             depth (int)                         : Number of engrams to recall.
-            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
+            date_range (tuple[str, str] | None) : Optional, ISO date range (start, end) inclusive — filters recall to that period.
         
         Returns:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
         try:                                                                    # attempt semantic recall with given cue
-            date_from, date_to = date_range if date_range else (None, None)     # unpack date range — None if no filter
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
+            temporal_filter: str = """
+                AND (store.date >= ? OR ? IS NULL)
+                AND (store.date <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                    # only filter by date if schema has a date column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+
             matches: list[sqlite3.Row] = self._conn.execute(                    # semantic recall for nearest engrams by L2 distance
                 f"""        
                 SELECT store.*, vec.distance
                 FROM {self._vector_schema} vec
                 JOIN {self._storage_schema} store ON store.id = vec.rowid
                 WHERE vec.{self._blueprint.semantic_traces} MATCH ?
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
+                {temporal_filter}
                 AND k = ?
                 ORDER BY vec.distance, store.id DESC
                 """,
-                [pack_vector(cue), date_from, date_from, date_to, date_to, depth * 2],  # pack cue blob; date passed twice — filter + NULL check; 2× depth for RRF
+                [pack_vector(cue), *temporal_params, depth * 2],                # only pass date params if schema has a date column
             ).fetchall()                                                        # return all matching engrams by semantic similarity
 
             if not matches:                                                     # if no matches found,
@@ -542,19 +569,24 @@ class EngramComplex:
             return []                                                       # return empty list
 
         try:                                                                # attempt lexical recall with sanitized cue
-            date_from, date_to = date_range if date_range else (None, None) # unpack date range — None if no filter
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
+            temporal_filter: str = """
+                AND (store.date >= ? OR ? IS NULL)
+                AND (store.date <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                # only filter by date if schema has a date column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+
             matches: list[sqlite3.Row] = self._conn.execute(                # FTS5 lexical recall for matching engrams
                 f"""
                 SELECT store.*, lexeme.rank AS raw_rank
                 FROM {self._lexical_schema} lexeme
                 JOIN {self._storage_schema} store on store.id = lexeme.rowid
                 WHERE {self._lexical_schema} MATCH ? 
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
+                {temporal_filter}
                 ORDER BY lexeme.rank, store.id DESC
                 LIMIT ?
                 """,
-                [clean_cue, date_from, date_from, date_to, date_to, depth * 2],  # date passed twice — filter + NULL check; 2× limit for RRF
+                [clean_cue, *temporal_params, depth * 2],                   # only pass date params if schema has a date column
             ).fetchall()                                                    # fetch all matching engrams
 
             if not matches:                                                 # if no matches found,
@@ -602,6 +634,16 @@ class EngramComplex:
             return ""                                                    # return empty string
 
         return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the engram
+
+    @property
+    def _is_temporal(self) -> bool:
+        """
+        Returns True if this memory cortex is temporal.
+
+        Returns:
+            bool: True if storage schema has a date column, False otherwise
+        """
+        return any(t.label == "date" for t in self._blueprint.storage)      # True if storage schema has a date column
 
     @staticmethod
     def _memory_convergence(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
@@ -676,14 +718,14 @@ class EngramComplex:
         Assess the current status of the engram complex for logging and monitoring.
 
         Returns:
-            dict: Current engram complex stats including engram count, oldest and newest engram, buffer count, and database size.
+            dict: Current engram complex stats including engram count, earliest and latest timestamp, buffer count, and database size.
         """
         try:                                                                    # attempt retrieve stats of engram complex database
-            storage_stats: sqlite3.Row = self._conn.execute(                    # query storage schema for engram count and date range
+            storage_stats: sqlite3.Row = self._conn.execute(                    # query storage schema for engram count and timestamp range
                 "SELECT COUNT(*) as total, "
-                "MIN(date) as earliest, MAX(date) as latest "
+                "MIN(timestamp) as earliest, MAX(timestamp) as latest "
                 f"FROM {self._storage_schema}"
-            ).fetchone()                                                        # fetch engram count and date range
+            ).fetchone()                                                        # fetch engram count and timestamp range
 
             staging_stats: sqlite3.Row = self._conn.execute(                    # query staging schema for buffer count
                 f"SELECT COUNT(*) as total FROM {self._staging_schema}"
@@ -695,8 +737,8 @@ class EngramComplex:
             return {                                                            # return engram complex stats for logging and monitoring
                 "buffer_count"    : staging_stats["total"]  if staging_stats else 0,
                 "engram_count"    : storage_stats["total"]  if storage_stats else 0,
-                "earliest_engram" : storage_stats["earliest"] if storage_stats else None,
-                "latest_engram"   : storage_stats["latest"] if storage_stats else None,
+                "earliest_timestamp" : storage_stats["earliest"] if storage_stats else None,
+                "latest_timestamp"   : storage_stats["latest"]   if storage_stats else None,
                 "physical_volume" : ecx_volume,
             }
         except Exception as e:                                                  # catch any database access errors
