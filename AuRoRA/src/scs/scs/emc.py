@@ -122,16 +122,12 @@ EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory C
 
 from scs.msb import (               # Aquire access to memory storage bank
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
-    EngramStorageBank,          # Centralized engram memory storage interface
+    EngramComplex,          # Centralized engram memory storage interface
     EngramSchema,               # Schema definition object for memory cortices
     EngramTrace,                # Trace definition object for individual engram fields
     EngramModality,             # Enumeration of valid engram field modalities
-    semantic_match,             # Cosine similarity fallback (when sqlite-vec unavailable)
     pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
     unpack_vector,              # Unpack a fp32 binary blob back into a float vector
-    connect_engram,             # Open a SQLite connection with WAL mode and row factory
-    activate_engram_index,      # Attempt to load the sqlite-vec extension into a connection
-    sanitize_lexical_cue,       # Sanitize a raw query string for safe FTS5 MATCH usage
     memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
 )
 
@@ -240,7 +236,7 @@ class EpisodicMemoryCortex:
 
         # SQLite — WAL mode for concurrent reads during async writes
         try:                                                                # Attempt to connect to the engram
-            self.engram = connect_engram(engram_gateway, logger=logger)     # Open engram connection via shared MSB factory (WAL + row_factory)
+            self.engram = connect_ecx(engram_gateway, logger=logger)        # Open engram connection via shared MSB factory (WAL + row_factory)
 
             # Set up SQLite-vec for L2 distance semantic search
             # Graceful fallback to cosine similarity if SQLite-vec not available

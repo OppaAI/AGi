@@ -31,16 +31,16 @@ Terminology:
     unit vector     — L2-normalized vector; cosine similarity becomes equivalent
                       to L2 distance, enabling sqlite-vec KNN search
                   
-TODO: migrate pack_vector, unpack_vector, normalize_vector to hrs.py if
+TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
 """
 
 # System libraries
 from dataclasses import dataclass, field    # dataclass for EngramTrace/EngramSchema, field for default_factory
 from enum import Enum                       # enum base for EngramModality type definitions
-import numpy as np                          # for fast vector math — normalization and cosine similarity
+import numpy as np                          # for fast vector math — normalization
 import sqlite3                              # for engram connection factory
-import struct                               # for packing/unpacking semantic vectors (fp32)
+import struct                               # for packing semantic vectors (fp32)
 import re                                   # for lexical cue sanitization
 from pathlib import Path                    # for calculating database size — owned here, never passed back up
 
@@ -93,29 +93,17 @@ def normalize_vector(vector: list[float]) -> list[float]:
     return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
     
 def pack_vector(vector: list[float]) -> bytes:
-"""
-Packs an encoding vector into binary blob for engram storage.
+    """
+    Packs an encoding vector into binary blob for engram storage.
 
-Args:
-    vector (list[float]): Semantic encoding vector.
+    Args:
+        vector (list[float]): Semantic encoding vector.
 
-Returns:
-    bytes: Binary blob of fp32 values.
-"""
-return struct.pack(f"{len(vector)}f", *vector)              # pack float list into fp32 binary blob — e.g. "384f" for 384 floats
+    Returns:
+        bytes: Binary blob of fp32 values.
+    """
+    return struct.pack(f"{len(vector)}f", *vector)              # pack float list into fp32 binary blob — e.g. "384f" for 384 floats
 
-def unpack_vector(blob: bytes, dim: int) -> list[float]:
-"""
-Unpacks a binary blob back into an encoding vector.
-
-Args:
-    blob (bytes): Binary blob stored in the engram.
-    dim  (int)  : Expected vector dimension.
-
-Returns:
-    list[float]: Unpacked float vector.
-"""
-return list(struct.unpack(f"{dim}f", blob))                 # reverse pack_vector — dim must match original or values corrupt silently
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -169,7 +157,7 @@ class EncodingEngine:
         """
         Encodes a memory trace into a semantic vector for storage or recall.
         Primes recent encodings to speed up subsequent recall.
-        Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical search.
+        Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical recall.
         
         Args:
         trace  (str) : Memory trace to encode — episode content or recall cue
@@ -181,9 +169,9 @@ class EncodingEngine:
         """
         if not self.is_available:                                                       # _core is None, skip encoding entirely
             self.logger.debug(                                                          # log the SentenceTransformer being unavailable
-                "Encoding engine unavailable — semantic search inactive"
+                "Encoding engine unavailable — semantic recall inactive"
             )
-            return []                                                                   # empty list signals fallback to lexical search
+            return []                                                                   # empty list signals fallback to lexical recall
 
         prime_key = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.prime_key_limit])}"# prime key — prefixed by types so same text encodes separately as cue vs episode
         if prime_key in self._prime:                                                      # O(1) dict lookup
@@ -208,19 +196,20 @@ class EngramComplex:
     """
     Engram Complex (ECX) — memory storage bank abstraction layer.
     Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
-    search, and retrieval. The memory cortex never touches SQL directly.
+    recall, and retrieval. The memory cortex never touches SQL directly.
 
     TODO: extend engram complex with SMC and PMC tables in M2.
     TODO: backend swap — Qdrant, pgvector, or other vector DB — swap here only,
           cortex cognitive logic untouched.
     """
     
-    LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in sanitize_lexical_cue
+    LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in clean_cue
             "a", "an", "the", "is", "are", "was", "were", "what", "how", "why", "where", 
             "when", "who", "which", "in", "on", "at", "to", "for", "of", "with", "by", 
             "from", "as", "and", "or", "but", "if", "then", "else", "my", "your", "our", 
             "their", "his", "her", "its", "me", "you", "him", "them", "us", "i", "can", 
             "could", "would", "should", "will", "shall", "do", "does", "did", "have", 
+            "hello", "hi", "hey", "bye", "goodbye", "thanks", "please", "yes", "no", "maybe",
             "has", "had", "it", "this", "that", "those", "these"
         }
 
@@ -235,17 +224,17 @@ class EngramComplex:
             schema (EngramSchema)   : Blueprint defining the engram complex structure
             dim (int)               : Vector dimension of the engram complex
         """
-        self.logger                     = logger                  # logger instance passed from caller
-        self._storage_schema: str       = f"{cortex}_storage"     # table name for main storage
-        self._staging_schema: str       = f"{cortex}_staging"     # table name for crash-safe buffer
-        self._vector_schema: str        = f"{cortex}_vector"      # virtual table name for KNN search
-        self._lexical_schema: str       = f"{cortex}_lexical"     # virtual table name for FTS5 search
-        self._gateway: str              = gateway                 # gateway to access the engram complex
-        self._blueprint: EngramSchema   = schema                  # blueprint driving dynamic table generation
-        self._conn: sqlite3.Connection  = self._connect()         # open and configure SQLite connection
-        self._vector_dim: int           = dim                     # vector dimension — used in vec0 CREATE VIRTUAL TABLE
-        self._vector_index: bool        = self._activate_index()  # True if sqlite-vec loaded successfully
-        self._build_schema()                                      # create all tables and indexes from blueprint
+        self.logger                     = logger                        # logger instance passed from caller
+        self._storage_schema: str       = f"{cortex}_storage"           # table name for main storage
+        self._staging_schema: str       = f"{cortex}_staging"           # table name for crash-safe buffer
+        self._vector_schema: str        = f"{cortex}_vector"            # virtual table name for KNN search
+        self._lexical_schema: str       = f"{cortex}_lexical"           # virtual table name for FTS5 search
+        self._gateway: str              = gateway                       # gateway to access the engram complex
+        self._blueprint: EngramSchema   = schema                        # blueprint driving dynamic table generation
+        self._conn: sqlite3.Connection  = self._connect_ecx()           # open and configure SQLite connection
+        self._vector_dim: int           = dim                           # vector dimension — used in vec0 CREATE VIRTUAL TABLE
+        self._vector_index: bool        = self._activate_vector_index() # True if sqlite-vec loaded successfully
+        self._build_schema()                                            # create all tables and indexes from blueprint
 
     def _connect_ecx(self) -> sqlite3.Connection:
         """
@@ -273,7 +262,7 @@ class EngramComplex:
     def _activate_vector_index(self) -> bool:
         """
         Activates the vector index for semantic search.
-        Graceful fallback to cosine similarity if index unavailable.
+        Graceful fallback to lexical search if index unavailable.
         
         Returns:
             bool: True if vector index activated, False otherwise.
@@ -284,12 +273,12 @@ class EngramComplex:
             return True                                             # signal KNN search is available
         except Exception as e:                                      # if sqlite-vec fails to load,
             if self.logger:                                         # if a logger is provided,
-                self.logger.warning(                                # log the fallback to cosine similarity due to engram vector index unavailability
-                    f"⚠️ engram vector index not available, falling back to unindexed cosine similarity\n"
+                self.logger.warning(                                # log the fallback to lexical recall due to engram vector index unavailability
+                    f"⚠️ engram vector index not available, falling back to lexical recall\n"
                     f"   Note to technician: pip3 install sqlite-vec --break-system-packages\n"
                     f"   Reason: {e}"
                 )
-            return False                                            # signals caller to fall back to cosine similarity
+            return False                                            # signals caller to fall back to lexical recall
 
     def _build_schema(self) -> None:
         """
@@ -325,10 +314,10 @@ class EngramComplex:
 
             # 4. Build Vector Search Virtual Table
             if self._engram_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
-                semantic_col = self._blueprint.semantic_traces                                 # column name holding the encoding BLOB
+                semantic_transcript = self._transcribe_traces(self._blueprint.semantic_traces) # column name holding the encoding BLOB
                 self._conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
-                        {semantic_col} FLOAT[{self._engram_dim}]
+                        {semantic_transcript} FLOAT[{self._vector_dim}]
                     )
                 """)                                                                           # create vec0 virtual table for KNN search
                 self._conn.commit()                                                            # commit the virtual table to the memory bank
@@ -392,14 +381,28 @@ class EngramComplex:
         Returns:
             int: staging_id for deletion after processing
         """
-        labels: str     = ", ".join(engram.keys())                              # transcript label list from engram — e.g. "timestamp, date, content"
-        slots: str      = ", ".join([ "?"] * len(engram))                       # one ? per trace — e.g. "?, ?, ?"
-        staging_id: int = self._conn.execute(                                   # INSERT built dynamically from transcript labels
-            f"INSERT INTO {self._staging_schema} ({labels}) VALUES ({slots})",  # trace content in same order as labels
+        return self.inscribe_engram(engram, self._staging_schema)           # wrap inscribe_engram with staging schema
+
+    def inscribe_engram(self, engram: dict, schema: str | None = None) -> int:
+        """
+        Inscribe an engram into the target schema.
+
+        Args:
+            engram (dict): Engram to inscribe — keys map to transcript labels, values to trace content
+            schema (str | None) : Target schema to inscribe the engram into. Defaults to self._storage_schema if None
+
+        Returns:
+            int: engram_id of the inscribed engram
+        """
+        schema: str    = schema or self._storage_schema                     # default to permanent storage if no schema provided
+        labels: str    = ", ".join(engram.keys())                           # transcript label list from engram
+        slots: str     = ", ".join([ "?"] * len(engram))                    # one ? per trace
+        engram_id: int = self._conn.execute(                                # INSERT dynamically built from transcript labels
+            f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
-        self._conn.commit()                                                     # commit before returning — crash-safe
-        return staging_id.lastrowid                                             # return staging_id for deletion after processing
+        self._conn.commit()                                                 # commit before returning — permanent
+        return engram_id.lastrowid                                          # return engram_id for vector and lexical indexing
 
     def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
         """
@@ -431,87 +434,133 @@ class EngramComplex:
         )
         self._conn.commit()                                                 # commit decay before returning
 
-    def insert_episode(self, conn: sqlite3.Connection, episode: dict, encoding_blob: bytes) -> int:
+    def inscribe_vector_index(self, engram_id: int, blob: bytes) -> None:
         """
-        Insert an encoded episode into the episodes table.
+        Inscribe an engram encoding into the vector index for semantic recall.
+        Only called if vector index is activated.
 
         Args:
-            conn          : Encoder connection for writing
-            episode       : Episode dict with timestamp, date, content
-            encoding_blob : Binary encoding blob of the episode
-
-        Returns:
-            int: episode_id of the inserted episode
+            engram_id (int) : ID of the inscribed engram
+            blob      (bytes): Binary encoding blob of the engram
         """
-        engram_id = conn.execute(                                               # Insert the episode into engram
-            f"INSERT INTO {self._storage_schema} (timestamp, date, content, encoding) VALUES (?,?,?,?)",   # Insert the episode into engram
-            [episode["timestamp"], episode["date"], episode["content"], encoding_blob],     # With the episode timestamp, date, content, and encoding
+        self._conn.execute(                                                 # insert encoding into vector index for KNN semantic recall
+            f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",
+            [engram_id, blob],                                              # rowid must match engram_id for JOIN during recall
         )
-        return engram_id.lastrowid                                              # Get the ID of the inscribed episode
+        self._conn.commit()                                                 # commit before returning
 
-    def insert_vector(self, conn: sqlite3.Connection, episode_id: int, encoding_blob: bytes) -> None:
+    def inscribe_lexical_index(self, engram_id: int, content: str) -> None:
         """
-        Insert an episode encoding into the engram vector index.
-        Only called if engram vector index is activated.
+        Inscribe an engram into the lexical index for lexical recall.
 
         Args:
-            conn          : Encoder connection for writing
-            episode_id    : ID of the episode to index
-            encoding_blob : Binary encoding blob of the episode
+            engram_id (int) : ID of the inscribed engram
+            content   (str) : Trace content to index for lexical recall
         """
-        conn.execute(                                                           # Insert the episode encoding into engram vectors for fast retrieval
-            f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",        # Insert the episode encoding into engram vectors
-            [episode_id, encoding_blob],                                        # With the episode ID and encoding
+        self._conn.execute(                                                 # insert content into FTS5 index for lexical recall
+            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",
+            [engram_id, content],                                           # rowid must match engram_id for JOIN during recall
         )
+        self._conn.commit()                                                 # commit before returning
 
-    def insert_lexical(self, conn: sqlite3.Connection, episode_id: int, content: str) -> None:
+    def semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
-        Insert episode content into the FTS5 lexical index.
-        rowid must match episodes.id so JOIN works during recall.
+        Recall engrams from the vector index by semantic similarity to the cue.
 
         Args:
-            conn       : Encoder connection for writing
-            episode_id : ID of the episode to index
-            content    : Raw content of the episode
-        """
-        conn.execute(                                                           # Insert the episode content into engram lexical for fast retrieval
-            f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",         # Insert the episode content into engram lexical
-            [episode_id, content],                                              # With the episode ID and content
-        )
-
-    def get_buffer_count(self) -> int:
-        """
-        Return count of episodes currently staged in episodic buffer.
-
-        Returns:
-            int: Number of unencoded episodes in episodic buffer
-        """
-        return self._conn.execute(
-            f"SELECT COUNT(*) FROM {self._staging_schema}"
-        ).fetchone()[0]
-
-    def semantic_match(cue: list[float], episode: list[float]) -> float:
-        """
-        Measures semantic relevancy between a recall cue and a stored episode.
-        Fallback when sqlite-vec is unavailable.
-        TODO: To be replaced with sqlite-vec ANN search.
-
-        Args:
-            cue     (list[float]): Encoded recall cue.
-            episode (list[float]): Encoded stored episode.
+            cue (list[float])                   : Encoded recall cue as float vector.
+            depth (int)                         : Number of engrams to recall.
+            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
         
         Returns:
-            float: Semantic relevancy score (0.0 – 1.0).
+            list[dict]: Engram traces with relevancy and _rank fields appended.
         """
-        if not cue or not episode or len(cue) != len(episode):      # guards empty vectors and dimension mismatch
-            return 0.0                                              # no match rather than exception
-        return float(np.dot(np.array(cue), np.array(episode)))      # dot product == cosine sim on already unit-normalized vectors
-        
-    def sanitize_lexical_cue(cue: str) -> str:
+        try:                                                                    # attempt semantic recall with given cue
+            date_from, date_to = date_range if date_range else (None, None)     # unpack date range — None if no filter
+            matches: list[sqlite3.Row] = self._conn.execute(                    # semantic recall for nearest engrams by L2 distance
+                f"""        
+                SELECT store.*, vec.distance
+                FROM {self._vector_schema} vec
+                JOIN {self._storage_schema} store ON store.id = vec.rowid
+                WHERE vec.{self._blueprint.semantic_traces} MATCH ?
+                AND (store.date >= ? OR ? IS NULL)
+                AND (store.date <= ? OR ? IS NULL)
+                AND k = ?
+                ORDER BY vec.distance, store.id DESC
+                """,
+                [pack_vector(cue), date_from, date_from, date_to, date_to, depth * 2],  # pack cue blob; date passed twice — filter + NULL check; 2× depth for RRF
+            ).fetchall()                                                        # return all matching engrams by semantic similarity
+
+            if not matches:                                                     # if no matches found,
+                return []                                                       # return empty list
+
+            self.logger.debug(f"MSB semantic recall → {len(matches)} candidates | best_dist:{matches[0]['distance']:.4f}")  # log number of matches and best distance
+
+            return [                                                            # return matches with relevancy and _rank fields appended
+                {
+                    **dict(match),                                              # unpack all trace columns — cortex knows its own schema
+                    "relevancy" : max(0.0, 1.0 - (match["distance"]**2 / 2.0)), # L2 → cosine sim on unit-normalized vectors
+                    "_rank"     : i,                                            # 0-based rank — 0 = closest match, used by RRF
+                }
+                for i, match in enumerate(matches)                              # enumerate matches to capture rank
+            ]
+        except Exception as e:                                                  # if semantic recall fails
+            self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
+            return []                                                           # empty list — caller handles no results
+
+    def lexical_recall(self, cue: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
-        Sanitize and tokenize a recall cue for FTS5 lexical matching.
-        Strips punctuation, filters stop-words, and joins keywords with OR
-        to improve pattern-separation recall while maintaining precision.
+        Recall engrams from the lexical index by keyword matching.
+
+        Args:
+            cue (str)                           : Raw recall cue string — sanitized internally.
+            depth (int)                         : Number of engrams to recall.
+            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
+
+        Returns:
+            list[dict]: Engram traces with relevancy and _rank fields appended.
+        """
+        clean_cue: str = self._clean_cue(cue)                               # strip punctuation, filter stop words, join with OR
+        if not clean_cue:                                                   # if clean_cue is empty or pure whitespace — nothing to recall
+            return []                                                       # return empty list
+
+        try:                                                                # attempt lexical recall with sanitized cue
+            date_from, date_to = date_range if date_range else (None, None) # unpack date range — None if no filter
+            matches: list[sqlite3.Row] = self._conn.execute(                # FTS5 lexical recall for matching engrams
+                f"""
+                SELECT store.*, lexeme.rank AS raw_rank
+                FROM {self._lexical_schema} lexeme
+                JOIN {self._storage_schema} store on store.id = lexeme.rowid
+                WHERE {self._lexical_schema} MATCH ? 
+                AND (store.date >= ? OR ? IS NULL)
+                AND (store.date <= ? OR ? IS NULL)
+                ORDER BY lexeme.rank, store.id DESC
+                LIMIT ?
+                """,
+                [clean_cue, date_from, date_from, date_to, date_to, depth * 2],  # date passed twice — filter + NULL check; 2× limit for RRF
+            ).fetchall()                                                    # fetch all matching engrams
+
+            if not matches:                                                 # if no matches found,
+                return []                                                   # return empty list
+
+            raw_scores: list[float] = [abs(match["raw_rank"]) for match in matches] # FTS5 rank is negative — abs() to normalize
+            max_score:  float       = max(raw_scores) if raw_scores else 1.0        # best score for normalization — guard against empty
+
+            return [                                                        # return matches with relevancy and _rank fields appended
+                {
+                    **dict(match),                                          # unpack all trace columns — cortex knows its own schema
+                    "relevancy" : abs(match["raw_rank"]) / max_score if max_score else 0.0,  # normalize to 0.0–1.0
+                    "_rank"     : i,                                        # 0-based rank — 0 = best match, used by RRF
+                }
+                for i, match in enumerate(matches)                          # enumerate matches to capture rank
+            ]
+        except Exception as e:                                              # if lexical recall fails
+            self.logger.debug(f"MSB lexical recall failed: {e}")            # log failure with reason
+            return []                                                       # empty list — caller handles no results
+
+    def _clean_cue(self, cue: str) -> str:
+        """
+        Clean and prepare a recall cue for keyword search for lexical recall.
 
         Args:
             cue (str): Raw recall cue string from the caller.
@@ -519,31 +568,35 @@ class EngramComplex:
         Returns:
             str: FTS5-safe quoted token string, or empty string if query is blank.
         """
-        clean_cue = re.sub(r'[^\w\s]', ' ', cue.lower())                 # strip punctuation → space, lowercases — FTS5 MATCH rejects special chars
-        lexemes = clean_cue.strip().split()                              # splits on whitespace → list of tokens
+        clean_cue: str     = re.sub(r'[^\w\s]', ' ', cue.lower())        # replace punctuation with space — preserves word boundaries
+        lexemes: list[str] = clean_cue.strip().split()                   # strip whitespace then split into tokens
         
         # Extract keywords (non-stop-words longer than 1 character)
-        terms = [kw for kw in lexemes if kw not in LEXICAL_FILTER_WORDS and len(kw) > 1]    # filter stop words and single chars
+        terms: list[str] = [                                             # filter stop words and single characters
+            kw for kw in lexemes
+            if kw not in self.LEXICAL_FILTER_WORDS and len(kw) > 1
+        ]
         
         # Fallback to original lexemes if no terms remain
-        if not terms:                                                    # all words were stop words — fall back to full token list
-            terms = lexemes
+        if not terms:                                                    # if all words filtered,
+            terms = lexemes                                              # fallback to original tokens
             
-        if not terms:                                                    # cue was empty or whitespace only — caller skips lexical path
-            return ""
+        if not terms:                                                    # if cue was empty or pure whitespace,
+            return ""                                                    # return empty string
 
-        return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the episode
+        return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the engram
 
+    @staticmethod
     def memory_convergence(
-        semantic_results : list[dict],
-        lexical_results  : list[dict],
-        recall_limit     : int,
+        semantic_matches : list[dict],
+        lexical_matches  : list[dict],
+        depth            : int,
         rrf_k            : int = 60,
     ) -> list[dict]:
         """
-        Fuse semantic and lexical recall results into a unified engram salience ranking.
-        Semantic search (vec KNN / cosine) + lexical search (FTS5)
-        → unified engram salience ranking through memory convergence (RRF).
+        Fuse semantic and lexical recall matches into a unified engram salience ranking.
+        Semantic recall (vec KNN) + lexical recall (FTS5)
+        → unified engram salience ranking via memory convergence (RRF).
 
         Shared across EMC, SMC, and PMC — all memory cortices use the same
         dual-path retrieval and convergence pattern.
@@ -557,232 +610,65 @@ class EngramComplex:
         lexical match is still a valid recall candidate.
 
         Args:
-            semantic_results : Ranked list from semantic search (vec KNN / cosine)
-            lexical_results  : Ranked list from lexical search (FTS5)
-            recall_limit     : Final number of engrams to return
+            semantic_matches : Ranked list from semantic recall (vec KNN)
+            lexical_matches  : Ranked list from lexical recall (FTS5)
+            depth            : Final number of engrams to return
             rrf_k            : RRF constant (default 60, standard in literature)
 
         Returns:
-            list[dict]: list of episodes up to recall limit sorted by descending RRF score,
+            list[dict]: list of engrams up to recall depth sorted by descending RRF score,
                         with 'relevancy' set to normalised RRF score (0.0–1.0)
         """
         # Build rank lookup schemas and episode pool — 0-based, best = 0
-        episode_pool: dict[int, dict] = {}                                        # union of all candidates from both paths — keyed by episode id
-        semantic_rank: dict[int, int] = {}                                        # episode_id → 0-based rank in semantic results
-        lexical_rank: dict[int, int] = {}                                         # episode_id → 0-based rank in lexical results
+        engram_pool: dict[int, dict] = {}                                       # union of all candidates from both paths — keyed by engram_id
+        semantic_rank: dict[int, int] = {}                                      # engram_id → 0-based rank in semantic results
+        lexical_rank: dict[int, int] = {}                                       # engram_id → 0-based rank in lexical results
 
-        for rank, episode in enumerate(semantic_results):                         # enumerate gives 0-based rank alongside each episode
-            semantic_rank[episode["id"]] = rank                                   # stores rank by id — look up during RRF scoring
-            episode_pool[episode["id"]] = episode                                 # add episode to union pool
+        for rank, engram in enumerate(semantic_matches):                        # enumerate gives 0-based rank alongside each engram
+            semantic_rank[engram["id"]] = rank                                  # stores rank by id — look up during RRF scoring
+            engram_pool[engram["id"]] = engram                                  # add engram to union pool
 
-        for rank, episode in enumerate(lexical_results):                          # iterate through each lexical match results
-            lexical_rank[episode["id"]] = rank                                    # stores rank by id — looked up during RRF scoring
-            episode_pool.setdefault(episode["id"], episode)                       # setdefault — only add episode if id not already, semantic path takes precedence
+        for rank, engram in enumerate(lexical_matches):                         # iterate through each lexical match results
+            lexical_rank[engram["id"]] = rank                                   # stores rank by id — looked up during RRF scoring
+            engram_pool.setdefault(engram["id"], engram)                        # setdefault — only add engram if id not already, semantic path takes precedence
 
-        semantic_miss = len(semantic_results)                                     # penalty rank for episodes absent from semantic results
-        lexical_miss = len(lexical_results)                                       # penalty rank for episodes absent from lexical results
+        semantic_miss = len(semantic_matches)                                   # penalty rank for engrams absent from semantic results
+        lexical_miss = len(lexical_matches)                                     # penalty rank for engrams absent from lexical results
         
         # Compute RRF score for each candidate
-        for episode in list(episode_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
-            episode = episode.copy()                                              # clone entry — prevents mutating the original pool entry
-            episode["rrf_score"] = (                                              # RRF formula — higher score = stronger combined rank
-                1.0 / (rrf_k + semantic_rank.get(episode["id"], semantic_miss)) + # .get() returns penalty rank if episode missing from semantic
-                1.0 / (rrf_k + lexical_rank.get(episode["id"], lexical_miss))     # .get() returns penalty rank if episode missing from lexical
+        for engram in list(engram_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
+            engram = engram.copy()                                              # clone entry — prevents mutating the original pool entry
+            engram["rrf_score"] = (                                             # RRF formula — higher score = stronger combined rank
+                1.0 / (rrf_k + semantic_rank.get(engram["id"], semantic_miss)) + # .get() returns penalty rank if engram missing from semantic
+                1.0 / (rrf_k + lexical_rank.get(engram["id"], lexical_miss))   # .get() returns penalty rank if engram missing from lexical
             )
-            episode_pool[episode["id"]] = episode                                 # writes cloned episode with rrf_score back into pool
+            engram_pool[engram["id"]] = engram                                  # writes cloned engram with rrf_score back into pool
 
         # Sort descending by RRF score
-        sorted_episodes = sorted(episode_pool.values(),                           # sorts all candidates by rrf_score descending
-                                key=lambda episode: episode["rrf_score"],        # uses rrf_score as the sorting key
-                                reverse=True)                                    # sorts in descending order
+        sorted_engrams = sorted(engram_pool.values(),                           # sorts all candidates by rrf_score descending
+                                key=lambda engram: engram["rrf_score"],         # uses rrf_score as the sorting key
+                                reverse=True)                                   # sorts in descending order
 
         # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-        max_rrf = sorted_episodes[0]["rrf_score"] if sorted_episodes else 1.0     # best score for normalization — guard against empty list
+        max_rrf = sorted_engrams[0]["rrf_score"] if sorted_engrams else 1.0     # best score for normalization — guard against empty list
     
-        for episode in sorted_episodes[:recall_limit]:                            # only processes top episodes up to recall limit
-            episode["relevancy"] = episode["rrf_score"] / max_rrf                 # normalize RRF score to 0.0–1.0
-            episode.pop("_rank", None)                                            # strip internal rank field before surfacing to caller
-            episode.pop("rrf_score", None)                                        # strip internal RRF score before surfacing to caller
+        for engram in sorted_engrams[:depth]:                                   # only processes top engrams up to depth
+            engram["relevancy"] = engram["rrf_score"] / max_rrf                 # normalize RRF score to 0.0–1.0
+            engram.pop("_rank", None)                                           # strip internal rank field before surfacing to caller
+            engram.pop("rrf_score", None)                                       # strip internal RRF score before surfacing to caller
         
-        return sorted_episodes[:recall_limit]                                     # Return top episodes normalized and cleaned
+        return sorted_engrams[:depth]                                           # return top engrams normalized and cleaned
 
-    def search_knn(self, cue_blob: bytes, limit: int) -> list[dict]:
+    def get_buffer_count(self) -> int:
         """
-        KNN semantic search via sqlite-vec L2 distance.
-        Returns shaped results ready for RRF fusion — no post-processing in caller.
-
-        Args:
-            cue_blob : fp32 binary blob of the encoded recall cue
-            limit    : Maximum candidates to return
+        Return count of episodes currently staged in episodic buffer.
 
         Returns:
-            list[dict]: id, timestamp, date, content, relevancy, _rank
+            int: Number of unencoded episodes in episodic buffer
         """
-        try:
-            rows = self._conn.execute(
-                f"""
-                SELECT e.id, e.timestamp, e.date, e.content,
-                    ev.distance
-                FROM {self._vector_schema} ev
-                JOIN {self._storage_schema} e ON e.id = ev.rowid
-                WHERE ev.{self._blueprint.semantic_traces} MATCH ?
-                AND k = ?
-                ORDER BY ev.distance
-                """,
-                [cue_blob, limit],
-            ).fetchall()
-
-            if not rows:
-                return []
-
-            self.logger.debug(f"ESB KNN → {len(rows)} candidates | best_dist:{rows[0]['distance']:.4f}")
-
-            return [
-                {
-                    "id"        : row["id"],
-                    "timestamp" : row["timestamp"],
-                    "date"      : row["date"],
-                    "content"   : row["content"],
-                    "relevancy" : max(0.0, 1.0 - (row["distance"]**2 / 2.0)),  # L2 distance → cosine similarity on unit vectors
-                    "_rank"     : i,                                             # 0-based rank for RRF
-                }
-                for i, row in enumerate(rows)
-            ]
-        except Exception as e:
-            self.logger.debug(f"ESB KNN search failed: {e}")
-            return []
-
-    def search_cosine(self, cue_vector: list[float], recall_limit: int, recall_pool: int) -> list[dict]:
-        """
-        Brute-force cosine similarity fallback when sqlite-vec is unavailable.
-        Stratified sampling — half recent, half oldest — bounds RAM usage while
-        ensuring old memories score alongside recent ones.
-
-        Args:
-            cue_vector   : Encoded recall cue as float list
-            recall_limit : Maximum candidates to return
-            recall_pool  : Candidate pool multiplier — controls stratified sample size
-
-        Returns:
-            list[dict]: id, timestamp, date, content, relevancy, _rank
-        """
-        try:
-            half_pool = (recall_limit * recall_pool) // 2                       # Stratified pool — half recent, half oldest
-            rows = self._conn.execute(
-                f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
-                "ORDER BY rowid DESC LIMIT ? "
-                "UNION ALL "
-                f"SELECT id, timestamp, date, content, encoding FROM {self._storage_schema} "
-                "ORDER BY rowid ASC LIMIT ?",
-                [half_pool, half_pool],
-            ).fetchall()
-
-            scored = []
-            expected_bytes = len(cue_vector) * 4                                    # fp32 — 4 bytes per float
-            for row in rows:
-                if len(row["encoding"]) != expected_bytes:                          # Dimension mismatch — stale encoding from old model
-                    continue
-                engram_vec = unpack_vector(row["encoding"], len(cue_vector))        
-                score = semantic_match(cue_vector, engram_vec)                      # Dot product == cosine sim on unit vectors
-                if score > 0.0:
-                    scored.append((score, row))
-
-            scored.sort(key=lambda x: x[0], reverse=True)
-
-            return [
-                {
-                    "id"        : row["id"],
-                    "timestamp" : row["timestamp"],
-                    "date"      : row["date"],
-                    "content"   : row["content"],
-                    "relevancy" : score,
-                    "_rank"     : i,                                                # 0-based rank for RRF
-                }
-                for i, (score, row) in enumerate(scored[:recall_limit * 2])
-            ]
-        except Exception as e:
-            self.logger.debug(f"ESB cosine search failed: {e}")
-            return []
-
-    def search_lexical_normalized(self, query: str, recall_limit: int) -> list[dict]:
-        """
-        FTS5 lexical search with normalized relevancy scores.
-        Sanitizes raw query, executes FTS5 match, normalizes raw rank to 0.0-1.0
-        so results are shaped identically to semantic path for RRF fusion.
-
-        Args:
-            query        : Raw recall cue string — sanitized internally
-            recall_limit : Maximum candidates to return
-
-        Returns:
-            list[dict]: id, timestamp, date, content, relevancy, _rank
-        """
-        safe_query = sanitize_lexical_cue(query)                                    # Strip punctuation, filter stop words, join with OR
-        if not safe_query:
-            return []
-
-        try:
-            rows = self._conn.execute(
-                f"""
-                SELECT e.id, e.timestamp, e.date, e.content,
-                    fts.rank AS raw_rank
-                FROM {self._lexical_schema} fts
-                JOIN {self._storage_schema} e ON e.id = fts.rowid
-                WHERE {self._lexical_schema} MATCH ?
-                ORDER BY fts.rank
-                LIMIT ?
-                """,
-                [safe_query, recall_limit * 2],                                     # 2× limit — RRF culls to recall_limit after fusion
-            ).fetchall()
-
-            if not rows:
-                return []
-
-            raw_scores = [abs(row["raw_rank"]) for row in rows]
-            max_score  = max(raw_scores) if raw_scores else 1.0                     # Guard against empty — should never reach here
-
-            return [
-                {
-                    "id"        : row["id"],
-                    "timestamp" : row["timestamp"],
-                    "date"      : row["date"],
-                    "content"   : row["content"],
-                    "relevancy" : abs(row["raw_rank"]) / max_score if max_score else 0.0,  # FTS5 rank is negative — abs() then normalize to 0.0-1.0
-                    "_rank"     : i,                                                        # 0-based rank for RRF
-                }
-                for i, row in enumerate(rows)
-            ]
-        except Exception as e:
-            self.logger.debug(f"ESB lexical search failed: {e}")
-            return []
-
-    # ── Retrieval ─────────────────────────────────────────────────────────────
-
-    def get_episodes_for_date(self, date_str: str) -> list[dict]:
-        """
-        Return all episodes for a given date in chronological order.
-        Used by MCC for 11pm Dream Cycle reflection (M2).
-
-        Args:
-            date_str (str): ISO date string (e.g. "2026-04-05")
-
-        Returns:
-            List of dicts: {timestamp, content}
-            Empty list if no episodes found or on failure.
-        """
-        try:
-            rows = self._conn.execute(
-                f"SELECT timestamp, content FROM {self._storage_schema} "
-                "WHERE date = ? ORDER BY timestamp",
-                [date_str],
-            ).fetchall()
-            return [
-                {"timestamp": r["timestamp"], "content": r["content"]}
-                for r in rows
-            ]
-        except Exception as e:
-            self.logger.error(f"EMC get_episodes_for_date failed: {e}")
-            return []
+        return self._conn.execute(
+            f"SELECT COUNT(*) FROM {self._staging_schema}"
+        ).fetchone()[0]
 
     def get_stats(self, engram_gateway: str) -> dict:
         """
