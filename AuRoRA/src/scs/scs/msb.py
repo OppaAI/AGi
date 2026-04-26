@@ -30,7 +30,22 @@ Terminology:
     transcript      — SQL column definition string generated from a blueprint
     unit vector     — L2-normalized vector; cosine similarity becomes equivalent
                       to L2 distance, enabling sqlite-vec KNN search  
-    
+
+Public interface:
+    EncodingEngine:
+        encode_engram(trace: str) → list[float]
+        encode_cue(cue: str) → RecallCue
+
+    EngramComplex:
+        stage_engram(engram: dict) → int
+        inscribe_engram(engram: dict, schema: str | None) → int
+        retrieve_staged_batch(batch_size: int, offset: int) → list[dict]
+        decay_staged_engram(staging_id: int) → None
+        inscribe_vector_index(engram_id: int, blob: bytes) → None
+        inscribe_lexical_index(engram_id: int, content: str) → None
+        recall_engram(cue: RecallCue, depth: int, date_range: tuple[str, str] | None) → list[dict]
+        assess_engram_complex() → dict
+
 TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
 """
@@ -84,7 +99,6 @@ class RecallCue:
     vector: list[float]     # encoded semantic vector — passed to semantic recall
     text: str               # raw cue text — passed to lexical recall
 
-# TODO: migrate pack_vector, unpack_vector, normalize_vector to hrs.py if vector math is needed outside memory cortices
 def normalize_vector(vector: list[float]) -> list[float]:
     """
     Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
@@ -122,18 +136,22 @@ class EncodingEngine:
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger, encoding_engine: str, prime_limit: int = 256, prime_key_limit: int = 300) -> None:
+    def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_limit: int = 256, prime_key_limit: int = 300) -> None:
         """
         Initializes the encoding engine and encoding prime for recent memory traces.
     
         Args:
-            logger                   : Logger instance passed from the cortex
-            encoding_engine (str)    : Embedding model to load (e.g. from HRP)
-            prime_limit (int)        : Maximum number of entries in the encoding prime
-            prime_key_limit (int)    : Maximum characters hashed for the prime key
+            logger                      : Logger instance passed from the cortex
+            encoding_engine (str)       : Embedding model to load (e.g. from HRP)
+            encoding_cue_prefix (str)   : Prompt prefix for encoding cues
+            encoding_engram_prefix (str): Prompt prefix for engrams
+            prime_limit (int)           : Maximum number of entries in the encoding prime
+            prime_key_limit (int)       : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
+        self._cue_prefix: str               = cue_prefix            # prompt prefix for encoding cues
+        self._engram_prefix: str            = engram_prefix         # prompt prefix for engrams
         self.prime_limit: int               = prime_limit           # max prime entries before LRU eviction
         self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until load succeeds
@@ -141,7 +159,7 @@ class EncodingEngine:
         
         try:                                                                        # attempt to activate SentenceTransformer
             from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
-            self.logger.info(f"⏳ Activating Encoding Engine ({encoding_engine})…") # log before the blocking load
+            self.logger.info(f"⏳ Activating Encoding Engine ({self.encoding_engine})…") # log before the blocking load
             self._core = SentenceTransformer(self.encoding_engine)                  # load model weights into RAM — blocks until complete
             self.logger.info("✅ Encoding Engine activated")                        # only reached if load succeeded
         except ImportError:                                                         # trigger if sentence_transformers package not installed
@@ -163,17 +181,17 @@ class EncodingEngine:
         """
         return self._core is not None            # True only if SentenceTransformer loaded successfully
 
-    def encode_engram(self, trace: str) -> list[float]:
+    def _encode(self, trace: str, prefix: str) -> list[float]:
         """
-        Encodes a memory trace into a semantic vector for storage or recall.
-        Primes recent encodings to speed up subsequent recall.
+        Core encoding logic — primes recent encodings to speed up subsequent recall.
         Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical recall.
-        
+
         Args:
-            trace (str) : Memory trace to encode
+            trace (str): Memory trace or recall cue to encode.
+            prefix (str): Instruction prefix to prepend before encoding — empty for engrams, BGE prefix for cues.
 
         Returns:
-            list[float]:  Semantic encoding vector, or empty list if engine unavailable
+            list[float]: Semantic encoding vector, or empty list if engine unavailable.
         """
         if not self.is_available:                                                           # _core is None, skip encoding entirely
             self.logger.debug(                                                              # log the SentenceTransformer being unavailable
@@ -181,12 +199,12 @@ class EncodingEngine:
             )
             return []                                                                       # empty list signals fallback to lexical recall
 
-        prime_key: str = f"engram:{hashlib.md5(trace[:self.prime_key_limit].encode()).hexdigest()}"  # deterministic prime key — stable across restarts
+        prime_key: str = f"engram:{hashlib.md5((prefix + trace)[:self.prime_key_limit].encode()).hexdigest()}"  # prefix included — cue and engram encode separately
         if prime_key in self._prime:                                                        # O(1) dict lookup
             return self._prime[prime_key]                                                   # prime hit — skips model inference
 
         try:                                                                                # attempt to embed the query or engram vector
-            encoded_trace: list[float] = self._core.encode(trace).tolist()                  # model inference — .tolist() converts ndarray → float list
+            encoded_trace: list[float] = self._core.encode(prefix + trace).tolist()         # model inference — prefix prepended; .tolist() converts ndarray → float list
             encoded_trace = normalize_vector(encoded_trace)                                 # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
@@ -198,7 +216,19 @@ class EncodingEngine:
         except Exception as e:                                                              # if embedding fails,
             self.logger.debug(f"Encoding error: {e}")                                       # log encoding errors with reason
             return []                                                                       # same empty list fallback as unavailable guard
-    
+
+    def encode_engram(self, trace: str) -> list[float]:
+        """
+        Encode a memory trace into a semantic vector for storage.
+
+        Args:
+            trace (str): Memory trace to encode.
+
+        Returns:
+            list[float]: Semantic encoding vector, or empty list if encoding engine unavailable.
+        """
+        return self._encode(trace, self._engram_prefix)                                     # wrap _encode with engram prefix for encoding engine
+
     def encode_cue(self, cue: str) -> RecallCue:
         """
         Encodes a recall cue and store with raw cue for dual-path retrieval.
@@ -209,9 +239,8 @@ class EncodingEngine:
         Returns:
             RecallCue : Encoded vector and raw cue for dual-path retrieval
         """
-        cue_prefix: str = "Represent this sentence for searching relevant passages: "       # BGE instruction prefix — applied to recall cues only, not stored engrams
         return RecallCue(                                                                   # return a RecallCue for dual-path retrieval
-            vector=self.encode_engram(cue_prefix + cue),                                    # encode with BGE prefix — separate prime entry from storage encoding
+            vector=self._encode(cue, self._cue_prefix),                                     # wrap _encode with cue prefix for encoding engine
             text=cue                                                                        # raw cue text preserved for lexical fallback
         )
 
