@@ -508,6 +508,24 @@ class EngramComplex:
             self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
             return []                                                           # empty list — caller handles no results
 
+    def recall_engram(self, cue_vector: list[float], cue_text: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+        """
+        Recall engrams by fusing semantic and lexical matches.
+        Cortex encodes the cue before calling — MSB owns retrieval only.
+
+        Args:
+            cue_vector (list[float])            : Encoded recall cue as float vector.
+            cue_text   (str)                    : Raw recall cue string for lexical search.
+            depth      (int)                    : Number of engrams to recall.
+            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
+
+        Returns:
+            list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
+        """
+        semantic_matches = self._semantic_recall(cue_vector, depth, date_range)     # recall by meaning
+        lexical_matches  = self._lexical_recall(cue_text, depth, date_range)        # recall by keyword
+        return self._memory_convergence(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
+
     def lexical_recall(self, cue: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the lexical index by keyword matching.
@@ -587,12 +605,7 @@ class EngramComplex:
         return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the engram
 
     @staticmethod
-    def memory_convergence(
-        semantic_matches : list[dict],
-        lexical_matches  : list[dict],
-        depth            : int,
-        rrf_k            : int = 60,
-    ) -> list[dict]:
+    def memory_convergence(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
         """
         Fuse semantic and lexical recall matches into a unified engram salience ranking.
         Semantic recall (vec KNN) + lexical recall (FTS5)
