@@ -160,8 +160,8 @@ class EncodingEngine:
         Returns empty list if encoding engine is unavailable — signals caller to fall back to lexical recall.
         
         Args:
-        trace  (str) : Memory trace to encode — episode content or recall cue
-        is_cue (bool): If True, prepends BGE instruction prefix before encoding — cues and episodes
+        trace  (str) : Memory trace to encode — engram content or recall cue
+        is_cue (bool): If True, prepends BGE instruction prefix before encoding — cues and engrams
                        encode differently so identical text gets separate prime entries
 
         Returns:
@@ -173,12 +173,12 @@ class EncodingEngine:
             )
             return []                                                                   # empty list signals fallback to lexical recall
 
-        prime_key = f"{'cue' if is_cue else 'episode'}:{hash(trace[:self.prime_key_limit])}"# prime key — prefixed by types so same text encodes separately as cue vs episode
+        prime_key = f"{'cue' if is_cue else 'engram'}:{hash(trace[:self.prime_key_limit])}"# prime key — prefixed by types so same text encodes separately as cue vs engram
         if prime_key in self._prime:                                                      # O(1) dict lookup
             return self._prime[prime_key]                                                 # prime hit — skips model inference
 
         try:                                                                            # attempt to embed the query or engram vector
-            cue_prefix = "Represent this sentence for searching relevant passages: "    # BGE instruction prefix — applied to recall cues only , not stored episodes
+            cue_prefix = "Represent this sentence for searching relevant passages: "    # BGE instruction prefix — applied to recall cues only , not stored engrams
             encoded_trace: list[float] = self._core.encode(cue_prefix + trace if is_cue else trace).tolist() # model inference — .tolist() converts ndarray → float list
             encoded_trace = normalize_vector(encoded_trace)                               # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
@@ -313,11 +313,10 @@ class EngramComplex:
             self._conn.commit()                                                                # commit tables and indexes together
 
             # 4. Build Vector Search Virtual Table
-            if self._engram_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
-                semantic_transcript = self._transcribe_traces(self._blueprint.semantic_traces) # column name holding the encoding BLOB
+            if self._vector_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
                 self._conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
-                        {semantic_transcript} FLOAT[{self._vector_dim}]
+                        {self._blueprint.semantic_traces} FLOAT[{self._vector_dim}]
                     )
                 """)                                                                           # create vec0 virtual table for KNN search
                 self._conn.commit()                                                            # commit the virtual table to the memory bank
@@ -394,10 +393,10 @@ class EngramComplex:
         Returns:
             int: engram_id of the inscribed engram
         """
-        schema: str    = schema or self._storage_schema                     # default to permanent storage if no schema provided
-        labels: str    = ", ".join(engram.keys())                           # transcript label list from engram
-        slots: str     = ", ".join([ "?"] * len(engram))                    # one ? per trace
-        engram_id: int = self._conn.execute(                                # INSERT dynamically built from transcript labels
+        schema                    = schema or self._storage_schema          # default to permanent storage if no schema provided
+        labels: str               = ", ".join(engram.keys())                # transcript label list from engram
+        slots: str                = ", ".join([ "?"] * len(engram))         # one ? per trace
+        engram_id: sqlite3.Cursor = self._conn.execute(                     # INSERT dynamically built from transcript labels
             f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
@@ -463,7 +462,25 @@ class EngramComplex:
         )
         self._conn.commit()                                                 # commit before returning
 
-    def semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def recall_engram(self, cue_vector: list[float], cue_text: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+        """
+        Recall engrams by fusing semantic and lexical matches.
+        Cortex encodes the cue before calling — MSB owns retrieval only.
+
+        Args:
+            cue_vector (list[float])            : Encoded recall cue as float vector.
+            cue_text   (str)                    : Raw recall cue string for lexical search.
+            depth      (int)                    : Number of engrams to recall.
+            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
+
+        Returns:
+            list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
+        """
+        semantic_matches = self._semantic_recall(cue_vector, depth, date_range)     # recall by meaning
+        lexical_matches  = self._lexical_recall(cue_text, depth, date_range)        # recall by keyword
+        return self._memory_convergence(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
+
+    def _semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the vector index by semantic similarity to the cue.
 
@@ -508,25 +525,7 @@ class EngramComplex:
             self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
             return []                                                           # empty list — caller handles no results
 
-    def recall_engram(self, cue_vector: list[float], cue_text: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
-        """
-        Recall engrams by fusing semantic and lexical matches.
-        Cortex encodes the cue before calling — MSB owns retrieval only.
-
-        Args:
-            cue_vector (list[float])            : Encoded recall cue as float vector.
-            cue_text   (str)                    : Raw recall cue string for lexical search.
-            depth      (int)                    : Number of engrams to recall.
-            date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
-
-        Returns:
-            list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
-        """
-        semantic_matches = self._semantic_recall(cue_vector, depth, date_range)     # recall by meaning
-        lexical_matches  = self._lexical_recall(cue_text, depth, date_range)        # recall by keyword
-        return self._memory_convergence(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
-
-    def lexical_recall(self, cue: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _lexical_recall(self, cue: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the lexical index by keyword matching.
 
@@ -605,7 +604,7 @@ class EngramComplex:
         return " OR ".join(f'"{term}"' for term in terms if term)        # wraps each token in quotes, joins with OR — any keyword match surfaces the engram
 
     @staticmethod
-    def memory_convergence(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
+    def _memory_convergence(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
         """
         Fuse semantic and lexical recall matches into a unified engram salience ranking.
         Semantic recall (vec KNN) + lexical recall (FTS5)
@@ -632,7 +631,7 @@ class EngramComplex:
             list[dict]: list of engrams up to recall depth sorted by descending RRF score,
                         with 'relevancy' set to normalised RRF score (0.0–1.0)
         """
-        # Build rank lookup schemas and episode pool — 0-based, best = 0
+        # Build rank lookup schemas and engram pool — 0-based, best = 0
         engram_pool: dict[int, dict] = {}                                       # union of all candidates from both paths — keyed by engram_id
         semantic_rank: dict[int, int] = {}                                      # engram_id → 0-based rank in semantic results
         lexical_rank: dict[int, int] = {}                                       # engram_id → 0-based rank in lexical results
@@ -645,12 +644,12 @@ class EngramComplex:
             lexical_rank[engram["id"]] = rank                                   # stores rank by id — looked up during RRF scoring
             engram_pool.setdefault(engram["id"], engram)                        # setdefault — only add engram if id not already, semantic path takes precedence
 
-        semantic_miss = len(semantic_matches)                                   # penalty rank for engrams absent from semantic results
-        lexical_miss = len(lexical_matches)                                     # penalty rank for engrams absent from lexical results
+        semantic_miss: int = len(semantic_matches)                              # penalty rank for engrams absent from semantic results
+        lexical_miss:  int = len(lexical_matches)                               # penalty rank for engrams absent from lexical results
         
         # Compute RRF score for each candidate
         for engram in list(engram_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
-            engram = engram.copy()                                              # clone entry — prevents mutating the original pool entry
+            engram: dict = engram.copy()                                        # clone entry — prevents mutating the original pool entry
             engram["rrf_score"] = (                                             # RRF formula — higher score = stronger combined rank
                 1.0 / (rrf_k + semantic_rank.get(engram["id"], semantic_miss)) + # .get() returns penalty rank if engram missing from semantic
                 1.0 / (rrf_k + lexical_rank.get(engram["id"], lexical_miss))   # .get() returns penalty rank if engram missing from lexical
@@ -658,12 +657,12 @@ class EngramComplex:
             engram_pool[engram["id"]] = engram                                  # writes cloned engram with rrf_score back into pool
 
         # Sort descending by RRF score
-        sorted_engrams = sorted(engram_pool.values(),                           # sorts all candidates by rrf_score descending
-                                key=lambda engram: engram["rrf_score"],         # uses rrf_score as the sorting key
-                                reverse=True)                                   # sorts in descending order
+        sorted_engrams: list[dict] = sorted(engram_pool.values(),                   # sorts all candidates by rrf_score descending
+                                            key=lambda engram: engram["rrf_score"], # uses rrf_score as the sorting key
+                                            reverse=True)                           # sorts in descending order
 
         # Normalise RRF scores to 0.0–1.0 for the 'relevancy' field
-        max_rrf = sorted_engrams[0]["rrf_score"] if sorted_engrams else 1.0     # best score for normalization — guard against empty list
+        max_rrf: float = sorted_engrams[0]["rrf_score"] if sorted_engrams else 1.0  # best score for normalization — guard against empty list
     
         for engram in sorted_engrams[:depth]:                                   # only processes top engrams up to depth
             engram["relevancy"] = engram["rrf_score"] / max_rrf                 # normalize RRF score to 0.0–1.0
@@ -672,65 +671,34 @@ class EngramComplex:
         
         return sorted_engrams[:depth]                                           # return top engrams normalized and cleaned
 
-    def get_buffer_count(self) -> int:
+    def assess_engram_complex(self) -> dict:
         """
-        Return count of episodes currently staged in episodic buffer.
+        Assess the current status of the engram complex for logging and monitoring.
 
         Returns:
-            int: Number of unencoded episodes in episodic buffer
+            dict: Current engram complex stats including engram count, oldest and newest engram, buffer count, and database size.
         """
-        return self._conn.execute(
-            f"SELECT COUNT(*) FROM {self._staging_schema}"
-        ).fetchone()[0]
-
-    def get_stats(self, engram_gateway: str) -> dict:
-        """
-        Return EMC health and storage stats.
-
-        Returns:
-            dict: {
-                episodes, oldest_episode, newest_episode,
-                buffer_total, db_size_mb
-            }
-            Empty dict on failure.
-        """
-        try:
-            ep_row = self._conn.execute(
+        try:                                                                    # attempt retrieve stats of engram complex database
+            storage_stats: sqlite3.Row = self._conn.execute(                    # query storage schema for engram count and date range
                 "SELECT COUNT(*) as total, "
-                "MIN(date) as oldest, MAX(date) as newest "
+                "MIN(date) as earliest, MAX(date) as latest "
                 f"FROM {self._storage_schema}"
-            ).fetchone()
+            ).fetchone()                                                        # fetch engram count and date range
 
-            buf_row = self._conn.execute(
+            staging_stats: sqlite3.Row = self._conn.execute(                    # query staging schema for buffer count
                 f"SELECT COUNT(*) as total FROM {self._staging_schema}"
-            ).fetchone()
+            ).fetchone()                                                        # fetch buffer count
 
-            db_size_mb = round(Path(engram_gateway).stat().st_size / 1_048_576, 2) \
-                if Path(engram_gateway).exists() else 0.0
+            ecx_volume: float = round(Path(self._gateway).stat().st_size / 1_048_576, 2) \
+                if Path(self._gateway).exists() else 0.0                        # calculate engram complex physical volume size (in MB)
 
-            return {
-                "episodes":       ep_row["total"]  if ep_row  else 0,
-                "oldest_episode": ep_row["oldest"] if ep_row  else None,
-                "newest_episode": ep_row["newest"] if ep_row  else None,
-                "buffer_total":   buf_row["total"] if buf_row else 0,
-                "db_size_mb":     db_size_mb,
+            return {                                                            # return engram complex stats for logging and monitoring
+                "buffer_count"    : staging_stats["total"]  if staging_stats else 0,
+                "engram_count"    : storage_stats["total"]  if storage_stats else 0,
+                "earliest_engram" : storage_stats["earliest"] if storage_stats else None,
+                "latest_engram"   : storage_stats["latest"] if storage_stats else None,
+                "physical_volume" : ecx_volume,
             }
-        except Exception as e:
-            self.logger.error(f"EMC get_stats failed: {e}")
-            return {}
-
-    def count_staged_engrams(self) -> int:
-        """
-        Count number of engrams staged in the buffer pending processing.
-        """
-        return self._conn.execute(                              # return count of engrams in staging schema
-            f"SELECT COUNT(*) FROM {self._staging_schema}"      # query staging schema for count
-        ).fetchone()[0]                                         # first element is the count
-        
-    def count_stored_engrams(self) -> int:
-        """
-        Count number of engrams stored in the memory bank.
-        """
-        return self._conn.execute(                              # Return count of engrams in storage schema
-            f"SELECT COUNT(*) FROM {self._storage_schema}"      # Query engram storage schema for count
-        ).fetchone()[0]                                         # Return first element of result tuple
+        except Exception as e:                                                  # catch any database access errors
+            self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
+            return {}                                                           # empty dict — caller handles no results
