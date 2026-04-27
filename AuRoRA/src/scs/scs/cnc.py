@@ -324,7 +324,7 @@ class CNC(Node):
         # Stop asyncio loop
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._loop_thread.join(timeout=3.0)
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True)
 
         super().destroy_node()
         self.get_logger().info("✅ CNC shutdown complete")
