@@ -121,14 +121,12 @@ CNS = AGi.CNS                   # Channel for interfacing with Central Nervous S
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
 from scs.msb import (               # Aquire access to memory storage bank
-    EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
-    EngramComplex,          # Centralized engram memory storage interface
     EngramSchema,               # Schema definition object for memory cortices
     EngramTrace,                # Trace definition object for individual engram fields
     EngramModality,             # Enumeration of valid engram field modalities
-    pack_vector,                # Pack a float vector into fp32 binary blob for engram storage
-    unpack_vector,              # Unpack a fp32 binary blob back into a float vector
-    memory_convergence,         # RRF fusion of semantic + lexical ranked result lists
+    RecallCue,                  # Recall cue definition object for memory cortices
+    EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
+    EngramComplex,          # Centralized engram memory storage interface
 )
 
 EMC_SCHEMA = EngramSchema(                                              # Define the engram schema for episodic memory
@@ -231,7 +229,11 @@ class EpisodicMemoryCortex:
         self._episodic_buffer_lock   = threading.Lock()                         # Lock for thread-safe access to episodic buffer
         self._encoding_engine        = EncodingEngine(
             logger=logger,
-            encoding_engine=EMC.ENCODING_ENGINE
+            encoding_engine=EMC.ENCODING_ENGINE,
+            cue_prefix=EMC.RECALL_CUE_PREFIX,
+            engram_prefix=EMC.RECALL_ENGRAM_PREFIX,
+            prime_limit=EMC.PRIME_LIMIT,
+            prime_key_limit=EMC.PRIME_KEY_LIMIT
         )                                                                       # Initialize shared encoding engine from MSB
 
         # SQLite — WAL mode for concurrent reads during async writes
@@ -407,7 +409,7 @@ class EpisodicMemoryCortex:
                         )
       
                 # Encode the episode content into a semantic vector
-                encoded_episode: list[float] = self._encoding_engine.encode(episode["content"], is_cue=False)   # Encode the episode content into a semantic vector
+                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode["content"])   # Encode the episode content into a semantic vector
                 if not encoded_episode:                                             # If the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # Log the warning message of unavailability of the encoding engine
@@ -496,7 +498,7 @@ class EpisodicMemoryCortex:
     
         # PATH 1: Semantic
         if self._encoding_engine.is_available:                                                  # Encoding engine must be loaded for semantic path
-            cue_vector: list[float] = self._encoding_engine.encode(query, is_cue=True)          # Encode cue — BGE instruction prefix applied internally
+            cue_vector: list[float] = self._encoding_engine.encode_cue(query)          # Encode cue — BGE instruction prefix applied internally
     
             if cue_vector:                                                                      # Empty vector means encoding failed — skip semantic path
                 if self._engram_index:                                                          # sqlite-vec available — use KNN

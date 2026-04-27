@@ -19,34 +19,36 @@ Architecture:
     WMC and EMC operate independently but converge in assemble_memory_context() into
     a single unified memory context sent to cognitive engine — exactly as fresh thoughts
     and recalled memories both surface into the same prefrontal awareness.
-    Cognitive engine cannot distinguish a recent sustained  WMC PMTs from a recalled EMC engram —
+    Cognitive engine cannot distinguish a sustained WMC PMT from a recalled EMC engram —
     they are all just active cognition context.
 
     Cortical capacity budget:
-        Identity and cognition          →  CNS_COGNITIVE_RESERVE
-        EMC recalled engrams            →  EMC_RECALL_RESERVE
-        WMC sustained PMTs              →  WMC_GLOBAL_CHUNK_LIMIT
+        Identity and cognition          →  CNS.COGNITIVE_RESERVE
+        EMC recalled engrams            →  CNS.EMC.RECALL_RESERVE
+        WMC sustained PMTs              →  CNS.WMC.GLOBAL_CHUNK_LIMIT
         ─────────────────────────────────────────────────────────────────────
-        Total active cognitive core     →  CNS_CORTICAL_CAPACITY
+        Total active cognitive core     →  CNS.CORTICAL_CAPACITY
 
 Terminology:
-    Buffer      — temporary staging area for memory traces in transition 
-                (e.g. evicted PMTs from WMC waiting for encoding and consolidation in EMC, or
-                recalled EMC episodes waiting to be injected into memory context)
+    Buffer      — temporary staging area for memory traces in transition
+                  (evicted PMTs from WMC waiting for encoding in EMC, or
+                  recalled EMC episodes waiting to be injected into memory context)
     Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
-    Engram      — episodic memory trace (one past interaction, user prompt + AI response)
+    Engram      — one physical stored memory record in the engram complex
     PMT         — phonological memory trace (one interaction, user prompt + AI response)
-                WMC pairs the interaction internally; MCC forwards evicted PMTs to EMC for encoding and consolidation
-    Scaffold    — temporary staging area for relevant EMC episodes to be injected into memory context
-    Reserve     — cortical capacity reserve for a specific memory function (e.g. EMC_RECALL_RESERVE for recalling relevant EMC episodes)
-    Threshold   — minimum relevancy score for an EMC episode to be injected into memory context
+                  WMC pairs turns internally — MCC forwards evicted PMTs to EMC
+    Scaffold    — temporary staging area for relevant EMC episodes before context injection
+    Reserve     — cortical capacity reserved for a specific memory function
+    Threshold   — minimum relevancy score for an EMC episode to enter memory context
 
 Public interface:
-    await mcc.register_memory(role, content)
-    context = await mcc.assemble_memory_context(user_prompt)
-    mcc.report_memory_stats()
-    mcc.forget_memory()
-    mcc.close()
+    MemoryCoordinationCore:
+        await register_memory(user_id: str, content: str) -> None   
+        context = await assemble_memory_context(user_prompt: str) -> list[dict]
+        assess_memory_schema() -> dict
+        report_memory_stats() -> None
+        forget_memory() -> None
+        close() -> None
 
 TODO:
     M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown
@@ -65,15 +67,15 @@ TODO:
 """
 
 # System libraries
-import asyncio                              # For concurrent WMC and EMC recall
-import json                                 # For structured PMT storage — crash-safe serialization and recall
-from pathlib import Path                    # For handling gateway to the engrams
+import asyncio                              # for async WMC and EMC recall
+import json                                 # for deserializing episode content in memory context assembly
+from pathlib import Path                    # for engram gateway path construction
 
 # AGi libraries
-from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex layer of the CNS, responsible for sustaining PMTs in working memory
-from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex layer of the CNS, responsible for recalling relevant episodes from the engram complex
-from hrs.hrp import AGi                     # Import AGi homeostatic regulation parameters
-CNS = AGi.CNS                               # Channel for interfacing with Central Nervous System (CNS)
+from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex — sustains active PMTs
+from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex — recalls relevant episodes
+from hrs.hrp import AGi                     # Homeostatic Regulation Parameters — global variables
+CNS = AGi.CNS                               # CNS parameters alias — used throughout MCC
 
 class MemoryCoordinationCore:
     """

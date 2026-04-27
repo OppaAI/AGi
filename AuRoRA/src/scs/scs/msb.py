@@ -37,14 +37,14 @@ Public interface:
         encode_cue(cue: str) → RecallCue
 
     EngramComplex:
-        stage_engram(engram: dict) → int
-        inscribe_engram(engram: dict, schema: str | None) → int
-        retrieve_staged_batch(batch_size: int, offset: int) → list[dict]
-        decay_staged_engram(staging_id: int) → None
-        inscribe_vector_index(engram_id: int, blob: bytes) → None
-        inscribe_lexical_index(engram_id: int, content: str) → None
-        recall_engram(cue: RecallCue, depth: int, date_range: tuple[str, str] | None) → list[dict]
-        assess_engram_complex() → dict
+        stage_engram(engram: dict) -> int
+        inscribe_engram(engram: dict, schema: str | None) -> int
+        retrieve_staged_batch(batch_size: int, offset: int) -> list[dict]
+        decay_staged_engram(staging_id: int) -> None
+        inscribe_vector_index(engram_id: int, blob: bytes) -> None
+        inscribe_lexical_index(engram_id: int, content: str) -> None
+        recall_engram(cue: RecallCue, depth: int, date_range: tuple[str, str] | None) -> list[dict]
+        assess_engram_complex() -> dict
 
 TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
@@ -283,9 +283,9 @@ class EngramComplex:
         self._lexical_schema: str       = f"{cortex}_lexical"           # virtual table name for FTS5 search
         self._gateway: str              = gateway                       # gateway to access the engram complex
         self._blueprint: EngramSchema   = schema                        # blueprint driving dynamic table generation
-        self._conn: sqlite3.Connection  = self._connect_ecx()           # open and configure SQLite connection
-        self._vector_dim: int           = dim                           # vector dimension — used in vec0 CREATE VIRTUAL TABLE
+        self._ecx_conn: sqlite3.Connection  = self._connect_ecx()       # open and configure SQLite connection
         self._vector_index: bool        = self._activate_vector_index() # True if sqlite-vec loaded successfully
+        self._vector_dim: int           = dim                           # vector dimension — used in vec0 CREATE VIRTUAL TABLE
         self._build_schema()                                            # create all tables and indexes from blueprint
 
     def _connect_ecx(self) -> sqlite3.Connection:
@@ -311,17 +311,21 @@ class EngramComplex:
             self.logger.error(f"Engram complex connection failed: {e}")         # log failure before re-raising
             raise                                                               # re-raise to let caller handle the error
 
-    def _activate_vector_index(self) -> bool:
+    def _activate_vector_index(self, ecx_conn: sqlite3.Connection | None = None) -> bool:
         """
         Activates the vector index for semantic search.
         Graceful fallback to lexical search if index unavailable.
         
+        Args:
+            ecx_conn (sqlite3.Connection | None): Connection to the engram complex
+            
         Returns:
             bool: True if vector index activated, False otherwise.
         """
+        ecx_conn = ecx_conn or self._ecx_conn                       # use separate connection or fallback to main connection
         try:                                                        # attempt to activate engram vector index
             import sqlite_vec                                       # deferred import — avoids hard crash if package missing
-            sqlite_vec.load(self._conn)                             # load vec0 virtual table support into this connection
+            sqlite_vec.load(ecx_conn)                               # load vec0 virtual table support into this connection
             return True                                             # signal KNN search is available
         except Exception as e:                                      # if sqlite-vec fails to load,
             if self.logger:                                         # if a logger is provided,
@@ -331,6 +335,20 @@ class EngramComplex:
                     f"   Reason: {e}"
                 )
             return False                                            # signals caller to fall back to lexical recall
+
+    def bifurcate_ecx(self) -> sqlite3.Connection:
+        """
+        Open a parallel connection to the engram complex for parallel access.
+        Biological analogue: axonal bifurcation — a parallel pathway off the 
+        same substrate serving synaptic consolidation independently of the main 
+        retrieval pathway.
+
+        Returns:
+            sqlite3.Connection: Separate connection for parallel access to the engram complex
+        """
+        ecx_conn = self._connect_ecx()                              # create separate connection to engram complex
+        self._activate_vector_index(ecx_conn)                       # activate vector index for parallel retrieval
+        return ecx_conn                                             # return separate connection for parallel access
 
     def _build_schema(self) -> None:
         """
@@ -529,7 +547,7 @@ class EngramComplex:
         """
         semantic_matches = self._semantic_recall(cue.vector, depth, date_range)     # recall by meaning
         lexical_matches  = self._lexical_recall(cue.text, depth, date_range)        # recall by keyword
-        return self._memory_convergence(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
+        return self._converge_memories(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
 
     def _semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
@@ -675,7 +693,7 @@ class EngramComplex:
         return any(t.label == "date" for t in self._blueprint.storage)      # True if storage schema has a date column
 
     @staticmethod
-    def _memory_convergence(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
+    def _converge_memories(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
         """
         Fuse semantic and lexical recall matches into a unified engram salience ranking.
         Semantic recall (vec KNN) + lexical recall (FTS5)
