@@ -106,7 +106,6 @@ TODO:
 
 # System libraries
 import os                                   # For process priority adjustment
-import sqlite3                              # For storage of episodic memory and buffer
 import threading                            # For background encoding of episodes
 import time                                 # For inter-encode yielding (sleep) and timing control within encoding cycle
 from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
@@ -223,44 +222,25 @@ class EpisodicMemoryCortex:
             logger              : Logger instance for logging operations
             engram_gateway (str): Path to access the engram for storing episodic memories
         """
-        self.logger                  = logger                                   # Retrieve logger from CNC for logging EMC operations
-        self.engram_gateway: str     = str(engram_gateway)                      # Retrieve engram gateway passed down from MCC
-        self.episodic_buffer         = EpisodicBuffer()                         # Initialize episodic buffer — binding and recall streams for active cognition
-        self._episodic_buffer_lock   = threading.Lock()                         # Lock for thread-safe access to episodic buffer
-        self._encoding_engine        = EncodingEngine(
-            logger=logger,
-            encoding_engine=EMC.ENCODING_ENGINE,
-            cue_prefix=EMC.RECALL_CUE_PREFIX,
-            engram_prefix=EMC.RECALL_ENGRAM_PREFIX,
-            prime_limit=EMC.PRIME_LIMIT,
-            prime_key_limit=EMC.PRIME_KEY_LIMIT
-        )                                                                       # Initialize shared encoding engine from MSB
+        self.logger                  = logger                               # Retrieve logger from CNC for logging EMC operations
+        self.episodic_buffer         = EpisodicBuffer()                     # Initialize episodic buffer — binding and recall streams for active cognition
+        self._episodic_buffer_lock   = threading.Lock()                     # Lock for thread-safe access to episodic buffer
+        self._encoding_engine        = EncodingEngine(                      # Initialize shared encoding engine from MSB
+            logger          = logger,                                       # Logger instance for logging operations
+            encoding_engine = EMC.ENCODING_ENGINE,                          # Identifier for the encoding engine
+            cue_prefix      = EMC.RECALL_CUE_PREFIX,                        # Prefix for recall cues
+            engram_prefix   = EMC.RECALL_ENGRAM_PREFIX,                     # Prefix for engram identifiers
+            prime_limit     = EMC.PRIME_LIMIT,                              # Limit for prime numbers
+            prime_key_limit = EMC.PRIME_KEY_LIMIT                           # Limit for prime keys
+        )                                                                      
 
-        # SQLite — WAL mode for concurrent reads during async writes
-        try:                                                                # Attempt to connect to the engram
-            self.engram = connect_ecx(engram_gateway, logger=logger)        # Open engram connection via shared MSB factory (WAL + row_factory)
-
-            # Set up SQLite-vec for L2 distance semantic search
-            # Graceful fallback to cosine similarity if SQLite-vec not available
-            self._engram_index = activate_engram_index(self.engram, logger=logger)    # Attempt to activate engram vector index via shared MSB utility
-            if self._engram_index:                                          # If engram vector index successfully loaded,
-                self.logger.info("✅ Activated semantic search via engram vectors") # Log the activation of engram vector index
-
-            self._esb = EngramStorageBank(                                  # Acquire access to the engram
-                memory_type  = "emc",
-                engram_conn  = self.engram,
-                engram_schema= EMC_SCHEMA,
-                engram_dim   = EMC.ENCODING_DIM,
-                engram_index = self._engram_index,
-                logger       = self.logger
-            )
-            self._esb.init_schema()                                         # Initialize the schema of the engram
-
-        except sqlite3.Error as e:                                          # If failed to connect to the engram
-            self.logger.error(f"❌ Engram connection failed → {e}")         # Log the failure to connect to the engram
-            if hasattr(self, 'engram'):                                     # If engram already exists,
-                self.engram.close()                                         # Close the engram connection
-            raise                                                           # Raise the anomaly to the caller
+        self._ecx = EngramComplex(                                          # Acquire access to the engram complex
+            logger       = self.logger,                                     # Logger instance for logging operations
+            cortex       = "EMC",                                           # Cortex identifier
+            gateway      = engram_gateway,                                  # Path to the engram complex
+            schema       = EMC_SCHEMA,                                      # Schema for episodic memories
+            dim          = EMC.ENCODING_DIM,                                # Dimension for episodic memories
+        )
 
         try:                                                                # Attempt to initialize the write lock
             # Inscription lock — only encoding cycle inscribes into episodes
@@ -321,7 +301,7 @@ class EpisodicMemoryCortex:
         recovery_offset = 0                                         # For tracking the offset for batch recovery of unencoded episodes
 
         while True:                                                 # Keep recovering unencoded episodes in batches
-            unencoded = self._esb.get_unencoded(                    # Query the engram for unencoded episodes
+            unencoded = self._esb.retrieve_staged_batch(            # Query the engram for unencoded episodes
                 batch_size = EMC.RECOVERY_BATCH_SIZE,
                 offset     = recovery_offset,
             )
@@ -363,17 +343,9 @@ class EpisodicMemoryCortex:
         Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
         """
 
-        # Connect to engram gateway with WAL mode for concurrent access
-        encoder_conn = connect_engram(self.engram_gateway)        # Open encoder connection via shared MSB factory (WAL + row_factory)
-
         # Yield processing priority to active cognition threads
         os.nice(19)                                               # Encoding is non-latency-sensitive — defers to all active cognition threads
-
-        # Load sqlite-vec into encoder connection if engram vector index is active
-        if self._engram_index:                                    # If engram vector index is active,
-            if not activate_engram_index(encoder_conn, logger=self.logger):  # Attempt to load sqlite-vec into encoder connection via shared MSB utility
-                self._engram_index = False                        # Disable engram vector index — fall back to cosine similarity search
-
+        encoder_conn = self._ecx.bifurcate_ecx()                  # Bifurcate a connection to the engram complex for parallel processing
         self.logger.info("⚙️ EMC encoding cycle running…")       # Log the start of encoding cycle
     
         while self._encoder_running:                              # While the encoder is running,
@@ -403,7 +375,7 @@ class EpisodicMemoryCortex:
                 # Skip if already recovered from episodic_buffer on restart
                 if not episode.get("staging_id"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
-                        episode["staging_id"] = self._esb.insert_staged(                # Insert the episode into the episodic buffer
+                        episode["staging_id"] = self._ecx.stage_engram(                 # Insert the episode into the episodic buffer
                             conn=encoder_conn,
                             episode=episode,
                         )

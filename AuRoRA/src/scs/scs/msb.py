@@ -37,6 +37,7 @@ Public interface:
         encode_cue(cue: str) → RecallCue
 
     EngramComplex:
+        bifurcate_ecx() -> sqlite3.Connection
         stage_engram(engram: dict) -> int
         inscribe_engram(engram: dict, schema: str | None) -> int
         retrieve_staged_batch(batch_size: int, offset: int) -> list[dict]
@@ -277,6 +278,7 @@ class EngramComplex:
             dim (int)               : Vector dimension of the engram complex
         """
         self.logger                     = logger                        # logger instance passed from caller
+        cortex: str                     = cortex.lower()                # sanitize cortex name for consistent table naming
         self._storage_schema: str       = f"{cortex}_storage"           # table name for main storage
         self._staging_schema: str       = f"{cortex}_staging"           # table name for crash-safe buffer
         self._vector_schema: str        = f"{cortex}_vector"            # virtual table name for KNN search
@@ -347,7 +349,8 @@ class EngramComplex:
             sqlite3.Connection: Separate connection for parallel access to the engram complex
         """
         ecx_conn = self._connect_ecx()                              # create separate connection to engram complex
-        self._activate_vector_index(ecx_conn)                       # activate vector index for parallel retrieval
+        if self._vector_index:                                      # if vector index is available,
+            self._activate_vector_index(ecx_conn)                   # activate vector index for parallel retrieval
         return ecx_conn                                             # return separate connection for parallel access
 
     def _build_schema(self) -> None:
@@ -358,7 +361,7 @@ class EngramComplex:
 
             # 1. Build Storage Table
             storage_transcript: str = self._transcribe_traces(self._blueprint.storage)       # convert main storage trace → SQL column definition string
-            self._conn.execute(f"""
+            self._ecx_conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self._storage_schema} (
                     {storage_transcript}
                 )
@@ -367,7 +370,7 @@ class EngramComplex:
             # 2. Build Staging Table (if defined)
             if self._blueprint.staging:                                                       # staging is optional — not all cortices need a buffer
                 staging_transcript: str = self._transcribe_traces(self._blueprint.staging)    # convert staging traces → SQL column definition string
-                self._conn.execute(f"""
+                self._ecx_conn.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self._staging_schema} (
                         {staging_transcript}
                     )
@@ -376,32 +379,32 @@ class EngramComplex:
             # 3. Build Indexes
             if self._blueprint.index_traces:                                                   # optional — only if cortex defined index columns
                 for trace in self._blueprint.index_traces:                                     # one B-tree index per column
-                    self._conn.execute(f"""
+                    self._ecx_conn.execute(f"""
                         CREATE INDEX IF NOT EXISTS idx_{self._storage_schema}_{trace}
                         ON {self._storage_schema}({trace})
                     """)                                                                       # create index for fast retrieval
-            self._conn.commit()                                                                # commit tables and indexes together
+            self._ecx_conn.commit()                                                                # commit tables and indexes together
 
             # 4. Build Vector Search Virtual Table
             if self._vector_index and self._blueprint.semantic_traces:                         # only if sqlite-vec loaded and cortex defined a vector column
-                self._conn.execute(f"""
+                self._ecx_conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._vector_schema} USING vec0(
                         {self._blueprint.semantic_traces} FLOAT[{self._vector_dim}]
                     )
                 """)                                                                           # create vec0 virtual table for KNN search
-                self._conn.commit()                                                            # commit the virtual table to the memory bank
+                self._ecx_conn.commit()                                                            # commit the virtual table to the memory bank
                 self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")# log the successful initialization of engram vector index
 
             # 5. Build Lexical Search Virtual Table (FTS5)
             if self._blueprint.lexical_traces:                                                 # only if cortex defined lexical columns
                 lexical_transcript = ", ".join(self._blueprint.lexical_traces)                 # join column names into comma-separated string for FTS5 definition
-                self._conn.execute(f"""
+                self._ecx_conn.execute(f"""
                     CREATE VIRTUAL TABLE IF NOT EXISTS {self._lexical_schema} USING fts5(
                        {lexical_transcript},
                        tokenize='porter unicode61'
                     )
                 """)                                                                           # create FTS5 virtual table for keyword search
-                self._conn.commit()                                                            # commit the virtual table to the memory bank
+                self._ecx_conn.commit()                                                            # commit the virtual table to the memory bank
                 
         except sqlite3.Error as e:                                                             # if error occurs during building schema
             self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
@@ -439,38 +442,41 @@ class EngramComplex:
         self.logger.debug(f"Blueprint transcribed — {len(transcripts)} traces")                 # log column count for debug verification
         return ",\n                        ".join(transcripts)                                  # join all into one SQL string for CREATE TABLE
 
-    def stage_engram(self, engram: dict) -> int:
+    def stage_engram(self, engram: dict, ecx_conn: sqlite3.Connection | None = None) -> int:
         """
         Stage an engram into the buffer pending processing.
         Crash-safe — engram persists until explicitly deleted after processing.
 
         Args:
             engram (dict): Engram to stage — keys map to transcript labels, values to trace content
+            ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
     
         Returns:
             int: staging_id for deletion after processing
         """
-        return self.inscribe_engram(engram, self._staging_schema)           # wrap inscribe_engram with staging schema
+        return self.inscribe_engram(engram, self._staging_schema, ecx_conn)         # wrap inscribe_engram with staging schema
 
-    def inscribe_engram(self, engram: dict, schema: str | None = None) -> int:
+    def inscribe_engram(self, engram: dict, schema: str | None = None, ecx_conn: sqlite3.Connection | None = None) -> int:
         """
         Inscribe an engram into the target schema.
 
         Args:
             engram (dict): Engram to inscribe — keys map to transcript labels, values to trace content
             schema (str | None) : Target schema to inscribe the engram into. Defaults to self._storage_schema if None
+            ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
 
         Returns:
             int: engram_id of the inscribed engram
         """
         schema                    = schema or self._storage_schema          # default to permanent storage if no schema provided
+        ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         labels: str               = ", ".join(engram.keys())                # transcript label list from engram
         slots: str                = ", ".join([ "?"] * len(engram))         # one ? per trace
-        engram_id: sqlite3.Cursor = self._conn.execute(                     # INSERT dynamically built from transcript labels
+        engram_id: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
             f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
-        self._conn.commit()                                                 # commit before returning — permanent
+        ecx_conn.commit()                                                   # commit before returning — permanent
         return engram_id.lastrowid                                          # return engram_id for vector and lexical indexing
 
     def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
@@ -484,26 +490,28 @@ class EngramComplex:
         Returns:
             list: Staged engrams in the buffer
         """
-        return self._conn.execute(                                          # query staging table for pending engrams
+        return self._ecx_conn.execute(                                      # query staging table for pending engrams
             f"SELECT * FROM {self._staging_schema} "                        # all traces returned — cortex knows its own schema
             "ORDER BY id LIMIT ? OFFSET ?",                                 # oldest first — paginated by batch_size and offset
             [batch_size, offset]                                            # bind batch_size and offset to placeholders
         ).fetchall()                                                        # return all rows in the batch
 
-    def decay_staged_engram(self, staging_id: int) -> None:
+    def decay_staged_engram(self, staging_id: int, ecx_conn: sqlite3.Connection | None = None) -> None:
         """
         Decay a staged engram from the buffer after processing.
 
         Args:
             staging_id (int): staging_id of the engram to decay.
+            ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
         """
-        self._conn.execute(                                                 # remove staged engram from buffer by staging_id
+        ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
+        ecx_conn.execute(                                                   # remove staged engram from buffer by staging_id
             f"DELETE FROM {self._staging_schema} WHERE id=?",               # match by staging_id — only decays the target engram
             [staging_id],                                                   # placeholder for staging_id
         )
-        self._conn.commit()                                                 # commit decay before returning
+        ecx_conn.commit()                                                   # commit decay before returning
 
-    def inscribe_vector_index(self, engram_id: int, blob: bytes) -> None:
+    def inscribe_vector_index(self, engram_id: int, blob: bytes, ecx_conn: sqlite3.Connection | None = None) -> None:
         """
         Inscribe an engram encoding into the vector index for semantic recall.
         Only called if vector index is activated.
@@ -511,26 +519,30 @@ class EngramComplex:
         Args:
             engram_id (int) : ID of the inscribed engram
             blob (bytes)    : Binary encoding blob of the engram
+            ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
         """
-        self._conn.execute(                                                 # insert encoding into vector index for KNN semantic recall
+        ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
+        ecx_conn.execute(                                                   # insert encoding into vector index for KNN semantic recall
             f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",
             [engram_id, blob],                                              # rowid must match engram_id for JOIN during recall
         )
-        self._conn.commit()                                                 # commit before returning
+        ecx_conn.commit()                                                   # commit before returning
 
-    def inscribe_lexical_index(self, engram_id: int, content: str) -> None:
+    def inscribe_lexical_index(self, engram_id: int, content: str, ecx_conn: sqlite3.Connection | None = None) -> None:
         """
         Inscribe an engram into the lexical index for lexical recall.
 
         Args:
             engram_id (int) : ID of the inscribed engram
             content (str)   : Trace content to index for lexical recall
+            ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
         """
-        self._conn.execute(                                                 # insert content into FTS5 index for lexical recall
+        ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
+        ecx_conn.execute(                                                   # insert content into FTS5 index for lexical recall
             f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",
             [engram_id, content],                                           # rowid must match engram_id for JOIN during recall
         )
-        self._conn.commit()                                                 # commit before returning
+        ecx_conn.commit()                                                   # commit before returning
 
     def recall_engram(self, cue: RecallCue, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
@@ -547,7 +559,7 @@ class EngramComplex:
         """
         semantic_matches = self._semantic_recall(cue.vector, depth, date_range)     # recall by meaning
         lexical_matches  = self._lexical_recall(cue.text, depth, date_range)        # recall by keyword
-        return self._converge_memories(semantic_matches, lexical_matches, depth)   # fuse into unified ranking
+        return self._converge_memories(semantic_matches, lexical_matches, depth)    # fuse into unified ranking
 
     def _semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
@@ -569,8 +581,8 @@ class EngramComplex:
             """ if self._is_temporal else ""                                    # only filter by date if schema has a date column
             temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
 
-            matches: list[sqlite3.Row] = self._conn.execute(                    # semantic recall for nearest engrams by L2 distance
-                f"""        
+            matches: list[sqlite3.Row] = self._ecx_conn.execute(                # semantic recall for nearest engrams by L2 distance
+                f"""
                 SELECT store.*, vec.distance
                 FROM {self._vector_schema} vec
                 JOIN {self._storage_schema} store ON store.id = vec.rowid
@@ -623,7 +635,7 @@ class EngramComplex:
             """ if self._is_temporal else ""                                # only filter by date if schema has a date column
             temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
 
-            matches: list[sqlite3.Row] = self._conn.execute(                # FTS5 lexical recall for matching engrams
+            matches: list[sqlite3.Row] = self._ecx_conn.execute(            # FTS5 lexical recall for matching engrams
                 f"""
                 SELECT store.*, lexeme.rank AS raw_rank
                 FROM {self._lexical_schema} lexeme
@@ -741,7 +753,7 @@ class EngramComplex:
             engram: dict = engram.copy()                                        # clone entry — prevents mutating the original pool entry
             engram["rrf_score"] = (                                             # RRF formula — higher score = stronger combined rank
                 1.0 / (rrf_k + semantic_rank.get(engram["id"], semantic_miss)) + # .get() returns penalty rank if engram missing from semantic
-                1.0 / (rrf_k + lexical_rank.get(engram["id"], lexical_miss))   # .get() returns penalty rank if engram missing from lexical
+                1.0 / (rrf_k + lexical_rank.get(engram["id"], lexical_miss))    # .get() returns penalty rank if engram missing from lexical
             )
             engram_pool[engram["id"]] = engram                                  # writes cloned engram with rrf_score back into pool
 
@@ -768,13 +780,13 @@ class EngramComplex:
             dict: Current engram complex stats including engram count, earliest and latest timestamp, buffer count, and database size.
         """
         try:                                                                    # attempt retrieve stats of engram complex database
-            storage_stats: sqlite3.Row = self._conn.execute(                    # query storage schema for engram count and timestamp range
+            storage_stats: sqlite3.Row = self._ecx_conn.execute(                # query storage schema for engram count and timestamp range
                 "SELECT COUNT(*) as total, "
                 "MIN(timestamp) as earliest, MAX(timestamp) as latest "
                 f"FROM {self._storage_schema}"
             ).fetchone()                                                        # fetch engram count and timestamp range
 
-            staging_stats: sqlite3.Row = self._conn.execute(                    # query staging schema for buffer count
+            staging_stats: sqlite3.Row = self._ecx_conn.execute(                # query staging schema for buffer count
                 f"SELECT COUNT(*) as total FROM {self._staging_schema}"
             ).fetchone()                                                        # fetch buffer count
 
@@ -782,11 +794,11 @@ class EngramComplex:
                 if Path(self._gateway).exists() else 0.0                        # calculate engram complex physical volume size (in MB)
 
             return {                                                            # return engram complex stats for logging and monitoring
-                "buffer_count"    : staging_stats["total"]  if staging_stats else 0,
-                "engram_count"    : storage_stats["total"]  if storage_stats else 0,
-                "earliest_timestamp" : storage_stats["earliest"] if storage_stats else None,
-                "latest_timestamp"   : storage_stats["latest"]   if storage_stats else None,
-                "physical_volume" : ecx_volume,
+                "buffer_count"    : staging_stats["total"]  if staging_stats else 0,            # count of episodes in the buffer
+                "engram_count"    : storage_stats["total"]  if storage_stats else 0,            # count of episodes in the engram complex
+                "earliest_timestamp" : storage_stats["earliest"] if storage_stats else None,    # timestamp of the earliest engram complex
+                "latest_timestamp"   : storage_stats["latest"]   if storage_stats else None,    # timestamp of the latest engram complex
+                "physical_volume" : ecx_volume,                                                 # physical volume of the engram complex
             }
         except Exception as e:                                                  # catch any database access errors
             self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
