@@ -272,11 +272,11 @@ class CNC(Node):
                         self._publish({"type": "start", "content": delta})
                         is_first = False
                     else:
-                        self._publish({"type": "delta", "content": delta})
+                        self._publish({"type": "chunk", "content": delta})
 
             # Publish done marker with full response
             if full_response:
-                self._publish({"type": "done", "content": full_response})
+                self._publish({"type": "end", "content": full_response})
                 self.get_logger().info(
                     f"✅ Response: {len(full_response)} chars"
                 )
