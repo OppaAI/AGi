@@ -335,10 +335,10 @@ class EpisodicMemoryCortex:
             with self._episodic_buffer_lock:                    # With lock on episodic buffer,
                 if not self.episodic_buffer._binding_stream:    # If the binding stream is empty,
                     continue                                    # Skip this encoding cycle
-                    ripple: list[dict] = list(itertools.islice(
-                        self.episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
-                    ))                                                                # snapshot up to batch limit — remaining stays for next theta cycle
-                    del self.episodic_buffer._binding_stream[:EMC.THETA_BATCH_LIMIT]  # drain only what was snapshotted
+                ripple: list[dict] = list(itertools.islice(
+                    self.episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
+                ))                                                                # snapshot up to batch limit — remaining stays for next theta cycle
+                del self.episodic_buffer._binding_stream[:EMC.THETA_BATCH_LIMIT]  # drain only what was snapshotted
     
             self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
     
