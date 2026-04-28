@@ -81,6 +81,7 @@ TODO:
     M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
     M2 — heartbeat logging during long idle periods
     M2 — staging_id integrity check after Dream Cycle consolidation
+    M2 — graceful drain + optional timeout fallback for SWR trigger during close
 """
 
 # System libraries
@@ -234,35 +235,33 @@ class EpisodicMemoryCortex:
    
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
-        Entry point of the EMC lifecycle. Receives a PMT evicted from WMC
-        and binds it into the episodic buffer as episode for encoding and storing into engram.
-    
-        Called by MCC asynchronously at the WMC → EMC boundary — crash-safe, non-blocking.
+        Receive an evicted PMT from MCC and bind it into the episodic buffer for encoding.
+        Called at the WMC → EMC boundary — non-blocking, crash-safe via staging table.
 
         Args:
-            timestamp (str): Timestamp of interaction induced into WMC
-            content (str): Content of interaction (truncated to engram content limit for safety)
+            timestamp (str): ISO-8601 timestamp of the original PMT
+            content (str)  : Raw PMT content — truncated internally to engram content limit
 
         Returns:
             bool: True on success, False on failure
         """
-        episode: dict = {                                                           # Package the evicted PMT data into episode
-            "timestamp": timestamp,                                                 # Timestamp of PMT induced into WMC
-            "date":      timestamp[:10],                                            # Date of PMT induced into WMC
-            "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # Truncate content to the engram content limit
-        }
+        episode: dict = {                                                           # package the evicted PMT data into episode
+            "timestamp": timestamp,                                                 # timestamp of PMT induced into WMC
+            "date":      timestamp[:10],                                            # YYYY-MM-DD slice — B-tree indexed for date recall
+            "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # truncate to engram limit before binding
+    }
 
-        try:                                                                        # Attempt to bind the evicted PMT into episodic buffer
-            with self._episodic_buffer_lock:                                        # Acquire the lock to prevent race conditions
-                self.episodic_buffer._binding_stream.append(episode)                # Bind the episode to the binding stream
-            self._theta_rhythm.set()                                                # Set the theta rhythm to trigger encoding cycle
+        try:                                                                        # attempt to bind the evicted PMT into episodic buffer
+            with self._episodic_buffer_lock:                                        # hold lock for binding stream append
+                self.episodic_buffer._binding_stream.append(episode)                # queue episode for encoding cycle
+            self._theta_rhythm.set()                                                # wake encoding cycle — sharp-wave ripple
             self.logger.debug(                                                      # Log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
             )
-            return True                                                             # Indicate successful binding
+            return True                                                             # indicate successful binding
         except Exception as e:
-            self.logger.warning(f"EMC binding PMT failed: {e}")                     # Log the failure to bind the evicted PMT into episodic buffer
-            return False                                                            # Report failure to bind the evicted PMT into episodic buffer
+            self.logger.warning(f"EMC binding PMT failed: {e}")                     # log failure with reason
+            return False                                                            # indicate failure during binding
 
     def _init_encoding_cycle(self) -> None:
         """
