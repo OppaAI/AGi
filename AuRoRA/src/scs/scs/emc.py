@@ -86,6 +86,7 @@ TODO:
 
 # System libraries
 import os                                   # for encoding thread priority via os.nice()
+import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import threading                            # for background thread, locks, and theta rhythm event
 import time                                 # for CPU yield during ripple processing
 from collections import deque               # for O(1) append/popleft in binding stream
@@ -324,7 +325,7 @@ class EpisodicMemoryCortex:
     
         while self._encoder_running:                              # While the encoder is running,
             # Rest state — wait for theta rhythm activation
-            self._theta_rhythm.wait()                             # Wait for theta rhythm activation
+            self._theta_rhythm.wait(timeout=EMC.THETA_INTERVAL)  # wake on PMT arrival or theta interval — whichever comes first
             self._theta_rhythm.clear()                            # Clear the theta rhythm activation flag
     
             if not self._encoder_running:                         # If the encoder is not running,
@@ -334,8 +335,10 @@ class EpisodicMemoryCortex:
             with self._episodic_buffer_lock:                    # With lock on episodic buffer,
                 if not self.episodic_buffer._binding_stream:    # If the binding stream is empty,
                     continue                                    # Skip this encoding cycle
-                ripple: list[dict] = list(self.episodic_buffer._binding_stream)   # Capture point-in-time of the binding stream
-                self.episodic_buffer._binding_stream.clear()    # Clear the binding stream
+                    ripple: list[dict] = list(itertools.islice(
+                        self.episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
+                    ))                                                                # snapshot up to batch limit — remaining stays for next theta cycle
+                    del self.episodic_buffer._binding_stream[:EMC.THETA_BATCH_LIMIT]  # drain only what was snapshotted
     
             self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
     
