@@ -21,15 +21,14 @@ Terminology:
     engram          — one physical stored memory record
     engram complex  — the SQLite database holding all engrams across cortices
     FTS5            — SQLite full-text search for lexical pattern retrieval
-    memory          — the contextual meaning of an engram
     memory bank     — the abstraction layer managing the engram complex
     prime           — LRU encoding cache mapping prime keys to encoding vectors
-    prime key       — truncated hash of a memory trace used for prime lookup
+    prime key       — MD5 hash of a truncated trace used for prime lookup
     RRF             — Reciprocal Rank Fusion — fuses semantic and lexical ranked
                       results into a single relevancy-ordered list
     transcript      — SQL column definition string generated from a blueprint
     unit vector     — L2-normalized vector; cosine similarity becomes equivalent
-                      to L2 distance, enabling sqlite-vec KNN search  
+                      to L2 distance, enabling sqlite-vec KNN search
 
 Public interface:
     EncodingEngine:
@@ -37,15 +36,15 @@ Public interface:
         encode_cue(cue: str) → RecallCue
 
     EngramComplex:
-        bifurcate_ecx() -> sqlite3.Connection
-        stage_engram(engram: dict) -> int
-        inscribe_engram(engram: dict, schema: str | None) -> int
-        retrieve_staged_batch(batch_size: int, offset: int) -> list[dict]
-        decay_staged_engram(staging_id: int) -> None
-        inscribe_vector_index(engram_id: int, blob: bytes) -> None
-        inscribe_lexical_index(engram_id: int, content: str) -> None
-        recall_engram(cue: RecallCue, depth: int, date_range: tuple[str, str] | None) -> list[dict]
-        assess_engram_complex() -> dict
+        bifurcate_ecx() → sqlite3.Connection
+        stage_engram(engram: dict, ecx_conn?) → int
+        inscribe_engram(engram: dict, schema?, ecx_conn?) → int
+        retrieve_staged_batch(batch_size: int, offset: int) → list[dict]
+        decay_staged_engram(staging_id: int, ecx_conn?) → None
+        inscribe_vector_index(engram_id: int, blob: bytes, ecx_conn?) → None
+        inscribe_lexical_index(engram_id: int, content: str, ecx_conn?) → None
+        recall_engram(cue: RecallCue, depth: int, date_range?) → list[dict]
+        assess_engram_complex() → dict
 
 TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices

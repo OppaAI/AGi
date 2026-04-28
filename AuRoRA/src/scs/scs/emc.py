@@ -4,72 +4,53 @@ EMC — Episodic Memory Cortex
 AuRoRA · Semantic Cognitive System (SCS)
 
 Episodic memory layer of the CNS — "I remember that specific moment."
-Stores memory episodes with semantic encodings into engrams for recall using semantic search.
-No expiry — 1TB NVMe means the robot remembers everything.
+Stores conversational PMTs as dated, semantically encoded engrams for future recall.
+No expiry — 1TB NVMe means Grace remembers everything.
 
 Responsibilities:
-    - Receive evicted PMTs from MCC into crash-safe buffer (binding)
-    - Encode buffered turns into semantic encodings (encoding)
-    - Store encoded episodes into SMC and PMC intermediately for future consolidation into LTM
-    - Search episodes via semantical and lexical search for relevant past context (recall)
-    - Inject recalled episodes into MCC memory context (reinstatement)
+    - Receive evicted PMTs from MCC into crash-safe episodic buffer (binding)
+    - Encode buffered turns into semantic vectors (encoding)
+    - Consolidate encoded episodes into the episodic engram (synaptic consolidation)
+    - Recall relevant past episodes via semantic and lexical search (recall)
+    - Surface recalled episodes into MCC memory context (reinstatement)
 
 Architecture:
-    Episodic Buffer (2-layer)
-        _binding_stream  —  transient intake of evicted PMTs from WMC overflow
-        episodic_buffer  — crash-safe pre-consolidation staging of episodes
-    One Table + Two Indexes SQLite design:
-        episodes         — embedded, searchable episodic memory (intermediate)
-        engram_vectors   — semantic vectors for L2 distance semantic search
-        engram_lexical   — FTS5 lexical index for pattern separation recall
+    Episodic Buffer (Baddeley's model, 2-layer):
+        _binding_stream  — private deque; evicted PMTs land here first (fast RAM staging)
+                           invisible to MCC — MCC calls bind_pmt() and lets go,
+                           mirroring how PFC does not monitor every hippocampal trace after handoff
+        recall_stream    — shared stream; recalled episodes surface here before
+                           being injected into MCC memory context
 
-     
-    Episodic Buffer (Baddeley's model):
-        Two streams, private vs shared, mirroring biological architecture:
- 
-        _binding_stream  — private deque inside EMC (cf. hippocampal binding)
-                        Evicted PMTs land here first (fast RAM staging).
-                        Invisible to MCC — MCC calls bind_pmt() and lets go,
-                        just as the prefrontal cortex does not monitor every
-                        hippocampal trace after handoff.
-                        _run_encoding_cycle() drains _binding_stream, writes to
-                        episodic_buffer (SQLite) before encoding, then stores
-                        into engram as episodes. On restart, Unencoded episodes in
-                        episodic_buffer are recovered back into _binding_stream
-                        by _init_encoding_cycle() before the cycle starts.
- 
-        recall_stream   — shared on EpisodicBuffer (cross-layer)
-                          Recalled episodes surface here before being injected
-                          into MCC memory context — exactly as hippocampal recall
-                          projects back into prefrontal awareness.
-                          Visible to MCC for memory context assembly.
+    SQLite engram (one table + two indexes):
+        emc_storage      — permanent episodic memory store
+        emc_vector       — sqlite-vec KNN index for semantic search
+        emc_lexical      — FTS5 index for lexical search
+        emc_staging      — crash-safe buffer for unencoded PMTs
                           
+
     Encoding:
         Continuous during wake — online encoding, not sleep-only.
         sentence-transformers, CPU-only, zero GPU impact.
-        Model configured via EMC.ENCODING_ENGINE constant.
         Biological analogue: hippocampal initial encoding during wake.
         Deep consolidation (SMC distillation) deferred to M2 Dream Cycle.
 
-    Enccoding Cycle:
-        Background thread drains episodic_buffer → encodes → episodes
-        Falls back to SQLite episodic_buffer on restart for crash recovery
-        Runs continuously, sleeps when buffer is empty
-        Never blocks the robot's active cognition
+    Encoding Cycle:
+        Background thread drains _binding_stream → encodes → inscribes into emc_storage.
+        Falls back to emc_staging on restart for crash recovery.
+        Runs continuously, sleeps when buffer is empty via theta rhythm event.
+        Never blocks active cognition.
         
-    Relevancy:
-        Dual-path retrieval fused via Reciprocal Rank Fusion (memory convergence):
+    Retrieval:
+        Dual-path retrieval fused via Reciprocal Rank Fusion (RRF):
             PATH 1 — Semantic (cf. CA3 pattern completion):
-                SQLite-vec L2 distance KNN on unit-normalized vectors (cosine-equivalent)
-                Falls back to Python cosine similarity if SQLite-vec not available
-            PATH 2 — Lexical (cf. Dentate gyrus pattern separation):
-                FTS5 porter-stemmed lexical search on episode content
-        Both paths run in parallel and are fused via RRF scoring through CA1 convergence.
+                sqlite-vec L2 KNN on unit-normalized vectors (cosine-equivalent)
+            PATH 2 — Lexical (cf. dentate gyrus pattern separation):
+                FTS5 porter-stemmed search on episode content
         Fallback chain:
             Both paths active  → RRF fusion (full memory convergence)
-            Semantic only      → semantic results (encoding engine available, FTS5 unavailable)
             Lexical only       → lexical results  (encoding engine unavailable)
-            Neither            → []               (full degraded state)
+            Neither            → []               (catastrophic — SQLite unavailable)
 
     Storage:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
@@ -85,23 +66,21 @@ Terminology:
     RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
 
 Lifecycle:
-    Binding → Encoding → Synaptic Consolidation → System Consolidation → Recall → Reinstatement
+    Binding → Encoding → Synaptic Consolidation → Recall → Reinstatement
+    (System Consolidation — EMC → SMC distillation — deferred to M2 Dream Cycle)
 
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
-    emc.recall_episode(cue, recall_limit) → list[dict]
-    emc.get_episodes_for_date(date_str) → list[dict]
+    emc.recall_episodes(cue, recall_limit) → list[dict]
     emc.get_stats() → dict
     emc.close() → None
 
 TODO:
-    M2 — add date-range filtering to buffer entries and recall interface
-    M2 — migrate engram_vectors to sqlite-vec ANN index (DiskANN)
-         when episodes exceed ~50k — currently exact KNN is sufficient
-    M2 — date-range filtering exposed through MCC recall interface
-    M2 — SMC distillation trigger at 11pm reflection
-    M2 — add heartbeat logging during long idle periods (Dream Cycle sessions)
-    M2 — add staging_id check (unencoded in episodic buffer) after consolidation (after Dream Cycle implementations)
+    M2 — date-range filtering on recall interface and buffer entries
+    M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
+    M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
+    M2 — heartbeat logging during long idle periods
+    M2 — staging_id integrity check after Dream Cycle consolidation
 """
 
 # System libraries
