@@ -84,86 +84,88 @@ TODO:
 """
 
 # System libraries
-import os                                   # For process priority adjustment
-import threading                            # For background encoding of episodes
-import time                                 # For inter-encode yielding (sleep) and timing control within encoding cycle
-from collections import deque               # For use in binding stream of episodic buffer — fast FIFO staging before encoding into engram
-from dataclasses import dataclass, field    # For defining structures of episodes and engram
-from datetime import datetime               # (TODO) Replace with hrs.blc when BioLogic Clock is built
-from pathlib import Path                    # For handling gateway to the engram
-from typing import Optional                 # For validating parameters
+import os                                   # for encoding thread priority via os.nice()
+import threading                            # for background thread, locks, and theta rhythm event
+import time                                 # for CPU yield during ripple processing
+from collections import deque               # for O(1) append/popleft in binding stream
+from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi libraries
-from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
-CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
-EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
+from hrs.hrp import AGi                     # homeostatic regulation parameter namespace
+CNS = AGi.CNS                               # CNS-level constants — e.g. UNITS_PER_CHUNK
+EMC = AGi.CNS.EMC                           # EMC constants — encoding engine, limits, dims
 
-from scs.msb import (             # Aquire access to memory storage bank
-    EngramSchema,               # Schema definition object for memory cortices
-    EngramTrace,                # Trace definition object for individual engram fields
-    EngramModality,             # Enumeration of valid engram field modalities
-    RecallCue,                  # Recall cue definition object for memory cortices
-    EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
-    pack_vector,                # Vector packing utility for storage in SQLite
-    EngramComplex,              # Centralized engram memory storage interface
+from scs.msb import (                       # shared memory storage bank substrate
+    EngramSchema,                           # blueprint for engram table structure
+    EngramTrace,                            # single column definition within a blueprint
+    EngramModality,                         # TEXT / INTEGER / REAL / BLOB type enum
+    RecallCue,                              # encoded vector + raw text for dual-path recall
+    EncodingEngine,                         # sentence-transformers wrapper with LRU prime
+    pack_vector,                            # for packing float list into fp32 binary blob
+    EngramComplex,                          # all SQL ops for a memory cortex
 )
 
-EMC_SCHEMA = EngramSchema(                                              # Define the engram schema for episodic memory
+EMC_SCHEMA = EngramSchema(                  # define the engram schema for episodic memory
     storage=[
-        EngramTrace(label="id", modality=EngramModality.INTEGER, essential=True),
-        EngramTrace(label="timestamp", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="date", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="content", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="encoding", modality=EngramModality.BLOB, essential=True),
-        EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"),
+        EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
+        EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
+        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — B-tree indexed for date recall
+        EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
+        EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
+        EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
     ],
     staging=[
-        EngramTrace(label="id", modality=EngramModality.INTEGER, essential=True),
-        EngramTrace(label="timestamp", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="date", modality=EngramModality.TEXT, essential=True),
-        EngramTrace(label="content", modality=EngramModality.TEXT, essential=True),
+        EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
+        EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
+        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
+        EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw content pending encoding
     ],
-    semantic_traces="encoding",
-    lexical_traces=["content"],
-    index_traces=["date"]
+    semantic_traces="encoding",                                                                     # column linked to vec0 virtual table for KNN search
+    lexical_traces=["content"],                                                                     # column fed into FTS5 virtual table for keyword search
+    index_traces=["date"]                                                                           # B-tree index — speeds up date-filtered recall
 )
         
 @dataclass
 class EpisodicBuffer:
     """
     Episodic Buffer — shared workspace between WMC and EMC.
-    Base on the concept of episodic buffer in Baddeley's Model — one buffer, two hippocampal processes.
+    Modelled on Baddeley's episodic buffer — one buffer, two streams.
 
-    _binding_stream — evicted PMTs pending to be encoded into episodic memory
-    recall_stream   — recalled episodes pending to surface into active cognition context
+    _binding_stream — evicted PMTs pending encoding into episodic memory
+    recall_stream   — recalled episodes pending reinstatement into active cognition
     """
-    _binding_stream: deque[dict] = field(default_factory=deque)                # Evicted PMTs pending to be encoded into episodic memory
-    recall_stream: list[dict] = field(default_factory=list)                    # Recalled episodes pending to surface into active cognition context
+    _binding_stream: deque[dict] = field(default_factory=deque)                # evicted PMTs queued for encoding — drained by encoding cycle
+    recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly
 
     def __post_init__(self) -> None:
-        """Set up locks not defined in the episodic buffer schema."""
-        self._recall_lock = threading.Lock()                                   # Guards recall stream mutations for safety in future implementation
-        
+        """Initialize locks not expressible as dataclass fields."""
+        self._recall_lock = threading.Lock()                                   # serializes recall stream mutations across threads
+       
     def clear_recall_stream(self) -> None:
         """Clear the recall stream before assembling a new memory context."""
-        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
-            self.recall_stream.clear()                                         # Clear the content of recall stream
+        with self._recall_lock:                                                # hold lock for duration of mutation
+            self.recall_stream.clear()                                         # discard all previously recalled episodes
 
     def stage_single_episode(self, item: dict) -> None:
-        """Stage a single recalled episode into the recall stream."""
-        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
-            self.recall_stream.append(item)                                    # Stage a single recalled episode into recall stream
+        """Append a single recalled episode to the recall stream."""
+        with self._recall_lock:                                                # hold lock for duration of mutation
+            self.recall_stream.append(item)                                    # append single episode to recall stream
 
     def stage_episode_list(self, items: list[dict]) -> None:
         """Extend the recall stream with a list of recalled episodes."""
-        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
-            self.recall_stream.extend(items)                                   # Stage a list of recalled episodes into recall stream
+        with self._recall_lock:                                                # hold lock for duration of mutation
+            self.recall_stream.extend(items)                                   # extend recall stream with episode batch
 
     def assess_recall_stream(self) -> list[dict]:
-        """Return the current recall stream for memory context assembly."""
-        with self._recall_lock:                                                # Apply the lock to guard the process from mutations
-            return list(self.recall_stream)                                    # Assess the stable copy of the content in recall stream
+        """Return a snapshot of the recall stream for safe iteration.
         
+        Returns:
+            list[dict]: Stable copy of the current recall stream.
+        """
+        with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
+            return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
+
+       
 class EpisodicMemoryCortex:
     """
     Episodic Memory Cortex.

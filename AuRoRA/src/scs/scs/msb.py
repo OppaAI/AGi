@@ -752,12 +752,10 @@ class EngramComplex:
         
         # Compute RRF score for each candidate
         for engram in list(engram_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
-            engram: dict = engram.copy()                                        # clone entry — prevents mutating the original pool entry
             engram["rrf_score"] = (                                             # RRF formula — higher score = stronger combined rank
                 1.0 / (rrf_k + semantic_rank.get(engram["id"], semantic_miss)) + # .get() returns penalty rank if engram missing from semantic
                 1.0 / (rrf_k + lexical_rank.get(engram["id"], lexical_miss))    # .get() returns penalty rank if engram missing from lexical
             )
-            engram_pool[engram["id"]] = engram                                  # writes cloned engram with rrf_score back into pool
 
         # Sort descending by RRF score
         sorted_engrams: list[dict] = sorted(engram_pool.values(),                   # sorts all candidates by rrf_score descending
