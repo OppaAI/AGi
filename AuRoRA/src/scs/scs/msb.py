@@ -804,3 +804,9 @@ class EngramComplex:
         except Exception as e:                                                  # catch any database access errors
             self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
             return {}                                                           # empty dict — caller handles no results
+
+    def close(self) -> None:
+        """
+        Close the engram complex connection and release all resources.
+        """
+        self._ecx_conn.close()                                              # release SQLite connection — no further ops possible after this
