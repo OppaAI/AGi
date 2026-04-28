@@ -523,5 +523,5 @@ class EpisodicMemoryCortex:
         before closing the engram complex.
         """
         self._encoding_cycle.stop_cycle()                                   # signal encoding cycle to stop and wait for clean exit
-        self._ecx._ecx_conn.close()                                         # release SQLite connection to engram complex
+        self._ecx.close()                                                   # release engram complex connection
         self.logger.info("🗄️  EMC deactivated")                             # log successful deactivation
