@@ -338,7 +338,9 @@ class EpisodicMemoryCortex:
                 ripple: list[dict] = list(itertools.islice(
                     self.episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
                 ))                                                                # snapshot up to batch limit — remaining stays for next theta cycle
-                del self.episodic_buffer._binding_stream[:EMC.THETA_BATCH_LIMIT]  # drain only what was snapshotted
+                
+                for _ in range(len(ripple)):                                      # iterate through the length of snapshot
+                    self.episodic_buffer._binding_stream.popleft()                # drain only what was snapshotted
     
             self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
     
