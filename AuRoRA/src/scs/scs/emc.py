@@ -165,79 +165,72 @@ class EpisodicBuffer:
         with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
             return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
 
-       
 class EpisodicMemoryCortex:
     """
-    Episodic Memory Cortex.
-    Receives evicted PMT schema from WMC via MCC, persisting them as
-    retrievable long-term memory. Incoming PMT schemas land in episodic_buffer first
-    (crash-safe binding), then are encoded and stored into engram as episodes.
+    Episodic Memory Cortex (EMC) — hippocampal long-term episodic store.
+    Receives evicted PMTs from WMC via MCC, encodes them as semantic vectors,
+    and consolidates them into the episodic engram for future recall.
 
-    Episodic Buffer (2-layer)
-        _binding_stream  —  transient intake of evicted PMTs from WMC overflow
-        episodic_buffer  — crash-safe pre-consolidation staging of episodes
-    One Table + Two Indexes SQLite design:
-        episodes         — embedded, searchable episodic memory (intermediate)
-        engram_vectors   — semantic vectors for L2 distance semantic search
-        engram_lexical   — FTS5 lexical index for pattern separation recall
+    SQLite engram (one table + two indexes):
+        emc_storage  — permanent episodic memory store
+        emc_vector   — sqlite-vec KNN index for semantic search
+        emc_lexical  — FTS5 index for lexical search
+        emc_staging  — crash-safe buffer for unencoded PMTs
 
-    The encoding cycle runs in a separate neural thread, draining binding stream of episodic buffer →
-    encoding → episodes continuously during wake without blocking the main neural thread's responses.
-    
-    Thread-safety: 
-        Binding stream uses a threading.Lock for safety purpose.
-        Recall stream uses a threading.Lock — guarded via recall lock.
-        Encoding cycle is isolated from the main neural thread.
-        All inscription into engram are serialized through inscription lock.
-        SQLite WAL mode allows concurrent reads during async writes.
+    Thread-safety:
+        _episodic_buffer_lock  — serializes binding stream access
+        _recall_lock           — serializes recall stream access (on EpisodicBuffer)
+        _inscription_lock      — serializes all engram writes (RLock)
+        SQLite WAL mode allows concurrent reads during async writes
     """
 
     def __init__(self, logger, engram_gateway: str) -> None:
         """
-        Initialize the Episodic Memory Cortex with a logger and engram gateway.
-        
-        This method sets up the engram for storing episodic memories,
-        initializes the encoding engine, and starts the encoding cycle in a
-        background thread.
+        Initialize the Episodic Memory Cortex, engram complex, encoding engine,
+        and start the background encoding cycle.
+
+        Recovers any unencoded PMTs from the crash-safe staging table back into
+        the binding stream before the encoding cycle starts.
         
         Args:
             logger              : Logger instance for logging operations
             engram_gateway (str): Path to access the engram for storing episodic memories
         """
-        self.logger                  = logger                               # Retrieve logger from CNC for logging EMC operations
-        self.episodic_buffer         = EpisodicBuffer()                     # Initialize episodic buffer — binding and recall streams for active cognition
-        self._episodic_buffer_lock   = threading.Lock()                     # Lock for thread-safe access to episodic buffer
-        self._encoding_engine        = EncodingEngine(                      # Initialize shared encoding engine from MSB
-            logger          = logger,                                       # Logger instance for logging operations
-            encoding_engine = EMC.ENCODING_ENGINE,                          # Identifier for the encoding engine
-            cue_prefix      = EMC.RECALL_CUE_PREFIX,                        # Prefix for recall cues
-            engram_prefix   = EMC.RECALL_ENGRAM_PREFIX,                     # Prefix for engram identifiers
-            prime_limit     = EMC.PRIME_LIMIT,                              # Limit for prime numbers
-            prime_key_limit = EMC.PRIME_KEY_LIMIT                           # Limit for prime keys
-        )                                                                      
+        self.logger                = logger                                 # logger from MCC — used throughout EMC
+        self.episodic_buffer       = EpisodicBuffer()                       # two-stream buffer — binding and recall streams
+        self._episodic_buffer_lock = threading.Lock()                       # serializes binding stream access
+        self._encoding_engine      = EncodingEngine(                        # sentence-transformers wrapper with LRU prime
+            logger          = logger,                                       # logger instance for logging operations
+            encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
+            cue_prefix      = EMC.RECALL_CUE_PREFIX,                        # query prefix for recall cues
+            engram_prefix   = EMC.RECALL_ENGRAM_PREFIX,                     # document prefix for engrams
+            prime_limit     = EMC.PRIME_LIMIT,                              # max LRU prime entries before eviction
+            prime_key_limit = EMC.PRIME_KEY_LIMIT,                          # max chars hashed per prime key
+        )                                                                   
 
-        self._ecx = EngramComplex(                                          # Acquire access to the engram complex
-            logger       = self.logger,                                     # Logger instance for logging operations
-            cortex       = "EMC",                                           # Cortex identifier
-            gateway      = engram_gateway,                                  # Path to the engram complex
-            schema       = EMC_SCHEMA,                                      # Schema for episodic memories
-            dim          = EMC.ENCODING_DIM,                                # Dimension for episodic memories
+        self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
+            logger  = self.logger,                                          # logger instance for logging operations
+            cortex  = "EMC",                                                # drives table name prefix — emc_storage, emc_vector etc.
+            gateway = str(engram_gateway),                                  # cast to str — EngramComplex expects string path
+            schema  = EMC_SCHEMA,                                           # blueprint defining EMC table structure
+            dim     = EMC.ENCODING_DIM,                                     # vector dimension for vec0 KNN index
         )
 
-        try:                                                                # Attempt to initialize the write lock
-            # Inscription lock — only encoding cycle inscribes into episodes
-            self._inscription_lock = threading.RLock()                      # Ensure only one thread inscribes into the engram at a time
+        # Inscription lock — only encoding cycle inscribes into episodes
+        self._inscription_lock     = threading.RLock()                      # serializes engram writes — RLock allows re-entry
 
-            # Set up encoding cycle
-            self._encoder_running = False                                   # Indicate that encoding cycle not yet running
-            self._theta_rhythm = threading.Event()                          # Initialize the theta rhythm for encoding cycle
-            self._encoder_thread: Optional[threading.Thread] = None         # Initialize background neural thread
-            self._init_encoding_cycle()                                     # Start encoding cycle in the background
-        except RuntimeError as e:                                           # If failed to initialize the encoding cycle
-            self.logger.error(f"❌ Encoding cycle initialization failed → {e}")   # Log the failure to initialize the encoding cycle
-            raise                                                           # Raise the anomaly to the caller
+        # Set up encoding cycle
+        self._encoder_running      = False                                  # encoding cycle not yet started
+        self._theta_rhythm         = threading.Event()                      # gates encoding cycle — set by bind_pmt()
+        self._encoder_thread: threading.Thread | None = None                # assigned in _init_encoding_cycle()
 
-        self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # Log the successful initialization of the engram
+        try:                                                                # attempt to start encoding cycle
+            self._init_encoding_cycle()                                     # recover unencoded PMTs and start encoding thread
+        except RuntimeError as e:                                           # if failed to initialize the encoding cycle
+            self.logger.error(f"❌ Encoding cycle initialization failed → {e}")  # log before re-raising
+            raise                                                           # raise the anomaly to the caller
+
+        self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # log successful init with engram path
    
     def bind_pmt(self, timestamp: str, content: str) -> bool:
         """
