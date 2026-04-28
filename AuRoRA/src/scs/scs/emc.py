@@ -88,7 +88,7 @@ TODO:
 import os                                   # for encoding thread priority via os.nice()
 import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import threading                            # for background thread, locks, and theta rhythm event
-import time                                 # for CPU yield during ripple processing
+import time                                 # for CPU yield during theta rhythm cycle
 from collections import deque               # for O(1) append/popleft in binding stream
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
@@ -255,7 +255,7 @@ class EpisodicMemoryCortex:
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
                 self.episodic_buffer._binding_stream.append(episode)                # queue episode for encoding cycle
-            self._theta_rhythm.set()                                                # wake encoding cycle — sharp-wave ripple
+            self._theta_rhythm.set()                                                # trigger encoding cycle — theta rhythm
             self.logger.debug(                                                      # Log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
             )
@@ -314,8 +314,8 @@ class EpisodicMemoryCortex:
     def _run_encoding_cycle(self) -> None:
         """
         Event-driven encoding — drains episodic_buffer into episodes.
-        Wakes only when buffer has episodes (sharp-wave ripple pattern).
-        Processes a snapshot of IDs per ripple — new arrivals deferred to next cycle.
+        Trigger in 4-8Hz period or when buffer has episodes (theta rhythm pattern).
+        Processes a snapshot of IDs per rhythm — new arrivals deferred to next cycle.
         """
 
         # Yield processing priority to active cognition threads
@@ -331,24 +331,24 @@ class EpisodicMemoryCortex:
             if not self._encoder_running:                         # If the encoder is not running,
                 break                                             # Clean exit if stopped while waiting
     
-            # Snapshot IDs at this moment — one ripple, one defined window
+            # Snapshot IDs at this moment — one rhythm, one defined window
             with self._episodic_buffer_lock:                    # With lock on episodic buffer,
                 if not self.episodic_buffer._binding_stream:    # If the binding stream is empty,
                     continue                                    # Skip this encoding cycle
-                ripple: list[dict] = list(itertools.islice(
+                rhythm: list[dict] = list(itertools.islice(
                     self.episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
                 ))                                                                # snapshot up to batch limit — remaining stays for next theta cycle
                 
-                for _ in range(len(ripple)):                                      # iterate through the length of snapshot
+                for _ in range(len(rhythm)):                                      # iterate through the length of snapshot
                     self.episodic_buffer._binding_stream.popleft()                # drain only what was snapshotted
     
-            self.logger.debug(f"EMC encoding cycle → {len(ripple)} episode(s) in ripple") # Log the number of episodes in the ripple
+            self.logger.debug(f"EMC encoding cycle → {len(rhythm)} episode(s) in rhythm") # Log the number of episodes in the rhythm
     
-            # Replay each episode in the ripple
-            for episode in ripple:                              # For each episode in the ripple,
+            # Replay each episode in the rhythm
+            for episode in rhythm:                              # For each episode in the rhythm,
                 if not self._encoder_running:                   # If the encoder is not running,
-                    break                                       # Respect stop signal mid-ripple
-                time.sleep(0.01)                                # 10ms yield — prevents encoding loop from starving active cognition mid-ripple
+                    break                                       # Respect stop signal mid-rhythm
+                time.sleep(0.01)                                # 10ms yield — prevents encoding loop from starving active cognition mid-rhythm
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
@@ -373,7 +373,6 @@ class EpisodicMemoryCortex:
                     )
                     with self._episodic_buffer_lock:                                # With lock on episodic buffer,
                         self.episodic_buffer._binding_stream.appendleft(episode)    # Append the episode to the binding stream
-                    # Retry next ripple
                     continue                                                        # Continue to the next episode
     
                 # Pack encoded episode vector as fp32 binary for engram storage
