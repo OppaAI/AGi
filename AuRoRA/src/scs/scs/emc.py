@@ -89,7 +89,7 @@ Lifecycle:
 
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
-    emc.recall_episode(query, recall_limit) → list[dict]
+    emc.recall_episode(cue, recall_limit) → list[dict]
     emc.get_episodes_for_date(date_str) → list[dict]
     emc.get_stats() → dict
     emc.close() → None
@@ -119,13 +119,14 @@ from hrs.hrp import AGi         # Import AGi homeostatic regulation parameters
 CNS = AGi.CNS                   # Channel for interfacing with Central Nervous System (CNS)
 EMC = AGi.CNS.EMC               # Channel for interfacing with Episodic Memory Cortex (EMC)
 
-from scs.msb import (               # Aquire access to memory storage bank
+from scs.msb import (             # Aquire access to memory storage bank
     EngramSchema,               # Schema definition object for memory cortices
     EngramTrace,                # Trace definition object for individual engram fields
     EngramModality,             # Enumeration of valid engram field modalities
     RecallCue,                  # Recall cue definition object for memory cortices
     EncodingEngine,             # Shared encoding engine (sentence-transformers wrapper with cache)
-    EngramComplex,          # Centralized engram memory storage interface
+    pack_vector,                # Vector packing utility for storage in SQLite
+    EngramComplex,              # Centralized engram memory storage interface
 )
 
 EMC_SCHEMA = EngramSchema(                                              # Define the engram schema for episodic memory
@@ -301,7 +302,7 @@ class EpisodicMemoryCortex:
         recovery_offset = 0                                         # For tracking the offset for batch recovery of unencoded episodes
 
         while True:                                                 # Keep recovering unencoded episodes in batches
-            unencoded = self._esb.retrieve_staged_batch(            # Query the engram for unencoded episodes
+            unencoded = self._ecx.retrieve_staged_batch(            # Query the engram for unencoded episodes
                 batch_size = EMC.RECOVERY_BATCH_SIZE,
                 offset     = recovery_offset,
             )
@@ -376,8 +377,12 @@ class EpisodicMemoryCortex:
                 if not episode.get("staging_id"):
                     with self._inscription_lock:                                        # With inscription lock on episodic buffer,
                         episode["staging_id"] = self._ecx.stage_engram(                 # Insert the episode into the episodic buffer
-                            conn=encoder_conn,
-                            episode=episode,
+                            engram = {
+                                "timestamp": episode["timestamp"],
+                                "date":      episode["date"],
+                                "content":   episode["content"],
+                            },
+                            ecx_conn = encoder_conn,
                         )
       
                 # Encode the episode content into a semantic vector
@@ -426,114 +431,57 @@ class EpisodicMemoryCortex:
             episode      : Episode dictionary with timestamp, date, content
             encoding_blob: Binary encoding data of the episode
         """
-        with self._inscription_lock:                                                            # Ensure only one thread inscribes into the engram at a time
+        with self._inscription_lock:                                            # Ensure only one thread inscribes into the engram at a time
             # Primary episodic record
-            episode_id = self._esb.insert_episode(encoder_conn, episode, encoding_blob)         # Insert the episode into engram
+            episode_id = self._ecx.inscribe_engram(                             # Insert the episode into engram
+                engram={                                                        # Episode dictionary with timestamp, date, and content
+                    "timestamp": episode["timestamp"],                          # Episode timestamp
+                    "date":      episode["date"],                               # Episode date
+                    "content":   episode["content"],                            # Episode content
+                    "encoding":  encoding_blob,                                 # Episode encoding
+                }, 
+                ecx_conn=encoder_conn,                                          # Connection to use for the operation
+            )
 
             # Engram vector index (vec0 KNN for semantic search)
-            if self._engram_index:                                                              # Only create if engram vector index is activated
-                self._esb.insert_vector(encoder_conn, episode_id, encoding_blob)                # Insert the episode encoding into engram vectors for fast retrieval
+            self._ecx.insert_vector(                                            # Insert the episode encoding into engram vectors for fast retrieval
+                engram_id = episode_id,                                         # Episode ID for which to insert the encoding
+                blob = encoding_blob,                                           # Binary encoding data of the episode
+                ecx_conn = encoder_conn,                                        # Connection to use for the operation
+            )
      
             # Engram lexical index (FTS5 index for lexical search)
-            self._esb.insert_lexical(encoder_conn, episode_id, episode["content"])              # Insert the episode content into engram lexical for fast retrieval
+            self._ecx.insert_lexical(                                           # Insert the episode content into engram lexical for fast retrieval 
+                engram_id = episode_id,                                         # Episode ID for which to insert the encoding
+                text = episode["content"],                                      # Raw text content of the episode
+                ecx_conn = encoder_conn,                                        # Connection to use for the operation
+            )
      
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
-            if episode.get("staging_id") is not None:                                           # If the episode still staging in episodic buffer,
-                self._esb.delete_staged(encoder_conn, episode["staging_id"])                    # Remove the episode from episodic buffer after synaptic consolidation
-                
-            encoder_conn.commit()                                                               # Commit the transaction
-        
-    def recall_episodes(self, query: str, recall_limit: int = 5) -> list[dict]:
+            if episode.get("staging_id") is not None:                           # If the episode still staging in episodic buffer,
+                self._ecx.decay_engram(                                         # Remove the episode from episodic buffer after synaptic consolidation
+                    engram_id = episode["staging_id"],                          # Episode ID for which to decay the encoding
+                    ecx_conn  = encoder_conn,                                   # Connection to use for the operation
+                )
+
+    def recall_episodes(self, cue: str, recall_limit: int = EMC.RECALL_LIMIT) -> list[dict]:
         """
         Recall relevant episodes from episodic memory.
-        Runs semantic and lexical retrieval, fusing results via RRF.
-
-        Fallback chain:
-            semantic + lexical  → RRF fusion          (both paths available)
-            semantic only       → semantic results     (FTS5 unavailable)
-            lexical only        → lexical results      (encoding engine unavailable)
-            neither             → []                   (full degraded state)
+        Dual-path retrieval fused via RRF — handled internally by MSB.
 
         Args:
-            query        : Recall cue string
-            recall_limit : Number of episodes to return (default 5)
+            cue (str): Recall cue string
+            recall_limit (int): Number of episodes to return
 
         Returns:
             list[dict]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
-        if not query or not query.strip():                                                      # Empty cue — nothing to recall
-            return []                                                                           
+        if not cue or not cue.strip():                                          # Empty cue — nothing to recall
+            return []                                                           # Return empty list if no cue
     
-        semantic_results : list[dict] = []                                                      
-        lexical_results  : list[dict] = []                                                      
-    
-        # PATH 1: Semantic
-        if self._encoding_engine.is_available:                                                  # Encoding engine must be loaded for semantic path
-            cue_vector: list[float] = self._encoding_engine.encode_cue(query)          # Encode cue — BGE instruction prefix applied internally
-    
-            if cue_vector:                                                                      # Empty vector means encoding failed — skip semantic path
-                if self._engram_index:                                                          # sqlite-vec available — use KNN
-                    try:                                                                        
-                        cue_blob = pack_vector(cue_vector)                                      
-                        semantic_results = self._esb.search_cosine(cue_vector, recall_limit, EMC.RECALL_POOL)
-                        self.logger.debug(f"EMC semantic recall (KNN) → {len(semantic_results)} candidates")
-                    except Exception as e:                                                      # KNN failed — fall through to cosine
-                        self.logger.debug(f"EMC KNN failed, falling back to cosine: {e}")      
-    
-                if not semantic_results:                                                        # KNN unavailable or returned nothing — cosine fallback
-                    try:                                                                        
-                        semantic_results = self._esb.search_cosine(cue_vector, recall_limit)    
-                        self.logger.debug(f"EMC semantic recall (cosine) → {len(semantic_results)} candidates")
-                    except Exception as e:
-                        self.logger.debug(f"EMC cosine fallback failed: {e}")   
-    
-        # PATH 2: Lexical
-        try:
-            lexical_results = self._esb.search_lexical_normalized(query, recall_limit)          
-            self.logger.debug(f"EMC lexical recall → {len(lexical_results)} candidates")
-        except Exception as e:
-            self.logger.debug(f"EMC lexical path failed: {e}")
-    
-        # CONVERGENCE: RRF fusion
-        if semantic_results and lexical_results:
-            fused = memory_convergence(semantic_results, lexical_results, recall_limit)         
-            self.logger.debug(
-                f"EMC recall → semantic:{len(semantic_results)} "
-                f"lexical:{len(lexical_results)} fused:{len(fused)}"
-            )
-            return fused
-    
-        if semantic_results:
-            results = sorted(semantic_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
-            for r in results:
-                r.pop("_rank", None)
-            self.logger.debug(f"EMC recall → semantic only ({len(results)})")
-            return results
-    
-        if lexical_results:
-            results = sorted(lexical_results, key=lambda x: x["relevancy"], reverse=True)[:recall_limit]
-            for r in results:
-                r.pop("_rank", None)
-            self.logger.debug(f"EMC recall → lexical only ({len(results)})")
-            return results
-    
-        self.logger.debug("EMC recall → no results from either path")
-        return []
-
-    def get_episodes_for_date(self, date_str: str) -> list[dict]:
-        """
-        Return all episodes for a given date in chronological order.
-        Used by MCC for 11pm Dream Cycle reflection (M2).
-
-        Args:
-            date_str (str): ISO date string (e.g. "2026-04-05")
-
-        Returns:
-            List of dicts: {timestamp, content}
-            Empty list if no episodes found or on failure.
-        """
-        return self._esb.get_episodes_for_date(date_str)                        # Obtain episodes for the given date from engram
+        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)           # Encode cue into vector and text
+        return self._ecx.recall_engram(recall_cue, recall_limit)                # Recall engram using the cue
 
     def get_stats(self) -> dict:
         """
@@ -548,7 +496,7 @@ class EpisodicMemoryCortex:
             with self._episodic_buffer_lock:                                    # Lock the episodic buffer to obtain accurate count
                 binding_pending= len(self.episodic_buffer._binding_stream)      # Count episodes in binding stream of episodic buffer
                 
-            engram_stats = self._esb.get_stats(self.engram_gateway)             # Obtain stats of engram from episodic storage bank
+            engram_stats = self._ecx.get_stats(self.engram_gateway)             # Obtain stats of engram from episodic storage bank
 
             return {                                                            # Retures the health and storage stats of EMC
                 **engram_stats,

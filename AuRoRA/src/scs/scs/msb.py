@@ -521,6 +521,9 @@ class EngramComplex:
             blob (bytes)    : Binary encoding blob of the engram
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
         """
+        if not self._vector_index:                                          # If the vector index is not available, return
+            return                                                          # No vector index = no semantic recall
+
         ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         ecx_conn.execute(                                                   # insert encoding into vector index for KNN semantic recall
             f"INSERT INTO {self._vector_schema} (rowid, {self._blueprint.semantic_traces}) VALUES (?,?)",
@@ -799,6 +802,7 @@ class EngramComplex:
                 "earliest_timestamp" : storage_stats["earliest"] if storage_stats else None,    # timestamp of the earliest engram complex
                 "latest_timestamp"   : storage_stats["latest"]   if storage_stats else None,    # timestamp of the latest engram complex
                 "physical_volume" : ecx_volume,                                                 # physical volume of the engram complex
+                "vector_index_active" : self._vector_index(),                   # whether vector index is available
             }
         except Exception as e:                                                  # catch any database access errors
             self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
