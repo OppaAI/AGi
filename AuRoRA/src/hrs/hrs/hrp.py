@@ -54,8 +54,12 @@ class AGi:                                              # Amazing Grace infrastr
             ENCODING_IMPRINT_LIMIT: int = 300           # [INTRINSIC] Maximum length of imprints to control cache hit rate vs false positive risk
             ENCODING_DIM: int           = 768           # [STATIC]    Dimensionality of the encoding vectors from the encoding engine
                                                         # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
-            EPISODE_CHUNK_LIMIT: int     = 300          # [INTRINSIC] Maximum number of chunks surfaced per episode during recall
-            EPISODE_CONTENT_LIMIT: int   = 6000         # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
+            EPISODE_CHUNK_LIMIT: int    = 300          # [INTRINSIC] Maximum number of chunks surfaced per episode during recall
+            EPISODE_CONTENT_LIMIT: int  = 6000         # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
+            
+            THETA_INTERVAL              = 2.0           # [INTRINSIC] seconds — periodic theta rhythm fallback for continuous sensor input
+            THETA_BATCH_LIMIT           = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
+            
             RECALL_RESERVE: int         = 1024          # [INTRINSIC] Cortical capacity reserved for episodic recall
             RECALL_DEPTH: int           = 3             # [INTRINSIC] Maximum number of episodes surfaced per turn
             RECALL_POOL: int            = 50            # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL episodes scored)
