@@ -61,8 +61,9 @@ class AGi:                                              # Amazing Grace infrastr
             THETA_BATCH_LIMIT: int      = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
             
             RECALL_RESERVE: int         = 1024          # [INTRINSIC] cortical capacity reserved for episodic recall
-            RECALL_DEPTH: int           = 10            # [INTRINSIC] maximum number of candidates RRF returns (depth of each search)
-            RECALL_POOL: int            = 2             # [INTRINSIC] candidate pool multiplier for the dual recall path (RECALL_DEPTH × RECALL_POOL episodes scored)
+            RECALL_SURFACE_LIMIT: int   = 5             # [INTRINSIC] maximum number of episodes surfaced per turn (final RRF output)
+            RECALL_POOL: int            = 2             # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
+            RECALL_DEPTH: int           = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED] search depth passed to KNN and FTS5 (number of candidates per path)
             RECALL_TIMEOUT: float       = 2.0           # [INTRINSIC] timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                         # covers encode_query (~500-900ms) + KNN search
                                                         # TODO: increase to 3.0 if model is genuinely int4 quantized
