@@ -176,10 +176,10 @@ class MemoryCoordinationCore:
         # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
         wmc_pmts = self.wmc.recall_pmt_schema()                              # Recall WMC PMTs in main neural pathway
         
-        try:                                                                 # Attempt to recall EMC episodes
-            emc_episodes = await asyncio.wait_for(                           # Await recalling of EMC episodes that is on isolated neural pathway
+        try:                                                                 # attempt to recall EMC episodes
+            emc_episodes = await asyncio.wait_for(                           # await with timeout — recall blocks on encoding engine
                 asyncio.get_running_loop().run_in_executor(
-                    None, self.emc.recall_episodes, user_prompt, CNS.EMC.RECALL_SURFACE_LIMIT
+                    None, self.emc.recall_episodes, user_prompt
                 ),
                 timeout=CNS.EMC.RECALL_TIMEOUT                               # Set a time limit for recalling EMC episodes
             )
