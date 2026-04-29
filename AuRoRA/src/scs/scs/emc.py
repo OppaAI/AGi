@@ -27,7 +27,6 @@ Architecture:
         emc_vector       — sqlite-vec KNN index for semantic search
         emc_lexical      — FTS5 index for lexical search
         emc_staging      — crash-safe buffer for unencoded PMTs
-                          
 
     Encoding:
         Continuous during wake — online encoding, not sleep-only.
@@ -56,7 +55,7 @@ Architecture:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
 Terminology:
-    episodic_buffer  — raw binding table for evicted PMTs (crash-safe, temporary)
+    episodic_buffer  — in memory buffer for evicted PMTs (crash-safe, temporary)
     encoding         — semantic encoding of a turn into a vector
     episode          — dated and encoded memory trace (a specific remembered moment)
     engram           — the memory store containing encoded episodes
@@ -72,8 +71,8 @@ Lifecycle:
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
     emc.recall_episodes(cue, recall_limit) → list[dict]
-    emc.get_stats() → dict
-    emc.close() → None
+    emc.assess_emc() → dict
+    emc.terminate() → None
 
 TODO:
     M2 — date-range filtering on recall interface and buffer entries
@@ -86,7 +85,7 @@ TODO:
 
 # System libraries
 import os                                   # for encoding thread priority via os.nice()
-from pathlib import Path                    # for calculating database size — owned here, never passed back up
+from pathlib import Path                    # for building engram complex storage path
 import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import threading                            # for background thread, locks, and theta rhythm event
 import time                                 # for CPU yield during theta rhythm cycle
@@ -174,14 +173,15 @@ class EncodingCycle:
     Drains the binding stream, encodes PMTs into semantic vectors,
     and consolidates them into the episodic engram.
 
-    Biological analogue: hippocampal theta-rhythm driven encoding during wake.
+    Biological analogue: intra-hippocampal CA3/CA1 LTP-driven trace encoding during wake.
     """
+
     def __init__(self, logger, ecx: EngramComplex, encoding_engine: EncodingEngine,
                  episodic_buffer: EpisodicBuffer, episodic_buffer_lock: threading.Lock) -> None:
         """
         Initialize the episodic encoding cycle and start the background encoding thread.
         Recovers any unencoded PMTs from the staging table before the thread starts.
-    
+
         Args:
             logger                                : Logger instance from EMC
             ecx (EngramComplex)                   : Engram complex for staging and inscription
@@ -189,24 +189,23 @@ class EncodingCycle:
             episodic_buffer (EpisodicBuffer)      : Episodic buffer — binding stream source
             episodic_buffer_lock (threading.Lock) : Lock for thread-safe binding stream access
         """
-        self.logger                = logger
-        self._ecx                  = ecx
-        self._encoding_engine      = encoding_engine
-        self._episodic_buffer      = episodic_buffer
-        self._episodic_buffer_lock = episodic_buffer_lock
+        self.logger                = logger                             # logger instance from EMC
+        self._ecx                  = ecx                                # engram complex for staging and inscription
+        self._encoding_engine      = encoding_engine                    # shared encoding engine for semantic vectors
+        self._episodic_buffer      = episodic_buffer                    # episodic buffer — binding stream source
+        self._episodic_buffer_lock = episodic_buffer_lock               # lock for thread-safe binding stream access
                      
         # Inscription lock — only encoding cycle inscribes into episodes
         self._inscription_lock     = threading.RLock()                  # serializes engram writes — RLock allows re-entry
                      
         # Set up encoding cycle
         self._encoder_running      = False                              # encoding cycle not yet started
-        self._theta_rhythm         = threading.Event()                  # gates encoding cycle — set by bind_pmt()
+        self._theta_rhythm         = threading.Event()                  # gates encoding cycle — set by trigger_theta_rhythm() or WMC
         self._encoder_thread: threading.Thread | None = None            # assigned in _ignite_cycle()
-        self._ignite_cycle()
+        self._ignite_cycle()                                            # kick start the encoding cycle
 
     def _ignite_cycle(self) -> None:
         """
-        Kick start the dormant encoding cycle thread.
         Recover unencoded PMTs from the staging table into the binding stream,
         then start the background encoding thread.
         Batch recovery avoids RAM spike after crash during a long session.
@@ -217,10 +216,10 @@ class EncodingCycle:
         recovery_offset = 0                                         # pagination offset for batch recovery
 
         while True:                                                 # keep recovering unencoded episodes in batches
-            unencoded = self._ecx.retrieve_staged_batch(
-                batch_size = EMC.RECOVERY_BATCH_SIZE,
-                offset     = recovery_offset,
-            )                                                       # query staging table for unencoded episodes
+            unencoded = self._ecx.retrieve_staged_batch(            # query staging table for unencoded episodes
+                batch_size = EMC.RECOVERY_BATCH_SIZE,               # number of unencoded episodes to recover at once
+                offset     = recovery_offset,                       # offset for pagination — skips already-recovered episodes
+            )
 
             if not unencoded:                                       # if no more unencoded episodes to recover,
                 break                                               # stop recovering unencoded episodes
@@ -239,12 +238,12 @@ class EncodingCycle:
 
         if recovery_count:                                          # if any episodes were recovered,
             self.logger.info(                                       # Log the recovery of unencoded episodes
-                f"⚡ EMC recovered {recovery_count} Unencoded episode(s) from engram → binding stream"
+                f"⚡ EMC recovered {recovery_count} unencoded episode(s) from engram → binding stream"
             )                                                       
             self._theta_rhythm.set()                                # wake encoding cycle for recovered episodes
 
         self._encoder_running = True                                # mark cycle as active before thread starts
-        self._encoder_thread  = threading.Thread(                   # assign a neural thread for the encoding cycle
+        self._encoder_thread  = threading.Thread(                   # assign a dormant thread for the encoding cycle
             target=self._run_cycle,                                 # encoding cycle main loop
             name="emc-encoding-cycle",                              # named for debugging
             daemon=True,                                            # dies with main process
@@ -254,36 +253,36 @@ class EncodingCycle:
 
     def _run_cycle(self) -> None:
         """
-        Event-driven encoding — drains episodic_buffer into episodes.
-        Trigger in 4-8Hz period or when buffer has episodes (theta rhythm pattern).
-        Processes a snapshot of IDs per rhythm — new arrivals deferred to next cycle.
+        Theta-rhythm driven encoding — drains binding stream into emc_storage.
+        Wakes on PMT arrival or theta interval — whichever comes first.
+        Processes a fixed snapshot per rhythm — new arrivals deferred to next cycle.
         """
-
         # Yield processing priority to active cognition threads
         os.nice(19)                                               # deprioritize — encoding is non-latency-sensitive
+
         encoder_conn = self._ecx.bifurcate_ecx()                  # bifurcated connection for parallel writes
-        self.logger.info("⚙️ EMC encoding cycle running…")       # log the start of encoding cycle
+        self.logger.info("⚙️ EMC encoding cycle running…")        # log the start of encoding cycle
     
-        while self._encoder_running:                              # while the encoder is running,
+        while self._encoder_running:                              # loop until stop signal
             # Rest state — wait for theta rhythm activation
-            self._theta_rhythm.wait(timeout=EMC.THETA_INTERVAL)  # wake on PMT arrival or theta interval
+            self._theta_rhythm.wait(timeout=EMC.THETA_INTERVAL)   # wake on PMT arrival or theta interval
             self._theta_rhythm.clear()                            # reset event for next cycle
     
             if not self._encoder_running:                         # if the encoder is not running,
                 break                                             # clean exit if stopped while waiting
     
             # Snapshot IDs at this moment — one rhythm, one defined window
-            with self._episodic_buffer_lock:                    # hold lock for snapshot and drain
-                if not self._episodic_buffer._binding_stream:    # binding stream empty — nothing to encode
-                    continue                                    # skip this encoding cycle
+            with self._episodic_buffer_lock:                      # hold lock for snapshot and drain
+                if not self._episodic_buffer._binding_stream:     # binding stream empty — nothing to encode
+                    continue                                      # skip this encoding cycle
                 rhythm: list[dict] = list(itertools.islice(
                     self._episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
-                ))                                                                # snapshot up to batch limit — remaining stays for next cycle
+                ))                                                # snapshot up to batch limit — remaining stays for next cycle
                 
-                for _ in range(len(rhythm)):                                      # iterate through the length of snapshot
-                    self._episodic_buffer._binding_stream.popleft()               # drain only what was snapshotted
+                for _ in range(len(rhythm)):                      # iterate through the length of snapshot
+                    self._episodic_buffer._binding_stream.popleft() # drain only what was snapshotted
     
-            self.logger.debug(f"EMC encoding cycle → {len(rhythm)} episode(s) in rhythm")    # log the number of episodes in the rhythm
+            self.logger.debug(f"EMC encoding cycle → {len(rhythm)} episode(s) in rhythm") # log the number of episodes in the rhythm
     
             # Replay each episode in the rhythm
             for episode in rhythm:                              # for each episode in the rhythm,
@@ -293,20 +292,20 @@ class EncodingCycle:
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
-                if not episode.get("staging_id"):
-                    with self._inscription_lock:                                        # hold inscription lock for staging write
-                        episode["staging_id"] = self._ecx.stage_engram(                 # insert the episode into the episodic buffer
-                            engram = {
-                                "timestamp": episode["timestamp"],
-                                "date":      episode["date"],
-                                "content":   episode["content"],
+                if not episode.get("staging_id"):                           # if no staging_id, stage the episode
+                    with self._inscription_lock:                            # hold inscription lock for staging write
+                        episode["staging_id"] = self._ecx.stage_engram(     # insert the episode into the episodic buffer
+                            engram = {                                      # create engram with timestamp, date, and content
+                                "timestamp": episode["timestamp"],          # timestamp of episode
+                                "date":      episode["date"],               # date of episode
+                                "content":   episode["content"],            # content of episode
                             },
-                            ecx_conn = encoder_conn,
+                            ecx_conn = encoder_conn,                        # connection to episodic buffer
                         )
       
                 # Encode the episode content into a semantic vector
-                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode["content"])   # encode content into semantic vector
-                if not encoded_episode:                                             # If the encoding failed,
+                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode["content"]) # encode content into semantic vector
+                if not encoded_episode:                                             # if the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # log the warning message of unavailability of the encoding engine
                         f"EMC encode skipped (encoding engine unavailable): "
@@ -319,30 +318,36 @@ class EncodingCycle:
                 # Pack encoded episode vector as fp32 binary for engram storage
                 encoding_blob = pack_vector(encoded_episode)                        # pack float vector into fp32 binary blob
             
-                self._synaptic_consolidate(encoder_conn, episode, encoding_blob)
+                self._synaptic_consolidate(encoder_conn, episode, encoding_blob)    # consolidate the episode from episodic buffer into engram
     
                 self.logger.debug(
-                    f"EMC coded and stored → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # Log the number of chunks in the episode
-                    f" (date={episode['date']})",                                   # Log the date of the episode
+                    f"EMC coded and stored → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # log the number of chunks in the episode
+                    f" (date={episode['date']})",                                   # log the date of the episode
                 )
     
-        encoder_conn.close()                                                        # Close the encoder connection
-        self.logger.info("EMC encoding cycle stopped")                              # Log the stop of the EMC encoding cycle
-        
+        encoder_conn.close()                                                        # close the encoder connection
+        self.logger.info("EMC encoding cycle stopped")                              # log the stop of the EMC encoding cycle
+
+    def trigger_theta_rhythm(self) -> None:    
+        """
+        Trigger the theta rhythm to wake the encoding cycle.
+        """
+        self._theta_rhythm.set()                            # wake the theta rhythm to start encoding
+
     def _synaptic_consolidate(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
         """
         Stabilize one encoded episode into all three engram indexes.
         Biological analogue: LTP-driven trace stabilization in the hippocampus during wake.
         Distinct from systems consolidation (EMC → SMC) which occurs during the M2 Dream Cycle.
-    
+
         Args:
             encoder_conn          : Bifurcated connection for encoding cycle writes
             episode (dict)        : Episode with timestamp, date, content, staging_id
             encoding_blob (bytes) : fp32 binary vector of the encoded episode
         """
-        with self._inscription_lock:                                            # ensure only one thread inscribes into the engram at a time
+        with self._inscription_lock:                                            # serializes all three inscriptions as one atomic operation
             # Primary episodic record
-            episode_id = self._ecx.inscribe_engram(                             # insert the episode into engram
+            episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
                 engram={                                                        # episode dictionary with timestamp, date, and content
                     "timestamp": episode["timestamp"],                          # episode timestamp
                     "date":      episode["date"],                               # episode date
@@ -353,22 +358,22 @@ class EncodingCycle:
             )
 
             # Engram vector index (vec0 KNN for semantic search)
-            self._ecx.inscribe_vector_index(                                    # insert the episode encoding into engram vectors for fast retrieval
+            self._ecx.inscribe_vector_index(                                    # inscribe encoding into vec0 KNN index — rowid matches episode_id
                 engram_id = episode_id,                                         # episode ID for which to insert the encoding
                 blob = encoding_blob,                                           # binary encoding data of the episode
                 ecx_conn = encoder_conn,                                        # connection to use for the operation
             )
      
             # Engram lexical index (FTS5 index for lexical search)
-            self._ecx.inscribe_lexical_index(                                   # insert the episode content into engram lexical for fast retrieval 
+            self._ecx.inscribe_lexical_index(                                   # inscribe content into FTS5 index — rowid matches episode_id
                 engram_id = episode_id,                                         # episode ID for which to insert the encoding
                 content = episode["content"],                                   # raw text content of the episode
                 ecx_conn = encoder_conn,                                        # connection to use for the operation
             )
      
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
-            if episode.get("staging_id") is not None:                           # if the episode still staging in episodic buffer,
-                self._ecx.decay_staged_engram(                                  # remove the episode from episodic buffer after synaptic consolidation
+            if episode.get("staging_id") is not None:                           # staging_id present — episode was crash-recovered
+                self._ecx.decay_staged_engram(                                  # decay staging row — synaptic consolidation complete
                     staging_id = episode["staging_id"],                         # episode ID for which to decay the encoding
                     ecx_conn  = encoder_conn,                                   # connection to use for the operation
                 )
@@ -378,7 +383,7 @@ class EncodingCycle:
         self._encoder_running = False                                   # signal encoding thread to stop
         self._theta_rhythm.set()                                        # wake thread so it can exit cleanly
         if self._encoder_thread:                                        # if encoder cycle is still running,
-            self._encoder_thread.join(timeout=3.0)                      # wait for clean exit up to 3sec
+            self._encoder_thread.join(timeout=3.0)                      # wait for clean exit — up to 3 seconds
             
 class EpisodicMemoryCortex:
     """
@@ -416,8 +421,8 @@ class EpisodicMemoryCortex:
         self._encoding_engine      = EncodingEngine(                        # sentence-transformers wrapper with LRU prime
             logger          = logger,                                       # logger instance for logging operations
             encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
-            cue_prefix      = EMC.RECALL_CUE_PREFIX,                        # query prefix for recall cues
-            engram_prefix   = EMC.RECALL_ENGRAM_PREFIX,                     # document prefix for engrams
+            cue_prefix      = EMC.ENCODING_CUE_PREFIX,                      # query prefix for recall cues
+            engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX,                   # document prefix for engrams
             prime_limit     = EMC.PRIME_LIMIT,                              # max LRU prime entries before eviction
             prime_key_limit = EMC.PRIME_KEY_LIMIT,                          # max chars hashed per prime key
         )                                                                   
@@ -465,8 +470,8 @@ class EpisodicMemoryCortex:
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
                 self.episodic_buffer._binding_stream.append(episode)                # queue episode for encoding cycle
-            self._encoding_cycle._theta_rhythm.set()                                # trigger encoding cycle — theta rhythm
-            self.logger.debug(                                                      # Log the binding of the evicted PMT into episodic buffer
+            self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
+            self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
             )
             return True                                                             # indicate successful binding
@@ -480,20 +485,20 @@ class EpisodicMemoryCortex:
         Dual-path retrieval fused via RRF — handled internally by MSB.
 
         Args:
-            cue (str): Recall cue string
-            recall_limit (int): Number of episodes to return
+            cue (str)          : Recall cue string
+            recall_limit (int) : Maximum number of episodes to return
 
         Returns:
             list[dict]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
-        if not cue or not cue.strip():                                          # Empty cue — nothing to recall
-            return []                                                           # Return empty list if no cue
+        if not cue or not cue.strip():                                          # empty cue — nothing to recall
+            return []                                                           # return empty list if no cue
     
-        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)           # Encode cue into vector and text
-        return self._ecx.recall_engram(recall_cue, recall_limit)                # Recall engram using the cue
+        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)           # encode cue into vector + raw text for dual-path recall
+        return self._ecx.recall_engram(recall_cue, recall_limit)                # semantic + lexical RRF fusion — handled by MSB
 
-    def get_stats(self) -> dict:
+    def assess_emc(self) -> dict:
         """
         Return EMC health and storage stats.
     
@@ -502,27 +507,27 @@ class EpisodicMemoryCortex:
                   Empty dict on failure.
         """
         try:
-            with self._episodic_buffer_lock:                                        # hold lock for accurate binding stream count
-                binding_pending = len(self.episodic_buffer._binding_stream)         # count episodes queued for encoding
-    
-            engram_stats = self._ecx.assess_engram_complex()                        # query engram complex for storage stats
-    
+            with self._episodic_buffer_lock:                                    # hold lock for accurate binding stream count
+                binding_pending = len(self.episodic_buffer._binding_stream)     # count episodes queued for encoding
+
+            engram_stats = self._ecx.assess_engram_complex()                    # query engram complex for storage stats
+
             return {
-                **engram_stats,                                                     # unpack engram complex stats
-                "binding_pending"       : binding_pending,                          # episodes queued in binding stream
-                "encoding_engine_ready" : self._encoding_engine.is_available,       # True if sentence-transformers loaded
-                "encoding_engine"       : EMC.ENCODING_ENGINE,                      # model name for reference
+                **engram_stats,                                                 # unpack engram complex stats
+                "binding_pending"       : binding_pending,                      # episodes queued in binding stream
+                "encoding_engine_ready" : self._encoding_engine.is_available,   # True if sentence-transformers loaded
+                "encoding_engine"       : EMC.ENCODING_ENGINE,                  # model name for reference
             }
-        except Exception as e:
-            self.logger.error(f"EMC get_stats failed: {e}")                         # log failure with reason
-            return {}                                                               # empty dict — caller handles no results
-    
-    def close(self) -> None:
+        except Exception as e:                                                  # if assessment fails
+            self.logger.error(f"EMC assessment failed: {e}")                    # log failure with reason
+            return {}                                                           # empty dict — caller handles no results
+
+    def terminate(self) -> None:
         """
         Gracefully close EMC and release the engram connection.
         Signals encoding cycle to stop and waits for clean exit
         before closing the engram complex.
         """
         self._encoding_cycle.stop_cycle()                                   # signal encoding cycle to stop and wait for clean exit
-        self._ecx.close()                                                   # release engram complex connection
-        self.logger.info("🗄️  EMC deactivated")                             # log successful deactivation
+        self._ecx.terminate()                                               # release engram complex connection
+        self.logger.info("🗄️ EMC deactivated")                              # log successful termination

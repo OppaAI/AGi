@@ -45,6 +45,7 @@ Public interface:
         inscribe_lexical_index(engram_id: int, content: str, ecx_conn?) → None
         recall_engram(cue: RecallCue, depth: int, date_range?) → list[dict]
         assess_engram_complex() → dict
+        terminate() → None
 
 TODO: migrate pack_vector, normalize_vector to hrs.py if
       vector math is needed outside memory cortices
@@ -786,26 +787,29 @@ class EngramComplex:
                 f"FROM {self._storage_schema}"
             ).fetchone()                                                        # fetch engram count and timestamp range
 
-            staging_stats: sqlite3.Row = self._ecx_conn.execute(                # query staging schema for buffer count
-                f"SELECT COUNT(*) as total FROM {self._staging_schema}"
-            ).fetchone()                                                        # fetch buffer count
+            if self._blueprint.staging:                                         # check if blueprint has staging table
+                staging_stats: sqlite3.Row | None = self._ecx_conn.execute(     # query staging schema for buffer count
+                    f"SELECT COUNT(*) as total FROM {self._staging_schema}"
+                ).fetchone()                                                    # fetch buffer count
+            else:                                                               # no staging table defined in blueprint
+                staging_stats: sqlite3.Row | None = None                        # query returns None
 
             ecx_volume: float = round(Path(self._gateway).stat().st_size / 1_048_576, 2) \
                 if Path(self._gateway).exists() else 0.0                        # calculate engram complex physical volume size (in MB)
 
             return {                                                            # return engram complex stats for logging and monitoring
-                "buffer_count"        : staging_stats["total"]  if staging_stats else 0,        # count of episodes in the buffer
-                "engram_count"        : storage_stats["total"]  if storage_stats else 0,        # count of episodes in the engram complex
+                "buffer_count"        : staging_stats["total"] if staging_stats else 0,         # count of episodes in the buffer
+                "engram_count"        : storage_stats["total"] if storage_stats else 0,         # count of episodes in the engram complex
+                "vector_index_active" : self._vector_index,                                     # vector index available flag
                 "earliest_timestamp"  : storage_stats["earliest"] if storage_stats else None,   # timestamp of the earliest engram complex
-                "latest_timestamp"    : storage_stats["latest"]   if storage_stats else None,   # timestamp of the latest engram complex
+                "latest_timestamp"    : storage_stats["latest"] if storage_stats else None,     # timestamp of the latest engram complex
                 "physical_volume"     : ecx_volume,                                             # physical volume of the engram complex
-                "vector_index_active" : self._vector_index,                     # whether vector index is available
             }
         except Exception as e:                                                  # catch any database access errors
             self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
             return {}                                                           # empty dict — caller handles no results
 
-    def close(self) -> None:
+    def terminate(self) -> None:
         """
         Close the engram complex connection and release all resources.
         """

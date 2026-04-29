@@ -238,7 +238,7 @@ class MemoryCoordinationCore:
             dict: Combined schema from WMC and EMC cortex layers
         """
         wmc_schema: dict = self.wmc.assess_pmt_schema()      # Assess the PMT schema of WMC
-        emc_schema: dict = self.emc.get_stats()              # Assess the engram complex of EMC
+        emc_schema: dict = self.emc.assess_emc()             # Assess the engram complex of EMC
         return {                                             # Return the current stats of all memory cortex layers
             "wmc": wmc_schema,                               # Current stats of working memory
             "emc": emc_schema,                               # Current stats of engram complex

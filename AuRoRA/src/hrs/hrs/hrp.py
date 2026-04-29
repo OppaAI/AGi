@@ -56,12 +56,16 @@ class AGi:                                              # Amazing Grace infrastr
                                                         # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             EPISODE_CHUNK_LIMIT: int    = 300          # [INTRINSIC] Maximum number of chunks surfaced per episode during recall
             EPISODE_CONTENT_LIMIT: int  = 6000         # [INTRINSIC] Maximum character length of a PMT bound into episodic buffer
+
+            PRIME_LIMIT: int            = 50            # [INTRINSIC] Maximum number of items in the encoding engine's LRU prime cache
+            PRIME_KEY_LIMIT: int        = 50            # [INTRINSIC] Maximum number of characters hashed per prime key in the encoding engine
             
             THETA_INTERVAL              = 2.0           # [INTRINSIC] seconds — periodic theta rhythm fallback for continuous sensor input
             THETA_BATCH_LIMIT           = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
             
             RECALL_RESERVE: int         = 1024          # [INTRINSIC] Cortical capacity reserved for episodic recall
-            RECALL_DEPTH: int           = 3             # [INTRINSIC] Maximum number of episodes surfaced per turn
+            RECALL_DEPTH: int           = 10            # [INTRINSIC] Maximum number of candidates RRF returns (depth of each search)
+            RECALL_LIMIT: int           = 5             # [INTRINSIC] Maximum number of episodes surfaced per turnp (narrowerer surface)
             RECALL_POOL: int            = 50            # [INTRINSIC] Candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL episodes scored)
             RECALL_TIMEOUT: float       = 2.0           # [INTRINSIC] Timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                         # covers encode_query (~500-900ms) + KNN search
