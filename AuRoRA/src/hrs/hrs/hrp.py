@@ -62,7 +62,7 @@ class AGi:                                              # Amazing Grace infrastr
             
             RECALL_RESERVE: int         = 1024          # [INTRINSIC] cortical capacity reserved for episodic recall
             RECALL_DEPTH: int           = 10            # [INTRINSIC] maximum number of candidates RRF returns (depth of each search)
-            RECALL_POOL: int            = 2             # [INTRINSIC] candidate pool multiplier for cosine recall (RECALL_DEPTH × RECALL_POOL episodes scored)
+            RECALL_POOL: int            = 2             # [INTRINSIC] candidate pool multiplier for the dual recall path (RECALL_DEPTH × RECALL_POOL episodes scored)
             RECALL_TIMEOUT: float       = 2.0           # [INTRINSIC] timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                         # covers encode_query (~500-900ms) + KNN search
                                                         # TODO: increase to 3.0 if model is genuinely int4 quantized
