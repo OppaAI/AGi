@@ -464,7 +464,7 @@ class EpisodicMemoryCortex:
         episode: dict = {                                                           # package the evicted PMT data into episode
             "timestamp": timestamp,                                                 # timestamp of PMT induced into WMC
             "date":      timestamp[:10],                                            # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content":   content[:EMC.ENGRAM_CONTENT_LIMIT]                         # truncate to engram limit before binding
+            "content":   content[:EMC.EPISODE_CONTENT_LIMIT]                        # truncate to engram limit before binding
         }
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer

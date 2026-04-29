@@ -285,5 +285,5 @@ class MemoryCoordinationCore:
         WMC has no persistent resources to close,
         but EMC may have open file handles to the engram gateway that need to be released.
         """
-        self.emc.close()                                            # Close the engram gateway
+        self.emc.terminate()                                        # Terminate the engram gateway
         self.logger.info("🗄️  MCC shutdown sequence complete")      # Log entry on successful MCC closure
