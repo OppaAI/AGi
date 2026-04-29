@@ -513,10 +513,15 @@ class EpisodicMemoryCortex:
             engram_stats = self._ecx.assess_engram_complex()                    # query engram complex for storage stats
 
             return {
-                **engram_stats,                                                 # unpack engram complex stats
-                "binding_pending"       : binding_pending,                      # episodes queued in binding stream
-                "encoding_engine_ready" : self._encoding_engine.is_available,   # True if sentence-transformers loaded
-                "encoding_engine"       : EMC.ENCODING_ENGINE,                  # model name for reference
+                "engram_count"  : engram_stats.get("engram_count", 0),                    # total encoded episodes in engram storage
+                "earliest_timestamp"  : engram_stats.get("earliest_timestamp", None),     # timestamp of the oldest stored episode
+                "latest_timestamp"    : engram_stats.get("latest_timestamp", None),       # timestamp of the most recent stored episode
+                "physical_volume"     : engram_stats.get("physical_volume", 0.0),         # engram complex size on disk (MB)
+                "vector_index_active" : engram_stats.get("vector_index_active", False),   # True if KNN vector index is available
+                "buffer_count"        : engram_stats.get("buffer_count", 0),              # unencoded episodes in staging buffer
+                "binding_pending"       : binding_pending,                                # episodes queued in binding stream
+                "encoding_engine_ready" : self._encoding_engine.is_available,             # True if sentence-transformers loaded
+                "encoding_engine"       : EMC.ENCODING_ENGINE,                            # model name for reference
             }
         except Exception as e:                                                  # if assessment fails
             self.logger.error(f"EMC assessment failed: {e}")                    # log failure with reason
