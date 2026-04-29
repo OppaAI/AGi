@@ -798,12 +798,12 @@ class EngramComplex:
                 if Path(self._gateway).exists() else 0.0                        # calculate engram complex physical volume size (in MB)
 
             return {                                                            # return engram complex stats for logging and monitoring
-                "buffer_count"        : staging_stats["total"] if staging_stats else 0,         # count of episodes in the buffer
-                "engram_count"        : storage_stats["total"] if storage_stats else 0,         # count of episodes in the engram complex
-                "vector_index_active" : self._vector_index,                                     # vector index available flag
+                "engram_count"        : storage_stats["total"] if storage_stats else 0,         # total encoded episodes in engram storage
+                "buffer_count"        : staging_stats["total"] if staging_stats else 0,         # unencoded episodes in staging buffer
+                "vector_index_active" : self._vector_index,                                     # True if KNN vector index is available
                 "earliest_timestamp"  : storage_stats["earliest"] if storage_stats else None,   # timestamp of the earliest engram complex
                 "latest_timestamp"    : storage_stats["latest"] if storage_stats else None,     # timestamp of the latest engram complex
-                "physical_volume"     : ecx_volume,                                             # physical volume of the engram complex
+                "physical_volume"     : ecx_volume,                                             # engram complex size on disk (MB)
             }
         except Exception as e:                                                  # catch any database access errors
             self.logger.error(f"MSB assess engram complex failed: {e}")         # log failure with reason
