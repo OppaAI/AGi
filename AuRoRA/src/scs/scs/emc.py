@@ -423,8 +423,8 @@ class EpisodicMemoryCortex:
             encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
             cue_prefix      = EMC.ENCODING_CUE_PREFIX,                      # query prefix for recall cues
             engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX,                   # document prefix for engrams
-            prime_limit     = EMC.PRIME_LIMIT,                              # max LRU prime entries before eviction
-            prime_key_limit = EMC.PRIME_KEY_LIMIT,                          # max chars hashed per prime key
+            cache_capacity  = EMC.ENCODING_CACHE_CAPACITY,                  # max LRU prime entries before eviction
+            cache_key_limit = EMC.ENCODING_CACHE_KEY_LIMIT,                 # max chars hashed per prime key
         )                                                                   
 
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
