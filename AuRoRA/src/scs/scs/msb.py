@@ -137,7 +137,7 @@ class EncodingEngine:
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_limit: int = 256, prime_key_limit: int = 300) -> None:
+    def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_capacity: int, prime_key_limit: int) -> None:
         """
         Initializes the encoding engine and encoding prime for recent memory traces.
     
@@ -146,14 +146,14 @@ class EncodingEngine:
             encoding_engine (str)       : Embedding model to load (e.g. from HRP)
             encoding_cue_prefix (str)   : Prompt prefix for encoding cues
             encoding_engram_prefix (str): Prompt prefix for engrams
-            prime_limit (int)           : Maximum number of entries in the encoding prime
+            prime_capacity (int)        : Maximum number of entries in the encoding prime
             prime_key_limit (int)       : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
         self._cue_prefix: str               = cue_prefix            # prompt prefix for encoding cues
         self._engram_prefix: str            = engram_prefix         # prompt prefix for engrams
-        self.prime_limit: int               = prime_limit           # max prime entries before LRU eviction
+        self.prime_capacity: int            = prime_capacity        # max prime entries before LRU eviction
         self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until load succeeds
         self._prime: dict[str, list[float]] = {}                    # encoding prime — maps prime key → float vector
@@ -209,7 +209,7 @@ class EncodingEngine:
             encoded_trace = normalize_vector(encoded_trace)                                 # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
-            if len(self._prime) >= self.prime_limit:                                        # prime full — must evict before inserting
+            if len(self._prime) >= self.prime_capacity:                                     # prime full — must evict before inserting
                 decayed_prime_key: str = next(iter(self._prime))                            # first key = oldest — dicts preserve insertion order
                 del self._prime[decayed_prime_key]                                          # evict oldest entry
             self._prime[prime_key] = encoded_trace                                          # store new vector under prime key
