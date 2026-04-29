@@ -547,30 +547,31 @@ class EngramComplex:
         )
         ecx_conn.commit()                                                   # commit before returning
 
-    def recall_engram(self, cue: RecallCue, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def recall_engram(self, cue: RecallCue, surface_limit: int, search_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams by fusing semantic and lexical matches.
         Cortex encodes the cue before calling — MSB owns retrieval only.
 
         Args:
             cue (RecallCue)                     : Encoded recall cue as float vector and raw cue text.
-            depth (int)                         : Number of engrams to recall.
+            surface_limit (int)                 : Maximum engrams returned after RRF fusion — the final surface.
+            search_depth (int)                  : Candidate pool per search path — fed to semantic KNN and lexical FTS5 before fusion.
             date_range (tuple[str, str] | None) : Optional, ISO date range (start, end) inclusive — filters recall to that period.
 
         Returns:
             list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
         """
-        semantic_matches = self._semantic_recall(cue.vector, depth, date_range)     # recall by meaning
-        lexical_matches  = self._lexical_recall(cue.text, depth, date_range)        # recall by keyword
-        return self._converge_memories(semantic_matches, lexical_matches, depth)    # fuse into unified ranking
+        semantic_matches = self._semantic_recall(cue.vector, search_depth, date_range)    # recall by meaning
+        lexical_matches  = self._lexical_recall(cue.text, search_depth, date_range)       # recall by keyword
+        return self._converge_memories(semantic_matches, lexical_matches, surface_limit)  # fuse into unified ranking
 
-    def _semantic_recall(self, cue: list[float], depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _semantic_recall(self, cue: list[float], search_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the vector index by semantic similarity to the cue.
 
         Args:
             cue (list[float])                   : Encoded recall cue as float vector.
-            depth (int)                         : Number of engrams to recall.
+            search_depth (int)                  : Candidate pool per search path — passed directly to KNN k parameter.
             date_range (tuple[str, str] | None) : Optional, ISO date range (start, end) inclusive — filters recall to that period.
         
         Returns:
@@ -594,7 +595,7 @@ class EngramComplex:
                 AND k = ?
                 ORDER BY vec.distance, store.id DESC
                 """,
-                [pack_vector(cue), *temporal_params, depth * 2],                # only pass date params if schema has a date column
+                [pack_vector(cue), *temporal_params, search_depth],             # only pass date params if schema has a date column
             ).fetchall()                                                        # return all matching engrams by semantic similarity
 
             if not matches:                                                     # if no matches found,
@@ -614,13 +615,13 @@ class EngramComplex:
             self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
             return []                                                           # empty list — caller handles no results
 
-    def _lexical_recall(self, cue: str, depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _lexical_recall(self, cue: str, search_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the lexical index by keyword matching.
 
         Args:
             cue (str)                           : Raw recall cue string — sanitized internally.
-            depth (int)                         : Number of engrams to recall.
+            search_depth (int)                  : Candidate pool per search path — pass to lexical FTS5.
             date_range (tuple[str, str] | None) : ISO date range (start, end) inclusive — filters recall to that period.
 
         Returns:
@@ -648,7 +649,7 @@ class EngramComplex:
                 ORDER BY lexeme.rank, store.id DESC
                 LIMIT ?
                 """,
-                [clean_cue, *temporal_params, depth * 2],                   # only pass date params if schema has a date column
+                [clean_cue, *temporal_params, search_depth],                # only pass date params if schema has a date column
             ).fetchall()                                                    # fetch all matching engrams
 
             if not matches:                                                 # if no matches found,
