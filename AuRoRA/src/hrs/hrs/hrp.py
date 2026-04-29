@@ -52,8 +52,8 @@ class AGi:                                              # Amazing Grace infrastr
             ENCODING_CYCLE_TIMEOUT: float = 30.0        # [INTRINSIC] time period for theta rhythm to wake up (Currently not used, triggered only with new PMT)
             ENCODING_DIM: int             = 768         # [STATIC]    dimensionality of the encoding vectors from the encoding engine
                                                         # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
-            ENCODING_CACHE_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU cache
-            ENCODING_CACHE_KEY_LIMIT: int = 256         # [INTRINSIC] maximum characters hashed per cache key in encoding engine
+            ENCODING_PRIME_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU prime
+            ENCODING_PRIME_KEY_LIMIT: int = 256         # [INTRINSIC] maximum characters hashed per prime key in encoding engine
             
             EPISODE_CONTENT_LIMIT: int  = 6000          # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
             
