@@ -479,7 +479,7 @@ class EpisodicMemoryCortex:
             self.logger.warning(f"EMC binding PMT failed: {e}")                     # log failure with reason
             return False                                                            # indicate failure during binding
 
-    def recall_episodes(self, cue: str, recall_limit: int = EMC.RECALL_LIMIT) -> list[dict]:
+    def recall_episodes(self, cue: str, recall_limit: int = EMC.RECALL_SURFACE_LIMIT) -> list[dict]:
         """
         Recall relevant episodes from episodic memory.
         Dual-path retrieval fused via RRF — handled internally by MSB.
@@ -492,11 +492,11 @@ class EpisodicMemoryCortex:
             list[dict]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
-        if not cue or not cue.strip():                                          # empty cue — nothing to recall
-            return []                                                           # return empty list if no cue
+        if not cue or not cue.strip():                                                      # empty cue — nothing to recall
+            return []                                                                       # return empty list if no cue
     
-        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)           # encode cue into vector + raw text for dual-path recall
-        return self._ecx.recall_engram(recall_cue, recall_limit)                # semantic + lexical RRF fusion — handled by MSB
+        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                       # encode cue into vector + raw text for dual-path recall
+        return self._ecx.recall_engram(recall_cue, recall_limit, EMC.RECALL_SEARCH_DEPTH)   # semantic + lexical RRF fusion — handled by MSB
 
     def assess_emc(self) -> dict:
         """
