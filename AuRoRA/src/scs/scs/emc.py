@@ -70,7 +70,7 @@ Lifecycle:
 
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
-    emc.recall_episodes(cue, recall_limit) → list[dict]
+    emc.recall_episodes(cue) → list[dict]
     emc.assess_emc() → dict
     emc.terminate() → None
 
@@ -78,6 +78,7 @@ TODO:
     M2 — date-range filtering on recall interface and buffer entries
     M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
     M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
+    N2 — add watchdog for theta rhythm (interval of one encoding cycle) during dreaming cycle
     M2 — heartbeat logging during long idle periods
     M2 — staging_id integrity check after Dream Cycle consolidation
     M2 — graceful drain + optional timeout fallback for SWR trigger during close
@@ -380,10 +381,10 @@ class EncodingCycle:
     
     def stop_cycle(self) -> None:
         """Signal the encoding cycle to stop and wait for clean exit."""
-        self._encoder_running = False                                   # signal encoding thread to stop
-        self._theta_rhythm.set()                                        # wake thread so it can exit cleanly
-        if self._encoder_thread:                                        # if encoder cycle is still running,
-            self._encoder_thread.join(timeout=3.0)                      # wait for clean exit — up to 3 seconds
+        self._encoder_running = False                                       # signal encoding thread to stop
+        self._theta_rhythm.set()                                            # wake thread so it can exit cleanly
+        if self._encoder_thread:                                            # if encoder cycle is still running,
+            self._encoder_thread.join(timeout=EMC.ENCODING_CYCLE_TIMEOUT)   # wait for clean exit — up to 3 seconds
             
 class EpisodicMemoryCortex:
     """
