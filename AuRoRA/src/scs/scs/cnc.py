@@ -14,7 +14,7 @@ Topics:
     Sub: /cns/neural_input       (std_msgs/String) — user message
     Pub: /gce/response           (std_msgs/String) — streamed response chunks
 
-Response format (JSON on /aurora/grace/response):
+Response format (JSON on /grace/response):
     {"type": "start",  "content": "<first chunk>"}
     {"type": "delta",  "content": "<delta>"}
     {"type": "done",   "content": "<full response>"}
