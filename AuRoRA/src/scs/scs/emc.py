@@ -85,9 +85,10 @@ TODO:
 """
 
 # System libraries
+import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
+import json                                 # for deserializing episode content in memory context assembly
 import os                                   # for encoding thread priority via os.nice()
 from pathlib import Path                    # for building engram complex storage path
-import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import threading                            # for background thread, locks, and theta rhythm event
 import time                                 # for CPU yield during theta rhythm cycle
 from collections import deque               # for O(1) append/popleft in binding stream
@@ -498,6 +499,33 @@ class EpisodicMemoryCortex:
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                           # encode cue into vector + raw text for dual-path recall
         return self._ecx.recall_engram(recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH)  # semantic + lexical RRF fusion — handled by MSB
 
+    def stage_recall(self, episodes: list[dict]) -> None:
+        """
+        Format recalled episodes as a system message and stage into recall stream.
+        Called by MCC after relevancy filtering — EMC owns the episode format.
+    
+        Args:
+            episodes (list[dict]): Filtered episodes from recall_episodes() [{id, timestamp, date, content, relevancy}]
+        """
+        if not episodes:                                                        # nothing to stage — skip
+            return
+    
+        lines = ["Relevant memories from past conversations:"]                 # system message header
+        for episode in episodes:                                               # format each episode as a single line
+            try:
+                content = json.loads(episode.get("content", ""))               # deserialize stored JSON pair
+                date    = episode.get("date", "unknown date")                  # retrieve episode date for temporal context
+                lines.append(                                                  # format as readable memory trace with temporal anchor
+                    f"- [{date}] User: {content['user']} | Grace: {content['assistant']}"
+                )
+            except (json.JSONDecodeError, KeyError):                           # malformed engram — surface raw rather than silent drop
+                lines.append(f"- {episode.get('content', '')}")
+    
+        self.episodic_buffer.stage_single_episode({                            # inject as single system message — one block, temporally anchored
+            "role":    "system",
+            "content": "\n".join(lines)
+        })
+    
     def assess_emc(self) -> dict:
         """
         Return EMC health and storage stats.
