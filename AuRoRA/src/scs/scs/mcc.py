@@ -181,13 +181,14 @@ class MemoryCoordinationCore:
         self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating episodes
         reinstated_episodes: list[dict] = []                                 # list to store reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
-            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall blocks on encoding engine
-                asyncio.get_running_loop().run_in_executor(                  # run EMC recall in isolated neural pathway on dormant thread
-                    None, self.emc.reinstate_episodes, user_prompt           # EMC episodic recall using recall cue to surface relevant episodes
-                ),
-                timeout=self._recall_timeout                                 # set a time limit for recall of episodic memory traces
+            future = asyncio.get_running_loop().run_in_executor(             # run EMC recall in isolated neural pathway on dormant thread
+                None, self.emc.reinstate_episodes, user_prompt               # EMC episodic recall using recall cue to surface relevant episodes
             )
-        except asyncio.TimeoutError:                                         # if timeout error happens while recalling EMC episodes
+            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall blocks on encoding engine
+                future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
+            )
+        except asyncio.TimeoutError:                                         # recall exceeded time limit — cancel dormant thread
+            future.cancel()                                                  # cancel dormant thread to prevent stale episode contamination
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
 
         # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
