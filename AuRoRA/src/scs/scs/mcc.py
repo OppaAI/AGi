@@ -68,7 +68,6 @@ TODO:
 
 # System libraries
 import asyncio                              # for async WMC and EMC recall
-import json                                 # for deserializing episode content in memory context assembly
 from pathlib import Path                    # for engram gateway path construction
 
 # AGi libraries
@@ -122,7 +121,7 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMT to episodic buffer (non-blocking)
 
         Args:
-            speaker (str): User ID of the speaker interacting with the AI
+            user_id (str): User ID of the speaker interacting with the AI
             content (str): Content of the conversation turn (the message text)
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
@@ -131,7 +130,7 @@ class MemoryCoordinationCore:
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to episodic buffer
-            asyncio.get_running_loop().run_in_executor(                     # Recruit a dormant neural thread — run binding on isolated neural pathway
+            _ = asyncio.get_running_loop().run_in_executor(                # Recruit a dormant neural thread — run binding on isolated neural pathway
                 None, self._bind_to_episodic_buffer, evicted_pmts
             )
             self.logger.debug(                                              # Log the binding transition of evicted PMTs to episodic buffer
@@ -203,18 +202,7 @@ class MemoryCoordinationCore:
 
         # Inject relevant EMC episodes as a system message
         if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
-            for episode in episodic_scaffold:                                # Access each EMC episode in the EMC episodic scaffold
-                content     = episode.get("content", "")                     # Retrieve the content of the EMC episode
-
-                # Deserialize episode content into user prompt/AI response pairs for context assembly
-                try:
-                    content = json.loads(content)                                                                            # Deserialize episode content into user prompt/AI response pair
-                    self.emc.episodic_buffer.stage_single_episode({"role": "user",      "content": content["user"]})         # Unpack user prompt from the content
-                    self.emc.episodic_buffer.stage_single_episode({"role": "assistant", "content": content["assistant"]})    # Unpack AI response from the content
-                except (json.JSONDecodeError, KeyError):                                                                     # When error occurs during deseralization - malformed content format
-                    # Malformed — surface as-is rather than silent drop
-                    self.emc.episodic_buffer.stage_single_episode({"role": "user", "content": content})                      # Use the episode content as-is
-                 
+            self.emc.stage_recall(episodic_scaffold)
             self.logger.debug(                                               # Log the number of EMC episodes bound into episodic buffer
                 f"MCC injected {len(episodic_scaffold)} EMC episode(s) into episodic buffer"
             )
