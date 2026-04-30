@@ -109,6 +109,9 @@ class MemoryCoordinationCore:
         self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # For invoking WMC with provided logger
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # For invoking EMC with provided logger and gateway to engram complex
+
+        self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                       # Set a time limit for recall of episodic memory traces from EMC
+
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
     async def register_memory(self, user_id: str, content: str) -> None:
@@ -160,63 +163,42 @@ class MemoryCoordinationCore:
         """
         Assemble full memory context for the cognitive engine.
         Structure:
-            [WMC PMTs (chronological)]
-            + [EMC episodes injected into memory context (if relevant)]
-        WMC PMTs are recalled directly in the main neural pathway, while 
-        EMC episodes are recalled on an isolated neural pathway — awaited before returning.
+            [EMC reinstated episodes (system block, if relevant)]
+            + [WMC PMTs (chronological, chat turns)]
+        EMC reinstatement runs on an isolated neural pathway — awaited before returning.
         Awaits both before returning — inference requires full memory context.
-        
+
         Args:
-            user_prompt (str): Current user message (used as EMC recall query)
+            user_prompt (str): Current user message (used as EMC recall cue)
         Returns:
             list[dict]: List of message dicts [{role, content}] ready for inference
         """
         
-        # Recall WMC PMTs directly in main neural pathway, then EMC episodes on isolated neural pathway
-        wmc_pmts = self.wmc.recall_pmt_schema()                              # Recall WMC PMTs in main neural pathway
+        # Recall WMC PMTs directly in main neural pathway
+        wmc_pmts: list[dict[str, str]] = self.wmc.recall_pmt_schema()        # recall PMTs from working memory into main neural pathway
         
+        # EMC reinstatement on isolated neural pathway — recall, filter, format, inject
+        self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating episodes
+        reinstated_episodes: list[dict] = []                                 # list to store reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
-            emc_episodes = await asyncio.wait_for(                           # await with timeout — recall blocks on encoding engine
-                asyncio.get_running_loop().run_in_executor(
-                    None, self.emc.recall_episodes, user_prompt
+            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall blocks on encoding engine
+                asyncio.get_running_loop().run_in_executor(                  # run EMC recall in isolated neural pathway on dormant thread
+                    None, self.emc.reinstate_episodes, user_prompt           # EMC episodic recall using recall cue to surface relevant episodes
                 ),
-                timeout=CNS.EMC.RECALL_TIMEOUT                               # Set a time limit for recalling EMC episodes
+                timeout=self._recall_timeout                                 # set a time limit for recall of episodic memory traces
             )
-        except asyncio.TimeoutError:                                         # If timeout error happens while recalling EMC episodes
-            self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # Log the timeout error while recalling EMC episodes
-            emc_episodes = []                                                # Proceed without episodic context
+        except asyncio.TimeoutError:                                         # if timeout error happens while recalling EMC episodes
+            self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
+
+        # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
+        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # inject the sustained WMC PMTs into episodic buffer
         
-        self.logger.info(                                                    # Log the EMC recall results with relevancy scores
-            f"EMC raw recall: {len(emc_episodes)} episodes, "
-            f"scores: {[e['relevancy'] for e in emc_episodes]}"
+        self.logger.debug(                                                   # log the memory context assembled
+            f"MCC context assembled: "
+            f"{len(wmc_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
         )
 
-        # Pass through memory gate — suppress episodes below relevancy threshold
-        episodic_scaffold = [                                                # Set up EMC episodic scaffold to stage the relevant episodes
-            episode for episode in emc_episodes                              # Process each of the recalled EMC episodes
-            if episode["relevancy"] >= CNS.EMC.RELEVANCE_THRESHOLD           # Stage the EMC episode if above relevancy threshold
-        ]
-
-        # Assemble memory context
-        self.emc.episodic_buffer.clear_recall_stream()                       # Reset recall stream of episodic buffer before assembling memory context
-
-        # Inject relevant EMC episodes as a system message
-        if episodic_scaffold:                                                # If EMC episodic scaffold is not empty,
-            self.emc.stage_recall(episodic_scaffold)
-            self.logger.debug(                                               # Log the number of EMC episodes bound into episodic buffer
-                f"MCC injected {len(episodic_scaffold)} EMC episode(s) into episodic buffer"
-            )
-
-        # Bind sustained WMC PMTs in chronological order
-        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # Stage the sustained WMC PMTS into episodic buffer
-
-        self.logger.debug(                                                   # Log the recalled memory context (WMC PMTs + recalled EMC episodes)
-            f"MCC memory context recalled: "
-            f"{len(wmc_pmts)} WMC PMTs + "
-            f"{len(episodic_scaffold)} EMC episodes"
-        )
-
-        return self.emc.episodic_buffer.assess_recall_stream()               # Return the memory context staged in episodic buffer
+        return self.emc.episodic_buffer.assess_recall_stream()               # return the memory context reinstated in episodic buffer
 
     def assess_memory_schema(self) -> dict:
         """
