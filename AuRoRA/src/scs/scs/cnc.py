@@ -135,8 +135,10 @@ class CNC(Node):
         Schedules async processing on the asyncio loop — never blocks.
         """
         try:
-            data = json.loads(msg.data.strip())
-            user_input = data.get("text", "").strip()
+           data = json.loads(msg.data.strip())
+           if not isinstance(data, dict) or not data.get("text"):
+               return
+           user_input = data.get("text", "").strip()
         except json.JSONDecodeError:
             user_input = msg.data.strip()
 
@@ -240,7 +242,7 @@ class CNC(Node):
                 if resp.status_code != 200:
                     err = f"vLLM HTTP {resp.status_code}"
                     self.get_logger().error(f"❌ {err}")
-                    self._publish({"type": "chunk", "content": err})
+                    self._publish({"type": "error", "content": err})
                     return ""
 
                 async for line in resp.aiter_lines():
