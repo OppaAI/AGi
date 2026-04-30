@@ -79,7 +79,8 @@ if rows and rows[0]["rowid"] == 3:
     print("✅ Top result is correct — sqlite_vec KNN is working")
 else:
     print("⚠️  Top result unexpected — check dim or packing")
-
+    raise SystemExit(1)
+    
 conn.close()
 print("=" * 50)
 print("✅ sqlite_vec is fully operational for EMC on this device")
