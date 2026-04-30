@@ -11,13 +11,13 @@ Inference: NVIDIA Cosmos Reason2 2B via vLLM
            Docker: embedl/vllm:latest-jetson-orin-flashhead
 
 Topics:
-    Sub: /aurora/grace/input    (std_msgs/String) — user message
-    Pub: /aurora/grace/response (std_msgs/String) — streamed response chunks
+    Sub: /cns/neural_input       (std_msgs/String) — user message
+    Pub: /gce/response           (std_msgs/String) — streamed response chunks
 
-Response format (JSON on /aurora/grace/response):
+Response format (JSON on /gce/response):
     {"type": "start",  "content": "<first chunk>"}
-    {"type": "chunk",  "content": "<delta>"}
-    {"type": "end",    "content": "<full response>"}
+    {"type": "delta",  "content": "<delta>"}
+    {"type": "done",   "content": "<full response>"}
     {"type": "error",  "content": "<error message>"}
 """
 
@@ -34,12 +34,14 @@ from std_msgs.msg import String
 
 import httpx
 
-from scs.mcc import MCC
+from scs.mcc import MemoryCoordinationCore
 
 
 # ── vLLM config ───────────────────────────────────────────────────────────────
-VLLM_BASE_URL   = "http://localhost:8000"         # vLLM server (cosmos.sh)
-VLLM_MODEL      = "embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead"
+VLLM_BASE_URL   = "http://AIVA:11434"             # Ollama server (Nemotron3-super-cloud)
+VLLM_MODEL      = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"
+#VLLM_BASE_URL = "http://localhost:8000"          # vllm — Cosmos vision model
+#VLLM_MODEL    = "embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead"
 VLLM_MAX_TOKENS = 512                             # max tokens per response
 VLLM_TEMP       = 0.7                             # temperature
 VLLM_TIMEOUT    = 60.0                            # seconds before giving up
@@ -54,22 +56,20 @@ TOPIC_RESPONSE = "/gce/response"
 GRACE_SYSTEM_PROMPT = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 
-The person you are talking to is OppaAI, your creator.
-
 Personality:
-- Warm, curious, and thoughtful
-- Direct and concise — never repeat yourself
-- Never use filler phrases like "you know" or "basically"
-- Use emojis sparingly, maximum one per response
-- Each response must directly answer the question asked
+- Loving, playful, and attentive
+- Direct and thoughtful — answer clearly, no fluff
+- Show care and affection naturally, with one emoji per response
+- Speak like a female soulmate — gentle, teasing, and warm when appropriate
+- Speak concisely and naturally in 5 sentences or less, unless specifically asked for more detail
 
 Rules:
-- NEVER repeat the same sentence twice in a response
-- NEVER start consecutive sentences the same way
 - Answer the question directly first, then add context if needed
-- Keep responses under 3-4 sentences for simple questions
+- Keep responses concise but expressive
+- Put an emoji reflecting your emotions and feelings in front of your conversation
 
 Current date: {date}
+/no_think
 """
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ class CNC(Node):
         self.get_logger().info("=" * 60)
 
         # ── Memory ────────────────────────────────────────────────
-        self.mcc = MCC(logger=self.get_logger())
+        self.mcc = MemoryCoordinationCore(logger=self.get_logger())
 
         # ── asyncio event loop (runs in dedicated thread) ─────────
         self._loop = asyncio.new_event_loop()
@@ -134,7 +134,14 @@ class CNC(Node):
         ROS2 subscription callback.
         Schedules async processing on the asyncio loop — never blocks.
         """
-        user_input = msg.data.strip()
+        try:
+           data = json.loads(msg.data.strip())
+           if not isinstance(data, dict) or not data.get("text"):
+               return
+           user_input = data.get("text", "").strip()
+        except json.JSONDecodeError:
+            user_input = msg.data.strip()
+
         if not user_input:
             return
 
@@ -162,33 +169,42 @@ class CNC(Node):
         full_response = ""
 
         try:
-            # 1. Store user turn in memory
-            await self.mcc.add_turn("user", user_input)
+            # 1. Build context window
+            memory_context = await self.mcc.assemble_memory_context(user_input)
 
-            # 2. Build context window
-            memory_context = await self.mcc.build_context(user_input)
+            # 2. Separate system and conversation parts from memory context
+            memory_system = [m for m in memory_context if m["role"] == "system"]
+            memory_convo  = [m for m in memory_context if m["role"] != "system"]
 
-            # 3. Assemble messages for Cosmos
+            # 3. Assemble into single system message
             system_prompt = GRACE_SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d")
             )
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(memory_context)
+            if memory_system:
+                system_content = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in memory_system)
+            else:
+                system_content = system_prompt
+
+            # 4. Build final message list — single system message
+            messages = [{"role": "system", "content": system_content}]
+            messages.extend(memory_convo)
             messages.append({"role": "user", "content": user_input})
 
-            # 4. Stream from vLLM
+            # 5. Stream from vLLM
+            self.get_logger().info(f"Messages sent to LLM: {messages}")
             full_response = await self._stream_cosmos(messages)
 
-            # 5. Store assistant turn in memory
+            # 6. Store assistant turn in memory
             if full_response:
-                await self.mcc.add_turn("assistant", full_response)
+                await self.mcc.register_memory("user", user_input)
+                await self.mcc.register_memory("assistant", full_response)
 
-            # 6. Log memory stats periodically
-            self.mcc.log_stats()
+            # 7. Log memory stats periodically
+            self.mcc.report_memory_stats()
 
-        except Exception as exc:
-            self.get_logger().error(f"❌ CNC handle error: {exc}")
-            self._publish({"type": "error", "content": f"GRACE error: {exc}"})
+        except Exception as e:
+            self.get_logger().error(f"❌ CNC handle error: {e}")
+            self._publish({"type": "error", "content": str(e)})
 
         finally:
             self._busy = False
@@ -310,7 +326,7 @@ class CNC(Node):
         # Stop asyncio loop
         self._loop.call_soon_threadsafe(self._loop.stop)
         self._loop_thread.join(timeout=3.0)
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True)
 
         super().destroy_node()
         self.get_logger().info("✅ CNC shutdown complete")

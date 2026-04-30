@@ -1,4 +1,4 @@
-# AGi — Autonomous General Intelligence
+# AGi — Amazing Grace infrastructure
 
 **AuRoRA** · Autonomous Robot with Reasoning Architecture  
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
@@ -67,37 +67,172 @@ AGi/
 
 ## Roadmap
 
-### Phase 1 — Chatbot with Memory
-
+## Phase 1 — Chatbot with Memory
+ 
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | 🟢 In Progress |
-| M2 | + Semantic Memory (SMC) + 11pm daily reflection | ⬜ Planned |
-| M3 | + Procedural Memory (PMC) | ⬜ Planned |
-
-### Phase 2 — Voice Output
-
+| M2a | EMC maturity — forgetting + importance scoring | ⬜ Planned |
+| M2b | Semantic Memory (SMC) basics — distillation + structure | ⬜ Planned |
+| M2c | SMC maturity — graph structure + anchoring + decay | ⬜ Planned |
+| M3 | Procedural Memory (PMC) | ⬜ Planned |
+ 
+### M1 — Chatbot + WMC + EMC
+- PMT lifecycle with hybrid chunk/slot eviction (Miller's Law 7±2)
+- Async embedding worker via embeddinggemma (evaluate performance at M2a)
+- Embeddinggemma anchor vector relevance scoring — discard trivial PMTs before EMC buffer
+- Semantic search with cosine similarity
+- SQLite WAL episodic storage — no expiry, 1TB NVMe
+- Conflict/versioning columns in EMC schema (prep for M2b): `conflict`, `superseded_by`, `valid_from`, `valid_until`
+- Importance columns in EMC schema (prep for M2a): `memory_strength`, `last_recalled_at`, `recall_count`, `novelty_score`
+ 
+### M2a — EMC Maturity
+- Decision: keep async embedding per-segment or move to 11pm batch (based on M1 data)
+- 3-dimension importance scoring:
+    - Dimension 1 — SMC similarity (personal fact anchoring)
+    - Dimension 2 — novelty score via embeddinggemma (novel = important, duplicate = expendable)
+    - Dimension 3 — content signals (length, questions, named entities, significance markers)
+- Ebbinghaus forgetting curve: R = e^(−t/S), S set by importance score, +1 on each recall
+- Duplicate/similarity clustering — cosine > 0.85 = merge candidates
+- Daily reflection (11pm) — fast sweep:
+    - Calculate R for all episodes
+    - Cluster and merge duplicates → distil to SMC
+    - Delete low importance + high decay episodes
+- Weekly assessment (Sunday) — deep sweep via Cosmos:
+    - Full importance scoring across all EMC
+    - Resolve pending conflicts
+    - Generate memory health report for OppaAI review
+- Memory dumps to `~/.aurora/memory_dumps/daily/` and `weekly/`
+- Evaluate anchor vector PMT filtering accuracy — upgrade to fine-tuned Qwen3 0.6B if insufficient
+ 
+### M2b — SMC Basics
+- SMC structure decision — flat key-value vs triples vs graph
+- Distillation pipeline — EMC episodes → Cosmos → SMC facts
+- 11pm nightly reflection — novel vs routine day detection
+- Recursive summary update: Mi = LLM(Hi, Mi-1)
+- SMC fact update — when facts change, old fact versioned not deleted
+- Conflict detection during conversation — GRACE asks to clarify
+- `_pending_conflict` flag in MCC for turn-spanning conflict state
+- Memory versioning — `valid_from`, `valid_until`, `superseded_by`
+- SMC feeds back into WMC context injection via MCC
+ 
+### M2c — SMC Maturity
+- SMC as knowledge graph — entities + relationships + triples
+- SMC anchors EMC importance scoring (personal facts never decay)
+- SMC fact decay — do facts ever expire? policy decision
+- Cross-layer search — query spans WMC + EMC + SMC simultaneously
+- Dynamic WMC capacity via HRS reading VCS vitals
+- Fine-tuned Qwen3 0.6B memory gating classifier if embeddinggemma insufficient
+ 
+### M3 — Procedural Memory (PMC)
+- YAML-based skill storage
+- Skill ingestion pipeline
+- Sandboxed skill execution
+- PMC + SMC interaction design
+ 
+---
+ 
+## Phase 2 — Voice
+ 
 | Milestone | Description | Status |
 |---|---|---|
 | M4 | TTS on robot — Piper CPU streaming | ⬜ Planned |
 | M5 | TTS in web GUI — browser audio playback | ⬜ Planned |
-
-### Phase 3 — Multimodal Input
-
+ 
+### M4 — TTS on Robot
+- Piper CPU streaming on Jetson
+ 
+### M5 — TTS in Web GUI
+- Browser audio playback
+ 
+---
+ 
+## Phase 3 — Multimodal + Knowledge
+ 
 | Milestone | Description | Status |
 |---|---|---|
-| M6 | Image input — camera + vision | ⬜ Planned |
+| M6 | Image input — camera + Cosmos vision | ⬜ Planned |
 | M7 | ASR — on-device speech to text | ⬜ Planned |
-| M8 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
-
-### Phase 4 — Hardware / Autonomy
-
+| M8 | Knowledge ingestion — RAG + PDF/docs | ⬜ Planned |
+| M9 | Agentic web search + crawling | ⬜ Planned |
+| M10 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
+ 
+### M6 — Image Input + Visuospatial Memory
+- OAK-D frames → Cosmos Vision → text description → visuospatial PMT
+- WMC visuospatial sketchpad slot (Cowan 4±1)
+- Episodic buffer integrating phonological + visuospatial PMTs
+ 
+### M7 — ASR
+- Whisper on-device speech to text
+ 
+### M8 — Knowledge Ingestion (RAG)
+- Passive RAG — PDF/doc → embeddinggemma → SMC directly
+- Conflict report UI for ingested knowledge
+- Ingestion conflict resolution workflow
+ 
+### M9 — Agentic Web Search
+- AIVA LLM as web agent
+- Active RAG — search → summarise → SMC
+- Multiple search combining semantic + keyword + SQL
+ 
+### M10 — Messaging
+- Gmail, Slack, Telegram integration
+ 
+---
+ 
+## Phase 4 — Hardware + Autonomy
+ 
 | Milestone | Description | Status |
 |---|---|---|
-| M9 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
-| M10 | Navigation + SLAM | ⬜ Planned |
-| M11 | Agentic mission execution | ⬜ Planned |
+| M11 | Motors + LiDAR + OAK-D integration | ⬜ Planned |
+| M12 | Navigation + SLAM | ⬜ Planned |
+| M13 | Agentic mission execution | ⬜ Planned |
+ 
+### M11 — Motors + Sensors
+- LiDAR → text description → visuospatial PMT
+- OAK-D depth + object detection integration
+- Sensor fusion into episodic buffer
+ 
+### M12 — Navigation + SLAM
+- Nav2 + Isaac ROS
+- Spatial memory in SMC — home layout, familiar routes
+ 
+### M13 — Agentic Mission Execution
+- Mission planning via PMC skills
+- Igniter node for ordered startup and health checks
+ 
+---
+ 
+## Phase 5 — Deep Learning
+ 
+| Milestone | Description | Status |
+|---|---|---|
+| M14 | Graph-RAG — SMC as knowledge graph | ⬜ Planned |
+| M15 | LoRA fine-tuning — permanent learning | ⬜ Planned |
+| M16 | Test-time training — self-evolution | ⬜ Planned |
+ 
+### M14 — Graph-RAG
+- SMC as full knowledge graph — entities + relationships
+- Tree-based hierarchical search (HAT) for large SMC
+- Multiple search strategies combined
+ 
+### M15 — LoRA Fine-tuning
+- Bake frequently accessed SMC knowledge into Cosmos weights
+- GRACE learns permanently, not just retrieves
+ 
+### M16 — Test-Time Training
+- Adapt Cosmos weights during inference from new context
+- Self-evolution milestone
+---
 
+## Cognitive Development Phases
+
+| Phase | Capability | Milestone |
+|---|---|---|
+| Phase 1 — Memory | "I can remember" | M1 WMC + EMC |
+| Phase 2 — Salience | "I know what matters" | M2 EMC maturity + HRS |
+| Phase 3 — Cognition | "I have inner state" | M2 SMC + reflection |
+| Phase 4 — Consciousness | "I continuously exist" | M5+ global workspace |
 ---
 
 ## Architecture

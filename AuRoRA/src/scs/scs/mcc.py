@@ -7,215 +7,254 @@ Single memory interface for CNC — coordinates WMC and EMC.
 CNC never touches WMC or EMC directly, only calls MCC.
 
 Responsibilities:
-    - Route new turns to WMC
-    - Forward WMC overflow → EMC buffer (async, non-blocking)
-    - Build context window for Cosmos (WMC turns + EMC search results)
-    - Token budget management across the full context
+    - Fill induced PMTs to WMC
+    - Bind evicted PMTs → episodic buffer (async, non-blocking)
+    - Assemble memory context into episodic buffer for cognitive engine (sustained WMC PMTs + recalled EMC episodes)
+    - Manage cortical capacity across the full memory context
 
-Context window budget (Cosmos Reason2 2B, max_model_len=2048):
-    System prompt + GRACE personality  ~300 tokens  (reserved)
-    EMC injected context               ~300 tokens  (reserved)
-    WMC active turns                   ~1400 tokens (WMC budget)
-    ─────────────────────────────────────────────────────────
-    Total                              ~2000 tokens (safe under 2048)
+Architecture:
+    MCC mirrors the human prefrontal cortex — the brain's active workspace
+    where working memory and episodic recall share the same conscious space.
 
-Future milestones:
+    WMC and EMC operate independently but converge in assemble_memory_context() into
+    a single unified memory context sent to cognitive engine — exactly as fresh thoughts
+    and recalled memories both surface into the same prefrontal awareness.
+    Cognitive engine cannot distinguish a sustained WMC PMT from a recalled EMC engram —
+    they are all just active cognition context.
+
+    Cortical capacity budget:
+        Identity and cognition          →  CNS.COGNITIVE_RESERVE
+        EMC recalled engrams            →  CNS.EMC.RECALL_RESERVE
+        WMC sustained PMTs              →  CNS.WMC.GLOBAL_CHUNK_LIMIT
+        ─────────────────────────────────────────────────────────────────────
+        Total active cognitive core     →  CNS.CORTICAL_CAPACITY
+
+Terminology:
+    Buffer      — temporary staging area for memory traces in transition
+                  (evicted PMTs from WMC waiting for encoding in EMC, or
+                  recalled EMC episodes waiting to be injected into memory context)
+    Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
+    Engram      — one physical stored memory record in the engram complex
+    PMT         — phonological memory trace (one interaction, user prompt + AI response)
+                  WMC pairs turns internally — MCC forwards evicted PMTs to EMC
+    Scaffold    — temporary staging area for relevant EMC episodes before context injection
+    Reserve     — cortical capacity reserved for a specific memory function
+    Threshold   — minimum relevancy score for an EMC episode to enter memory context
+
+Public interface:
+    MemoryCoordinationCore:
+        await register_memory(user_id: str, content: str) -> None   
+        context = await assemble_memory_context(user_prompt: str) -> list[dict]
+        assess_memory_schema() -> dict
+        report_memory_stats() -> None
+        forget_memory() -> None
+        close() -> None
+
+TODO:
+    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown
+        gate on novelty/importance scoring — low-salience turns should be
+        truly forgotten, not blindly bound
+    M2 — salience gate at eviction boundary in _bind_to_episodic_buffer():
+         score evicted PMTs for novelty and importance before binding;
+         discard low-salience turns, bind high-salience turns to EMC.
+         WMC and EMC remain salience-agnostic — MCC owns this decision.
+    M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
+         EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
+         WMC's chunk limit
+    M2 — WMC/EMC health check
     M2 — add SMC, 11pm reflection trigger
     M3 — add PMC, procedural skill retrieval
 """
 
-import asyncio
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+# System libraries
+import asyncio                              # for async WMC and EMC recall
+from pathlib import Path                    # for engram gateway path construction
 
-from scs.wmc import WMC
-from scs.emc import EMC
+# AGi libraries
+from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex — sustains active PMTs
+from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex — recalls relevant episodes
+from hrs.hrp import AGi                     # Homeostatic Regulation Parameters — global variables
+CNS = AGi.CNS                               # CNS parameters alias — used throughout MCC
 
-
-# ── Token budget for context assembly ────────────────────────────────────────
-SYSTEM_PROMPT_RESERVE = 300   # tokens reserved for system prompt + personality
-EMC_CONTEXT_RESERVE   = 300   # tokens reserved for injected EMC episodes
-EMC_TOP_K             = 3     # max episodes injected per turn
-EMC_MIN_SIMILARITY    = 0.25  # minimum cosine sim to include an episode
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── DB path ───────────────────────────────────────────────────────────────────
-DEFAULT_DB_PATH = str(Path.home() / ".aurora" / "emc.db")
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class MCC:
+class MemoryCoordinationCore:
     """
-    Memory Coordination Core.
+    Memory Coordination Core — the memory manager of the CNS.
 
-    Instantiated once by CNC at startup.
-    All memory operations go through MCC — CNC calls:
-
-        await mcc.add_turn(role, content)
-        context = await mcc.build_context(user_input)
-        mcc.get_stats()
+    Central relay between CNC and the memory cortex layers (WMC, EMC).
+    Instantiated once at startup. All memory operations go through MCC
+    — CNC never touches WMC or EMC directly.
     """
 
-    def __init__(self, logger, db_path: str = DEFAULT_DB_PATH):
-        self.logger = logger
-
-        # Ensure DB directory exists
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-        # Initialise memory layers
-        self.wmc = WMC(logger=logger)
-        self.emc = EMC(db_path=db_path, logger=logger)
-
-        self.logger.info(
-            f"✅ MCC initialised\n"
-            f"   WMC budget : {self.wmc.token_budget} tokens\n"
-            f"   EMC db     : {db_path}\n"
-            f"   EMC top-k  : {EMC_TOP_K} episodes per turn\n"
-            f"   Context    : {SYSTEM_PROMPT_RESERVE + EMC_CONTEXT_RESERVE + self.wmc.token_budget} tokens total"
-        )
-
-    # ── Core API ──────────────────────────────────────────────────────────────
-
-    async def add_turn(self, role: str, content: str):
+    def __init__(self, logger) -> None:
         """
-        Add a new conversation turn to memory.
-
-        1. Push turn to WMC
-        2. Forward any evicted turns to EMC buffer (non-blocking)
+        Initialize the Memory Coordination Core with a logger and set up the engram gateway.
+        Also initializes the WMC and EMC layers of the CNS.
 
         Args:
-            role:    "user" or "assistant"
-            content: Message text
+            logger: Logger instance from CNC for logging MCC operations
         """
-        # Push to WMC — returns evicted turns synchronously (fast, in-memory)
-        evicted = self.wmc.add_turn(role, content)
+        self.logger = logger            # Retrieve logger from CNC for logging MCC operations
 
-        # Forward evicted turns to EMC buffer
-        # Run in executor so it never blocks the asyncio event loop
-        if evicted:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, self._forward_to_emc_buffer, evicted
+        # Ensure engram gateway exists
+        # TODO: HRS milestone — move path construction to hrs.py entity gateway
+        self.engram_gateway = (         # Construct the gateway towards engram complex
+            Path.home() / 
+            AGi.ENTITY_GATEWAY / 
+            CNS.NEURAL_GATEWAY / 
+            CNS.ENGRAM_COMPLEX
+        )
+        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
+
+        # Initialize memory cortex layers
+        self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
+        self.wmc = WorkingMemoryCortex(logger=logger)                                       # For invoking WMC with provided logger
+        self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # For invoking EMC with provided logger and gateway to engram complex
+
+        self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                       # Set a time limit for recall of episodic memory traces from EMC
+
+        self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
+
+    async def register_memory(self, user_id: str, content: str) -> None:
+        """
+        Register new PMT into working memory and bind any evicted interactions to episodic buffer.
+        WMC accumulates individual turns and pairs them into complete interactions internally.
+        Eviction only fires at interaction boundary — never mid-exchange.
+
+        1. Pair to complete interaction and fill induced PMT into WMC
+        2. Bind any evicted PMT to episodic buffer (non-blocking)
+
+        Args:
+            user_id (str): User ID of the speaker interacting with the AI
+            content (str): Content of the conversation turn (the message text)
+        """
+        # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
+        evicted_pmts = self.wmc.fill_pmt(speaker=user_id, content=content)  # Induce conversation turn to WMC, and collect any evicted PMTs
+            
+        # Bind evicted PMTs to episodic buffer
+        # Run and forget — never blocks active cognition
+        if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to episodic buffer
+            _ = asyncio.get_running_loop().run_in_executor(                # Recruit a dormant neural thread — run binding on isolated neural pathway
+                None, self._bind_to_episodic_buffer, evicted_pmts
             )
-            self.logger.debug(
-                f"MCC forwarded {len(evicted)} evicted turn(s) → EMC buffer"
+            self.logger.debug(                                              # Log the binding transition of evicted PMTs to episodic buffer
+                f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
-    def _forward_to_emc_buffer(self, turns: list[dict]):
+    def _bind_to_episodic_buffer(self, evicted_pmts: list[dict]) -> None:
         """
-        Write evicted WMC turns to EMC buffer.
-        Runs in thread pool — never blocks asyncio loop.
+        Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
+        Takes place in isolated neural pathway — never blocks active cognition neural pathway.
+
+        Args:
+            evicted_pmts (list[dict]): List of evicted PMTs [{content, timestamp}]
         """
-        for turn in turns:
-            self.emc.buffer_append(
-                role    = turn["role"],
-                content = turn["content"],
+        try:                                                         # Attempt binding evicted PMTs to episodic buffer
+            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT                
+                self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
+                    timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
+                    content=evicted_pmt["content"],                  # Bind the content of the interaction
+                )       
+        except Exception as e:                                       # If binding lapse occurs, log and continue
+            self.logger.error(                                       # Log the binding lapse
+                f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
             )
-
-    async def build_context(self, user_input: str) -> list[dict]:
+            
+    async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
         """
-        Build the full context window to send to Cosmos.
-
+        Assemble full memory context for the cognitive engine.
         Structure:
-            [WMC turns (chronological)]
-            + [EMC episodes injected as system context (if relevant)]
-
-        EMC search runs concurrently with WMC retrieval — no added latency.
+            [EMC reinstated episodes (system block, if relevant)]
+            + [WMC PMTs (chronological, chat turns)]
+        EMC reinstatement runs on an isolated neural pathway — awaited before returning.
+        Awaits both before returning — inference requires full memory context.
 
         Args:
-            user_input: Current user message (used as EMC search query)
-
+            user_prompt (str): Current user message (used as EMC recall cue)
         Returns:
-            List of message dicts [{role, content}] ready for Cosmos
+            list[dict]: List of message dicts [{role, content}] ready for inference
         """
-        # Run WMC retrieval and EMC search concurrently
-        loop = asyncio.get_event_loop()
-
-        wmc_turns_future = loop.run_in_executor(None, self.wmc.get_turns)
-        emc_results_future = loop.run_in_executor(
-            None, self.emc.search, user_input, EMC_TOP_K
-        )
-
-        wmc_turns, emc_results = await asyncio.gather(
-            wmc_turns_future, emc_results_future
-        )
-
-        # Filter EMC results by minimum similarity threshold
-        relevant_episodes = [
-            ep for ep in emc_results
-            if ep["similarity"] >= EMC_MIN_SIMILARITY
-        ]
-
-        # Build context list
-        context: list[dict] = []
-
-        # Inject relevant EMC episodes as a system message
-        if relevant_episodes:
-            episode_lines = ["Relevant memories from past conversations:"]
-            for ep in relevant_episodes:
-                date_str = ep.get("date", "unknown date")
-                role_str = ep.get("role", "unknown")
-                content  = ep.get("content", "")
-                sim      = ep.get("similarity", 0.0)
-                episode_lines.append(
-                    f"[{date_str}] {role_str}: {content} (relevance: {sim:.2f})"
-                )
-
-            context.append({
-                "role":    "system",
-                "content": "\n".join(episode_lines),
-            })
-
-            self.logger.debug(
-                f"MCC injected {len(relevant_episodes)} EMC episode(s) into context"
+        
+        # Recall WMC PMTs directly in main neural pathway
+        wmc_pmts: list[dict[str, str]] = self.wmc.recall_pmt_schema()        # recall PMTs from working memory into main neural pathway
+        
+        # EMC reinstatement on isolated neural pathway — recall, filter, format, inject
+        self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating episodes
+        reinstated_episodes: list[dict] = []                                 # list to store reinstated episodes from EMC
+        try:                                                                 # attempt to recall EMC episodes
+            future = asyncio.get_running_loop().run_in_executor(             # run EMC recall in isolated neural pathway on dormant thread
+                None, self.emc.reinstate_episodes, user_prompt               # EMC episodic recall using recall cue to surface relevant episodes
             )
+            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall blocks on encoding engine
+                future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
+            )
+        except asyncio.TimeoutError:                                         # recall exceeded time limit — cancel dormant thread
+            future.cancel()                                                  # cancel dormant thread to prevent stale episode contamination
+            self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
 
-        # Append active WMC turns (chronological)
-        context.extend(wmc_turns)
-
-        self.logger.debug(
-            f"MCC context built: "
-            f"{len(wmc_turns)} WMC turns + "
-            f"{len(relevant_episodes)} EMC episodes"
+        # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
+        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # inject the sustained WMC PMTs into episodic buffer
+        
+        self.logger.debug(                                                   # log the memory context assembled
+            f"MCC context assembled: "
+            f"{len(wmc_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
         )
 
-        return context
+        return self.emc.episodic_buffer.assess_recall_stream()               # return the memory context reinstated in episodic buffer
 
-    # ── Utility ───────────────────────────────────────────────────────────────
-
-    def get_stats(self) -> dict:
-        """Return combined memory stats for logging and health checks."""
-        wmc_stats = self.wmc.token_usage()
-        emc_stats = self.emc.get_stats()
-        return {
-            "wmc": wmc_stats,
-            "emc": emc_stats,
+    def assess_memory_schema(self) -> dict:
+        """
+        Assess the current stats of all memory cortex layers for logging and health checks.
+    
+        Returns:
+            dict: Combined schema from WMC and EMC cortex layers
+        """
+        wmc_schema: dict = self.wmc.assess_pmt_schema()      # Assess the PMT schema of WMC
+        emc_schema: dict = self.emc.assess_emc()             # Assess the engram complex of EMC
+        return {                                             # Return the current stats of all memory cortex layers
+            "wmc": wmc_schema,                               # Current stats of working memory
+            "emc": emc_schema,                               # Current stats of engram complex
         }
 
-    def log_stats(self):
-        """Log current memory stats at INFO level."""
-        stats = self.get_stats()
-        w = stats["wmc"]
-        e = stats["emc"]
-        self.logger.info(
+    def report_memory_stats(self) -> None:
+        """
+        Report current memory cortex stats.
+        Called by CNC after every turn for health monitoring.
+
+        TODO:
+        - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
+        - GUI — expose via ROS2 topic for real-time memory visualisation
+        """
+        stats: dict = self.assess_memory_schema()           # Assess the current stats of all memory cortex layers
+        wmc_stats: dict = stats["wmc"]                      # Retrieve current stats of working memory
+        emc_stats: dict = stats["emc"]                      # Retrieve current stats of episodic memory
+        self.logger.info(                                   # Log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
-            f"   WMC: {w['turns']} turns | "
-            f"{w['used']}/{w['budget']} tokens ({w['percent']}%)\n"
-            f"   EMC: {e.get('episodes', 0)} episodes | "
-            f"{e.get('buffer_pending', 0)} pending embed | "
-            f"{e.get('db_size_mb', 0)} MB"
+            f"   WMC: {wmc_stats['pmt_count']} PMTs ({wmc_stats['slot_occupancy']}%) | "
+            f"{wmc_stats['sustained_chunks']}/{wmc_stats['global_chunk_limit']} chunks ({wmc_stats['chunk_occupancy']}%)\n"
+            f"   EMC: {emc_stats.get('engram_count', 0)} episodes | "
+            f"{emc_stats.get('binding_pending', 0)} binding | "
+            f"{emc_stats.get('buffer_count', 0)} staged | "
+            f"{emc_stats.get('physical_volume', 0)} MB"
         )
 
-    def clear_wmc(self):
+    def forget_memory(self) -> None:
         """
-        Clear working memory — called at conversation reset.
-        Does NOT clear EMC — episodic memory is permanent.
+        Forget active memory at session end or conversation reset.
+        Clears:
+            - Working memory (WMC pmt_slot)
+        Preserves:
+            - Episodic memory (EMC) — permanent
+            - Semantic memory (SMC) — permanent (future)
+            - Procedural memory (PMC) — permanent (future)
         """
-        self.wmc.clear()
-        self.logger.info("🧹 WMC cleared via MCC")
+        self.wmc.forget_pmt_schema()                        # Forget all sustaining PMT schema in working memory
+        self.logger.info("🧹 Working memory forgotten")     # Log entry on successful working memory forgetting
 
-    def close(self):
-        """Shutdown all memory layers cleanly."""
-        self.emc.close()
-        self.logger.info("🗄️  MCC closed")
+    def close(self) -> None:
+        """
+        Gracefully close MCC and its memory cortex layers.
+        WMC has no persistent resources to close,
+        but EMC may have open file handles to the engram gateway that need to be released.
+        """
+        self.emc.terminate()                                        # Terminate the engram gateway
+        self.logger.info("🗄️  MCC shutdown sequence complete")      # Log entry on successful MCC closure
