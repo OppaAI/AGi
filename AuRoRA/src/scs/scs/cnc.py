@@ -11,13 +11,13 @@ Inference: NVIDIA Cosmos Reason2 2B via vLLM
            Docker: embedl/vllm:latest-jetson-orin-flashhead
 
 Topics:
-    Sub: /aurora/grace/input    (std_msgs/String) — user message
-    Pub: /aurora/grace/response (std_msgs/String) — streamed response chunks
+    Sub: /cns/neural_input       (std_msgs/String) — user message
+    Pub: /gce/response           (std_msgs/String) — streamed response chunks
 
 Response format (JSON on /aurora/grace/response):
     {"type": "start",  "content": "<first chunk>"}
-    {"type": "chunk",  "content": "<delta>"}
-    {"type": "end",    "content": "<full response>"}
+    {"type": "delta",  "content": "<delta>"}
+    {"type": "done",   "content": "<full response>"}
     {"type": "error",  "content": "<error message>"}
 """
 
