@@ -55,14 +55,39 @@ Architecture:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
 Terminology:
-    episodic_buffer  — in memory buffer for evicted PMTs (crash-safe, temporary)
-    encoding         — semantic encoding of a turn into a vector
-    episode          — dated and encoded memory trace (a specific remembered moment)
-    engram           — the memory store containing encoded episodes
-    FTS5             — SQLite FTS5 full-text search extension for lexical search
-    relevancy        — RRF-fused salience score of the episode (0.0–1.0) combining semantic and lexical rank
-    recall stream    — shared stream for recalled episodes (cross-layer)
-    RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
+    Episodic Buffer    — two-stream in-memory workspace bridging WMC eviction and EMC
+                         encoding. Binding stream receives evicted PMTs; recall stream
+                         stages reinstated episodes for MCC context assembly.
+    Encoding           — transformation of a raw PMT into a unit-normalized semantic
+                         vector for storage and similarity search in the engram complex.
+    Engram             — one physical stored memory record in the engram complex,
+                         carrying a timestamp, date, raw content, and semantic
+                         encoding vector.
+    Episode            — a dated, encoded memory trace representing a specific
+                         remembered moment — one complete PMT bound to the scaffold
+                         and consolidated into the engram complex.
+    Lexical Recall     — keyword search over episode content via SQLite FTS5 with
+                         porter stemming, surfacing episodes by pattern match rather
+                         than meaning. Biological analogue: dentate gyrus pattern
+                         separation — discriminates episodes by surface features.
+    Memory Convergence — fusion of semantic and lexical recall rankings into a single
+                         relevancy-ordered list via Reciprocal Rank Fusion (RRF).
+                         Neither path alone is canonical — convergence is the result.
+    Recall Stream      — shared output stream of the episodic buffer where reinstated
+                         episodes are staged before injection into MCC memory context.
+    Relevancy          — RRF-fused salience score (0.0–1.0) assigned to each recalled
+                         episode, combining semantic similarity rank and lexical match
+                         rank into a single measure of contextual fitness.
+    Scaffold           — the pre-structured temporal-semantic coordinate space that
+                         anchors every engram at bind time and sequences recalled
+                         episodes before reinstatement. The temporal axis (timestamp),
+                         semantic axis (vec0), and lexical axis (FTS5) together
+                         constitute the scaffold. Reinstatement traverses it;
+                         the Dream Cycle reorganizes attachments within it.
+    Semantic Recall    — vector similarity search over unit-normalized engram encodings
+                         via sqlite-vec KNN, surfacing episodes by meaning rather than
+                         keyword match. Biological analogue: CA3 pattern completion —
+                         a partial cue reinstates the full stored trace.
 
 Lifecycle:
     Binding → Encoding → Synaptic Consolidation → Recall → Reinstatement
@@ -75,6 +100,12 @@ Public interface:
     emc.terminate() → None
 
 TODO:
+    M2 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
+         engram anchoring at bind time, RECALL_RESERVE trimming, and chronological
+         sequencing before reinstatement. Extend EMC_SCHEMA with scaffold metadata
+         fields: sequence_index (INTEGER), session_id (TEXT), salience (REAL),
+         consolidation_state (TEXT DEFAULT 'raw') — required for Dream Cycle
+         distillation tracking and scaffold-aware recall ordering.
     M2 — date-range filtering on recall interface and buffer entries
     M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
     M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
