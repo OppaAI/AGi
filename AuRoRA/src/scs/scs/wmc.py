@@ -223,54 +223,54 @@ class WorkingMemoryCortex:
     def recall_pmt_schema(self) -> list[dict]:
         """
         Recall sustaining PMT schema for context window construction.
-        Unpacks the PMT schema into pair of user prompt and AI response.
+        Unpacks the PMT schema into interleaved pair of user prompt and AI response.
+        Timestamps stripped — only role and content surfaced for inference.
         Return PMT schema in ascending chronological order.
-        Only includes role + content — timestamp stripped for cognitive engine.
-        Timestamps are only used for logging and memory management.
 
         Returns:
-            list[dict]: List of sustained PMTs unpacked for cognitive engine inference [{role, content}]
+            list[dict]: Sustained PMT schema unpacked as turn pairs [{role, content}], in ascending chronological order
         """
-        sustained_pmts = []                                                                        # For collecting recalled pmts for cognitive engine memory context
-        for pmt in self._pmt_slot:                                                                 # Iterate over each sustained PMT in the slot
+        sustained_pmts = []                                                                        # accumulate unpacked turn pairs for inference
+
+        for pmt in self._pmt_slot:                                                                 # traverse sustaining PMTs oldest-first
             # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response pairs
-            try:                                                                                   # Attempt to deserialize the PMT content
-                content = json.loads(pmt["content"])                                               # Deserialize PMT content into user prompt/AI response pair
-                sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user prompt from the content
-                sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack AI response from the content
-            except (json.JSONDecodeError, KeyError):                                               # When error occurs during deseralization - malformed content format
-                sustained_pmts.append({"role": "user", "content": pmt["content"]})                 # Use the PMT content as-is
+            try:                                                                                   # attempt to deserialize the PMT content
+                content = json.loads(pmt["content"])                                               # deserialize — each PMT encodes a user/assistant pair
+                sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user turn from the content
+                sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack assistant turn from the content
+            except (json.JSONDecodeError, KeyError):                                               # malformed PMT — surface raw rather than drop
+                sustained_pmts.append({"role": "user", "content": pmt["content"]})                 # use the PMT content as-is
 
         # Return the list of sustained PMT schema in ascending chronological order
-        return sustained_pmts                                                                      # Return the list of unpacked user prompt/AI response pairs
+        return sustained_pmts                                                                      # ascending chronological order
 
     def forget_pmt_schema(self) -> list[dict]:
         """
-        Forget all sustaining PMT schema in working memory.
+        Forget all sustaining PMT schema — returns working memory to rest.
         Called at conversation end or on explicit reset.
-        Does NOT forward to EMC — PMT schema are permanently forgotten unless
-        caller chooses to save the returned list.
-
+        Forwarding the forgotten schema to EMC is the caller's responsibility.
+    
         Returns:
-            list[dict]: List of forgotten PMTs [{timestamp, content}]
+            list[dict] : Forgotten PMT schema [{timestamp, content}]
         """
-        forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # Capture PMT schema before forgetting, Safe — single-threaded access guaranteed by CNC._busy flag
-        self._pmt_slot.clear()                                      # Wipe out working memory
-        self._induced_pmt = None                                    # Clear any incomplete induced PMT  
-        self._sustained_chunks: int = 0                             # Zero out sustained chunk count
-        self.logger.info(                                           # Log the forgetting of the PMT schema from working memory
+        forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # snapshot before wipe — safe under CNC._busy
+        self._pmt_slot.clear()                                      # evict all sustaining PMTs
+        self._induced_pmt = None                                    # discard any incomplete induced PMT
+        self._sustained_chunks: int = 0                             # reset sustained chunk count
+        self.logger.info(                                           # log the forgetting of the PMT schema from working memory
             f"🧹 WMC forgotten ({len(forgotten_pmt_schema)} PMTs)"
         )
-        return forgotten_pmt_schema                                 # Return forgotten PMT schema to caller for optional saving or forwarding to EMC
+        return forgotten_pmt_schema                                 # return forgotten PMT schema to caller for optional saving or forwarding to EMC
     
     def assess_pmt_schema(self) -> dict:
         """
-        Assess the current status of sustaining PMT schema for logging and monitoring.
+        Assess current occupancy of the sustaining PMT schema.
+        Used for monitoring and GRACE cognitive state display.
 
         Returns:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage
         """
-        return {                                     # Return the occupancy of PMT and chunk sustaining in the working memory
+        return {                                     # return the occupancy of PMT and chunk sustaining in the working memory
             "pmt_count"          : len(self._pmt_slot),
             "pmt_slot_limit"     : self.pmt_slot_limit,
             "slot_occupancy"     : round(len(self._pmt_slot) / self.pmt_slot_limit * 100, 1) if self.pmt_slot_limit > 0 else 0.0,
@@ -283,9 +283,10 @@ class WorkingMemoryCortex:
     @property
     def is_empty(self) -> bool:
         """
-        Check if working memory is empty.
+        True if no PMTs are sustaining in working memory.
+        Expected at conversation start and after forgetting.
 
         Returns:
-            bool: True if working memory is empty, False otherwise
+            bool:  True if PMT slot is empty, False if any PMTs are sustaining
         """
-        return len(self._pmt_slot) == 0               # Return True if working memory is empty, False otherwise
+        return len(self._pmt_slot) == 0               # return True if working memory is empty, False otherwise
