@@ -39,9 +39,6 @@ Terminology:
     PMT         — phonological memory trace; one complete interaction
                   (user prompt + AI response). WMC pairs turns internally —
                   MCC forwards complete evicted PMTs to EMC.
-    Scaffold    — temporary staging area where retrieved memory fragments are 
-                  integrated and held for conscious review before being reinstated
-                  into the current mental context
     Reserve     — cortical capacity allocated to a specific memory function
     Threshold   — minimum relevancy score required for an EMC episode
                   to enter the active memory context
