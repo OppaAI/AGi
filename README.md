@@ -75,6 +75,7 @@ AGi/
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | ✅ Complete |
 | M1.5 | Memory bridges + Agentic tool validation | 🟢 In Progress |
+| M1.6 | EEE — Emergency and Exception Event module (HRS) | ⬜ Planned |
 | M1.X | Side Quests — Voice, Messaging, Web UI | ⬜ Planned |
 | M2a | EMC maturity — forgetting + importance scoring | ⬜ Planned |
 | M2b | Semantic Memory (SMC) basics — distillation + structure | ⬜ Planned |
@@ -105,6 +106,13 @@ AGi/
     - Web search — SearXNG via MCP server
 - Unit tests: WMC eviction + EMC recall (RRF, semantic/lexical paths, relevance threshold)
 - Integration test gate — 9 criteria must pass before M2a opens
+
+### M1.6 — EEE — Emergency and Exception Event module
+- EEE module in HRS — severity-tiered structured event records
+- Persistent event log — written to disk, queryable
+- Drop-in replacement for logger handle passed to CNC, MCC, WMC, EMC, MSB
+- Ring buffer of recent events — feeds Web UI monitoring panel (M1.X-d)
+- Emergency handling — graceful degradation and shutdown triggers on critical events
 
 ### M1.X — Side Quests
 Side quests between memory milestones — no fixed order, picked up when ready. M1.X closes when M2a opens.
