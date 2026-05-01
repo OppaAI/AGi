@@ -1,4 +1,42 @@
-## Stack
+# AGi — Amazing Grace infrastructure
+ 
+**AuRoRA** · Autonomous Robot with Reasoning Architecture  
+**Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
+ 
+[![Repo](https://img.shields.io/badge/Repo-OppaAI%2FAGi-76B900)](https://github.com/OppaAI/AGi)
+![Status](https://img.shields.io/badge/Status-experimental-orange.svg)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
+ 
+![ARM](https://img.shields.io/badge/ARM64-aarch64-0091BD?logo=arm)
+![LLM](https://img.shields.io/badge/Model-Cosmos%20Reason2%202B-76B900?logo=nvidia)
+![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
+![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
+ 
+For more comprehensive documentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
+ 
+---
+ 
+A clean-slate rebuild of my autonomous robot project, starting from first principles.
+After building [ERIC](https://github.com/OppaAI/eric) for the NVIDIA Cosmos Cookoff 2026, I learned what I would do differently — proper ROS2 architecture from day one, a biologically-inspired memory system, and a foundation that can grow into full autonomy.
+ 
+The goal: build an autonomous ground robot that can explore nature with me, powered by on-device AI with no cloud dependency.
+ 
+---
+ 
+## Hardware
+ 
+| Component | Model |
+|---|---|
+| SBC | Jetson Orin Nano Super 8GB |
+| Robot | Waveshare UGV Beast (tracked) |
+| LiDAR | YDLIDAR D500 360 |
+| Depth Camera | OAK-D Lite (stereo + YOLO) |
+| Pan-tilt + Webcam | USB |
+| Storage | 1TB NVMe |
+ 
+---
+
+ ## Stack
  
 - **Cosmos Reason2 2B** via vLLM — vision + reasoning brain (target: Jetson Orin Nano)
 - **ROS2 Humble** — full native architecture from day one
