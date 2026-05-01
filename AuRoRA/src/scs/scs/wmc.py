@@ -134,10 +134,16 @@ class WorkingMemoryCortex:
             list[dict]: list of evicted PMTs [{timestamp, content}], empty if no eviction occurred
         """
         if speaker == "user":                                   # If this is user prompt,
-            if self._induced_pmt is not None:                   # If there is already an induced user prompt, 
-                self.logger.warn(                               # Log the warning for development/troubleshooting
-                    "WMC: double user message — previous induced PMT overwritten without AI response"
+            if self._induced_pmt is not None:                   # guard — unpaired user prompt already pending
+                unpaired_user_prompt: str = self._induced_pmt["content"]["prompt"]   # retrieve existing unpaired user prompt
+                self._induced_pmt["content"]["prompt"] = (      # append new message — preserve both
+                    unpaired_user_prompt + "\n" + content
                 )
+                self.logger.warn(                               # log the double message append
+                    "WMC: second user message before AI response — appended to induced PMT"
+                )
+                return []                                       # still incomplete — wait for AI response
+
             # Induce unpaired user prompt — pending for AI response
             self._induced_pmt = {                               # Induce the user prompt into PMT
                 "timestamp": datetime.now().isoformat(),        # Register the inducing time of the PMT (TODO M2: use ROS2 time)
