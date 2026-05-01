@@ -353,11 +353,47 @@ class EngramComplex:
             self._activate_vector_index(ecx_conn)                   # activate vector index for parallel retrieval
         return ecx_conn                                             # return separate connection for parallel access
 
+    # Schema version — increment when storage schema changes
+    # On mismatch, MSB raises clearly rather than silently operating on wrong schema
+    SCHEMA_VERSION: int = 1                                     # set schema version for migration purposes if needed 
+
     def _build_schema(self) -> None:
         """
         Builds all tables and indexes for the engram complex from the blueprint.
+        Checks schema version on startup — raises if mismatch detected.
         """
         try:
+
+            # 0. Schema Version Check - create schema and verify version on startup
+            self._ecx_conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS schema_meta (
+                    key   TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            """)
+            self._ecx_conn.commit()
+
+            schema_version: tuple[tuple[str] | None] = self._ecx_conn.execute(                # get current schema version
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
+
+            if schema_version is None:                                                        # first run — inscribe current version
+                self._ecx_conn.execute(
+                    "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)",
+                    (str(self.SCHEMA_VERSION),)
+                )
+                self._ecx_conn.commit()                                                       # commit the schema version   
+                self.logger.info(                                                             # log the schema version after initialization  
+                    f"MSB schema v{self.SCHEMA_VERSION} initialized → {self._storage_schema}"
+                )
+            else:
+                stored_version: str = int(schema_version["value"])                            # extract stored schema version from the result
+                if stored_version != self.SCHEMA_VERSION:                                     # version mismatch — raise before touching schema
+                    raise RuntimeError(                                                       # if schema versions do not match, raise error     
+                        f"MSB schema version mismatch — "                                     # log the error message to indicate schema version mismatch 
+                        f"DB has v{stored_version}, code expects v{self.SCHEMA_VERSION}. "
+                        f"Run migration before starting the robot."
+                    )
 
             # 1. Build Storage Table
             storage_transcript: str = self._transcribe_traces(self._blueprint.storage)       # convert main storage trace → SQL column definition string
