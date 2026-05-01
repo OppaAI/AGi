@@ -46,6 +46,7 @@ class AGi:                                              # Amazing Grace infrastr
             ENCODING_DIM: int           = 768           # [STATIC]  dimensionality of the encoding vectors from the encoding engine
 
         class EMC:                                      # Episodic Memory Cortex
+            BINDING_STREAM_LIMIT: int = 512             # [INTRINSIC] max unencoded PMTs in binding stream — OOM guard on encoding engine failure
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5"  # [STATIC] encoding engine for episodic memory
             ENCODING_CUE_PREFIX: str    = "Represent this sentence for searching relevant passages  : " # [STATIC] prompt prefix for encoding cues
             ENCODING_ENGRAM_PREFIX: str = ""            # [STATIC] prompt prefix for engrams (no prefix for storage)

@@ -138,7 +138,9 @@ class EpisodicBuffer:
     _binding_stream — evicted PMTs pending encoding into episodic memory
     recall_stream   — recalled episodes pending reinstatement into active cognition
     """
-    _binding_stream: deque[dict] = field(default_factory=deque)                # evicted PMTs queued for encoding — drained by encoding cycle
+    _binding_stream: deque[dict] = field(                                      # evicted PMTs queued for encoding — drained by encoding cycle
+        default_factory=lambda: deque(maxlen=EMC.BINDING_STREAM_LIMIT)         # maxlen cap — oldest silently dropped if encoding engine offline too long
+    )
     recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly
 
     def __post_init__(self) -> None:
@@ -486,7 +488,13 @@ class EpisodicMemoryCortex:
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
-                self.episodic_buffer._binding_stream.append(episode)                # queue episode for encoding cycle
+                _binding_stream = self.episodic_buffer._binding_stream              # reference for capacity check
+                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                # at capacity — oldest will be silently dropped by deque maxlen
+                    self.logger.warning(                                            # warn — encoding engine may be offline or falling behind
+                        f"⚠️  EMC binding stream at capacity ({EMC.BINDING_STREAM_LIMIT}) — "
+                        f"oldest episode dropped. Encoding engine may be offline."
+                    )
+                _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
             self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
             self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
