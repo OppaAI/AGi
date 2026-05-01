@@ -214,31 +214,31 @@ class MemoryCoordinationCore:
 
     def assess_memory_schema(self) -> dict:
         """
-        Assess the current stats of all memory cortex layers for logging and health checks.
-    
+        Assess the current state of all memory cortex layers for logging and health checks.
+
         Returns:
-            dict: Combined schema from WMC and EMC cortex layers
+            dict : Combined schema from WMC and EMC cortex layers
         """
-        wmc_schema: dict = self.wmc.assess_pmt_schema()      # Assess the PMT schema of WMC
-        emc_schema: dict = self.emc.assess_emc()             # Assess the engram complex of EMC
-        return {                                             # Return the current stats of all memory cortex layers
-            "wmc": wmc_schema,                               # Current stats of working memory
-            "emc": emc_schema,                               # Current stats of engram complex
+        wmc_schema: dict = self.wmc.assess_pmt_schema()      # assess current PMT state of working memory
+        emc_schema: dict = self.emc.assess_emc()             # assess current engram state of episodic memory
+        return {                                             # return the current stats of all memory cortex layers
+            "wmc": wmc_schema,                               # current stats of working memory
+            "emc": emc_schema,                               # current stats of engram complex
         }
 
     def report_memory_stats(self) -> None:
         """
-        Report current memory cortex stats.
+        Report current memory cortex stats to the log.
         Called by CNC after every turn for health monitoring.
 
         TODO:
         - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
         - GUI — expose via ROS2 topic for real-time memory visualisation
         """
-        stats: dict = self.assess_memory_schema()           # Assess the current stats of all memory cortex layers
-        wmc_stats: dict = stats["wmc"]                      # Retrieve current stats of working memory
-        emc_stats: dict = stats["emc"]                      # Retrieve current stats of episodic memory
-        self.logger.info(                                   # Log the current stats of all memory cortex layers 
+        stats: dict = self.assess_memory_schema()           # assess current state of all memory cortex layers
+        wmc_stats: dict = stats["wmc"]                      # extract working memory stats
+        emc_stats: dict = stats["emc"]                      # extract episodic memory stats
+        self.logger.info(                                   # log the current stats of all memory cortex layers 
             f"🧠 Memory stats:\n"
             f"   WMC: {wmc_stats['pmt_count']} PMTs ({wmc_stats['slot_occupancy']}%) | "
             f"{wmc_stats['sustained_chunks']}/{wmc_stats['global_chunk_limit']} chunks ({wmc_stats['chunk_occupancy']}%)\n"
@@ -251,6 +251,7 @@ class MemoryCoordinationCore:
     def forget_memory(self) -> None:
         """
         Forget active memory at session end or conversation reset.
+
         Clears:
             - Working memory (WMC pmt_slot)
         Preserves:
@@ -258,14 +259,14 @@ class MemoryCoordinationCore:
             - Semantic memory (SMC) — permanent (future)
             - Procedural memory (PMC) — permanent (future)
         """
-        self.wmc.forget_pmt_schema()                        # Forget all sustaining PMT schema in working memory
-        self.logger.info("🧹 Working memory forgotten")     # Log entry on successful working memory forgetting
+        self.wmc.forget_pmt_schema()                        # clear all sustained PMTs from working memory
+        self.logger.info("🧹 Working memory forgotten")     # log entry on successful working memory forgetting
 
     def close(self) -> None:
         """
         Gracefully close MCC and its memory cortex layers.
-        WMC has no persistent resources to close,
-        but EMC may have open file handles to the engram gateway that need to be released.
+        WMC has no persistent resources to close — EMC releases its
+        open handles to the engram gateway on termination.
         """
-        self.emc.terminate()                                        # Terminate the engram gateway
-        self.logger.info("🗄️  MCC shutdown sequence complete")      # Log entry on successful MCC closure
+        self.emc.terminate()                                        # release EMC engram gateway file handles
+        self.logger.info("🗄️  MCC shutdown sequence complete")      # log entry on successful MCC closure
