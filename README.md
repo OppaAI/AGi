@@ -92,6 +92,15 @@ AGi/
 - Basic user profile store — `~/.agi/cns/user_profile.json` as lightweight SMC precursor, always injected into context
 - Anti-hallucination grounding instruction in `GRACE_SYSTEM_PROMPT` — no invented values for unrecalled episodes
 - Recall parameter tuning — validate `RECALL_DEPTH`, `RECALL_SURFACE_LIMIT`, `RELEVANCE_THRESHOLD`, `RECALL_TIMEOUT`
+- Episodic scaffold reintroduction in EMC — restore scaffold at the memory-binding boundary (not prompt assembly) to support episode grouping and stable reinstatement cues
+- Chunk model expansion across memory layers:
+    - Keep WMC chunking for PMT packing/eviction
+    - Add EMC chunk metadata (`chunk_len`, `chunk_count`, boundaries) for indexing, recall weighting, and min/max guardrails
+    - Standardise shared chunk policy in MCC so both WMC and EMC use one sizing contract
+- Tokenizer-grounded chunk accounting:
+    - Use model tokenizer for authoritative token counts (instead of character/word heuristics)
+    - Persist token counts per chunk/episode to drive truncation, salience features, and retrieval limits
+    - Add calibration tests comparing heuristic length vs tokenizer length on representative dialogue samples
 - Agentic tools module (`tools/`):
     - Weather — MSC GeoMet (Environment Canada), no API key, BC-optimised
     - Moon phase — `ephem` local calculation, no network dependency
