@@ -36,7 +36,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
  
 ---
 
- ## Stack
+## Stack
  
 - **Cosmos Reason2 2B** via vLLM — vision + reasoning brain (target: Jetson Orin Nano)
 - **ROS2 Humble** — full native architecture from day one
@@ -44,6 +44,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **SQLite** — lightweight on-device memory storage
 - **rosbridge** — WebSocket bridge to web GUI
 - **ephem** — local moon phase calculation (no network)
+
 ---
  
 ## Repository Structure
@@ -68,40 +69,35 @@ AGi/
  
 ## Roadmap
  
-## Phase 1 — Chatbot with Memory
+### Phase 1 — Chatbot with Memory
  
 | Milestone | Description | Status |
 |---|---|---|
 | M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | ✅ Complete |
-| M1.5 | Memory Bridges + Agentic Tool Validation | 🟢 In Progress |
+| M1.5 | Memory bridges + Agentic tool validation | 🟢 In Progress |
+| M1.X | Side Quests — Voice, Messaging, Web UI | ⬜ Planned |
 | M2a | EMC maturity — forgetting + importance scoring | ⬜ Planned |
 | M2b | Semantic Memory (SMC) basics — distillation + structure | ⬜ Planned |
 | M2c | SMC maturity — graph structure + anchoring + decay | ⬜ Planned |
 | M3 | Procedural Memory (PMC) | ⬜ Planned |
- 
+
 ### M1 — Chatbot + WMC + EMC
 - PMT lifecycle with hybrid chunk/slot eviction (Miller's Law 7±2)
-- Async embedding worker via embedding model (evaluate performance at M2a)
+- Async embedding worker via BAAI/bge-base-en-v1.5
 - RRF dual-path recall — semantic (sqlite-vec KNN) + lexical (FTS5) fusion
 - SQLite WAL episodic storage — no expiry, 1TB NVMe
 - Conflict/versioning columns in EMC schema (prep for M2b): `conflict`, `superseded_by`, `valid_from`, `valid_until`
 - Importance columns in EMC schema (prep for M2a): `memory_strength`, `last_recalled_at`, `recall_count`, `novelty_score`
+
 ### M1.5 — Memory Bridges + Agentic Tool Validation
 - Anchor vector PMT filtering — semantic trivial-turn gating (replaces length filter)
 - Session-end WMC flush to EMC on `close()` — salience-gated, no silent loss of unsaved turns
 - Basic user profile store — `~/.agi/cns/user_profile.json` as lightweight SMC precursor, always injected into context
 - Anti-hallucination grounding instruction in `GRACE_SYSTEM_PROMPT` — no invented values for unrecalled episodes
 - Recall parameter tuning — validate `RECALL_DEPTH`, `RECALL_SURFACE_LIMIT`, `RELEVANCE_THRESHOLD`, `RECALL_TIMEOUT`
-- Episodic scaffold reintroduction in EMC — restore scaffold at the memory-binding boundary (not prompt assembly) to support episode grouping and stable reinstatement cues
-- Chunk model expansion across memory layers:
-    - Keep WMC chunking for PMT packing/eviction
-    - Add EMC chunk metadata (`chunk_len`, `chunk_count`, boundaries) for indexing, recall weighting, and min/max guardrails
-    - Standardise shared chunk policy in MCC so both WMC and EMC use one sizing contract
-- Tokenizer-grounded chunk accounting:
-    - Use model tokenizer for authoritative token counts (instead of character/word heuristics)
-    - Rationale: model context windows, truncation, and billing are token-based; character counts drift across languages, punctuation, emojis, and code blocks
-    - Persist token counts per chunk/episode to drive truncation, salience features, and retrieval limits
-    - Add calibration tests comparing heuristic length vs tokenizer length on representative dialogue samples
+- Episodic scaffold — explicit `EpisodicScaffold` class in `emc.py` owning RECALL_RESERVE trimming and chronological sequencing before context injection
+- Chunk budget enforcement — `ChunkEstimator` in `msb.py` shared across WMC, EMC, MCC; enforces `RECALL_RESERVE` and `CORTICAL_CAPACITY`
+- Tokenizer-accurate chunk counting — `ChunkEstimator` loads real model tokenizer; graceful fallback to char-division if unavailable
 - Agentic tools module (`tools/`):
     - Weather — MSC GeoMet (Environment Canada), no API key, BC-optimised
     - Moon phase — `ephem` local calculation, no network dependency
@@ -109,85 +105,91 @@ AGi/
     - Web search — SearXNG via MCP server
 - Unit tests: WMC eviction + EMC recall (RRF, semantic/lexical paths, relevance threshold)
 - Integration test gate — 9 criteria must pass before M2a opens
+
+### M1.X — Side Quests
+Side quests between memory milestones — no fixed order, picked up when ready. M1.X closes when M2a opens.
+
+- **M1.X-a** TTS Robot — evaluate Piper vs Kokoro for on-device CPU streaming; integrate selected engine into Grace's response pipeline
+- **M1.X-b** ASR — FasterWhisper on-device speech to text; microphone input pipeline into CNC; VAD gating
+- **M1.X-c** Messaging — Telegram (bot API, proven from previous projects), Discord, Gmail; unified input into CNC neural input
+- **M1.X-d** Web UI + TTS Web — sophisticated monitoring UI (cognitive state, memory panels, real-time WMC/EMC visualization, robot controls); browser TTS audio playback
+
 ### M2a — EMC Maturity
-- Decision: keep async embedding per-segment or move to 11pm batch (based on M1 data)
-- 3-dimension importance scoring:
-    - Dimension 1 — SMC similarity (personal fact anchoring)
-    - Dimension 2 — novelty score (novel = important, duplicate = expendable)
-    - Dimension 3 — content signals (length, questions, named entities, significance markers)
-- Ebbinghaus forgetting curve: R = e^(−t/S), S set by importance score, +1 on each recall
+- 3-dimension importance scoring: SMC similarity, novelty score, content signals
+- Ebbinghaus forgetting curve: `R = e^(−t/S)`, S set by importance score
 - Duplicate/similarity clustering — cosine > 0.85 = merge candidates
-- Daily reflection (11pm) — fast sweep:
-    - Calculate R for all episodes
-    - Cluster and merge duplicates → distil to SMC
-    - Delete low importance + high decay episodes
-- Weekly assessment (Sunday) — deep sweep via LLM:
-    - Full importance scoring across all EMC
-    - Resolve pending conflicts
-    - Generate memory health report
+- Daily reflection (11pm) — R calculation, deduplication, low-salience deletion
+- Weekly deep sweep via Cosmos — full importance rescore, conflict resolution, health report
 - Memory dumps to `~/.aurora/memory_dumps/daily/` and `weekly/`
+
 ### M2b — SMC Basics
-- SMC structure decision — flat key-value vs triples vs graph
-- Distillation pipeline — EMC episodes → LLM → SMC facts
+- Distillation pipeline — EMC episodes → Cosmos → SMC facts
 - 11pm nightly reflection — novel vs routine day detection
-- Recursive summary update: Mi = LLM(Hi, Mi-1)
-- SMC fact update — when facts change, old fact versioned not deleted
+- Recursive summary update: `Mi = LLM(Hi, Mi-1)`
+- SMC fact versioning — `valid_from`, `valid_until`, `superseded_by`
 - Conflict detection during conversation — GRACE asks to clarify
-- `_pending_conflict` flag in MCC for turn-spanning conflict state
-- Memory versioning — `valid_from`, `valid_until`, `superseded_by`
 - SMC feeds back into WMC context injection via MCC
+
 ### M2c — SMC Maturity
 - SMC as knowledge graph — entities + relationships + triples
 - SMC anchors EMC importance scoring (personal facts never decay)
-- SMC fact decay — do facts ever expire? policy decision
 - Cross-layer search — query spans WMC + EMC + SMC simultaneously
 - Dynamic WMC capacity via HRS reading VCS vitals
+
 ### M3 — Procedural Memory (PMC)
 - YAML-based skill storage
 - Skill ingestion pipeline
 - Sandboxed skill execution
 - PMC + SMC interaction design
+
 ---
  
 ## Phase 2 — Voice
  
 | Milestone | Description | Status |
 |---|---|---|
-| M4 | TTS on robot — Piper CPU streaming | ⬜ Planned |
-| M5 | TTS in web GUI — browser audio playback | ⬜ Planned |
- 
+| M4 | TTS on robot — Piper / Kokoro CPU streaming | → M1.X-a |
+| M5 | TTS in web GUI — browser audio playback | → M1.X-d |
+
 ### M4 — TTS on Robot
-- Piper CPU streaming on Jetson
+→ Promoted to M1.X-a. See Side Quests.
+
 ### M5 — TTS in Web GUI
-- Browser audio playback
+→ Promoted to M1.X-d. See Side Quests.
+
 ---
  
 ## Phase 3 — Multimodal + Knowledge
  
 | Milestone | Description | Status |
 |---|---|---|
-| M6 | Image input — camera + vision model | ⬜ Planned |
-| M7 | ASR — on-device speech to text | ⬜ Planned |
+| M6 | Image input — camera + Cosmos vision | ⬜ Planned |
+| M7 | ASR — on-device speech to text | → M1.X-b |
 | M8 | Knowledge ingestion — RAG + PDF/docs | ⬜ Planned |
 | M9 | Agentic web search + crawling | ⬜ Planned |
-| M10 | Messaging — Gmail, Slack, Telegram | ⬜ Planned |
+| M10 | Messaging — Telegram, Discord, Gmail | → M1.X-c |
  
 ### M6 — Image Input + Visuospatial Memory
-- OAK-D frames → vision model → text description → visuospatial PMT
+- OAK-D frames → Cosmos Vision → text description → visuospatial PMT
 - WMC visuospatial sketchpad slot (Cowan 4±1)
 - Episodic buffer integrating phonological + visuospatial PMTs
+
 ### M7 — ASR
-- Whisper on-device speech to text
+→ Promoted to M1.X-b. See Side Quests.
+
 ### M8 — Knowledge Ingestion (RAG)
-- Passive RAG — PDF/doc → embedding model → SMC directly
+- Passive RAG — PDF/doc → embeddinggemma → SMC directly
 - Conflict report UI for ingested knowledge
 - Ingestion conflict resolution workflow
+
 ### M9 — Agentic Web Search
 - AIVA LLM as web agent
 - Active RAG — search → summarise → SMC
 - Multiple search combining semantic + keyword + SQL
+
 ### M10 — Messaging
-- Gmail, Slack, Telegram integration
+→ Promoted to M1.X-c. Updated scope: Telegram, Discord, Gmail (Slack removed). See Side Quests.
+
 ---
  
 ## Phase 4 — Hardware + Autonomy
@@ -202,12 +204,15 @@ AGi/
 - LiDAR → text description → visuospatial PMT
 - OAK-D depth + object detection integration
 - Sensor fusion into episodic buffer
+
 ### M12 — Navigation + SLAM
 - Nav2 + Isaac ROS
 - Spatial memory in SMC — home layout, familiar routes
+
 ### M13 — Agentic Mission Execution
 - Mission planning via PMC skills
 - Igniter node for ordered startup and health checks
+
 ---
  
 ## Phase 5 — Deep Learning
@@ -222,19 +227,22 @@ AGi/
 - SMC as full knowledge graph — entities + relationships
 - Tree-based hierarchical search (HAT) for large SMC
 - Multiple search strategies combined
+
 ### M15 — LoRA Fine-tuning
-- Bake frequently accessed SMC knowledge into model weights
+- Bake frequently accessed SMC knowledge into Cosmos weights
 - GRACE learns permanently, not just retrieves
+
 ### M16 — Test-Time Training
-- Adapt model weights during inference from new context
+- Adapt Cosmos weights during inference from new context
 - Self-evolution milestone
+
 ---
  
 ## Cognitive Development Phases
  
 | Phase | Capability | Milestone |
 |---|---|---|
-| Phase 1 — Memory | "I can remember" | M1 ✅ → M1.5 🟢 → M2 WMC + EMC |
+| Phase 1 — Memory | "I can remember" | M1 WMC + EMC |
 | Phase 2 — Salience | "I know what matters" | M2a EMC maturity |
 | Phase 3 — Cognition | "I have inner state" | M2b SMC + reflection |
 | Phase 4 — Consciousness | "I continuously exist" | M5+ global workspace |
