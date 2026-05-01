@@ -107,108 +107,110 @@ class MemoryCoordinationCore:
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # create all missing parent dirs — no-op if already exists
 
         # Initialize memory cortex layers
-        self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
+        self.logger.info("🔄 Activating Memory Coordination Core…")                         # log entry on MCC activation
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # boot WMC — owns the active PMT slot
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # boot EMC — owns the engram complex on disk
 
         self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                        # cache recall timeout — EMC runs on a thread and must not stall inference
 
-        self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
+        self.logger.info("✅ Memory Coordination Core Activated")                           # log entry on successful MCC activation
 
     async def register_memory(self, user_id: str, content: str) -> None:
         """
-        Register new PMT into working memory and bind any evicted interactions to episodic buffer.
-        WMC accumulates individual turns and pairs them into complete interactions internally.
+        Receive a new conversation turn and commit it to working memory.
+        Any PMTs evicted by WMC are handed off to the episodic buffer — non-blocking.
         Eviction only fires at interaction boundary — never mid-exchange.
 
         1. Pair to complete interaction and fill induced PMT into WMC
         2. Bind any evicted PMT to episodic buffer (non-blocking)
 
         Args:
-            user_id (str): User ID of the speaker interacting with the AI
-            content (str): Content of the conversation turn (the message text)
+            user_id (str) : User ID of the speaker interacting with GRACE
+            content (str) : Content of the conversation turn
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(speaker=user_id, content=content)  # Induce conversation turn to WMC, and collect any evicted PMTs
-            
+        evicted_pmts = self.wmc.fill_pmt(speaker=user_id, content=content)  # induce turn into WMC — returns any PMTs displaced by the new arrival
+
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
-        if evicted_pmts:                                                    # If WMC evicted any PMTs, bind them to episodic buffer
-            _ = asyncio.get_running_loop().run_in_executor(                # Recruit a dormant neural thread — run binding on isolated neural pathway
+        if evicted_pmts:                                                    # evicted PMTs present — hand off to episodic buffer
+            _ = asyncio.get_running_loop().run_in_executor(                 # recruit a dormant thread — binding never blocks active cognition
                 None, self._bind_to_episodic_buffer, evicted_pmts
             )
-            self.logger.debug(                                              # Log the binding transition of evicted PMTs to episodic buffer
+            self.logger.debug(                                              # log the binding transition of evicted PMTs to episodic buffer
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
     def _bind_to_episodic_buffer(self, evicted_pmts: list[dict]) -> None:
         """
-        Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
-        Takes place in isolated neural pathway — never blocks active cognition neural pathway.
+        Bind evicted PMTs from WMC into the episodic buffer for encoding and consolidation.
+        Runs on a dormant thread — never blocks active cognition.
         Trivial PMT filter (M1): discards turns under 50 chars — filler turns not worth encoding.
         Anchor vector filter (M1.5): semantic filtering via embeddinggemma replaces this.
 
         Args:
-            evicted_pmts (list[dict]): List of evicted PMTs [{content, timestamp}]
+            evicted_pmts (list[dict]) : List of evicted PMTs [{content, timestamp}]
         """
-        try:                                                         # Attempt binding evicted PMTs to episodic buffer
-            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT
+        try:                                                         # attempt binding evicted PMTs to episodic buffer
+            for evicted_pmt in evicted_pmts:                         # iterate through each evicted PMT
                 # M1 trivial filter — discard filler turns under 50 chars
-                if len(evicted_pmt.get("content", "")) < 50:         # short content — likely filler turn
+                if len(evicted_pmt.get("content", "")) < 50:         # trivial filter — discard filler turns under 50 chars
                     self.logger.debug(                               # log the discarded trivial PMT
                         "MCC discarded trivial PMT — below length threshold"
                     )
-                    continue                                         # skip — do not bind to EMC
-                self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
-                    timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
-                    content=evicted_pmt["content"],                  # Bind the content of the interaction
+                    continue                                         # skip — not worth encoding into episodic memory
+                self.emc.bind_pmt(                                   # bind evicted pmt into episodic buffer
+                    timestamp=evicted_pmt["timestamp"],              # timestamp of the original PMT
+                    content=evicted_pmt["content"],                  # raw content of the evicted PMT
                 )
-        except Exception as e:                                       # If binding lapse occurs, log and continue
+                )
+        except Exception as e:                                       # if binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
             )
             
     async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
         """
-        Assemble full memory context for the cognitive engine.
+        Assemble the full memory context for the cognitive engine.
+        EMC reinstatement runs on a dormant thread — awaited before returning.
+        Awaits both before returning — inference requires full memory context.
+
         Structure:
             [EMC reinstated episodes (system block, if relevant)]
             + [WMC PMTs (chronological, chat turns)]
-        EMC reinstatement runs on an isolated neural pathway — awaited before returning.
-        Awaits both before returning — inference requires full memory context.
 
         Args:
-            user_prompt (str): Current user message (used as EMC recall cue)
+            user_prompt (str) : Current user message — used as EMC recall cue
+
         Returns:
-            list[dict]: List of message dicts [{role, content}] ready for inference
+            list[dict] : List of message dicts [{role, content}] ready for inference
         """
-        
         # Recall WMC PMTs directly in main neural pathway
-        wmc_pmts: list[dict[str, str]] = self.wmc.recall_pmt_schema()        # recall PMTs from working memory into main neural pathway
+        wmc_pmts: list[dict[str, str]] = self.wmc.recall_pmt_schema()        # recall sustained PMTs from working memory
         
         # EMC reinstatement on isolated neural pathway — recall, filter, format, inject
-        self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating episodes
-        reinstated_episodes: list[dict] = []                                 # list to store reinstated episodes from EMC
+        self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating fresh episodes
+        reinstated_episodes: list[dict] = []                                 # holds reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
-            future = asyncio.get_running_loop().run_in_executor(             # run EMC recall in isolated neural pathway on dormant thread
-                None, self.emc.reinstate_episodes, user_prompt               # EMC episodic recall using recall cue to surface relevant episodes
+            future = asyncio.get_running_loop().run_in_executor(             # recruit a dormant thread — EMC recall blocks on encoding engine
+                None, self.emc.reinstate_episodes, user_prompt               # reinstate relevant episodes using current prompt as cue
             )
-            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall blocks on encoding engine
+            reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall must not stall inference
                 future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
             )
         except asyncio.TimeoutError:                                         # recall exceeded time limit — cancel dormant thread
-            future.cancel()                                                  # cancel dormant thread to prevent stale episode contamination
+            future.cancel()                                                  # cancel dormant thread — prevents stale episode contamination
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
 
         # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
-        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # inject the sustained WMC PMTs into episodic buffer
+        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # inject WMC PMTs after EMC episodes — preserves chronological order
         
         self.logger.debug(                                                   # log the memory context assembled
             f"MCC context assembled: "
             f"{len(wmc_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
         )
 
-        return self.emc.episodic_buffer.assess_recall_stream()               # return the memory context reinstated in episodic buffer
+        return self.emc.episodic_buffer.assess_recall_stream()               # return full memory context for inference
 
     def assess_memory_schema(self) -> dict:
         """
