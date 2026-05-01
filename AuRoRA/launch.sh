@@ -1,6 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Stop and remove existing container
 docker stop cosmos-reason2-2b 2>/dev/null
 docker rm   cosmos-reason2-2b 2>/dev/null
+
+# Clear caches
 sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
+
+# Run new container
 docker run -d \
   --restart unless-stopped \
   --network host \
@@ -19,6 +27,7 @@ docker run -d \
     --mm-processor-kwargs '{"max_pixels":256000}' \
     --trust-remote-code
 #   --enforce_eager
+
 echo "⏳ Cosmos loading (~3 minutes)..."
 echo "Monitor: docker logs -f cosmos-reason2-2b"
 echo "Ready when you see: Application startup complete"
