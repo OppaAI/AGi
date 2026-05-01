@@ -108,10 +108,8 @@ AGi/
 - Integration test gate — 9 criteria must pass before M2a opens
 
 ### M1.6 — EEE — Emergency and Exception Event module
-- EEE module in HRS — severity-tiered structured event records
-- Persistent event log — written to disk, queryable
-- Drop-in replacement for logger handle passed to CNC, MCC, WMC, EMC, MSB
-- Ring buffer of recent events — feeds Web UI monitoring panel (M1.X-d)
+- Structured event logging in HRS — replaces raw logger handles across all CNS cortices
+- Severity-tiered persistent event log — written to disk, ring buffer for Web UI monitoring
 - Emergency handling — graceful degradation and shutdown triggers on critical events
 
 ### M1.X — Side Quests
