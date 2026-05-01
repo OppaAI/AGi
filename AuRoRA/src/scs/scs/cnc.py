@@ -169,14 +169,17 @@ class CNC(Node):
         full_response = ""
 
         try:
-            # 1. Build context window
+            # 1. Register user turn in memory
+            await self.mcc.register_memory("user", user_input)
+
+            # 2. Build context window
             memory_context = await self.mcc.assemble_memory_context(user_input)
 
-            # 2. Separate system and conversation parts from memory context
+            # 3. Separate system and conversation parts from memory context
             memory_system = [m for m in memory_context if m["role"] == "system"]
             memory_convo  = [m for m in memory_context if m["role"] != "system"]
 
-            # 3. Assemble into single system message
+            # 4. Assemble into single system message
             system_prompt = GRACE_SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d")
             )
@@ -185,21 +188,20 @@ class CNC(Node):
             else:
                 system_content = system_prompt
 
-            # 4. Build final message list — single system message
+            # 5. Build final message list — single system message
             messages = [{"role": "system", "content": system_content}]
             messages.extend(memory_convo)
             messages.append({"role": "user", "content": user_input})
 
-            # 5. Stream from vLLM
+            # 6. Stream from vLLM
             self.get_logger().info(f"Messages sent to LLM: {messages}")
             full_response = await self._stream_cosmos(messages)
 
-            # 6. Store assistant turn in memory
+            # 7. Store assistant turn in memory
             if full_response:
-                await self.mcc.register_memory("user", user_input)
                 await self.mcc.register_memory("assistant", full_response)
 
-            # 7. Log memory stats periodically
+            # 8. Log memory stats periodically
             self.mcc.report_memory_stats()
 
         except Exception as e:
