@@ -1,30 +1,30 @@
 # AGi — Amazing Grace infrastructure
-
+ 
 **AuRoRA** · Autonomous Robot with Reasoning Architecture  
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
-
+ 
 [![Repo](https://img.shields.io/badge/Repo-OppaAI%2FAGi-76B900)](https://github.com/OppaAI/AGi)
 ![Status](https://img.shields.io/badge/Status-experimental-orange.svg)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
-
+ 
 ![ARM](https://img.shields.io/badge/ARM64-aarch64-0091BD?logo=arm)
 ![LLM](https://img.shields.io/badge/Model-Cosmos%20Reason2%202B-76B900?logo=nvidia)
 ![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
 ![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
-
+ 
 For more comprehensive documentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
-
+ 
 ---
-
+ 
 A clean-slate rebuild of my autonomous robot project, starting from first principles.
 After building [ERIC](https://github.com/OppaAI/eric) for the NVIDIA Cosmos Cookoff 2026, I learned what I would do differently — proper ROS2 architecture from day one, a biologically-inspired memory system, and a foundation that can grow into full autonomy.
-
+ 
 The goal: build an autonomous ground robot that can explore nature with me, powered by on-device AI with no cloud dependency.
-
+ 
 ---
-
+ 
 ## Hardware
-
+ 
 | Component | Model |
 |---|---|
 | SBC | Jetson Orin Nano Super 8GB |
@@ -33,21 +33,21 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 | Depth Camera | OAK-D Lite (stereo + YOLO) |
 | Pan-tilt + Webcam | USB |
 | Storage | 1TB NVMe |
-
+ 
 ---
-
+ 
 ## Stack
-
+ 
 - **Cosmos Reason2 2B** via vLLM — vision + reasoning brain
 - **ROS2 Humble** — full native architecture from day one
-- **embeddinggemma-300m** — CPU-only semantic embeddings
+- **bge-base-en-v1.5** — CPU-only semantic embeddings (anchor vector filtering + episodic recall)
 - **SQLite** — lightweight on-device memory storage
 - **rosbridge** — WebSocket bridge to web GUI
-
+- **ephem** — local moon phase calculation (no network)
 ---
-
+ 
 ## Repository Structure
-
+ 
 ```
 AGi/
 ├── AuRoRA/          # Robot workspace (Jetson Orin Nano)
@@ -62,16 +62,17 @@ AGi/
 └── AIVA/            # Server workspace (PC) — future
     └── src/
 ```
-
+ 
 ---
-
+ 
 ## Roadmap
-
+ 
 ## Phase 1 — Chatbot with Memory
  
 | Milestone | Description | Status |
 |---|---|---|
-| M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | 🟢 In Progress |
+| M1 | Chatbot + Working Memory (WMC) + Episodic Memory (EMC) | ✅ Complete |
+| M1.5 | Memory Bridges + Agentic Tool Validation | 🟢 In Progress |
 | M2a | EMC maturity — forgetting + importance scoring | ⬜ Planned |
 | M2b | Semantic Memory (SMC) basics — distillation + structure | ⬜ Planned |
 | M2c | SMC maturity — graph structure + anchoring + decay | ⬜ Planned |
@@ -86,6 +87,18 @@ AGi/
 - Conflict/versioning columns in EMC schema (prep for M2b): `conflict`, `superseded_by`, `valid_from`, `valid_until`
 - Importance columns in EMC schema (prep for M2a): `memory_strength`, `last_recalled_at`, `recall_count`, `novelty_score`
  
+### M1.5 — Memory Bridges + Agentic Tool Validation
+- Anchor vector PMT filtering — semantic trivial-turn gating via embeddinggemma (replaces length filter)
+- Session-end WMC flush to EMC on `close()` — salience-gated, no silent loss of unsaved turns
+- Basic user profile store — `~/.agi/cns/user_profile.json` as lightweight SMC precursor, always injected into context
+- Anti-hallucination grounding instruction in `GRACE_SYSTEM_PROMPT` — no invented values for unrecalled episodes
+- Recall parameter tuning — validate `RECALL_DEPTH`, `RECALL_SURFACE_LIMIT`, `RELEVANCE_THRESHOLD`, `RECALL_TIMEOUT`
+- Agentic tools module (`tools/`):
+    - Weather — MSC GeoMet (Environment Canada), no API key, BC-optimised
+    - Moon phase — `ephem` local calculation, no network dependency
+    - Aurora forecast — NOAA SWPC Kp index, real-time geomagnetic activity
+- Unit tests: WMC eviction + EMC recall (RRF, semantic/lexical paths, relevance threshold)
+- Integration test gate — 9 criteria must pass before M2a opens
 ### M2a — EMC Maturity
 - Decision: keep async embedding per-segment or move to 11pm batch (based on M1 data)
 - 3-dimension importance scoring:
@@ -224,25 +237,25 @@ AGi/
 - Adapt Cosmos weights during inference from new context
 - Self-evolution milestone
 ---
-
+ 
 ## Cognitive Development Phases
-
+ 
 | Phase | Capability | Milestone |
 |---|---|---|
-| Phase 1 — Memory | "I can remember" | M1 WMC + EMC |
-| Phase 2 — Salience | "I know what matters" | M2 EMC maturity + HRS |
-| Phase 3 — Cognition | "I have inner state" | M2 SMC + reflection |
+| Phase 1 — Memory | "I can remember" | M1 ✅ → M1.5 🟢 → M2 WMC + EMC |
+| Phase 2 — Salience | "I know what matters" | M2a EMC maturity + HRS |
+| Phase 3 — Cognition | "I have inner state" | M2b SMC + reflection |
 | Phase 4 — Consciousness | "I continuously exist" | M5+ global workspace |
 ---
-
+ 
 ## Architecture
-
+ 
 ```mermaid
 flowchart TD
     GUI[GUI - AGi.html]
     IN[cns/neural_input]
     OUT[gce/response]
-
+ 
     subgraph SCS[Semantic Cognitive System]
         CNC[CNC - Central Neural Core]
         MCC[MCC - Memory Coordination Core]
@@ -250,11 +263,11 @@ flowchart TD
         EMC[EMC - Episodic Memory Cortex]
         BUF[em_buffer - crash-safe intake]
     end
-
-    COSMOS[Cosmos Reason2 2B - vLLM]
-    DB[(emc.db - SQLite)]
-    EMBED[embeddinggemma-300m - CPU]
-
+ 
+    COSMOS[LLM Model - Ollama/vLLM]
+    DB[(Engram Complex - SQLite)]
+    EMBED[Embedding Model - CPU]
+ 
     GUI -->|user message| IN
     IN --> CNC
     CNC --> MCC
@@ -270,11 +283,11 @@ flowchart TD
     CNC -->|chunks| OUT
     OUT --> GUI
 ```
-
+ 
 ---
-
+ 
 ## Conversation Sequence
-
+ 
 ```mermaid
 sequenceDiagram
     participant GUI
@@ -283,15 +296,15 @@ sequenceDiagram
     participant WMC
     participant EMC
     participant COSMOS as Cosmos vLLM
-
+ 
     GUI->>CNC: /cns/neural_input
     activate CNC
-
+ 
     CNC->>MCC: add_turn user
     MCC->>WMC: add_turn
     WMC-->>MCC: evicted turns
     MCC-->>EMC: buffer_append async
-
+ 
     CNC->>MCC: build_context
     par concurrent
         MCC->>WMC: get_turns
@@ -301,56 +314,56 @@ sequenceDiagram
         EMC-->>MCC: past episodes
     end
     MCC-->>CNC: messages with context
-
+ 
     CNC->>COSMOS: POST stream
     loop tokens
         COSMOS-->>CNC: token
         CNC-->>GUI: start / delta
     end
     CNC-->>GUI: done
-
+ 
     CNC->>MCC: add_turn assistant
     deactivate CNC
 ```
-
+ 
 ---
-
+ 
 ## Quick Start
-
+ 
 ```bash
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
 cd ~/AGi/AuRoRA
-
+ 
 # 2. Install deps
 rosdep install --from-paths src --ignore-src -r -y
 pip3 install -r requirements.txt --break-system-packages
-
+ 
 # 3. Build
 colcon build --packages-select scs
 source install/setup.bash
-
+ 
 # 4. Start Cosmos vLLM
 bash launch/cosmos.sh
 # Wait ~3 min for: Application startup complete
-
+ 
 # 5. Start GRACE
 ros2 run scs cnc
-
+ 
 # 6. Start rosbridge
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-
+ 
 # 7. Open GUI
 python3 -m http.server 9413 --directory src/scs/scs
 # Open: http://<jetson-ip>:9413/AGi.html
 ```
-
+ 
 ---
-
+ 
 ## Built by
-
+ 
 Solo developer — Beautiful British Columbia, Canada. No CS/ML degree.  
 Just curiosity, a tracked robot, and NVIDIA Cosmos Reason 2 on a Jetson.
-
+ 
 Previous project: [ERIC — Edge Robotics Innovation by Cosmos](https://github.com/OppaAI/eric)  
 Built for the NVIDIA Cosmos Cookoff 2026.
