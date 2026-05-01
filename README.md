@@ -99,6 +99,7 @@ AGi/
     - Standardise shared chunk policy in MCC so both WMC and EMC use one sizing contract
 - Tokenizer-grounded chunk accounting:
     - Use model tokenizer for authoritative token counts (instead of character/word heuristics)
+    - Rationale: model context windows, truncation, and billing are token-based; character counts drift across languages, punctuation, emojis, and code blocks
     - Persist token counts per chunk/episode to drive truncation, salience features, and retrieval limits
     - Add calibration tests comparing heuristic length vs tokenizer length on representative dialogue samples
 - Agentic tools module (`tools/`):
