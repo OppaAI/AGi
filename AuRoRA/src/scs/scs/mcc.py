@@ -161,7 +161,7 @@ class MemoryCoordinationCore:
                 self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
                     timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
                     content=evicted_pmt["content"],                  # Bind the content of the interaction
-                )       
+                )
         except Exception as e:                                       # If binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
