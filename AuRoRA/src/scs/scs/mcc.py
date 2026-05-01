@@ -69,14 +69,14 @@ TODO:
 """
 
 # System libraries
-import asyncio                              # for async WMC and EMC recall
-from pathlib import Path                    # for engram gateway path construction
+import asyncio                              # for fire-and-forget episodic binding and EMC recall timeout racing
+from pathlib import Path                    # for constructing and creating the engram gateway on disk
 
 # AGi libraries
-from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex — sustains active PMTs
-from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex — recalls relevant episodes
-from hrs.hrp import AGi                     # Homeostatic Regulation Parameters — global variables
-CNS = AGi.CNS                               # CNS parameters alias — used throughout MCC
+from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex — sustains active PMTs in hot short-term memory
+from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
+from hrs.hrp import AGi                     # homeostatic regulation parameter registry — system-wide constants
+CNS = AGi.CNS                               # CNS parameter namespace alias — keeps constant references concise
 
 class MemoryCoordinationCore:
     """
@@ -89,30 +89,29 @@ class MemoryCoordinationCore:
 
     def __init__(self, logger) -> None:
         """
-        Initialize the Memory Coordination Core with a logger and set up the engram gateway.
-        Also initializes the WMC and EMC layers of the CNS.
+        Initiatiate the Memory Coordination Core and prepare its memory layers for operation.
 
         Args:
-            logger: Logger instance from CNC for logging MCC operations
+            logger: Logger instance forwarded from CNC
         """
-        self.logger = logger            # Retrieve logger from CNC for logging MCC operations
+        self.logger = logger             # logger forwarded from CNC — all MCC methods emit through this handle
 
         # Ensure engram gateway exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
-        self.engram_gateway = (         # Construct the gateway towards engram complex
-            Path.home() / 
-            AGi.ENTITY_GATEWAY / 
-            CNS.NEURAL_GATEWAY / 
-            CNS.ENGRAM_COMPLEX
+        self.engram_gateway = (         # construct absolute path to the engram complex on disk
+            Path.home() /               # anchor at OS home (~)
+            AGi.ENTITY_GATEWAY /        # descend into the entity gateway directory
+            CNS.NEURAL_GATEWAY /        # descend into the neural gateway subdirectory
+            CNS.ENGRAM_COMPLEX          # land at the engram complex — where encoded episodes live
         )
-        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # Generate the gateway if not already exists
+        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # create all missing parent dirs — no-op if already exists
 
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                         # Log entry on MCC activation
-        self.wmc = WorkingMemoryCortex(logger=logger)                                       # For invoking WMC with provided logger
-        self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # For invoking EMC with provided logger and gateway to engram complex
+        self.wmc = WorkingMemoryCortex(logger=logger)                                       # boot WMC — owns the active PMT slot
+        self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # boot EMC — owns the engram complex on disk
 
-        self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                       # Set a time limit for recall of episodic memory traces from EMC
+        self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                        # cache recall timeout — EMC runs on a thread and must not stall inference
 
         self.logger.info("✅ Memory Coordination Core Activated")                           # Log entry on successful MCC activation
 
