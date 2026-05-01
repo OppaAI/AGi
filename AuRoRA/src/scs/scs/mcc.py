@@ -144,12 +144,20 @@ class MemoryCoordinationCore:
         """
         Bind evicted PMTs from WMC into episodic buffer for pending encoding and consolidation.
         Takes place in isolated neural pathway — never blocks active cognition neural pathway.
+        Trivial PMT filter (M1): discards turns under 50 chars — filler turns not worth encoding.
+        Anchor vector filter (M1.5): semantic filtering via embeddinggemma replaces this.
 
         Args:
             evicted_pmts (list[dict]): List of evicted PMTs [{content, timestamp}]
         """
         try:                                                         # Attempt binding evicted PMTs to episodic buffer
-            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT                
+            for evicted_pmt in evicted_pmts:                         # Process each evicted PMT
+                # M1 trivial filter — discard filler turns under 50 chars
+                if len(evicted_pmt.get("content", "")) < 50:         # short content — likely filler turn
+                    self.logger.debug(                               # log the discarded trivial PMT
+                        "MCC discarded trivial PMT — below length threshold"
+                    )
+                    continue                                         # skip — do not bind to EMC
                 self.emc.bind_pmt(                                   # Bind evicted pmt into episodic buffer
                     timestamp=evicted_pmt["timestamp"],              # Bind the timestamp of the interaction
                     content=evicted_pmt["content"],                  # Bind the content of the interaction
