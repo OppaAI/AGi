@@ -4,23 +4,23 @@ MCC — Memory Coordination Core
 AuRoRA · Semantic Cognitive System (SCS)
 
 Single memory interface for CNC — coordinates WMC and EMC.
-CNC never touches WMC or EMC directly, only calls MCC.
+CNC never touches WMC or EMC directly; all memory operations route through MCC.
 
 Responsibilities:
-    - Fill induced PMTs to WMC
-    - Bind evicted PMTs → episodic buffer (async, non-blocking)
-    - Assemble memory context into episodic buffer for cognitive engine (sustained WMC PMTs + recalled EMC episodes)
-    - Manage cortical capacity across the full memory context
+    - Receive induced PMTs from CNC and fill them into WMC
+    - Bind evicted PMTs to episodic buffer for EMC encoding (async, non-blocking)
+    - Assemble unified memory context from sustained WMC PMTs and recalled EMC episodes
+    - Manage cortical capacity across the full memory core
 
 Architecture:
     MCC mirrors the human prefrontal cortex — the brain's active workspace
-    where working memory and episodic recall share the same conscious space.
+    where working memory and episodic recall converge into a single conscious field.
 
-    WMC and EMC operate independently but converge in assemble_memory_context() into
-    a single unified memory context sent to cognitive engine — exactly as fresh thoughts
-    and recalled memories both surface into the same prefrontal awareness.
-    Cognitive engine cannot distinguish a sustained WMC PMT from a recalled EMC engram —
-    they are all just active cognition context.
+    WMC and EMC operate independently but are unified in assemble_memory_context()
+    into one memory context passed to the cognitive engine — exactly as fresh thoughts
+    and recalled memories surface together into the same prefrontal awareness.
+    The cognitive engine cannot distinguish a sustained WMC PMT from a recalled EMC
+    engram; to it, they are all active cognition.
 
     Cortical capacity budget:
         Identity and cognition          →  CNS.COGNITIVE_RESERVE
@@ -31,19 +31,24 @@ Architecture:
 
 Terminology:
     Buffer      — temporary staging area for memory traces in transition
-                  (evicted PMTs from WMC waiting for encoding in EMC, or
-                  recalled EMC episodes waiting to be injected into memory context)
-    Context     — active memory for cognition (WMC PMTs + relevant EMC episodes)
-    Engram      — one physical stored memory record in the engram complex
-    PMT         — phonological memory trace (one interaction, user prompt + AI response)
-                  WMC pairs turns internally — MCC forwards evicted PMTs to EMC
-    Scaffold    — temporary staging area for relevant EMC episodes before context injection
-    Reserve     — cortical capacity reserved for a specific memory function
-    Threshold   — minimum relevancy score for an EMC episode to enter memory context
+                  (evicted PMTs from WMC awaiting EMC encoding, or recalled EMC 
+                  episodes awaiting reinstatment into the memory context)
+    Context     — the full active memory presented to the cognitive engine
+                  (WMC PMTs + relevant EMC episodes, assembled each turn)
+    Engram      — one physical memory record stored in the engram complex
+    PMT         — phonological memory trace; one complete interaction
+                  (user prompt + AI response). WMC pairs turns internally —
+                  MCC forwards complete evicted PMTs to EMC.
+    Scaffold    — temporary staging area where retrieved memory fragments are 
+                  integrated and held for conscious review before being reinstated
+                  into the current mental context
+    Reserve     — cortical capacity allocated to a specific memory function
+    Threshold   — minimum relevancy score required for an EMC episode
+                  to enter the active memory context
 
 Public interface:
     MemoryCoordinationCore:
-        await register_memory(user_id: str, content: str) -> None   
+        await register_memory(user_id: str, content: str) -> None
         context = await assemble_memory_context(user_prompt: str) -> list[dict]
         assess_memory_schema() -> dict
         report_memory_stats() -> None
@@ -51,17 +56,17 @@ Public interface:
         close() -> None
 
 TODO:
-    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown
-        gate on novelty/importance scoring — low-salience turns should be
-        truly forgotten, not blindly bound
+    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown,
+         gated on novelty/importance scoring — low-salience turns should be
+         truly forgotten, not blindly bound
     M2 — salience gate at eviction boundary in _bind_to_episodic_buffer():
          score evicted PMTs for novelty and importance before binding;
          discard low-salience turns, bind high-salience turns to EMC.
-         WMC and EMC remain salience-agnostic — MCC owns this decision.
-    M2 — dynamic EMC capacity adjustment — if recalled engrams exceed
+         WMC and EMC remain salience-agnostic — MCC owns this gate.
+    M2 — dynamic EMC capacity adjustment: if recalled engrams exceed
          EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
          WMC's chunk limit
-    M2 — WMC/EMC health check
+    M2 — WMC/EMC health check with capacity breach warnings
     M2 — add SMC, 11pm reflection trigger
     M3 — add PMC, procedural skill retrieval
 """
