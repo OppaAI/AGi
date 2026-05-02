@@ -35,11 +35,20 @@ class AGi:                                              # Amazing Grace infrastr
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
     class CNS:                                          # Central Nervous System
-        CORTICAL_CAPACITY: int = 8192                   # [STATIC]    total neural capacity of the active cognitive core
+        CORTICAL_CAPACITY: int = 8192                   # [STATIC] total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int = 512                    # [INTRINSIC] cortical capacity reserved for identity and cognition
-        NEURAL_GATEWAY: str    = "cns"                  # [STATIC]    neural gateway endpoint for inter-cortical communication
-        ENGRAM_COMPLEX: str    = "engram_complex.db"    # [STATIC]    engram complex where long-term memories storage
-        UNITS_PER_CHUNK: int   = 4                      # [STATIC]    number of neural units per chunk; Todo: move to AGi.CNS if other modules need this
+        NEURAL_GATEWAY: str    = "cns"                  # [STATIC] neural gateway endpoint for inter-cortical communication
+        ENGRAM_COMPLEX: str    = "engram_complex.db"    # [STATIC] engram complex where long-term memories storage
+        UNITS_PER_CHUNK: int   = 4                      # [STATIC] number of neural units per chunk
+        NEURAL_TEXT_INPUT: str = "/cns/neural_text_input" # [STATIC] ROS topic for text input from users
+
+        class GCE:                                      # Generative Cognitive Engine
+            NEURAL_ENDPOINT: str  = "http://AIVA:11434" # [STATIC] GCE server endpoint
+            COGNITIVE_ENGINE: str = "HammerAI/mn-mag-mell-r1:12b-q4_K_M" # [STATIC] GCE model identifier
+            CHUNK_LIMIT: int      = 512                 # [INTRINSIC] maximum response tokens per inference
+            TEMPERATURE: float    = 0.7                 # [INTRINSIC] response creativity — adapts per cognitive state
+            TIMEOUT: float        = 60.0                # [STATIC] seconds before abandoning inference
+            TOPIC_RESPONSE: str   = "/gce/response"     # [STATIC] GCE response topic
 
         class SMC:                                      # Semantic Memory Cortex
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5" # [STATIC] encoding engine for semantic memory

@@ -3,54 +3,42 @@ CNC — Central Neural Core
 ===========================
 AuRoRA · Semantic Cognitive System (SCS)
 
-ROS2 node — the brain of GRACE.
+ROS2 node — central cognitive coordinator of Grace.
 Milestone 1: Chatbot with Working Memory (WMC) + Episodic Memory (EMC)
 
-Inference: NVIDIA Cosmos Reason2 2B via vLLM
-           embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead
-           Docker: embedl/vllm:latest-jetson-orin-flashhead
+Inference routed through Generative Cognitive Engine (GCE).
+Model and endpoint configured via HRP.
 
 Topics:
-    Sub: /cns/neural_input       (std_msgs/String) — user message
-    Pub: /gce/response           (std_msgs/String) — streamed response chunks
+    Sub: CNS.LANGUAGE_INPUT      (std_msgs/String) — incoming language signal
+    Pub: GCE.TOPIC_RESPONSE      (std_msgs/String) — streamed cognitive response
 
-Response format (JSON on /gce/response):
+Response format (JSON on GCE.TOPIC_RESPONSE):
     {"type": "start",  "content": "<first chunk>"}
     {"type": "delta",  "content": "<delta>"}
     {"type": "done",   "content": "<full response>"}
     {"type": "error",  "content": "<error message>"}
 """
 
-import asyncio
-import json
-import threading
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+# System libraries
+import asyncio                              # for async pipeline and concurrent memory operations
+from concurrent.futures import ThreadPoolExecutor   # for blocking I/O thread pool
+from datetime import datetime               # for injecting current date into system prompt
+import httpx                                # async HTTP client for GCE streaming inference
+import json                                 # for serializing ROS2 messages and deserializing GCE responses
+import threading                            # for dedicated asyncio event loop thread
 
-import rclpy
-from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from std_msgs.msg import String
+# ROS2 libraries
+import rclpy                                # ROS2 Python client library
+from rclpy.node import Node                 # ROS2 node base class
+from rclpy.executors import MultiThreadedExecutor   # for concurrent ROS2 callback handling
+from std_msgs.msg import String             # ROS2 string message type for topic I/O
 
-import httpx
-
-from scs.mcc import MemoryCoordinationCore
-
-
-# ── vLLM config ───────────────────────────────────────────────────────────────
-VLLM_BASE_URL   = "http://AIVA:11434"             # Ollama server (Nemotron3-super-cloud)
-VLLM_MODEL      = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"
-#VLLM_BASE_URL = "http://localhost:8000"          # vllm — Cosmos vision model
-#VLLM_MODEL    = "embedl/Cosmos-Reason2-2B-W4A16-Edge2-FlashHead"
-VLLM_MAX_TOKENS = 512                             # max tokens per response
-VLLM_TEMP       = 0.7                             # temperature
-VLLM_TIMEOUT    = 60.0                            # seconds before giving up
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── ROS2 topics ───────────────────────────────────────────────────────────────
-TOPIC_INPUT    = "/cns/neural_input"
-TOPIC_RESPONSE = "/gce/response"
-# ─────────────────────────────────────────────────────────────────────────────
+# AGi libraries
+from scs.mcc import MemoryCoordinationCore  # memory coordination core — single memory interface for CNC
+from hrs.hrp import AGi                     # homeostatic regulation parameter registry — system-wide constants
+CNS = AGi.CNS                               # CNS parameter alias — used throughout CNC
+GCE = AGi.CNS.GCE                           # GCE parameter alias — used throughout CNC
 
 # ── GRACE personality ─────────────────────────────────────────────────────────
 GRACE_SYSTEM_PROMPT = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
