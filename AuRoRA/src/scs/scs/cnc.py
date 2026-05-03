@@ -40,13 +40,22 @@ Response format (JSON on GCE.COGNITIVE_RESPONSE):
     {"type": "done",   "content": "<full response>"}
     {"type": "error",  "content": "<error message>"}
 
+Terminology:
+    Gamma Rhythm    — asyncio loop coordinating active cognition across memory and inference
+    Neural Gateway  — persistent async HTTP connection to an external cognitive engine
+    Neural Thread   — dedicated background thread hosting an async event loop
+    Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
+
 TODO:
     M2 — _strip_model_artifacts(): strip think blocks and roleplay artifacts
          from assistant response before handing to MCC for memory storage
     M2 — salience gate: score assistant response before registering in MCC —
          discard low-salience turns at the CNC boundary
     M2 — busy queue: buffer incoming inputs during processing rather than dropping
+    M3 — emotional state initialization
     M3 — multi-modal input: image and audio signal routing through CNC
+    M? — perception subsystems (visual, auditory)
+    M? — motor control interface
 """
 
 # System libraries
@@ -80,26 +89,48 @@ class CNC(Node):
     """
 
     def __init__(self):
-        super().__init__("cnc")
-        self.get_logger().info("=" * 60)
-        self.get_logger().info("🧠 CNC — Central Neural Core starting…")
-        self.get_logger().info("=" * 60)
+        """
+        Initialize Central Neural Core — the main orchestrator of the robot's cognitive
+        architecture.
 
-        self.mcc = MemoryCoordinationCore(logger=self.get_logger())
+        Initializes all cognitive subsystems in order:
+            - Generative Cognitive Engine (GCE) — persistent connection for inference of generative cognition
+            - Memory Coordination Core (MCC) — short-term and long-term memory management
+            - Neural threads — dedicated asyncio loops for parallel operations
+            - Neural gateways — ROS2 topics for language input and cognitive output
 
-        self._loop = asyncio.new_event_loop()
-        self._loop_thread = threading.Thread(
-            target=self._loop.run_forever,
-            name="cnc-asyncio",
-            daemon=True,
+
+        """
+        super().__init__("cnc")                                             # register this node with ROS2 as "cnc"
+        self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
+        self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
+        self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
+
+        # Initialize GCE gateway to interface with generative cognitive engine
+        self._gce_gateway = httpx.AsyncClient(                              # persistent async HTTP client — reused across all GCE requests
+            base_url=GCE.NEURAL_ENDPOINT,                                   # base URL set once — requests only need the endpoint path
+            timeout=httpx.Timeout(GCE.TIMEOUT),                             # applies timeout to connect, read, and write operations
         )
-        self._loop_thread.start()
 
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="cnc-pool")
+        # Initialize MCC for memory management
+        self.mcc = MemoryCoordinationCore(                                  # boot memory coordination — WMC + EMC, embedding model loads here
+            logger=self.get_logger(),                                       # logger for memory coordination operations
+            executor=self._cognitive_executor,                              # thread pool for memory coordination operations
+        )
 
-        self._http = httpx.AsyncClient(
-            base_url=GCE.NEURAL_ENDPOINT,
-            timeout=httpx.Timeout(GCE.TIMEOUT),
+        # Initialize neural thread for parallel operations
+        self._cognitive_cycle= asyncio.new_event_loop()                     # asyncio event loop for active cognition — isolated from ROS2 spin thread
+        self._gamma_rhythm = threading.Thread(                              # dedicated OS thread driving the cognitive cycle
+            target=self._cognitive_cycle.run_forever,                       # runs indefinitely — processes coroutines as they arrive
+            name="cnc-cognitive-cycle",                                     # named for thread dump debugging
+            daemon=True,                                                    # dies with main process — clean shutdown
+        )
+        self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
+
+        # Thread pool for offloading blocking operations — strictly synchronous tasks like database access, file I/O, or external HTTP calls that shouldn't run on the asyncio event loop
+        self._cognitive_executor = ThreadPoolExecutor(                      # thread pool for blocking operations — offloads from cognitive cycle
+            max_workers=2,                                                  # two workers — memory and inference can run concurrently
+            thread_name_prefix="cnc-thread-pool",                           # named for thread dump debugging
         )
 
         self._sub = self.create_subscription(
@@ -109,6 +140,10 @@ class CNC(Node):
 
         self._busy = False
 
+        asyncio.run_coroutine_threadsafe(
+            self._warmup_gce(), self._cognitive_cycle                  # schedule warmup — doesn't block init
+        )
+
         self.get_logger().info(f"✅ Subscribed  : {CNS.NEURAL_TEXT_INPUT}")
         self.get_logger().info(f"✅ Publishing  : {GCE.COGNITIVE_RESPONSE}")
         self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")
@@ -116,6 +151,22 @@ class CNC(Node):
         self.get_logger().info("=" * 60)
         self.get_logger().info("🌸 GRACE is ready")
         self.get_logger().info("=" * 60)
+
+    async def _warmup_gce(self) -> None:
+        """Warm up GCE — load model into VRAM and pin it for the session."""
+        try:
+            payload = {
+                "model"    : GCE.COGNITIVE_ENGINE,
+                "messages" : [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,                                            # minimal response — just enough to trigger model load
+                "stream"   : False,
+            }
+            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
+                payload["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
+            await self._gce_gateway.post("/v1/chat/completions", json=payload)
+            self.get_logger().info("✅ GCE warmed up — model pinned in VRAM")
+        except Exception as e:
+            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
 
     def _on_input(self, msg: String):
         """
@@ -140,7 +191,7 @@ class CNC(Node):
 
         self.get_logger().info(f"📝 Input: {user_input[:80]}")
         asyncio.run_coroutine_threadsafe(
-            self._handle(user_input), self._loop
+            self._handle(user_input), self._cognitive_cycle
         )
 
     async def _handle(self, user_input: str):
@@ -222,7 +273,7 @@ class CNC(Node):
         is_first      = True
 
         try:
-            async with self._http.stream(
+            async with self._gce_gateway.stream(
                 "POST",
                 "/v1/chat/completions",
                 json=payload,
@@ -295,16 +346,16 @@ class CNC(Node):
         self.mcc.close()
 
         future = asyncio.run_coroutine_threadsafe(
-            self._http.aclose(), self._loop
+            self._gce_gateway.aclose(), self._cognitive_cycle
         )
         try:
             future.result(timeout=3.0)
         except Exception:
             pass
 
-        self._loop.call_soon_threadsafe(self._loop.stop)
-        self._loop_thread.join(timeout=3.0)
-        self._executor.shutdown(wait=True)
+        self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)
+        self._gamma_rhythm.join(timeout=3.0)
+        self._cognitive_executor.shutdown(wait=True)
 
         super().destroy_node()
         self.get_logger().info("✅ CNC shutdown complete")

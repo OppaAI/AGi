@@ -69,14 +69,15 @@ TODO:
 """
 
 # System libraries
-import asyncio                              # for fire-and-forget episodic binding and EMC recall timeout racing
-from pathlib import Path                    # for constructing and creating the engram gateway on disk
+import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
+from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
+from pathlib import Path                            # for constructing and creating the engram gateway on disk
 
 # AGi libraries
-from scs.wmc import WorkingMemoryCortex     # Working Memory Cortex — sustains active PMTs in hot short-term memory
-from scs.emc import EpisodicMemoryCortex    # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
-from hrs.hrp import AGi                     # homeostatic regulation parameter registry — system-wide constants
-CNS = AGi.CNS                               # CNS parameter namespace alias — keeps constant references concise
+from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
+from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
+from hrs.hrp import AGi                             # homeostatic regulation parameter registry — system-wide constants
+CNS = AGi.CNS                                       # CNS parameter namespace alias — keeps constant references concise
 
 class MemoryCoordinationCore:
     """
@@ -87,14 +88,16 @@ class MemoryCoordinationCore:
     — CNC never touches WMC or EMC directly.
     """
 
-    def __init__(self, logger) -> None:
+    def __init__(self, logger, executor: ThreadPoolExecutor) -> None:
         """
         Initiatiate the Memory Coordination Core and prepare its memory layers for operation.
 
         Args:
             logger: Logger instance forwarded from CNC
+            executor: Thread pool for blocking operations
         """
-        self.logger = logger             # logger forwarded from CNC — all MCC methods emit through this handle
+        self.logger = logger            # logger forwarded from CNC — all MCC methods emit through this handle
+        self._executor = executor       # thread pool for blocking operations
 
         # Ensure engram gateway exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
@@ -135,7 +138,7 @@ class MemoryCoordinationCore:
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                    # evicted PMTs present — hand off to episodic buffer
             _ = asyncio.get_running_loop().run_in_executor(                 # recruit a dormant thread — binding never blocks active cognition
-                None, self._bind_to_episodic_buffer, evicted_pmts
+                self._executor, self._bind_to_episodic_buffer, evicted_pmts # bind evicted PMTs to episodic buffer
             )
             self.logger.debug(                                              # log the binding transition of evicted PMTs to episodic buffer
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
@@ -192,7 +195,7 @@ class MemoryCoordinationCore:
         reinstated_episodes: list[dict] = []                                 # holds reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
             future = asyncio.get_running_loop().run_in_executor(             # recruit a dormant thread — EMC recall blocks on encoding engine
-                None, self.emc.reinstate_episodes, user_prompt               # reinstate relevant episodes using current prompt as cue
+                self._executor, self.emc.reinstate_episodes, user_prompt     # reinstate relevant episodes using current prompt as cue
             )
             reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall must not stall inference
                 future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
