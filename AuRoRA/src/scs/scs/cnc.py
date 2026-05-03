@@ -4,10 +4,31 @@ CNC — Central Neural Core
 AuRoRA · Semantic Cognitive System (SCS)
 
 ROS2 node — central cognitive coordinator of Grace.
+Orchestrates the full perception-cognition-response cycle each conversational turn.
 Milestone 1: Chatbot with Working Memory (WMC) + Episodic Memory (EMC)
 
 Inference routed through Generative Cognitive Engine (GCE).
 Model and endpoint configured via HRP.
+
+Architecture:
+    CNC mirrors the human thalamus — the central relay that routes signals
+    between sensory input, memory systems, and motor output.
+    It owns no memory directly; all memory operations delegate to MCC.
+
+    Each turn follows a fixed pipeline:
+        1. Receive language signal via ROS2 subscription
+        2. Register user turn in MCC (WMC fill + EMC eviction)
+        3. Assemble unified memory context (WMC PMTs + EMC episodes)
+        4. Build system prompt with date and reinstated episodic context
+        5. Stream inference through GCE
+        6. Register assistant turn in MCC
+        7. Report memory stats
+
+    Async architecture:
+        ROS2 spin runs on main thread.
+        A dedicated asyncio loop runs on a background thread (cnc-asyncio).
+        All async operations (memory, inference) are scheduled onto this loop
+        via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
     Sub: CNS.NEURAL_TEXT_INPUT   (std_msgs/String) — incoming language signal
@@ -18,27 +39,35 @@ Response format (JSON on GCE.COGNITIVE_RESPONSE):
     {"type": "delta",  "content": "<delta>"}
     {"type": "done",   "content": "<full response>"}
     {"type": "error",  "content": "<error message>"}
+
+TODO:
+    M2 — _strip_model_artifacts(): strip think blocks and roleplay artifacts
+         from assistant response before handing to MCC for memory storage
+    M2 — salience gate: score assistant response before registering in MCC —
+         discard low-salience turns at the CNC boundary
+    M2 — busy queue: buffer incoming inputs during processing rather than dropping
+    M3 — multi-modal input: image and audio signal routing through CNC
 """
 
 # System libraries
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-import httpx
-import json
-import threading
+import asyncio                                             # dedicated event loop for async memory and inference operations — runs on cnc-asyncio thread
+from concurrent.futures import ThreadPoolExecutor          # thread pool for offloading blocking operations from the ROS2 spin thread
+from datetime import datetime                              # for injecting current date into system prompt each turn
+import httpx                                               # async HTTP client for GCE streaming — OpenAI-compatible SSE
+import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
+import threading                                           # for cnc-asyncio background thread hosting the event loop
 
 # ROS2 libraries
-import rclpy
-from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
-from std_msgs.msg import String
+import rclpy                                               # ROS2 Python client library — node lifecycle and spin
+from rclpy.node import Node                                # base class for all ROS2 nodes
+from rclpy.executors import MultiThreadedExecutor          # allows concurrent callback execution — required for async scheduling
+from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
 # AGi libraries
-from scs.mcc import MemoryCoordinationCore
-from hrs.hrp import AGi
-CNS = AGi.CNS
-GCE = AGi.CNS.GCE
+from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
+from hrs.hrp import AGi                                    # homeostatic regulation parameter namespace
+CNS = AGi.CNS                                              # CNS-level constants — topic names, cortical capacity
+GCE = AGi.CNS.GCE                                          # GCE constants — model, endpoint, inference parameters
 
 
 class CNC(Node):
