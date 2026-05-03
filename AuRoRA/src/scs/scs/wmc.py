@@ -182,6 +182,7 @@ class WorkingMemoryCortex:
             induced_pmt: dict = {                                   # assemble evictable PMT
                 "timestamp": self._induced_pmt["timestamp"],        # preserve original induction timestamp
                 "content":   json.dumps({                           # serialize user/assistant pair into single content string
+                                 "user": content["prompt"],
                                  "assistant": content["response"],
                              }),
             }

@@ -19,7 +19,7 @@ PINK   = "\033[95m"
 GREY   = "\033[90m"
 RED    = "\033[91m"
 
-TOPIC_INPUT    = "/cns/neural_input"
+TOPIC_INPUT    = "/cns/neural_text_input"
 TOPIC_RESPONSE = "/gce/response"
 
 # If no "done" arrives within this many seconds, auto-unlock the prompt.

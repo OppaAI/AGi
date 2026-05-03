@@ -198,7 +198,6 @@ class MemoryCoordinationCore:
                 future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
             )
         except asyncio.TimeoutError:                                         # recall exceeded time limit — cancel dormant thread
-            future.cancel()                                                  # cancel dormant thread — prevents stale episode contamination
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
 
         # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
