@@ -16,7 +16,7 @@ Architecture:
     It owns no memory directly; all memory operations delegate to MCC.
 
     Each turn follows a fixed pipeline:
-        1. Receive language signal via ROS2 subscription
+        1. Receive text input signal via ROS2 subscription
         2. Register user turn in MCC (WMC fill + EMC eviction)
         3. Assemble unified memory context (WMC PMTs + EMC episodes)
         4. Build system prompt with date and reinstated episodic context
@@ -31,7 +31,7 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: CNS.NEURAL_TEXT_INPUT   (std_msgs/String) — incoming language signal
+    Sub: CNS.NEURAL_TEXT_INPUT   (std_msgs/String) — incoming text input signal
     Pub: GCE.COGNITIVE_RESPONSE  (std_msgs/String) — streamed cognitive response
 
 Response format (JSON on GCE.COGNITIVE_RESPONSE):
@@ -83,7 +83,7 @@ class CNC(Node):
     """
     Central Neural Core — ROS2 node.
 
-    Subscribes to user input, routes inference through GCE with streaming,
+    Subscribes to text input, routes inference through GCE with streaming,
     publishes response chunks to the cognitive response topic.
     Memory is managed entirely through MCC.
     """
@@ -97,7 +97,7 @@ class CNC(Node):
             - Generative Cognitive Engine (GCE) — persistent connection for inference of generative cognition
             - Memory Coordination Core (MCC) — short-term and long-term memory management
             - Neural threads — dedicated asyncio loops for parallel operations
-            - Neural gateways — ROS2 topics for language input and cognitive output
+            - Neural gateways — ROS2 topics for text input and cognitive output
 
 
         """
@@ -127,16 +127,17 @@ class CNC(Node):
         )
         self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
 
-        # Thread pool for offloading blocking operations — strictly synchronous tasks like database access, file I/O, or external HTTP calls that shouldn't run on the asyncio event loop
+        # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor = ThreadPoolExecutor(                      # thread pool for blocking operations — offloads from cognitive cycle
             max_workers=2,                                                  # two workers — memory and inference can run concurrently
             thread_name_prefix="cnc-thread-pool",                           # named for thread dump debugging
         )
 
-        self._sub = self.create_subscription(
-            String, CNS.NEURAL_TEXT_INPUT, self._on_input, 10
+        # Initialize neural gateway for text input and generative cognitive output
+        self._text_input_stimulus = self.create_subscription(                                # register ROS2 subscriber — fires on every incoming message
+            String, CNS.NEURAL_TEXT_INPUT, self._receive_text_input, 10                      # String type | topic | callback | QoS depth 10
         )
-        self._pub = self.create_publisher(String, GCE.COGNITIVE_RESPONSE, 10)
+        self._cognitive_response = self.create_publisher(String, GCE.COGNITIVE_RESPONSE, 10) # ROS2 publisher — sends cognitive output to the specified topic
 
         self._busy = False
 
@@ -168,7 +169,7 @@ class CNC(Node):
         except Exception as e:
             self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
 
-    def _on_input(self, msg: String):
+    def _receive_text_input(self, msg: String):
         """
         ROS2 subscription callback.
         Schedules async processing on the asyncio loop — never blocks.
