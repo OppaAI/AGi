@@ -144,7 +144,7 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     storage=[
         EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
-        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — B-tree indexed for date recall
+        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
@@ -157,7 +157,8 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     ],
     semantic_traces="encoding",                                                                     # column linked to vec0 virtual table for KNN search
     lexical_traces=["content"],                                                                     # column fed into FTS5 virtual table for keyword search
-    index_traces=["date"]                                                                           # B-tree index — speeds up date-filtered recall
+    index_traces=["timestamp"],                                                                     # B-tree index — speeds up temporal-filtered recall
+    temporal_trace="timestamp",                                                                     # temporal filter column — represents when the memory occurred
 )
         
 @dataclass

@@ -163,7 +163,6 @@ class MemoryCoordinationCore:
                     timestamp=evicted_pmt["timestamp"],              # timestamp of the original PMT
                     content=evicted_pmt["content"],                  # raw content of the evicted PMT
                 )
-                )
         except Exception as e:                                       # if binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",

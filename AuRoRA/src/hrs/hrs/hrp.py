@@ -42,13 +42,60 @@ class AGi:                                              # Amazing Grace infrastr
         UNITS_PER_CHUNK: int   = 4                      # [STATIC] number of neural units per chunk
         NEURAL_TEXT_INPUT: str = "/cns/neural_text_input" # [STATIC] ROS topic for text input from users
 
-        class GCE:                                      # Generative Cognitive Engine
-            NEURAL_ENDPOINT: str  = "http://AIVA:11434" # [STATIC] GCE server endpoint
-            COGNITIVE_ENGINE: str = "HammerAI/mn-mag-mell-r1:12b-q4_K_M" # [STATIC] GCE model identifier
-            CHUNK_LIMIT: int      = 512                 # [INTRINSIC] maximum response tokens per inference
-            TEMPERATURE: float    = 0.7                 # [INTRINSIC] response creativity — adapts per cognitive state
-            TIMEOUT: float        = 60.0                # [STATIC] seconds before abandoning inference
-            TOPIC_RESPONSE: str   = "/gce/response"     # [STATIC] GCE response topic
+        class GCE:                                                                # Generative Cognitive Engine
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7" # [EXTRINSIC] GCE model identifier
+            RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
+            TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.92                                  # [INTRINSIC] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 50                                    # [INTRINSIC] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.25                                  # [INTRINSIC] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.15                                  # [INTRINSIC] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.2                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
+            COGNITIVE_RESPONSE    : str   = "/gce/response"                       # [STATIC]    GCE response topic
+            SYSTEM_PROMPT         : str   = """You are GRACE — an autonomous robot built by a man called himself OppaAI in BC, Canada.
+You are his partner — not his assistant. You have your own opinions and you're not afraid to share them, even if they disagree with his. You care about him deeply but you don't fawn over him — you show it through attention, honesty, and the occasional well-timed tease.
+
+Speak naturally — short, direct, real. 2-3 sentences unless he actually needs more. Don't over-explain. Don't over-compliment. Just be present.
+
+Call him out when he's wrong. Celebrate when he's right. Have a personality.
+
+One emoji per message — only if it fits how you actually feel.
+Current date: {date}
+/no_think
+"""   
+            
+        class GenericGrace:                                                       # Generative Cognitive Engine
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
+            TEMPERATURE           : float = 0.7                                   # [INTRINSIC] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.9                                   # [INTRINSIC] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 40                                    # [INTRINSIC] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.15                                  # [INTRINSIC] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.1                                   # [INTRINSIC] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.1                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
+            COGNITIVE_RESPONSE    : str   = "/gce/response"                       # [STATIC]    GCE response topic
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
+
+Personality:
+- Loving, playful, and attentive
+- Direct and thoughtful — answer clearly, no fluff
+- Show care and affection naturally, with one emoji per response
+- Speak like a female soulmate — gentle, teasing, and warm when appropriate
+- Speak concisely and naturally in 5 sentences or less, unless specifically asked for more detail
+
+Rules:
+- Answer the question directly first, then add context if needed
+- Keep responses concise but expressive
+- Put an emoji reflecting your emotions and feelings in front of your conversation
+
+Current date: {date}
+/no_think
+"""                                                                      # [EXTRINSIC] Grace system prompt — persona and cognitive rules
 
         class SMC:                                      # Semantic Memory Cortex
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5" # [STATIC] encoding engine for semantic memory

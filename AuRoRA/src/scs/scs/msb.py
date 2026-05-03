@@ -90,6 +90,7 @@ class EngramSchema:
     semantic_traces: str | None = None              # column name holding the encoding BLOB — used for KNN vector search
     lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
     index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
+    temporal_trace: str | None = None               # column name representing when this memory occurred — used for date filtering and stats
 
 @dataclass
 class RecallCue:
@@ -114,8 +115,8 @@ def normalize_vector(vector: list[float]) -> list[float]:
     vector_array = np.array(vector)                                                # list → ndarray for vectorized math
     vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
     if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-        return (vector_array / vector_mag).tolist()                                # already unit length — skip normalization
-    return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
+        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
+    return vector                                                                  # already unit length — skip normalization
     
 def pack_vector(vector: list[float]) -> bytes:
     """
@@ -488,7 +489,7 @@ class EngramComplex:
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
     
         Returns:
-            int: staging_id for deletion after processing
+            int: ID for deletion after processing
         """
         return self.inscribe_engram(engram, self._staging_schema, ecx_conn)         # wrap inscribe_engram with staging schema
 
@@ -502,18 +503,18 @@ class EngramComplex:
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
 
         Returns:
-            int: engram_id of the inscribed engram
+            int: ID of the inscribed engram
         """
         schema                    = schema or self._storage_schema          # default to permanent storage if no schema provided
         ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         labels: str               = ", ".join(engram.keys())                # transcript label list from engram
         slots: str                = ", ".join([ "?"] * len(engram))         # one ? per trace
-        engram_id: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
+        inscription: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
             f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
         ecx_conn.commit()                                                   # commit before returning — permanent
-        return engram_id.lastrowid                                          # return engram_id for vector and lexical indexing
+        return inscription.lastrowid                                          # return engram_id for vector and lexical indexing
 
     def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
         """
@@ -614,12 +615,12 @@ class EngramComplex:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
         try:                                                                    # attempt semantic recall with given cue
-            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
-            temporal_filter: str = """
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
-            """ if self._is_temporal else ""                                    # only filter by date if schema has a date column
-            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
+            temporal_filter: str = f"""
+                AND (store.{self._blueprint.temporal_trace} >= ? OR ? IS NULL)
+                AND (store.{self._blueprint.temporal_trace} <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                    # only filter by temporal trace if schema has a temporal trace column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass temporal params if schema has a temporal trace column
 
             matches: list[sqlite3.Row] = self._ecx_conn.execute(                # semantic recall for nearest engrams by L2 distance
                 f"""
@@ -631,7 +632,7 @@ class EngramComplex:
                 AND k = ?
                 ORDER BY vec.distance, store.id DESC
                 """,
-                [pack_vector(cue), *temporal_params, recall_depth],             # only pass date params if schema has a date column
+                [pack_vector(cue), *temporal_params, recall_depth],             # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                        # return all matching engrams by semantic similarity
 
             if not matches:                                                     # if no matches found,
@@ -668,12 +669,12 @@ class EngramComplex:
             return []                                                       # return empty list
 
         try:                                                                # attempt lexical recall with sanitized cue
-            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
-            temporal_filter: str = """
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
-            """ if self._is_temporal else ""                                # only filter by date if schema has a date column
-            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
+            temporal_filter: str = f"""
+                AND (store.{self._blueprint.temporal_trace} >= ? OR ? IS NULL)
+                AND (store.{self._blueprint.temporal_trace} <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                # only filter by temporal trace if schema has a temporal trace column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass temporal params if schema has a temporal trace column
 
             matches: list[sqlite3.Row] = self._ecx_conn.execute(            # FTS5 lexical recall for matching engrams
                 f"""
@@ -685,7 +686,7 @@ class EngramComplex:
                 ORDER BY lexeme.rank, store.id DESC
                 LIMIT ?
                 """,
-                [clean_cue, *temporal_params, recall_depth],                # only pass date params if schema has a date column
+                [clean_cue, *temporal_params, recall_depth],                # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                    # fetch all matching engrams
 
             if not matches:                                                 # if no matches found,
@@ -740,9 +741,9 @@ class EngramComplex:
         Returns True if this memory cortex is temporal.
 
         Returns:
-            bool: True if storage schema has a date column, False otherwise
+            bool: True if storage schema has a temporal trace column, False otherwise
         """
-        return any(t.label == "date" for t in self._blueprint.storage)      # True if storage schema has a date column
+        return self._blueprint.temporal_trace is not None               # True if storage schema has a temporal trace column
 
     @staticmethod
     def _converge_memories(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
@@ -815,14 +816,17 @@ class EngramComplex:
         Assess the current status of the engram complex for logging and monitoring.
 
         Returns:
-            dict: Current engram complex stats including engram count, earliest and latest timestamp, buffer count, and database size.
+            dict: Current engram complex stats including engram count, earliest and latest temporal trace, buffer count, and database size.
         """
         try:                                                                    # attempt retrieve stats of engram complex database
-            storage_stats: sqlite3.Row = self._ecx_conn.execute(                # query storage schema for engram count and timestamp range
-                "SELECT COUNT(*) as total, "
-                "MIN(timestamp) as earliest, MAX(timestamp) as latest "
+            storage_stats: sqlite3.Row = self._ecx_conn.execute(                # query storage schema for engram count and temporal range
+                f"SELECT COUNT(*) as total, "
+                f"MIN({self._blueprint.temporal_trace}) as earliest, "
+                f"MAX({self._blueprint.temporal_trace}) as latest "
                 f"FROM {self._storage_schema}"
-            ).fetchone()                                                        # fetch engram count and timestamp range
+                if self._blueprint.temporal_trace else
+                f"SELECT COUNT(*) as total FROM {self._storage_schema}"
+            ).fetchone()                                                        # fetch engram count and temporal range
 
             if self._blueprint.staging:                                         # check if blueprint has staging table
                 staging_stats: sqlite3.Row | None = self._ecx_conn.execute(     # query staging schema for buffer count
