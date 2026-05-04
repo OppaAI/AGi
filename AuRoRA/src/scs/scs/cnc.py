@@ -78,9 +78,8 @@ from std_msgs.msg import String                            # ROS2 string message
 # AGi libraries
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from hrs.hrp import AGi                                    # homeostatic regulation parameter namespace
-CNS = AGi.CNS                                              # CNS-level constants — topic names, cortical capacity
-GCE = AGi.CNS.GCE                                          # GCE constants — model, endpoint, inference parameters
-
+CNS = AGi.CNS                                              # module-level alias — CNS-level constants (topic names, cortical capacity)
+GCE = AGi.CNS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
 class CNC(Node):
     """
@@ -165,7 +164,7 @@ class CNC(Node):
         Drops the signal if CNC is already processing a turn.
         """
         try:                                                                        # attempt to parse JSON payload — CLI sends {"text": "..."}
-            ui_input: dict[str, Any] = json.loads(msg.data.strip())                 # converts the ROS2 String message to a Python dictionary
+            ui_input: dict = json.loads(msg.data.strip())                           # converts the ROS2 String message to a Python dictionary
             if not isinstance(ui_input, dict) or not ui_input.get("text"):          # malformed or empty payload — discard
                 return                                                              # abort early
             user_prompt: str = ui_input.get("text", "").strip()                     # extract text field — strip whitespace
@@ -254,7 +253,7 @@ class CNC(Node):
         Returns:
             str: Full cognitive response for memory registration.
         """
-        inference_request: dict[str, Any] = {
+        inference_packet: dict = {
             "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRP 
             "messages"           : messages,                                # full memory context + current user prompt
             "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
@@ -267,7 +266,7 @@ class CNC(Node):
             "stream"             : True,                                    # enable SSE streaming — chunks published as they arrive
         }
         if GCE.KEEP_ALIVE is not None:                                      # Ollama only — vLLM keeps models loaded permanently
-            inference_request["keep_alive"] = GCE.KEEP_ALIVE                # pin model in VRAM for session duration
+            inference_packet["keep_alive"] = GCE.KEEP_ALIVE                 # pin model in VRAM for session duration
 
         cognitive_response: str = ""                                        # accumulates response chunks into full response
         is_first: bool = True                                               # tracks first chunk — triggers "start" event type
@@ -276,7 +275,7 @@ class CNC(Node):
             async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
                 "POST",                                                     # POST request method for SSE streaming
                 "/v1/chat/completions",                                     # SSE endpoint — matches OpenAI-compatible API
-                json=inference_request,                                     # JSON body with inference parameters
+                json=inference_packet,                                      # JSON body with inference parameters
             ) as resp:                                                      # asynchronous response stream
 
                 if resp.status_code != 200:                                 # non-200 — GCE rejected the request
@@ -337,32 +336,32 @@ class CNC(Node):
         Fire and forget — called once at boot, non-blocking.
         """
         try:                                                                # Attempt to preload GCE model into memory
-            inference_request = {                                           # minimal inference request — triggers model load into VRAM
+            inference_packet = {                                           # minimal inference request — triggers model load into VRAM
                 "model"    : GCE.COGNITIVE_ENGINE,                          # GCE model to prime
                 "messages" : [{"role": "user", "content": "hi"}],           # inimal prompt — just enough to trigger model load
                 "max_tokens": 1,                                            # single token response — minimizes priming cost
                 "stream"   : False,                                         # no streaming needed for priming
             }
             if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
-                inference_request["keep_alive"] = GCE.KEEP_ALIVE            # pin model in VRAM for session duration
-            await self._gce_gateway.post("/v1/chat/completions", json=inference_request)  # submit priming request to GCE
+                inference_packet["keep_alive"] = GCE.KEEP_ALIVE            # pin model in VRAM for session duration
+            await self._gce_gateway.post("/v1/chat/completions", json=inference_packet)  # submit priming request to GCE
             self.get_logger().info("✅ GCE primed successfully — activated into memory")  # log the successful activation of GCE
         except Exception as e:
             self.get_logger().warning(f"⚠️ GCE priming failed: {e}")         # non-fatal — model loads on first real request
             
-    def _emit_response(self, inference_request: dict[str, Any]):
+    def _emit_response(self, response_packet: dict):
         """
         Emit a cognitive response chunk to the ROS2 output topic.
     
         Args:
-            inference_request (dict): Response payload — type and content fields.
+            response_packet (dict): Response payload — type and content fields.
         """
         try:                                                                        
             msg = String()                                                        # create ROS2 String message
-            msg.data = json.dumps(inference_request)                              # serialize payload to JSON string
+            msg.data = json.dumps(response_packet)                                # serialize payload to JSON string
             self._cognitive_response.publish(msg)                                 # publish to cognitive response topic
         except Exception as exc:                                                  
-            self.get_logger().error(f"❌ Publish error: {exc}")                   # log publish failure — non-fatal
+            self.get_logger().error(f"❌ Publish error: {exc}")                   # log publish failure — # non-fatal — publishing failure must not crash the cognitive cycle
 
     def destroy_node(self):
         """
@@ -377,7 +376,7 @@ class CNC(Node):
         try:
             future.result(timeout=3.0)                                              # wait up to 3 seconds for clean close
         except Exception:
-            pass                                                                    # ignore errors on shutdown — process is ending
+            pass                                                                    # ignore — process is ending, clean close is best-effort
 
         self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)      # signal cognitive cycle to stop
         self._gamma_rhythm.join(timeout=3.0)                                        # wait for gamma rhythm thread to exit
