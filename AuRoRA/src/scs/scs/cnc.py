@@ -158,7 +158,7 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
 
-    def _receive_text_input(self, msg: String):
+    def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
         Drops the signal if CNC is already processing a turn.
@@ -186,7 +186,7 @@ class CNC(Node):
             self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
         )
 
-    async def _process_stimulus(self, user_prompt: str):
+    async def _process_stimulus(self, user_prompt: str) -> None:
         """
         Process one full stimulus-response cycle:
             1. Register user prompt in memory
@@ -308,10 +308,10 @@ class CNC(Node):
                     cognitive_response += fragment_content                  # accumulate fragment into full response
 
                     if leading_fragment:                                    # first fragment — signal stream start to caller
-                        self._emit_response({"type": GCE.STREAM_LEADING, "content": fragement_content})  # publish "start" event
+                        self._emit_response({"type": GCE.STREAM_LEADING, "content": fragment_content})  # publish "start" event
                         leading_fragment = False                            # clear flag after first fragment
                     else:                                                   # subsequent fragments — signal token arrival
-                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragement_content})  # subsequent fragments — stream "delta" to caller
+                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # subsequent fragments — stream "delta" to caller
 
             if cognitive_response:                                                            # response assembled — signal completion
                 self._emit_response({"type": GCE.STREAM_TRAILING, "content": cognitive_response}) # publish "done" event
@@ -373,7 +373,7 @@ class CNC(Node):
         future = asyncio.run_coroutine_threadsafe(                                  # schedule HTTP client close on cognitive cycle
             self._gce_gateway.aclose(), self._cognitive_cycle                       # async close — releases TCP connections
         )
-        try:                                                                        # attempt to 
+        try:                                                                        # attempt clean close — best-effort on shutdown
             future.result(timeout=3.0)                                              # wait up to 3 seconds for clean close
         except Exception:
             pass                                                                    # ignore — process is ending, clean close is best-effort
