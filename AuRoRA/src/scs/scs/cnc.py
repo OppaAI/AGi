@@ -50,6 +50,8 @@ TODO:
     M1.x — define and lock NeuralTextInput schema in scs/types.py
            standardize JSON contract across all input sources (CLI, web, voice)
            evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
+    M1.x — multi-user identity: replace hardcoded "user" speaker literal with
+       user_id from NeuralTextInput schema — required for ASR multi-speaker routing
     M2 — _strip_model_artifacts(): strip think blocks and roleplay artifacts
          from assistant response before handing to MCC for memory storage
     M2 — salience gate: score assistant response before registering in MCC —
