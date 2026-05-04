@@ -47,6 +47,9 @@ Terminology:
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
 
 TODO:
+    M1.x — define and lock NeuralTextInput schema in scs/types.py
+           standardize JSON contract across all input sources (CLI, web, voice)
+           evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
     M2 — _strip_model_artifacts(): strip think blocks and roleplay artifacts
          from assistant response before handing to MCC for memory storage
     M2 — salience gate: score assistant response before registering in MCC —
@@ -106,40 +109,44 @@ class CNC(Node):
         self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
+        
+        # Initialize separate execution thread for memory and blocking operations
+        self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
+            max_workers=2,                                                  # two workers — memory and inference can run concurrently
+            thread_name_prefix="cnc-thread-pool",                           # named for thread dump debugging
+        )
+
         # Initialize GCE gateway to interface with generative cognitive engine
-        self._gce_gateway = httpx.AsyncClient(                              # persistent async HTTP client — reused across all GCE requests
+        self._gce_gateway: httpx.AsyncClient = httpx.AsyncClient(           # persistent async HTTP client — reused across all GCE requests
             base_url=GCE.NEURAL_ENDPOINT,                                   # base URL set once — requests only need the endpoint path
             timeout=httpx.Timeout(GCE.TIMEOUT),                             # applies timeout to connect, read, and write operations
         )
 
         # Initialize MCC for memory management
-        self.mcc = MemoryCoordinationCore(                                  # boot memory coordination — WMC + EMC, embedding model loads here
+        self.mcc: MemoryCoordinationCore = MemoryCoordinationCore(          # boot memory coordination — WMC + EMC, embedding model loads here
             logger=self.get_logger(),                                       # logger for memory coordination operations
             executor=self._cognitive_executor,                              # thread pool for memory coordination operations
         )
 
         # Initialize neural thread for parallel operations
-        self._cognitive_cycle= asyncio.new_event_loop()                     # asyncio event loop for active cognition — isolated from ROS2 spin thread
-        self._gamma_rhythm = threading.Thread(                              # dedicated OS thread driving the cognitive cycle
+        self._cognitive_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # asyncio event loop for active cognition — isolated from ROS2 spin thread
+        self._gamma_rhythm: threading.Thread = threading.Thread(            # dedicated OS thread driving the cognitive cycle
             target=self._cognitive_cycle.run_forever,                       # runs indefinitely — processes coroutines as they arrive
             name="cnc-cognitive-cycle",                                     # named for thread dump debugging
             daemon=True,                                                    # dies with main process — clean shutdown
         )
         self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
 
-        # Initialize separate execution thread for memory and blocking operations
-        self._cognitive_executor = ThreadPoolExecutor(                      # thread pool for blocking operations — offloads from cognitive cycle
-            max_workers=2,                                                  # two workers — memory and inference can run concurrently
-            thread_name_prefix="cnc-thread-pool",                           # named for thread dump debugging
-        )
-
         # Initialize neural gateway for text input and generative cognitive output
-        self._text_input_stimulus = self.create_subscription(               # register ROS2 subscriber — fires on every incoming message
+        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # register ROS2 subscriber — fires on every incoming message
             String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10    # String type | topic | callback | QoS depth 10
         )
-        self._cognitive_response = self.create_publisher(String, GCE.RESPONSE_GATEWAY, 10) # ROS2 publisher — sends cognitive output to the specified topic
+        self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
+            String, GCE.RESPONSE_GATEWAY, 10                                # String type | topic | QoS depth 10
+        )
 
-        self._attention_gate = False                                        # attentional gate — True while processing a turn, drops incoming stimuli
+        # Initialize attentional gate — True while processing a turn, drops incoming stimuli
+        self._attention_gate: bool = False                                  # attentional gate — True while processing a turn, drops incoming stimuli
         asyncio.run_coroutine_threadsafe(                                   # submit GCE priming to cognitive cycle — fire and forget, doesn't block init
             self._prime_gce(), self._cognitive_cycle                        # schedules across thread boundary — safe from ROS2 main thread
         )
@@ -157,25 +164,27 @@ class CNC(Node):
         Receive an incoming text input signal and schedule cognitive processing.
         Drops the signal if CNC is already processing a turn.
         """
-        try:
-            data = json.loads(msg.data.strip())                                     # attempt to parse JSON payload — CLI sends {"text": "..."}
-            if not isinstance(data, dict) or not data.get("text"):
-                return
-            user_input = data.get("text", "").strip()                           # extract text from the dictionary
-        except json.JSONDecodeError:
-            user_input = msg.data.strip()                                       # if not valid JSON, treat as raw text
+        try:                                                                        # attempt to parse JSON payload — CLI sends {"text": "..."}
+            ui_input: dict = json.loads(msg.data.strip())                           # converts the ROS2 String message to a Python dictionary
+            if not isinstance(ui_input, dict) or not ui_input.get("text"):          # malformed or empty payload — discard
+                return                                                              # abort early
+            user_prompt: str = ui_input.get("text", "").strip()                     # extract text field — strip whitespace
+        except json.JSONDecodeError:                                                # plain string — not JSON, use as-is
+            user_prompt = msg.data.strip()                                          # strip whitespace
+        
+        if not user_prompt:                                                         # empty input after stripping — discard
+            return                                                                  # abort early
 
-        if not user_input:
-            return
+        if self._attention_gate:                                                    # cognitive cycle busy — drop incoming stimulus
+            self.get_logger().warning("⚠️  Cognitive Engine is busy — dropping input") # log the cognitive cycle congestion
+            self._emit_response({"type": "error", "content": "Cognitive Engine is still thinking…"}) # publish error notification
+            return                                                                  # abort early
 
-        if self._attention_gate:
-            self.get_logger().warning("⚠️  CNC busy — dropping input")
-            self._publish({"type": "error", "content": "GRACE is still thinking…"})
-            return
+        user_prompt_chunk: int = len(user_prompt) // CNS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
+        self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt
 
-        self.get_logger().info(f"📝 Input: {user_input[:80]}")
-        asyncio.run_coroutine_threadsafe(
-            self._handle(user_input), self._cognitive_cycle
+        asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
+            self._handle(user_prompt), self._cognitive_cycle                        # submit to gamma rhythm — never blocks ROS2 spin
         )
 
     async def _handle(self, user_input: str):
