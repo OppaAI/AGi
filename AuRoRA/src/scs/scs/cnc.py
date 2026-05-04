@@ -225,7 +225,7 @@ class CNC(Node):
             messages.append({"role": "user", "content": user_prompt})           # append current user prompt — last message before inference
 
             # 6. Stream from GCE
-            self.get_logger().info(f"Messages sent to GCE: {messages}")
+            self.get_logger().debug(f"📤 GCE messages: {messages}")             # debug — full message context before inference
             cognitive_response = await self._stream_gce(messages)               # stream GCE response — publishes chunks as they arrive
 
             # 7. Register assistant turn in memory
