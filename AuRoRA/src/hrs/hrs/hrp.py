@@ -35,8 +35,8 @@ class AGi:                                              # Amazing Grace infrastr
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
     class CNS:                                             # Central Nervous System
-        CORTICAL_CAPACITY: int  = 8192                     # [STATIC] total neural capacity of the active cognitive core
-        COGNITIVE_RESERVE: int  = 1024                     # [INTRINSIC] cortical capacity reserved for identity and cognition
+        CORTICAL_CAPACITY: int  = 16384                    # [STATIC] total neural capacity of the active cognitive core
+        COGNITIVE_RESERVE: int  = 2048                     # [INTRINSIC] cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
@@ -46,6 +46,7 @@ class AGi:                                              # Amazing Grace infrastr
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
             COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
+            CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
             TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
             PROBABILITY_THRESHOLD : float = 0.92                                  # [INTRINSIC] cumulative probability cutoff for token sampling
             CANDIDATE_THRESHOLD   : int   = 50                                    # [INTRINSIC] maximum candidate tokens considered per step
@@ -117,12 +118,12 @@ Current date: {date}
             ENCODING_PRIME_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU prime
             ENCODING_PRIME_KEY_LIMIT: int = 256         # [INTRINSIC] maximum characters hashed per prime key in encoding engine
             
-            EPISODE_CONTENT_LIMIT: int  = 6000          # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
+            EPISODE_CONTENT_LIMIT: int  = 800           # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
             
             THETA_INTERVAL: float       = 2.0           # [INTRINSIC] seconds — periodic theta rhythm fallback for continuous sensor input
             THETA_BATCH_LIMIT: int      = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
             
-            RECALL_RESERVE: int         = 1024          # [INTRINSIC] cortical capacity reserved for episodic recall
+            RECALL_RESERVE: int         = 2048          # [INTRINSIC] cortical capacity reserved for episodic recall
             RECALL_SURFACE_LIMIT: int   = 5             # [INTRINSIC] maximum number of episodes surfaced per turn (final RRF output)
             RECALL_POOL: int            = 10            # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
             RECALL_DEPTH: int           = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED] search depth passed to KNN and FTS5 (number of candidates per path)
