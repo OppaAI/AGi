@@ -35,10 +35,10 @@ Topics:
     Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String) — streamed cognitive response
 
 Response format (JSON on GCE.RESPONSE_GATEWAY):
-    {"type": "start",  "content": "<first chunk>"}
-    {"type": "delta",  "content": "<delta>"}
-    {"type": "done",   "content": "<full response>"}
-    {"type": "error",  "content": "<error message>"}
+    {"type": "start", "content": "<first fragment>"}
+    {"type": "delta", "content": "<fragment>"}
+    {"type": "done",  "content": "<full cognitive response>"}
+    {"type": "error", "content": "<error message>"}
 
 Terminology:
     Gamma Rhythm    — asyncio loop coordinating active cognition across memory and inference
@@ -176,7 +176,7 @@ class CNC(Node):
 
         if self._attention_gate:                                                    # cognitive cycle busy — drop incoming stimulus
             self.get_logger().warning("⚠️  Cognitive Engine is busy — dropping input") # log the cognitive cycle congestion
-            self._emit_response({"type": "error", "content": "Cognitive Engine is still thinking…"}) # publish error notification
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is still thinking…"}) # publish error notification
             return                                                                  # abort early
 
         user_prompt_chunk: int = len(user_prompt) // CNS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
@@ -237,7 +237,7 @@ class CNC(Node):
 
         except Exception as e:                                                  # unhandled failure in cognitive pipeline
             self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
-            self._emit_response({"type": "error", "content": str(e)})           # surface error to caller
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)}) # surface error to caller
 
         finally:                                                                # always runs — resets attention gate regardless of success or failure
             self._attention_gate = False                                        # reopen attentional gate — ready for next stimulus
@@ -245,7 +245,7 @@ class CNC(Node):
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
         Generate and emit a cognitive response through the Generative Cognitive Engine.
-        Response is streamed as chunks to the cognitive output gateway as it arrives.
+        Response is streamed as fragments to the cognitive output gateway as it arrives.
 
         Args:
             messages (list[dict]): Full memory context and current user prompt for inference.
@@ -263,70 +263,70 @@ class CNC(Node):
             "repetition_penalty" : GCE.PERSEVERATION_DAMPING,               # suppresses repetition
             "frequency_penalty"  : GCE.HABITUATION_DAMPING,                 # suppresses frequent tokens
             "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
-            "stream"             : True,                                    # enable SSE streaming — chunks published as they arrive
+            "stream"             : True,                                    # enable SSE streaming — fragments published as they arrive
         }
         if GCE.KEEP_ALIVE is not None:                                      # Ollama only — vLLM keeps models loaded permanently
             inference_packet["keep_alive"] = GCE.KEEP_ALIVE                 # pin model in VRAM for session duration
 
-        cognitive_response: str = ""                                        # accumulates response chunks into full response
-        leading_chunk: bool = True                                          # tracks first chunk — triggers "start" event type
+        cognitive_response: str = ""                                        # accumulates response fragments into full response
+        leading_fragment: bool = True                                       # tracks first fragment — triggers start event type
 
-        try:                                                                # attempt to forward request to GCE and stream response chunks
+        try:                                                                # attempt to forward request to GCE and stream response fragments
             async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
                 "POST",                                                     # POST request method for SSE streaming
                 "/v1/chat/completions",                                     # SSE endpoint — matches OpenAI-compatible API
                 json=inference_packet,                                      # JSON body with inference parameters
-            ) as resp:                                                      # asynchronous response stream
+            ) as response:                                                  # asynchronous response stream
 
-                if resp.status_code != 200:                                 # non-200 — GCE rejected the request
-                    anomaly = f"GCE HTTP {resp.status_code}"                # build error message with status code
+                if response.status_code != 200:                             # non-200 — GCE rejected the request
+                    anomaly: str = f"GCE HTTP {response.status_code}"       # build error message with status code
                     self.get_logger().error(f"❌ {anomaly}")                # log failure with reason
-                    self._emit_response({"type": "error", "content": anomaly})  # surface HTTP error to caller
+                    self._emit_response({"type": GCE.STREAM_ANOMALY, "content": anomaly})  # surface HTTP error to caller
                     return ""
 
-                async for line in resp.aiter_lines():                       # iterate SSE stream line by line
+                async for line in response.aiter_lines():                   # iterate SSE stream line by line
                     if not line or not line.startswith("data:"):            # skip empty lines and non-data SSE events
                         continue
 
-                    data_str = line[len("data:"):].strip()                  # strip "data:" prefix — extract JSON payload
-                    if data_str == "[DONE]":                                # SSE stream complete signal
+                    fragment_data: str = line[len("data:"):].strip()        # strip "data:" prefix — extract JSON payload
+                    if fragment_data == "[DONE]":                           # SSE stream complete signal
                         break
 
-                    try:                                                    # attempt to parse SSE chunk
-                        chunk = json.loads(data_str)                        # parse SSE chunk — each chunk is a JSON object
-                    except json.JSONDecodeError:                            # malformed JSON — skip this chunk
+                    try:                                                    # attempt to parse SSE fragment
+                        fragment: dict = json.loads(fragment_data)          # parse SSE fragment — each fragment is a JSON object
+                    except json.JSONDecodeError:                            # malformed JSON — skip this fragment
                         continue                                            # skip and continue stream
 
-                    delta = (                                               # extract delta from SSE chunk
-                        chunk.get("choices", [{}])[0]                       # first choice in the choices list
-                        .get("delta", {})                                   # token delta from chunk
-                        .get("content", "")                                 # text content — empty string if no content in this chunk
+                    fragment_content: str = (                               # extract delta from SSE fragment
+                        fragment.get("choices", [{}])[0]                    # first choice in the choices list
+                        .get(GCE.STREAM_PROPAGATING, {})                    # token "delta" from fragment
+                        .get("content", "")                                 # text content — empty string if no content in this fragment
                     )
-                    if not delta:                                           # no content in this chunk — skip
+                    if not fragment_content:                                # no content in this fragment — skip
                         continue                                            # skip and continue stream
 
-                    cognitive_response += delta                             # accumulate chunk into full response
+                    cognitive_response += fragment_content                  # accumulate fragment into full response
 
-                    if leading_chunk:                                       # first chunk — signal stream start to caller
-                        self._emit_response({"type": "start", "content": delta})  # publish start event
-                        leading_chunk = False                               # clear flag after first chunk
-                    else:                                                   # subsequent chunks — signal token arrival
-                        self._emit_response({"type": "delta", "content": delta})  # subsequent chunks — stream delta to caller
+                    if leading_fragment:                                    # first fragment — signal stream start to caller
+                        self._emit_response({"type": GCE.STREAM_LEADING, "content": fragement_content})  # publish "start" event
+                        leading_fragment = False                            # clear flag after first fragment
+                    else:                                                   # subsequent fragments — signal token arrival
+                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragement_content})  # subsequent fragments — stream "delta" to caller
 
             if cognitive_response:                                                            # response assembled — signal completion
-                self._emit_response({"type": "done", "content": cognitive_response})          # publish done event
+                self._emit_response({"type": GCE.STREAM_TRAILING, "content": cognitive_response}) # publish "done" event
                 self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")       # log completion with response length
-            else:                                                                             # no response assembled — publish error event
-                self._emit_response({"type": "error", "content": "Empty response from GCE"})  # GCE returned nothing
+            else:                                                                             # no response assembled — publish "error" event
+                self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE"})  # GCE returned nothing
 
         except httpx.TimeoutException:                                      # GCE exceeded timeout — model may still be loading
             err = "GCE timeout — model may still be loading"                # timeout error message
             self.get_logger().error(f"❌ {err}")                            # log timeout error with reason
-            self._emit_response({"type": "error", "content": err})          # publish timeout error to caller
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": err}) # publish timeout "error" to caller
 
-        except Exception as exc:                                            # unhandled stream errors
-            self.get_logger().error(f"❌ Stream error: {exc}")              # log unexpected error
-            self._emit_response({"type": "error", "content": str(exc)})     # publish error to caller
+        except Exception as e:                                               # unhandled stream errors
+            self.get_logger().error(f"❌ Stream error: {e}")                # log unexpected error
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)})     # publish "error" to caller
 
         return cognitive_response                                           # return accumulated response
 
@@ -335,10 +335,10 @@ class CNC(Node):
         Prime GCE — activate the cognitive engine and pin it for the session.
         Fire and forget — called once at boot, non-blocking.
         """
-        try:                                                                # Attempt to preload GCE model into memory
-            inference_packet = {                                           # minimal inference request — triggers model load into VRAM
+        try:                                                                # attempt to preload GCE model into memory
+            inference_packet: dict = {                                      # minimal inference request — triggers model load into VRAM
                 "model"    : GCE.COGNITIVE_ENGINE,                          # GCE model to prime
-                "messages" : [{"role": "user", "content": "hi"}],           # inimal prompt — just enough to trigger model load
+                "messages" : [{"role": "user", "content": "hi"}],           # minimal prompt — just enough to trigger model load
                 "max_tokens": 1,                                            # single token response — minimizes priming cost
                 "stream"   : False,                                         # no streaming needed for priming
             }
@@ -349,19 +349,19 @@ class CNC(Node):
         except Exception as e:
             self.get_logger().warning(f"⚠️ GCE priming failed: {e}")         # non-fatal — model loads on first real request
             
-    def _emit_response(self, response_packet: dict):
+    def _emit_response(self, response_packet: dict) -> None:
         """
-        Emit a cognitive response chunk to the ROS2 output topic.
+        Emit a cognitive response fragment to the ROS2 output topic.
     
         Args:
             response_packet (dict): Response payload — type and content fields.
         """
         try:                                                                        
-            msg = String()                                                        # create ROS2 String message
-            msg.data = json.dumps(response_packet)                                # serialize payload to JSON string
-            self._cognitive_response.publish(msg)                                 # publish to cognitive response topic
-        except Exception as exc:                                                  
-            self.get_logger().error(f"❌ Publish error: {exc}")                   # log publish failure — # non-fatal — publishing failure must not crash the cognitive cycle
+            raw_signal: String = String()                                         # create ROS2 String message
+            raw_signal.data = json.dumps(response_packet)                         # serialize payload to JSON string
+            self._cognitive_response.publish(raw_signal)                          # publish to cognitive response topic
+        except Exception as e:                                                  
+            self.get_logger().error(f"❌ Publish error: {e}")                     # non-fatal — publishing failure must not crash the cognitive cycle
 
     def destroy_node(self):
         """
@@ -398,8 +398,6 @@ def main(args=None):
         executor.shutdown()                                      # stop executor
         node.destroy_node()                                      # clean shutdown sequence
         rclpy.shutdown()                                         # release ROS2 context
-
-
 
 if __name__ == "__main__":
     main()
