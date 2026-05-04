@@ -35,7 +35,7 @@ class AGi:                                              # Amazing Grace infrastr
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
     class CNS:                                             # Central Nervous System
-        CORTICAL_CAPACITY: int  = 16384                    # [STATIC] total neural capacity of the active cognitive core
+        CORTICAL_CAPACITY: int  = 16384                    # [INTRINSIC] total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int  = 2048                     # [INTRINSIC] cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
@@ -112,7 +112,7 @@ Current date: {date}
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5"  # [STATIC] encoding engine for episodic memory
             ENCODING_CUE_PREFIX: str    = "Represent this sentence for searching relevant passages  : " # [STATIC] prompt prefix for encoding cues
             ENCODING_ENGRAM_PREFIX: str = ""            # [STATIC] prompt prefix for engrams (no prefix for storage)
-            ENCODING_CYCLE_TIMEOUT: float = 30.0        # [INTRINSIC] time period for theta rhythm to wake up (Currently not used, triggered only with new PMT)
+            ENCODING_CYCLE_TIMEOUT: float = 30.0        # [INTRINSIC] max wait for encoding thread clean exit on shutdown
             ENCODING_DIM: int             = 768         # [STATIC]    dimensionality of the encoding vectors from the encoding engine
                                                         # TODO: for future use when implementing GPU-accelerated similarity search with FAISS, Annoy, etc.
             ENCODING_PRIME_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU prime
