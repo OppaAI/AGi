@@ -124,7 +124,7 @@ Current date: {date}
             
             RECALL_RESERVE: int         = 1024          # [INTRINSIC] cortical capacity reserved for episodic recall
             RECALL_SURFACE_LIMIT: int   = 5             # [INTRINSIC] maximum number of episodes surfaced per turn (final RRF output)
-            RECALL_POOL: int            = 2             # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
+            RECALL_POOL: int            = 10            # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
             RECALL_DEPTH: int           = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED] search depth passed to KNN and FTS5 (number of candidates per path)
             RECALL_TIMEOUT: float       = 2.0           # [INTRINSIC] timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                         # covers encode_query (~500-900ms) + KNN search
