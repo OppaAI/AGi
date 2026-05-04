@@ -44,7 +44,7 @@ class AGi:                                              # Amazing Grace infrastr
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "hf.co/mradermacher/Ministral-3-14B-abliterated-GGUF" # [EXTRINSIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "fluffy/l3-8b-stheno-v3.2:q8_0"       # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
             TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
             PROBABILITY_THRESHOLD : float = 0.92                                  # [INTRINSIC] cumulative probability cutoff for token sampling
