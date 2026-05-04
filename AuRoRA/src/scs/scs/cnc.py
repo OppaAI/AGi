@@ -363,17 +363,17 @@ class CNC(Node):
         except Exception as e:                                                  
             self.get_logger().error(f"❌ Publish error: {e}")                     # non-fatal — publishing failure must not crash the cognitive cycle
 
-    def destroy_node(self):
+    def destroy_node(self) -> None:
         """
         Gracefully shut down CNC — close all cognitive subsystems in reverse boot order.
         """
-        self.get_logger().info("🛑 CNC shutting down…")
+        self.get_logger().info("🛑 CNC shutting down…")                            # announce shutdown sequence — stdout and /rosout
         self.mcc.close()                                                            # close memory coordination — EMC encoding cycle stops
 
         future = asyncio.run_coroutine_threadsafe(                                  # schedule HTTP client close on cognitive cycle
             self._gce_gateway.aclose(), self._cognitive_cycle                       # async close — releases TCP connections
         )
-        try:
+        try:                                                                        # attempt to 
             future.result(timeout=3.0)                                              # wait up to 3 seconds for clean close
         except Exception:
             pass                                                                    # ignore — process is ending, clean close is best-effort
@@ -394,7 +394,7 @@ def main(args=None):
         executor.spin()                                          # block until shutdown — processes ROS2 callbacks
     except KeyboardInterrupt:                                    # user press Ctrl-C interrupt
         node.get_logger().info("👋 Shutdown requested")          # log the graceful shutdown request
-    finally:                                                     # 
+    finally:
         executor.shutdown()                                      # stop executor
         node.destroy_node()                                      # clean shutdown sequence
         rclpy.shutdown()                                         # release ROS2 context
