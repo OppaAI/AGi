@@ -22,10 +22,14 @@ PINK   = "\033[95m"
 GREY   = "\033[90m"
 RED    = "\033[91m"
 
+STREAM_LEADING    = GCE.STREAM_LEADING
+STREAM_PROPAGATING = GCE.STREAM_PROPAGATING
+STREAM_TRAILING   = GCE.STREAM_TRAILING
+STREAM_ANOMALY    = GCE.STREAM_ANOMALY
 TOPIC_INPUT    = CNS.TEXT_INPUT_GATEWAY
 TOPIC_RESPONSE = GCE.RESPONSE_GATEWAY
 
-# If no "done" arrives within this many seconds, auto-unlock the prompt.
+# If no trailing arrives within this many seconds, auto-unlock the prompt.
 STREAM_TIMEOUT_SEC = 15.0
 
 
@@ -83,7 +87,7 @@ class GraceCLI(Node):
         content  = data.get("content", "")
 
         with self._print_lock:
-            if msg_type == "start":
+            if msg_type == STREAM_LEADING:
                 self._cancel_timeout()
                 self._streaming    = True
                 self._turn_start   = time.monotonic()
@@ -97,11 +101,11 @@ class GraceCLI(Node):
                 print(f"\n{BOLD}{PINK}GRACE{RESET}{PINK} 🌸  {RESET}", end="", flush=True)
                 print(content, end="", flush=True)
 
-            elif msg_type == "delta":
+            elif msg_type == STREAM_PROPAGATING:
                 self._token_count += max(1, len(content.split()))
                 print(content, end="", flush=True)
 
-            elif msg_type == "done":
+            elif msg_type == STREAM_TRAILING:
                 self._cancel_timeout()
                 elapsed = (
                     time.monotonic() - self._turn_start
