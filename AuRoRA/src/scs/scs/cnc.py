@@ -356,7 +356,7 @@ class CNC(Node):
         Args:
             response_packet (dict): Response payload — type and content fields.
         """
-        try:                                                                        
+        try:                                                                      # attempt to serialize and publish response packet
             raw_signal: String = String()                                         # create ROS2 String message
             raw_signal.data = json.dumps(response_packet)                         # serialize payload to JSON string
             self._cognitive_response.publish(raw_signal)                          # publish to cognitive response topic
@@ -394,7 +394,7 @@ def main(args=None):
         executor.spin()                                          # block until shutdown — processes ROS2 callbacks
     except KeyboardInterrupt:                                    # user press Ctrl-C interrupt
         node.get_logger().info("👋 Shutdown requested")          # log the graceful shutdown request
-    finally:
+    finally:                                                     # always runs — ensure clean shutdown regardless of interrupt
         executor.shutdown()                                      # stop executor
         node.destroy_node()                                      # clean shutdown sequence
         rclpy.shutdown()                                         # release ROS2 context
