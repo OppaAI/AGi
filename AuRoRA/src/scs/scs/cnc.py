@@ -337,18 +337,18 @@ class CNC(Node):
         Fire and forget — called once at boot, non-blocking.
         """
         try:                                                                # Attempt to preload GCE model into memory
-            inference_request = {                                           # Set up minmial message to inference the model
+            inference_request = {                                           # minimal inference request — triggers model load into VRAM
                 "model"    : GCE.COGNITIVE_ENGINE,                          # GCE model to prime
-                "messages" : [{"role": "user", "content": "hi"}],           # minimal prompt — just enough to trigger model load
+                "messages" : [{"role": "user", "content": "hi"}],           # inimal prompt — just enough to trigger model load
                 "max_tokens": 1,                                            # single token response — minimizes priming cost
                 "stream"   : False,                                         # no streaming needed for priming
             }
             if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
                 inference_request["keep_alive"] = GCE.KEEP_ALIVE            # pin model in VRAM for session duration
-            await self._gce_gateway.post("/v1/chat/completions", json=inference_request)  # pass the priming message to inference the model
-            self.get_logger().info("✅ GCE primed succesfully — activated into memory")  # log the successful activation of GCE
+            await self._gce_gateway.post("/v1/chat/completions", json=inference_request)  # submit priming request to GCE
+            self.get_logger().info("✅ GCE primed successfully — activated into memory")  # log the successful activation of GCE
         except Exception as e:
-            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
+            self.get_logger().warning(f"⚠️ GCE priming failed: {e}")         # non-fatal — model loads on first real request
             
     def _emit_response(self, inference_request: dict[str, Any]):
         """
@@ -357,12 +357,12 @@ class CNC(Node):
         Args:
             inference_request (dict): Response payload — type and content fields.
         """
-        try:
-            msg = String()
-            msg.data = json.dumps(inference_request)
-            self._cognitive_response.publish(msg)
-        except Exception as exc:
-            self.get_logger().error(f"❌ Publish error: {exc}")
+        try:                                                                        
+            msg = String()                                                        # create ROS2 String message
+            msg.data = json.dumps(inference_request)                              # serialize payload to JSON string
+            self._cognitive_response.publish(msg)                                 # publish to cognitive response topic
+        except Exception as exc:                                                  
+            self.get_logger().error(f"❌ Publish error: {exc}")                   # log publish failure — non-fatal
 
     def destroy_node(self):
         """
