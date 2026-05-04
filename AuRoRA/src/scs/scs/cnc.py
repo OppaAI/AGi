@@ -184,62 +184,64 @@ class CNC(Node):
         self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt
 
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
-            self._handle(user_prompt), self._cognitive_cycle                        # submit to gamma rhythm — never blocks ROS2 spin
+            self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
         )
 
-    async def _handle(self, user_input: str):
+    async def _process_stimulus(self, user_prompt: str):
         """
-        Full async pipeline for one conversation turn:
-            1. Register user turn in memory
+        Process one full stimulus-response cycle:
+            1. Register user prompt in memory
             2. Assemble memory context (WMC + EMC)
-            3. Stream GCE response
-            4. Register assistant turn in memory
+            3. Build system prompt with episodic context
+            4. Stream inference through GCE
+            5. Register AI response in memory
+            6. Report memory stats
         """
-        self._attention_gate = True
-        full_response = ""
+        self._attention_gate = True                                             # close attentional gate — drop incoming stimuli during processing
+        cognitive_response: str = ""                                            # accumulates GCE response chunks — empty until inference completes
 
-        try:
+        try:                                                                    # wrap full pipeline — any failure publishes error and resets attention gate
             # 1. Register user turn in memory
-            await self.mcc.register_memory("user", user_input)
+            await self.mcc.register_memory("user", user_prompt)                 # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
 
             # 2. Assemble memory context
-            memory_context = await self.mcc.assemble_memory_context(user_input)
+            memory_context: list[dict] = await self.mcc.assemble_memory_context(user_prompt)  # assemble full memory context — EMC episodes + WMC PMTs
 
             # 3. Separate system and conversation parts
-            memory_system = [m for m in memory_context if m["role"] == "system"]
-            memory_convo  = [m for m in memory_context if m["role"] != "system"]
+            long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]    # extract system blocks
+            short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"]  # extract conversation turns
 
             # 4. Assemble system prompt with date
-            system_prompt = GCE.SYSTEM_PROMPT.format(
-                date=datetime.now().strftime("%Y-%m-%d")
+            system_prompt: str = GCE.SYSTEM_PROMPT.format(                      # inject current date into system prompt
+                date=datetime.now().strftime("%Y-%m-%d")                        # ISO date — Grace knows what day it is
             )
-            if memory_system:
-                system_content = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in memory_system)
+            if long_term_memory:                                                # episodic context available — append to system prompt
+                system_content: str = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
             else:
-                system_content = system_prompt
+                system_content: str = system_prompt                             # no episodic context — personality prompt only
 
             # 5. Build final message list
-            messages = [{"role": "system", "content": system_content}]
-            messages.extend(memory_convo)
-            messages.append({"role": "user", "content": user_input})
+            messages: list[dict] = [{"role": "system", "content": system_content}]  # system prompt — always first
+            messages.extend(short_term_memory)                                  # inject WMC PMTs — chronological conversation history
+            messages.append({"role": "user", "content": user_prompt})           # append current user prompt — last message before inference
 
             # 6. Stream from GCE
             self.get_logger().info(f"Messages sent to GCE: {messages}")
-            full_response = await self._stream_gce(messages)
+            cognitive_response = await self._stream_gce(messages)               # stream GCE response — publishes chunks as they arrive
 
             # 7. Register assistant turn in memory
-            if full_response:
-                await self.mcc.register_memory("assistant", full_response)
+            if cognitive_response:                                              # only register non-empty responses — empty means GCE failed
+                await self.mcc.register_memory("assistant", cognitive_response) # bind assistant response into WMC — completes the PMT pair
 
             # 8. Report memory stats
-            self.mcc.report_memory_stats()
+            self.mcc.report_memory_stats()                                      # log WMC and EMC health after every turn
 
-        except Exception as e:
-            self.get_logger().error(f"❌ CNC handle error: {e}")
-            self._publish({"type": "error", "content": str(e)})
+        except Exception as e:                                                  # unhandled failure in cognitive pipeline
+            self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
+            self._emit_response({"type": "error", "content": str(e)})           # surface error to caller
 
-        finally:
-            self._attention_gate = False
+        finally:                                                                # always runs — resets attention gate regardless of success or failure
+            self._attention_gate = False                                        # reopen attentional gate — ready for next stimulus
 
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
@@ -262,7 +264,7 @@ class CNC(Node):
             "stream"             : True,
         }
 
-        full_response = ""
+        cognitive_response = ""
         is_first      = True
 
         try:
@@ -275,7 +277,7 @@ class CNC(Node):
                 if resp.status_code != 200:
                     err = f"GCE HTTP {resp.status_code}"
                     self.get_logger().error(f"❌ {err}")
-                    self._publish({"type": "error", "content": err})
+                    self._emit_response({"type": "error", "content": err})
                     return ""
 
                 async for line in resp.aiter_lines():
@@ -299,37 +301,37 @@ class CNC(Node):
                     if not delta:
                         continue
 
-                    full_response += delta
+                    cognitive_response += delta
 
                     if is_first:
-                        self._publish({"type": "start", "content": delta})
+                        self._emit_response({"type": "start", "content": delta})
                         is_first = False
                     else:
-                        self._publish({"type": "delta", "content": delta})
+                        self._emit_response({"type": "delta", "content": delta})
 
-            if full_response:
-                self._publish({"type": "done", "content": full_response})
-                self.get_logger().info(f"✅ Response: {len(full_response)} chars")
+            if cognitive_response:
+                self._emit_response({"type": "done", "content": cognitive_response})
+                self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")
             else:
-                self._publish({"type": "error", "content": "Empty response from GCE"})
+                self._emit_response({"type": "error", "content": "Empty response from GCE"})
 
         except httpx.TimeoutException:
             err = "GCE timeout — model may still be loading"
             self.get_logger().error(f"❌ {err}")
-            self._publish({"type": "error", "content": err})
+            self._emit_response({"type": "error", "content": err})
 
         except Exception as exc:
             self.get_logger().error(f"❌ Stream error: {exc}")
-            self._publish({"type": "error", "content": str(exc)})
+            self._emit_response({"type": "error", "content": str(exc)})
 
-        return full_response
+        return cognitive_response
 
-    def _publish(self, payload: dict):
+    def _emit_response(self, payload: dict):
         """Publish a JSON payload to the cognitive response topic."""
         try:
             msg = String()
             msg.data = json.dumps(payload)
-            self._pub.publish(msg)
+            self._cognitive_response.publish(msg)
         except Exception as exc:
             self.get_logger().error(f"❌ Publish error: {exc}")
 
