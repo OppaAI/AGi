@@ -269,7 +269,7 @@ class CNC(Node):
             inference_packet["keep_alive"] = GCE.KEEP_ALIVE                 # pin model in VRAM for session duration
 
         cognitive_response: str = ""                                        # accumulates response chunks into full response
-        is_first: bool = True                                               # tracks first chunk — triggers "start" event type
+        leading_chunk: bool = True                                          # tracks first chunk — triggers "start" event type
 
         try:                                                                # attempt to forward request to GCE and stream response chunks
             async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
@@ -307,9 +307,9 @@ class CNC(Node):
 
                     cognitive_response += delta                             # accumulate chunk into full response
 
-                    if is_first:                                            # first chunk — signal stream start to caller
+                    if leading_chunk:                                       # first chunk — signal stream start to caller
                         self._emit_response({"type": "start", "content": delta})  # publish start event
-                        is_first = False                                    # clear flag after first chunk
+                        leading_chunk = False                               # clear flag after first chunk
                     else:                                                   # subsequent chunks — signal token arrival
                         self._emit_response({"type": "delta", "content": delta})  # subsequent chunks — stream delta to caller
 
