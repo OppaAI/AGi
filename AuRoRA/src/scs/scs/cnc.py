@@ -165,7 +165,7 @@ class CNC(Node):
         Drops the signal if CNC is already processing a turn.
         """
         try:                                                                        # attempt to parse JSON payload — CLI sends {"text": "..."}
-            ui_input: dict = json.loads(msg.data.strip())                           # converts the ROS2 String message to a Python dictionary
+            ui_input: dict[str, Any] = json.loads(msg.data.strip())                 # converts the ROS2 String message to a Python dictionary
             if not isinstance(ui_input, dict) or not ui_input.get("text"):          # malformed or empty payload — discard
                 return                                                              # abort early
             user_prompt: str = ui_input.get("text", "").strip()                     # extract text field — strip whitespace
@@ -245,92 +245,97 @@ class CNC(Node):
 
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
-        Stream GCE response via OpenAI-compatible API.
-        Publishes chunks to ROS2 topic as they arrive.
+        Generate and emit a cognitive response through the Generative Cognitive Engine.
+        Response is streamed as chunks to the cognitive output gateway as it arrives.
+
+        Args:
+            messages (list[dict]): Full memory context and current user prompt for inference.
 
         Returns:
-            str: Full concatenated response string.
+            str: Full cognitive response for memory registration.
         """
-        payload = {
-            "model"              : GCE.COGNITIVE_ENGINE,
-            "messages"           : messages,
-            "max_tokens"         : GCE.RESPONSE_DEPTH,
-            "temperature"        : GCE.TEMPERATURE,
-            "top_p"              : GCE.PROBABILITY_THRESHOLD,
-            "top_k"              : GCE.CANDIDATE_THRESHOLD,
-            "repetition_penalty" : GCE.PERSEVERATION_DAMPING,
-            "frequency_penalty"  : GCE.HABITUATION_DAMPING,
-            "presence_penalty"   : GCE.NOVELTY_BIAS,
-            "stream"             : True,
+        inference_request: dict[str, Any] = {
+            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRP 
+            "messages"           : messages,                                # full memory context + current user prompt
+            "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
+            "temperature"        : GCE.TEMPERATURE,                         # response creativity
+            "top_p"              : GCE.PROBABILITY_THRESHOLD,               # cumulative probability cutoff
+            "top_k"              : GCE.CANDIDATE_THRESHOLD,                 # maximum candidate tokens per step
+            "repetition_penalty" : GCE.PERSEVERATION_DAMPING,               # suppresses repetition
+            "frequency_penalty"  : GCE.HABITUATION_DAMPING,                 # suppresses frequent tokens
+            "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
+            "stream"             : True,                                    # enable SSE streaming — chunks published as they arrive
         }
+        if GCE.KEEP_ALIVE is not None:                                      # Ollama only — vLLM keeps models loaded permanently
+            inference_request["keep_alive"] = GCE.KEEP_ALIVE                # pin model in VRAM for session duration
 
-        cognitive_response = ""
-        is_first      = True
+        cognitive_response: str = ""                                        # accumulates response chunks into full response
+        is_first: bool = True                                               # tracks first chunk — triggers "start" event type
 
-        try:
-            async with self._gce_gateway.stream(
-                "POST",
-                "/v1/chat/completions",
-                json=payload,
-            ) as resp:
+        try:                                                                # attempt to forward request to GCE and stream response chunks
+            async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
+                "POST",                                                     # POST request method for SSE streaming
+                "/v1/chat/completions",                                     # SSE endpoint — matches OpenAI-compatible API
+                json=inference_request,                                     # JSON body with inference parameters
+            ) as resp:                                                      # asynchronous response stream
 
-                if resp.status_code != 200:
-                    err = f"GCE HTTP {resp.status_code}"
-                    self.get_logger().error(f"❌ {err}")
-                    self._emit_response({"type": "error", "content": err})
+                if resp.status_code != 200:                                 # non-200 — GCE rejected the request
+                    anomaly = f"GCE HTTP {resp.status_code}"                # build error message with status code
+                    self.get_logger().error(f"❌ {anomaly}")                # log failure with reason
+                    self._emit_response({"type": "error", "content": anomaly})  # surface HTTP error to caller
                     return ""
 
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
+                async for line in resp.aiter_lines():                       # iterate SSE stream line by line
+                    if not line or not line.startswith("data:"):            # skip empty lines and non-data SSE events
                         continue
 
-                    data_str = line[len("data:"):].strip()
-                    if data_str == "[DONE]":
+                    data_str = line[len("data:"):].strip()                  # strip "data:" prefix — extract JSON payload
+                    if data_str == "[DONE]":                                # SSE stream complete signal
                         break
 
-                    try:
-                        chunk = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        continue
+                    try:                                                    # attempt to parse SSE chunk
+                        chunk = json.loads(data_str)                        # parse SSE chunk — each chunk is a JSON object
+                    except json.JSONDecodeError:                            # malformed JSON — skip this chunk
+                        continue                                            # skip and continue stream
 
-                    delta = (
-                        chunk.get("choices", [{}])[0]
-                        .get("delta", {})
-                        .get("content", "")
+                    delta = (                                               # extract delta from SSE chunk
+                        chunk.get("choices", [{}])[0]                       # first choice in the choices list
+                        .get("delta", {})                                   # token delta from chunk
+                        .get("content", "")                                 # text content — empty string if no content in this chunk
                     )
-                    if not delta:
-                        continue
+                    if not delta:                                           # no content in this chunk — skip
+                        continue                                            # skip and continue stream
 
-                    cognitive_response += delta
+                    cognitive_response += delta                             # accumulate chunk into full response
 
-                    if is_first:
-                        self._emit_response({"type": "start", "content": delta})
-                        is_first = False
-                    else:
-                        self._emit_response({"type": "delta", "content": delta})
+                    if is_first:                                            # first chunk — signal stream start to caller
+                        self._emit_response({"type": "start", "content": delta})  # publish start event
+                        is_first = False                                    # clear flag after first chunk
+                    else:                                                   # subsequent chunks — signal token arrival
+                        self._emit_response({"type": "delta", "content": delta})  # subsequent chunks — stream delta to caller
 
-            if cognitive_response:
-                self._emit_response({"type": "done", "content": cognitive_response})
-                self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")
-            else:
-                self._emit_response({"type": "error", "content": "Empty response from GCE"})
+            if cognitive_response:                                                            # response assembled — signal completion
+                self._emit_response({"type": "done", "content": cognitive_response})          # publish done event
+                self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")       # log completion with response length
+            else:                                                                             # no response assembled — publish error event
+                self._emit_response({"type": "error", "content": "Empty response from GCE"})  # GCE returned nothing
 
-        except httpx.TimeoutException:
-            err = "GCE timeout — model may still be loading"
-            self.get_logger().error(f"❌ {err}")
-            self._emit_response({"type": "error", "content": err})
+        except httpx.TimeoutException:                                      # GCE exceeded timeout — model may still be loading
+            err = "GCE timeout — model may still be loading"                # timeout error message
+            self.get_logger().error(f"❌ {err}")                            # log timeout error with reason
+            self._emit_response({"type": "error", "content": err})          # publish timeout error to caller
 
-        except Exception as exc:
-            self.get_logger().error(f"❌ Stream error: {exc}")
-            self._emit_response({"type": "error", "content": str(exc)})
+        except Exception as exc:                                            # unhandled stream errors
+            self.get_logger().error(f"❌ Stream error: {exc}")              # log unexpected error
+            self._emit_response({"type": "error", "content": str(exc)})     # publish error to caller
 
-        return cognitive_response
+        return cognitive_response                                           # return accumulated response
 
-    def _emit_response(self, payload: dict):
-        """Publish a JSON payload to the cognitive response topic."""
+    def _emit_response(self, inference_request: dict[str, Any]):
+        """Publish a JSON inference_request to the cognitive response topic."""
         try:
             msg = String()
-            msg.data = json.dumps(payload)
+            msg.data = json.dumps(inference_request)
             self._cognitive_response.publish(msg)
         except Exception as exc:
             self.get_logger().error(f"❌ Publish error: {exc}")
@@ -358,14 +363,14 @@ class CNC(Node):
     async def _prime_gce(self) -> None:
         """Warm up GCE — load model into VRAM and pin it for the session."""
         try:
-            payload = {
+            inference_request = {
                 "model"    : GCE.COGNITIVE_ENGINE,
                 "messages" : [{"role": "user", "content": "hi"}],
                 "max_tokens": 1,                                            # minimal response — just enough to trigger model load
                 "stream"   : False,
             }
             if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
-                payload["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
+                inference_request["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
             await self._gce_gateway.post("/v1/chat/completions", json=payload)
             self.get_logger().info("✅ GCE warmed up — model pinned in VRAM")
         except Exception as e:
