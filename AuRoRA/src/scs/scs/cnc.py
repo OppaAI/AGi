@@ -31,10 +31,10 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: CNS.NEURAL_TEXT_INPUT   (std_msgs/String) — incoming text input signal
-    Pub: GCE.COGNITIVE_RESPONSE  (std_msgs/String) — streamed cognitive response
+    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String) — incoming text input signal
+    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String) — streamed cognitive response
 
-Response format (JSON on GCE.COGNITIVE_RESPONSE):
+Response format (JSON on GCE.RESPONSE_GATEWAY):
     {"type": "start",  "content": "<first chunk>"}
     {"type": "delta",  "content": "<delta>"}
     {"type": "done",   "content": "<full response>"}
@@ -134,58 +134,41 @@ class CNC(Node):
         )
 
         # Initialize neural gateway for text input and generative cognitive output
-        self._text_input_stimulus = self.create_subscription(                                # register ROS2 subscriber — fires on every incoming message
-            String, CNS.NEURAL_TEXT_INPUT, self._receive_text_input, 10                      # String type | topic | callback | QoS depth 10
+        self._text_input_stimulus = self.create_subscription(               # register ROS2 subscriber — fires on every incoming message
+            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10    # String type | topic | callback | QoS depth 10
         )
-        self._cognitive_response = self.create_publisher(String, GCE.COGNITIVE_RESPONSE, 10) # ROS2 publisher — sends cognitive output to the specified topic
+        self._cognitive_response = self.create_publisher(String, GCE.RESPONSE_GATEWAY, 10) # ROS2 publisher — sends cognitive output to the specified topic
 
-        self._busy = False
-
-        asyncio.run_coroutine_threadsafe(
-            self._warmup_gce(), self._cognitive_cycle                  # schedule warmup — doesn't block init
+        self._attention_gate = False                                        # attentional gate — True while processing a turn, drops incoming stimuli
+        asyncio.run_coroutine_threadsafe(                                   # submit GCE priming to cognitive cycle — fire and forget, doesn't block init
+            self._prime_gce(), self._cognitive_cycle                        # schedules across thread boundary — safe from ROS2 main thread
         )
 
-        self.get_logger().info(f"✅ Subscribed  : {CNS.NEURAL_TEXT_INPUT}")
-        self.get_logger().info(f"✅ Publishing  : {GCE.COGNITIVE_RESPONSE}")
-        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")
-        self.get_logger().info(f"✅ Model       : {GCE.COGNITIVE_ENGINE}")
-        self.get_logger().info("=" * 60)
-        self.get_logger().info("🌸 GRACE is ready")
-        self.get_logger().info("=" * 60)
-
-    async def _warmup_gce(self) -> None:
-        """Warm up GCE — load model into VRAM and pin it for the session."""
-        try:
-            payload = {
-                "model"    : GCE.COGNITIVE_ENGINE,
-                "messages" : [{"role": "user", "content": "hi"}],
-                "max_tokens": 1,                                            # minimal response — just enough to trigger model load
-                "stream"   : False,
-            }
-            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
-                payload["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
-            await self._gce_gateway.post("/v1/chat/completions", json=payload)
-            self.get_logger().info("✅ GCE warmed up — model pinned in VRAM")
-        except Exception as e:
-            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
+        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")   # confirm GCE endpoint
+        self.get_logger().info(f"✅ Model       : {GCE.COGNITIVE_ENGINE}")  # confirm GCE model
+        self.get_logger().info(f"✅ Subscribed  : {CNS.TEXT_INPUT_GATEWAY}")# confirm input topic
+        self.get_logger().info(f"✅ Publishing  : {GCE.RESPONSE_GATEWAY}")  # confirm output topic
+        self.get_logger().info("=" * 60)                                    # visual separator
+        self.get_logger().info("🌸 GRACE is ready")                         # boot complete
+        self.get_logger().info("=" * 60)                                    # visual separator
 
     def _receive_text_input(self, msg: String):
         """
-        ROS2 subscription callback.
-        Schedules async processing on the asyncio loop — never blocks.
+        Receive an incoming text input signal and schedule cognitive processing.
+        Drops the signal if CNC is already processing a turn.
         """
         try:
-            data = json.loads(msg.data.strip())
+            data = json.loads(msg.data.strip())                                     # attempt to parse JSON payload — CLI sends {"text": "..."}
             if not isinstance(data, dict) or not data.get("text"):
                 return
-            user_input = data.get("text", "").strip()
+            user_input = data.get("text", "").strip()                           # extract text from the dictionary
         except json.JSONDecodeError:
-            user_input = msg.data.strip()
+            user_input = msg.data.strip()                                       # if not valid JSON, treat as raw text
 
         if not user_input:
             return
 
-        if self._busy:
+        if self._attention_gate:
             self.get_logger().warning("⚠️  CNC busy — dropping input")
             self._publish({"type": "error", "content": "GRACE is still thinking…"})
             return
@@ -203,7 +186,7 @@ class CNC(Node):
             3. Stream GCE response
             4. Register assistant turn in memory
         """
-        self._busy = True
+        self._attention_gate = True
         full_response = ""
 
         try:
@@ -247,7 +230,7 @@ class CNC(Node):
             self._publish({"type": "error", "content": str(e)})
 
         finally:
-            self._busy = False
+            self._attention_gate = False
 
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
@@ -361,6 +344,21 @@ class CNC(Node):
         super().destroy_node()
         self.get_logger().info("✅ CNC shutdown complete")
 
+    async def _prime_gce(self) -> None:
+        """Warm up GCE — load model into VRAM and pin it for the session."""
+        try:
+            payload = {
+                "model"    : GCE.COGNITIVE_ENGINE,
+                "messages" : [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,                                            # minimal response — just enough to trigger model load
+                "stream"   : False,
+            }
+            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
+                payload["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
+            await self._gce_gateway.post("/v1/chat/completions", json=payload)
+            self.get_logger().info("✅ GCE warmed up — model pinned in VRAM")
+        except Exception as e:
+            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
 
 def main(args=None):
     rclpy.init(args=args)

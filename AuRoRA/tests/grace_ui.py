@@ -11,6 +11,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from hrs.hrp import GCE  # import HRP constants so this standalone tool knows the same topic names
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
@@ -19,8 +20,8 @@ PINK   = "\033[95m"
 GREY   = "\033[90m"
 RED    = "\033[91m"
 
-TOPIC_INPUT    = "/cns/neural_text_input"
-TOPIC_RESPONSE = "/gce/response"
+TOPIC_INPUT    = GCE.TEXT_INPUT_GATEWAY
+TOPIC_RESPONSE = GCE.RESPONSE_GATEWAY
 
 # If no "done" arrives within this many seconds, auto-unlock the prompt.
 STREAM_TIMEOUT_SEC = 15.0

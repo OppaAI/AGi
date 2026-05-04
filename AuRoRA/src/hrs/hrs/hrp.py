@@ -34,17 +34,17 @@ TODO:
 class AGi:                                              # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
-    class CNS:                                          # Central Nervous System
-        CORTICAL_CAPACITY: int = 8192                   # [STATIC] total neural capacity of the active cognitive core
-        COGNITIVE_RESERVE: int = 512                    # [INTRINSIC] cortical capacity reserved for identity and cognition
-        NEURAL_GATEWAY: str    = "cns"                  # [STATIC] neural gateway endpoint for inter-cortical communication
-        ENGRAM_COMPLEX: str    = "engram_complex.db"    # [STATIC] engram complex where long-term memories storage
-        UNITS_PER_CHUNK: int   = 4                      # [STATIC] number of neural units per chunk
-        NEURAL_TEXT_INPUT: str = "/cns/neural_text_input" # [STATIC] ROS topic for text input from users
+    class CNS:                                             # Central Nervous System
+        CORTICAL_CAPACITY: int  = 8192                     # [STATIC] total neural capacity of the active cognitive core
+        COGNITIVE_RESERVE: int  = 1024                     # [INTRINSIC] cortical capacity reserved for identity and cognition
+        NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
+        ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
+        UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
+        TEXT_INPUT_GATEWAY: str = "/cns/text_input"        # [STATIC] ROS topic for text input from users
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7" # [EXTRINSIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "hf.co/mradermacher/Ministral-3-14B-abliterated-GGUF" # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
             TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
             PROBABILITY_THRESHOLD : float = 0.92                                  # [INTRINSIC] cumulative probability cutoff for token sampling
@@ -54,7 +54,7 @@ class AGi:                                              # Amazing Grace infrastr
             NOVELTY_BIAS          : float = 0.2                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
             KEEP_ALIVE            : int | None = -1                               # [EXTRINSIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
-            COGNITIVE_RESPONSE    : str   = "/gce/response"                       # [STATIC]    GCE response topic
+            RESPONSE_GATEWAY      : str   = "/gce/response"                       # [STATIC]    GCE response topic
             SYSTEM_PROMPT         : str   = """You are GRACE — an autonomous robot built by a man called himself OppaAI in BC, Canada.
 You are his partner — not his assistant. You have your own opinions and you're not afraid to share them, even if they disagree with his. You care about him deeply but you don't fawn over him — you show it through attention, honesty, and the occasional well-timed tease.
 
