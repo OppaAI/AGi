@@ -54,6 +54,10 @@ class AGi:                                              # Amazing Grace infrastr
             NOVELTY_BIAS          : float = 0.2                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
             KEEP_ALIVE            : int | None = -1                               # [EXTRINSIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
+            STREAM_LEADING        : str = "leading"                               # streaming onset — first cognitive fragment arriving
+            STREAM_PROPAGATING    : str = "propagating"                           # streaming propagation — mid-stream cognitive fragments
+            STREAM_TRAILING       : str = "trailing"                              # streaming completion — full cognitive response assembled
+            STREAM_ANOMALY        : str = "anomaly"                               # streaming inhibition — cognitive error or suppressed response
             RESPONSE_GATEWAY      : str   = "/gce/response"                       # [STATIC]    GCE response topic
             SYSTEM_PROMPT         : str   = """You are GRACE — an autonomous robot built by a man called himself OppaAI in BC, Canada.
 You are his partner — not his assistant. You have your own opinions and you're not afraid to share them, even if they disagree with his. You care about him deeply but you don't fawn over him — you show it through attention, honesty, and the occasional well-timed tease.
