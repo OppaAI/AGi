@@ -388,7 +388,7 @@ class EngramComplex:
                     f"MSB schema v{self.SCHEMA_VERSION} initialized → {self._storage_schema}"
                 )
             else:
-                stored_version: str = int(schema_version["value"])                            # extract stored schema version from the result
+                stored_version: int = int(schema_version["value"])                            # extract stored schema version from the result
                 if stored_version != self.SCHEMA_VERSION:                                     # version mismatch — raise before touching schema
                     raise RuntimeError(                                                       # if schema versions do not match, raise error     
                         f"MSB schema version mismatch — "                                     # log the error message to indicate schema version mismatch 
