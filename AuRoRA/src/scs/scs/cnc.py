@@ -258,7 +258,7 @@ class CNC(Node):
         inference_packet: dict = {
             "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRP 
             "messages"           : messages,                                # full memory context + current user prompt
-            "num_ctx"            : GCE.GCE.CONTEXT_WINDOW                   # model context window
+            "num_ctx"            : GCE.CONTEXT_WINDOW,                      # model context window
             "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
             "temperature"        : GCE.TEMPERATURE,                         # response creativity
             "top_p"              : GCE.PROBABILITY_THRESHOLD,               # cumulative probability cutoff
