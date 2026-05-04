@@ -331,8 +331,32 @@ class CNC(Node):
 
         return cognitive_response                                           # return accumulated response
 
+    async def _prime_gce(self) -> None:
+        """
+        Prime GCE — activate the cognitive engine and pin it for the session.
+        Fire and forget — called once at boot, non-blocking.
+        """
+        try:                                                                # Attempt to preload GCE model into memory
+            inference_request = {                                           # Set up minmial message to inference the model
+                "model"    : GCE.COGNITIVE_ENGINE,                          # GCE model to prime
+                "messages" : [{"role": "user", "content": "hi"}],           # minimal prompt — just enough to trigger model load
+                "max_tokens": 1,                                            # single token response — minimizes priming cost
+                "stream"   : False,                                         # no streaming needed for priming
+            }
+            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
+                inference_request["keep_alive"] = GCE.KEEP_ALIVE            # pin model in VRAM for session duration
+            await self._gce_gateway.post("/v1/chat/completions", json=inference_request)  # pass the priming message to inference the model
+            self.get_logger().info("✅ GCE primed succesfully — activated into memory")  # log the successful activation of GCE
+        except Exception as e:
+            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
+            
     def _emit_response(self, inference_request: dict[str, Any]):
-        """Publish a JSON inference_request to the cognitive response topic."""
+        """
+        Emit a cognitive response chunk to the ROS2 output topic.
+    
+        Args:
+            inference_request (dict): Response payload — type and content fields.
+        """
         try:
             msg = String()
             msg.data = json.dumps(inference_request)
@@ -341,54 +365,41 @@ class CNC(Node):
             self.get_logger().error(f"❌ Publish error: {exc}")
 
     def destroy_node(self):
-        """Clean shutdown — close memory and HTTP client."""
+        """
+        Gracefully shut down CNC — close all cognitive subsystems in reverse boot order.
+        """
         self.get_logger().info("🛑 CNC shutting down…")
-        self.mcc.close()
+        self.mcc.close()                                                            # close memory coordination — EMC encoding cycle stops
 
-        future = asyncio.run_coroutine_threadsafe(
-            self._gce_gateway.aclose(), self._cognitive_cycle
+        future = asyncio.run_coroutine_threadsafe(                                  # schedule HTTP client close on cognitive cycle
+            self._gce_gateway.aclose(), self._cognitive_cycle                       # async close — releases TCP connections
         )
         try:
-            future.result(timeout=3.0)
+            future.result(timeout=3.0)                                              # wait up to 3 seconds for clean close
         except Exception:
-            pass
+            pass                                                                    # ignore errors on shutdown — process is ending
 
-        self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)
-        self._gamma_rhythm.join(timeout=3.0)
-        self._cognitive_executor.shutdown(wait=True)
+        self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)      # signal cognitive cycle to stop
+        self._gamma_rhythm.join(timeout=3.0)                                        # wait for gamma rhythm thread to exit
+        self._cognitive_executor.shutdown(wait=True)                                # drain thread pool — wait for pending tasks
 
-        super().destroy_node()
-        self.get_logger().info("✅ CNC shutdown complete")
-
-    async def _prime_gce(self) -> None:
-        """Warm up GCE — load model into VRAM and pin it for the session."""
-        try:
-            inference_request = {
-                "model"    : GCE.COGNITIVE_ENGINE,
-                "messages" : [{"role": "user", "content": "hi"}],
-                "max_tokens": 1,                                            # minimal response — just enough to trigger model load
-                "stream"   : False,
-            }
-            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
-                inference_request["keep_alive"] = GCE.KEEP_ALIVE                     # pin model in VRAM for session duration
-            await self._gce_gateway.post("/v1/chat/completions", json=payload)
-            self.get_logger().info("✅ GCE warmed up — model pinned in VRAM")
-        except Exception as e:
-            self.get_logger().warning(f"⚠️ GCE warmup failed: {e}")         # non-fatal — model loads on first real request
+        super().destroy_node()                                                      # ROS2 node cleanup
+        self.get_logger().info("✅ CNC shutdown complete")                          # log the shutdown sequence complete
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = CNC()
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
+    rclpy.init(args=args)                                        # initialize ROS2 context
+    node = CNC()                                                 # instantiate CNC node — boots all subsystems
+    executor = MultiThreadedExecutor()                           # concurrent callback execution
+    executor.add_node(node)                                      # register CNC with executor
     try:
-        executor.spin()
-    except KeyboardInterrupt:
-        node.get_logger().info("👋 Shutdown requested")
-    finally:
-        executor.shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
+        executor.spin()                                          # block until shutdown — processes ROS2 callbacks
+    except KeyboardInterrupt:                                    # user press Ctrl-C interrupt
+        node.get_logger().info("👋 Shutdown requested")          # log the graceful shutdown request
+    finally:                                                     # 
+        executor.shutdown()                                      # stop executor
+        node.destroy_node()                                      # clean shutdown sequence
+        rclpy.shutdown()                                         # release ROS2 context
+
 
 
 if __name__ == "__main__":
