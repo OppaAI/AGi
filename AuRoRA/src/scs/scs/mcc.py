@@ -148,7 +148,7 @@ class MemoryCoordinationCore:
         """
         Bind evicted PMTs from WMC into the episodic buffer for encoding and consolidation.
         Runs on a dormant thread — never blocks active cognition.
-        Trivial PMT filter (M1): discards turns under 50 chars — filler turns not worth encoding.
+        Trivial PMT filter (M1): discards turns under 20 chars — filler turns not worth encoding.
         Anchor vector filter (M1.5): semantic filtering via embeddinggemma replaces this.
 
         Args:
@@ -156,8 +156,8 @@ class MemoryCoordinationCore:
         """
         try:                                                         # attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                         # iterate through each evicted PMT
-                # M1 trivial filter — discard filler turns under 50 chars
-                if len(evicted_pmt.get("content", "")) < 50:         # trivial filter — discard filler turns under 50 chars
+                # M1 trivial filter — discard filler turns under 20 chars
+                if len(evicted_pmt.get("content", ""))- len('{"user": "", "assistant": ""}') < 20:  # trivial filter — discard filler turns under 20 chars
                     self.logger.debug(                               # log the discarded trivial PMT
                         "MCC discarded trivial PMT — below length threshold"
                     )
