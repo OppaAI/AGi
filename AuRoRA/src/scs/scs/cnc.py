@@ -48,6 +48,8 @@ Terminology:
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
 
 TODO:
+    M1.x — WebUI operator dashboard: rosbridge_server WebSocket bridge for
+            browser-based debug stream, memory stats, and teleop interface
     M1.x — define and lock NeuralTextInput schema in scs/types.py
            standardize JSON contract across all input sources (CLI, web, voice)
            evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
