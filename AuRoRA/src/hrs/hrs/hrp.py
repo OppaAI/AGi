@@ -42,6 +42,7 @@ class AGi:                                              # Amazing Grace infrastr
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
         
         TEXT_INPUT_GATEWAY: str = "/cns/text_input"        # [STATIC] ROS topic for text input from users
+        MEMORY_CONTEXT_GATEWAY: str = "/cns/memory_context"# [STATIC] ROS topic for memory context reinstated
         MEMORY_STATS_GATEWAY: str = "/cns/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
 
         class GCE:                                                                # Generative Cognitive Engine
