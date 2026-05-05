@@ -374,7 +374,7 @@ class EngramComplex:
             """)
             self._ecx_conn.commit()
 
-            schema_version: sqlite3.Row | None = self._ecx_conn.execute((                     # get current schema version
+            schema_version: sqlite3.Row | None = self._ecx_conn.execute(                     # get current schema version
                 "SELECT value FROM schema_meta WHERE key = 'schema_version'"
             ).fetchone()
 
