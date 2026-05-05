@@ -1,6 +1,6 @@
 # AGi — Amazing Grace infrastructure
  
-**AuRoRA** · Autonomous Robot with Reasoning Architecture  
+**AuRoRA** · Autonomous Rover Robotics Assistant 
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
  
 [![Repo](https://img.shields.io/badge/Repo-OppaAI%2FAGi-76B900)](https://github.com/OppaAI/AGi)
