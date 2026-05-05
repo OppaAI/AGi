@@ -90,6 +90,7 @@ class EngramSchema:
     semantic_traces: str | None = None              # column name holding the encoding BLOB — used for KNN vector search
     lexical_traces: list[str] | None = None         # column names fed into FTS5 — used for keyword search
     index_traces: list[str] | None = None           # column names to B-tree index — speeds up WHERE/ORDER BY
+    temporal_trace: str | None = None               # column name representing when this memory occurred — used for date filtering and stats
 
 @dataclass
 class RecallCue:
@@ -114,8 +115,8 @@ def normalize_vector(vector: list[float]) -> list[float]:
     vector_array = np.array(vector)                                                # list → ndarray for vectorized math
     vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
     if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-        return (vector_array / vector_mag).tolist()                                # already unit length — skip normalization
-    return vector                                                                  # divide each element by magnitude → unit vector; zero vector guard
+        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
+    return vector                                                                  # already unit length — skip normalization
     
 def pack_vector(vector: list[float]) -> bytes:
     """
@@ -353,11 +354,57 @@ class EngramComplex:
             self._activate_vector_index(ecx_conn)                   # activate vector index for parallel retrieval
         return ecx_conn                                             # return separate connection for parallel access
 
+    # Schema version — increment when storage schema changes
+    # On mismatch, MSB raises clearly rather than silently operating on wrong schema
+    SCHEMA_VERSION: int = 1                                     # set schema version for migration purposes if needed 
+
     def _build_schema(self) -> None:
         """
         Builds all tables and indexes for the engram complex from the blueprint.
+        Checks schema version on startup — raises if mismatch detected.
         """
         try:
+
+            # 0. Schema Version Check - create schema and verify version on startup
+            self._ecx_conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS schema_meta (
+                    key   TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            """)
+            self._ecx_conn.commit()
+
+            schema_version: sqlite3.Row | None = self._ecx_conn.execute((                     # get current schema version
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
+
+            if schema_version is None:                                                        # first run — inscribe current version
+                # Detect legacy DB: if storage tables exist, this is a pre-versioned schema, not a fresh DB
+                legacy: sqlite3.Row | None = self._ecx_conn.execute(                          # query sqlite_master to check if the primary storage table already exists
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",           # match by table type and exact name to avoid false positives
+                    (self._storage_schema,),                                                  # bind storage table name — avoids SQL injection and handles dynamic schema names
+                ).fetchone()                                                                  # fetchone() sufficient — we only need existence, not full result set
+                if legacy:                                                                    # storage table exists but schema_meta absent — this is an unversioned legacy DB
+                    raise RuntimeError(                                                       # hard stop — do not stamp, do not proceed, force explicit migration
+                        f"MSB schema unversioned — '{self._storage_schema}' exists without schema_meta. "
+                        f"Run migration to v{self.SCHEMA_VERSION} before starting the robot."
+                    )
+                self._ecx_conn.execute(                                                       # fresh DB confirmed — no legacy tables found, safe to stamp version
+                    "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)",      # insert canonical version key into schema_meta
+                    (str(self.SCHEMA_VERSION),)                                               # cast to str — schema_meta stores all values as TEXT per table definition
+                )
+                self._ecx_conn.commit()                                                       # commit the schema version   
+                self.logger.info(                                                             # log the schema version after initialization  
+                    f"MSB schema v{self.SCHEMA_VERSION} initialized → {self._storage_schema}"
+                )
+            else:
+                stored_version: int = int(schema_version["value"])                            # extract stored schema version from the result
+                if stored_version != self.SCHEMA_VERSION:                                     # version mismatch — raise before touching schema
+                    raise RuntimeError(                                                       # if schema versions do not match, raise error     
+                        f"MSB schema version mismatch — "                                     # log the error message to indicate schema version mismatch 
+                        f"DB has v{stored_version}, code expects v{self.SCHEMA_VERSION}. "
+                        f"Run migration before starting the robot."
+                    )
 
             # 1. Build Storage Table
             storage_transcript: str = self._transcribe_traces(self._blueprint.storage)       # convert main storage trace → SQL column definition string
@@ -452,7 +499,7 @@ class EngramComplex:
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
     
         Returns:
-            int: staging_id for deletion after processing
+            int: ID for deletion after processing
         """
         return self.inscribe_engram(engram, self._staging_schema, ecx_conn)         # wrap inscribe_engram with staging schema
 
@@ -466,18 +513,18 @@ class EngramComplex:
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
 
         Returns:
-            int: engram_id of the inscribed engram
+            int: ID of the inscribed engram
         """
         schema                    = schema or self._storage_schema          # default to permanent storage if no schema provided
         ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         labels: str               = ", ".join(engram.keys())                # transcript label list from engram
         slots: str                = ", ".join([ "?"] * len(engram))         # one ? per trace
-        engram_id: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
+        inscription: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
             f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
         ecx_conn.commit()                                                   # commit before returning — permanent
-        return engram_id.lastrowid                                          # return engram_id for vector and lexical indexing
+        return inscription.lastrowid                                          # return engram_id for vector and lexical indexing
 
     def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
         """
@@ -578,12 +625,12 @@ class EngramComplex:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
         try:                                                                    # attempt semantic recall with given cue
-            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
-            temporal_filter: str = """
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
-            """ if self._is_temporal else ""                                    # only filter by date if schema has a date column
-            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
+            temporal_filter: str = f"""
+                AND (store.{self._blueprint.temporal_trace} >= ? OR ? IS NULL)
+                AND (store.{self._blueprint.temporal_trace} <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                    # only filter by temporal trace if schema has a temporal trace column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass temporal params if schema has a temporal trace column
 
             matches: list[sqlite3.Row] = self._ecx_conn.execute(                # semantic recall for nearest engrams by L2 distance
                 f"""
@@ -595,7 +642,7 @@ class EngramComplex:
                 AND k = ?
                 ORDER BY vec.distance, store.id DESC
                 """,
-                [pack_vector(cue), *temporal_params, recall_depth],             # only pass date params if schema has a date column
+                [pack_vector(cue), *temporal_params, recall_depth],             # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                        # return all matching engrams by semantic similarity
 
             if not matches:                                                     # if no matches found,
@@ -632,12 +679,12 @@ class EngramComplex:
             return []                                                       # return empty list
 
         try:                                                                # attempt lexical recall with sanitized cue
-            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip date filter if schema has no date column
-            temporal_filter: str = """
-                AND (store.date >= ? OR ? IS NULL)
-                AND (store.date <= ? OR ? IS NULL)
-            """ if self._is_temporal else ""                                # only filter by date if schema has a date column
-            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass date params if schema has a date column
+            date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
+            temporal_filter: str = f"""
+                AND (store.{self._blueprint.temporal_trace} >= ? OR ? IS NULL)
+                AND (store.{self._blueprint.temporal_trace} <= ? OR ? IS NULL)
+            """ if self._is_temporal else ""                                # only filter by temporal trace if schema has a temporal trace column
+            temporal_params: list = [date_from, date_from, date_to, date_to] if self._is_temporal else [] # only pass temporal params if schema has a temporal trace column
 
             matches: list[sqlite3.Row] = self._ecx_conn.execute(            # FTS5 lexical recall for matching engrams
                 f"""
@@ -649,7 +696,7 @@ class EngramComplex:
                 ORDER BY lexeme.rank, store.id DESC
                 LIMIT ?
                 """,
-                [clean_cue, *temporal_params, recall_depth],                # only pass date params if schema has a date column
+                [clean_cue, *temporal_params, recall_depth],                # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                    # fetch all matching engrams
 
             if not matches:                                                 # if no matches found,
@@ -704,9 +751,9 @@ class EngramComplex:
         Returns True if this memory cortex is temporal.
 
         Returns:
-            bool: True if storage schema has a date column, False otherwise
+            bool: True if storage schema has a temporal trace column, False otherwise
         """
-        return any(t.label == "date" for t in self._blueprint.storage)      # True if storage schema has a date column
+        return self._blueprint.temporal_trace is not None               # True if storage schema has a temporal trace column
 
     @staticmethod
     def _converge_memories(semantic_matches : list[dict], lexical_matches  : list[dict], depth: int, rrf_k: int = 60,) -> list[dict]:
@@ -779,14 +826,17 @@ class EngramComplex:
         Assess the current status of the engram complex for logging and monitoring.
 
         Returns:
-            dict: Current engram complex stats including engram count, earliest and latest timestamp, buffer count, and database size.
+            dict: Current engram complex stats including engram count, earliest and latest temporal trace, buffer count, and database size.
         """
         try:                                                                    # attempt retrieve stats of engram complex database
-            storage_stats: sqlite3.Row = self._ecx_conn.execute(                # query storage schema for engram count and timestamp range
-                "SELECT COUNT(*) as total, "
-                "MIN(timestamp) as earliest, MAX(timestamp) as latest "
+            storage_stats: sqlite3.Row = self._ecx_conn.execute(                # query storage schema for engram count and temporal range
+                f"SELECT COUNT(*) as total, "
+                f"MIN({self._blueprint.temporal_trace}) as earliest, "
+                f"MAX({self._blueprint.temporal_trace}) as latest "
                 f"FROM {self._storage_schema}"
-            ).fetchone()                                                        # fetch engram count and timestamp range
+                if self._blueprint.temporal_trace else
+                f"SELECT COUNT(*) as total FROM {self._storage_schema}"
+            ).fetchone()                                                        # fetch engram count and temporal range
 
             if self._blueprint.staging:                                         # check if blueprint has staging table
                 staging_stats: sqlite3.Row | None = self._ecx_conn.execute(     # query staging schema for buffer count

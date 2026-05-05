@@ -55,14 +55,39 @@ Architecture:
         SQLite WAL mode — Jetson-friendly, concurrent read/write
 
 Terminology:
-    episodic_buffer  — in memory buffer for evicted PMTs (crash-safe, temporary)
-    encoding         — semantic encoding of a turn into a vector
-    episode          — dated and encoded memory trace (a specific remembered moment)
-    engram           — the memory store containing encoded episodes
-    FTS5             — SQLite FTS5 full-text search extension for lexical search
-    relevancy        — RRF-fused salience score of the episode (0.0–1.0) combining semantic and lexical rank
-    recall stream    — shared stream for recalled episodes (cross-layer)
-    RRF              — Reciprocal Rank Fusion for combining semantic and lexical search
+    Episodic Buffer    — two-stream in-memory workspace bridging WMC eviction and EMC
+                         encoding. Binding stream receives evicted PMTs; recall stream
+                         stages reinstated episodes for MCC context assembly.
+    Encoding           — transformation of a raw PMT into a unit-normalized semantic
+                         vector for storage and similarity search in the engram complex.
+    Engram             — one physical stored memory record in the engram complex,
+                         carrying a timestamp, date, raw content, and semantic
+                         encoding vector.
+    Episode            — a dated, encoded memory trace representing a specific
+                         remembered moment — one complete PMT bound to the scaffold
+                         and consolidated into the engram complex.
+    Lexical Recall     — keyword search over episode content via SQLite FTS5 with
+                         porter stemming, surfacing episodes by pattern match rather
+                         than meaning. Biological analogue: dentate gyrus pattern
+                         separation — discriminates episodes by surface features.
+    Memory Convergence — fusion of semantic and lexical recall rankings into a single
+                         relevancy-ordered list via Reciprocal Rank Fusion (RRF).
+                         Neither path alone is canonical — convergence is the result.
+    Recall Stream      — shared output stream of the episodic buffer where reinstated
+                         episodes are staged before injection into MCC memory context.
+    Relevancy          — RRF-fused salience score (0.0–1.0) assigned to each recalled
+                         episode, combining semantic similarity rank and lexical match
+                         rank into a single measure of contextual fitness.
+    Scaffold           — the pre-structured temporal-semantic coordinate space that
+                         anchors every engram at bind time and sequences recalled
+                         episodes before reinstatement. The temporal axis (timestamp),
+                         semantic axis (vec0), and lexical axis (FTS5) together
+                         constitute the scaffold. Reinstatement traverses it;
+                         the Dream Cycle reorganizes attachments within it.
+    Semantic Recall    — vector similarity search over unit-normalized engram encodings
+                         via sqlite-vec KNN, surfacing episodes by meaning rather than
+                         keyword match. Biological analogue: CA3 pattern completion —
+                         a partial cue reinstates the full stored trace.
 
 Lifecycle:
     Binding → Encoding → Synaptic Consolidation → Recall → Reinstatement
@@ -75,6 +100,12 @@ Public interface:
     emc.terminate() → None
 
 TODO:
+    M2 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
+         engram anchoring at bind time, RECALL_RESERVE trimming, and chronological
+         sequencing before reinstatement. Extend EMC_SCHEMA with scaffold metadata
+         fields: sequence_index (INTEGER), session_id (TEXT), salience (REAL),
+         consolidation_state (TEXT DEFAULT 'raw') — required for Dream Cycle
+         distillation tracking and scaffold-aware recall ordering.
     M2 — date-range filtering on recall interface and buffer entries
     M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
     M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
@@ -113,7 +144,7 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     storage=[
         EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
-        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — B-tree indexed for date recall
+        EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
@@ -126,7 +157,8 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     ],
     semantic_traces="encoding",                                                                     # column linked to vec0 virtual table for KNN search
     lexical_traces=["content"],                                                                     # column fed into FTS5 virtual table for keyword search
-    index_traces=["date"]                                                                           # B-tree index — speeds up date-filtered recall
+    index_traces=["timestamp"],                                                                     # B-tree index — speeds up temporal-filtered recall
+    temporal_trace="timestamp",                                                                     # temporal filter column — represents when the memory occurred
 )
         
 @dataclass
@@ -138,7 +170,9 @@ class EpisodicBuffer:
     _binding_stream — evicted PMTs pending encoding into episodic memory
     recall_stream   — recalled episodes pending reinstatement into active cognition
     """
-    _binding_stream: deque[dict] = field(default_factory=deque)                # evicted PMTs queued for encoding — drained by encoding cycle
+    _binding_stream: deque[dict] = field(                                      # evicted PMTs queued for encoding — drained by encoding cycle
+        default_factory=lambda: deque(maxlen=EMC.BINDING_STREAM_LIMIT)         # maxlen cap — oldest silently dropped if encoding engine offline too long
+    )
     recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly
 
     def __post_init__(self) -> None:
@@ -486,7 +520,13 @@ class EpisodicMemoryCortex:
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
-                self.episodic_buffer._binding_stream.append(episode)                # queue episode for encoding cycle
+                _binding_stream = self.episodic_buffer._binding_stream              # reference for capacity check
+                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                # at capacity — oldest will be silently dropped by deque maxlen
+                    self.logger.warning(                                            # warn — encoding engine may be offline or falling behind
+                        f"⚠️  EMC binding stream at capacity ({EMC.BINDING_STREAM_LIMIT}) — "
+                        f"oldest episode dropped. Encoding engine may be offline."
+                    )
+                _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
             self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
             self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"

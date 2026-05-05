@@ -11,18 +11,25 @@ import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from hrs.hrp import AGi  # import HRP constants so this standalone tool knows the same topic names
+CNS = AGi.CNS
+GCE = AGi.CNS.GCE
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
-CYAN   = "\033[96m"
-PINK   = "\033[95m"
-GREY   = "\033[90m"
-RED    = "\033[91m"
+CYAN   = "\033[33m"   # yellow — high contrast on Solarized teal
+PINK   = "\033[35m"   # magenta — stands out well
+GREY   = "\033[37m"   # white/light grey
+RED    = "\033[91m"   # bright red — fine as-is
 
-TOPIC_INPUT    = "/cns/neural_input"
-TOPIC_RESPONSE = "/gce/response"
+STREAM_LEADING    = GCE.STREAM_LEADING
+STREAM_PROPAGATING = GCE.STREAM_PROPAGATING
+STREAM_TRAILING   = GCE.STREAM_TRAILING
+STREAM_ANOMALY    = GCE.STREAM_ANOMALY
+TOPIC_INPUT    = CNS.TEXT_INPUT_GATEWAY
+TOPIC_RESPONSE = GCE.RESPONSE_GATEWAY
 
-# If no "done" arrives within this many seconds, auto-unlock the prompt.
+# If no trailing arrives within this many seconds, auto-unlock the prompt.
 STREAM_TIMEOUT_SEC = 15.0
 
 
@@ -80,7 +87,7 @@ class GraceCLI(Node):
         content  = data.get("content", "")
 
         with self._print_lock:
-            if msg_type == "start":
+            if msg_type == STREAM_LEADING:
                 self._cancel_timeout()
                 self._streaming    = True
                 self._turn_start   = time.monotonic()
@@ -94,11 +101,11 @@ class GraceCLI(Node):
                 print(f"\n{BOLD}{PINK}GRACE{RESET}{PINK} 🌸  {RESET}", end="", flush=True)
                 print(content, end="", flush=True)
 
-            elif msg_type == "delta":
+            elif msg_type == STREAM_PROPAGATING:
                 self._token_count += max(1, len(content.split()))
                 print(content, end="", flush=True)
 
-            elif msg_type == "done":
+            elif msg_type == STREAM_TRAILING:
                 self._cancel_timeout()
                 elapsed = (
                     time.monotonic() - self._turn_start
