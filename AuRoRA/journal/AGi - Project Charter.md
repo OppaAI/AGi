@@ -83,38 +83,43 @@ emotional sensitivity, and transparent behavior. AGi's conscience
 module and humanistic naming conventions reflect this principle as a
 foundational design decision, not a feature addition.
 
-## 🔭 4. Vision Statement 
+## 🔭 4. Vision Statement
 
 AGi envisions a future where embodied AI companions are not just tools
 but genuine presences — minds that perceive the world, accumulate
-knowledge, and grow through experience. AGi represents the first
-realization of this vision: a robot that can move through the world
-alongside a person, notice what they notice, remember what they've
-shared, and engage with the environment as a curious, feeling
-participant.
+knowledge, and grow through experience. AGi is the infrastructure that
+makes this possible — an open-source cognitive architecture that any
+developer can use to build their own humanistic robotic companion.
+
+GRACE is AGi's first realization: OppaAI's personal companion that can
+move through the world alongside a person, notice what they notice,
+remember what they've shared, and engage with the environment as a
+curious, feeling participant.
 
 To make that possible, AGi is being built with a full cognitive stack:
-episodic and semantic memory so she can learn and retain; a knowledge
-base that grows from the internet; conscience and salience systems that
-shape what she pays attention to and how she responds; and sensory,
-vision, and audio modules that let her perceive and react to the world in
-real time. The goal is a mind that doesn't just answer questions but
-accumulates experience — self-improving through every conversation and
-every interaction.
+episodic and semantic memory so companions can learn and retain; a
+knowledge base that grows from the internet; conscience and salience
+systems that shape what they pay attention to and how they respond; and
+sensory, vision, and audio modules that let them perceive and react to
+the world in real time. The goal is a mind that doesn't just answer
+questions but accumulates experience — self-improving through every
+conversation and every interaction.
 
 Beyond the personal, AGi points toward a future where a single
 generalist robot replaces the fragmented landscape of simple apps and
 single-purpose devices — one companion that handles the mundane, the
 meaningful, and everything in between.
 
-## 5. 🎯 Mission Statement
+## 🎯 5. Mission Statement
 
-AGi exists to build: a humanistic robotic companion capable of
-assisting with daily life, exploring the world, and growing smarter over
-time. The mission is to give AGi the cognitive architecture — memory,
-knowledge, conscience, perception, and feeling — to be as present and
-interactive as possible with her environment, her surroundings, and the
-people she's with.
+AGi exists to provide the infrastructure and cognitive architecture for
+building humanistic robotic companions. Its first realization is GRACE
+— OppaAI's personal companion built to assist with daily life, explore
+the world, and grow smarter over time. The mission is to give any
+companion built on AGi the cognitive foundation — memory, knowledge,
+conscience, perception, and feeling — to be as present and interactive
+as possible with their environment, their surroundings, and the people
+they're with.
 
 ## 📦 6. Scope
 
