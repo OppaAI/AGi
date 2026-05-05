@@ -17,10 +17,10 @@ GCE = AGi.CNS.GCE
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
-CYAN   = "\033[33m"    # yellow — keep, good on Solarized
-PINK   = "\033[35m"    # magenta — keep, good on Solarized  
-GREY   = "\033[2;37m"  # dim white — less harsh than bright white
-RED    = "\033[31m"    # normal red instead of bright red 91
+CYAN   = "\033[36m"   # yellow — high contrast on Solarized teal
+PINK   = "\033[95m"   # magenta — stands out well
+GREY   = "\033[90m"   # white/light grey
+RED    = "\033[91m"   # bright red — fine as-is
 
 STREAM_LEADING    = GCE.STREAM_LEADING
 STREAM_PROPAGATING = GCE.STREAM_PROPAGATING
