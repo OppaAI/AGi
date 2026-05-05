@@ -146,7 +146,7 @@ class CNC(Node):
             String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
         )
         self._memory_stats_response: rclpy.publisher.Publisher = self.create_publisher(        # ROS2 publisher — sends memory stats to the specified topic
-            String, CNC.MEMORY_STATS_GATEWAY, 10                                               # String type | topic | QoS depth 10
+            String, CNS.MEMORY_STATS_GATEWAY, 10                                               # String type | topic | QoS depth 10
         )
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
@@ -195,13 +195,12 @@ class CNC(Node):
 
     async def _process_stimulus(self, user_prompt: str) -> None:
         """
-        Process one full stimulus-response cycle:
-            1. Register user prompt in memory
-            2. Assemble memory context (WMC + EMC)
-            3. Build system prompt with episodic context
-            4. Stream inference through GCE
-            5. Register AI response in memory
-            6. Report memory stats
+        Process one full stimulus-response cycle.
+    
+        Registers the user prompt in memory, assembles the full memory context
+        (WMC PMTs + recalled EMC episodes), builds the system prompt with episodic
+        context injected, streams inference through GCE, registers the assistant
+        response in memory, then reports memory stats.
         """
         cognitive_response: str = ""                                            # accumulates GCE response chunks — empty until inference completes
 
