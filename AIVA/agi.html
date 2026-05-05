@@ -675,7 +675,7 @@
     // Memory Stats Topic (you'll need to publish this from CNC/MCC)
     const statsTopic = new ROSLIB.Topic({
       ros: ros,
-      name: '/cnc/memory_stats',
+      name: '/cns/memory_stats',
       messageType: 'std_msgs/String'
     });
     statsTopic.subscribe((msg) => {
