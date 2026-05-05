@@ -379,9 +379,19 @@ class EngramComplex:
             ).fetchone()
 
             if schema_version is None:                                                        # first run — inscribe current version
-                self._ecx_conn.execute(
-                    "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)",
-                    (str(self.SCHEMA_VERSION),)
+                # Detect legacy DB: if storage tables exist, this is a pre-versioned schema, not a fresh DB
+                legacy: sqlite3.Row | None = self._ecx_conn.execute(                          # query sqlite_master to check if the primary storage table already exists
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",           # match by table type and exact name to avoid false positives
+                    (self._storage_schema,),                                                  # bind storage table name — avoids SQL injection and handles dynamic schema names
+                ).fetchone()                                                                  # fetchone() sufficient — we only need existence, not full result set
+                if legacy:                                                                    # storage table exists but schema_meta absent — this is an unversioned legacy DB
+                    raise RuntimeError(                                                       # hard stop — do not stamp, do not proceed, force explicit migration
+                        f"MSB schema unversioned — '{self._storage_schema}' exists without schema_meta. "
+                        f"Run migration to v{self.SCHEMA_VERSION} before starting the robot."
+                    )
+                self._ecx_conn.execute(                                                       # fresh DB confirmed — no legacy tables found, safe to stamp version
+                    "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)",      # insert canonical version key into schema_meta
+                    (str(self.SCHEMA_VERSION),)                                               # cast to str — schema_meta stores all values as TEXT per table definition
                 )
                 self._ecx_conn.commit()                                                       # commit the schema version   
                 self.logger.info(                                                             # log the schema version after initialization  
