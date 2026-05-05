@@ -532,7 +532,7 @@ ollama serve                          # on inference PC
 # set VLLM_BASE_URL = "http://<pc-ip>:11434" in cnc.py
  
 # Option B — vLLM / Cosmos (Jetson target)
-bash launch/cosmos.sh
+bash ./launch.sh
 # Wait ~3 min for: Application startup complete
  
 # 5. Start GRACE
