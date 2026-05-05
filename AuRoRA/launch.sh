@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Stop and remove existing container
-docker stop cosmos-reason2-2b 2>/dev/null
-docker rm   cosmos-reason2-2b 2>/dev/null
++docker stop cosmos-reason2-2b >/dev/null 2>&1 || true
++docker rm   cosmos-reason2-2b >/dev/null 2>&1 || true
 
 # Clear caches
 sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
