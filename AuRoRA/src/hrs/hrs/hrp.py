@@ -40,7 +40,9 @@ class AGi:                                              # Amazing Grace infrastr
         NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
+        
         TEXT_INPUT_GATEWAY: str = "/cns/text_input"        # [STATIC] ROS topic for text input from users
+        MEMORY_STATS_GATEWAY: str = "/cns/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
