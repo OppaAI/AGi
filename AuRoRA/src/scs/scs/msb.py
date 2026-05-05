@@ -141,14 +141,17 @@ class EncodingEngine:
     def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_capacity: int, prime_key_limit: int) -> None:
         """
         Initializes the encoding engine and encoding prime for recent memory traces.
+        Model load is deferred to a background thread — init returns immediately.
+        Lexical-only recall is active from the first turn; semantic recall activates
+        once the background load completes.
     
         Args:
-            logger                      : Logger instance passed from the cortex
-            encoding_engine (str)       : Embedding model to load (e.g. from HRP)
-            encoding_cue_prefix (str)   : Prompt prefix for encoding cues
-            encoding_engram_prefix (str): Prompt prefix for engrams
-            prime_capacity (int)        : Maximum number of entries in the encoding prime
-            prime_key_limit (int)       : Maximum characters hashed for the prime key
+            logger                  : Logger instance passed from the cortex
+            encoding_engine (str)   : Embedding model to load (e.g. from HRP)
+            cue_prefix (str)        : Prompt prefix for encoding cues
+            engram_prefix (str)     : Prompt prefix for engrams
+            prime_capacity (int)    : Maximum number of entries in the encoding prime
+            prime_key_limit (int)   : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
