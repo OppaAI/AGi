@@ -33,6 +33,7 @@ Architecture:
 Topics:
     Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
     Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
+    Pub: CNS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
     Pub: CNS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
 
 Response format (JSON on GCE.RESPONSE_GATEWAY):
@@ -50,6 +51,7 @@ Terminology:
 TODO:
     M1.x — WebUI operator dashboard: rosbridge_server WebSocket bridge for
             browser-based debug stream, memory stats, and teleop interface
+    M1.x — MEMORY_CONTEXT_GATEWAY: WebUI memory context debug stream
     M1.x — define and lock NeuralTextInput schema in scs/types.py
            standardize JSON contract across all input sources (CLI, web, voice)
            evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
@@ -148,8 +150,11 @@ class CNC(Node):
         self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
             String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
         )
-        self._memory_stats_response: rclpy.publisher.Publisher = self.create_publisher(        # ROS2 publisher — sends memory stats to the specified topic
-            String, CNS.MEMORY_STATS_GATEWAY, 10                                               # String type | topic | QoS depth 10
+        self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends memory context to the specified topic
+            String, CNS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
+        )
+        self._memory_stats_feedback: rclpy.publisher.Publisher = self.create_publisher(    # ROS2 publisher — sends memory stats to the specified topic
+            String, CNS.MEMORY_STATS_GATEWAY, 10                                           # String type | topic | QoS depth 10
         )
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
@@ -231,6 +236,10 @@ class CNC(Node):
             messages: list[dict] = [{"role": "system", "content": system_content}]  # system prompt — always first
             messages.extend(short_term_memory)                                  # inject WMC PMTs — chronological conversation history
             messages.append({"role": "user", "content": user_prompt})           # append current user prompt — last message before inference
+            
+            context_signal = String()                                           # create ROS2 String message
+            context_signal.data = json.dumps({"messages": messages})            # serialize payload to JSON string
+            self._memory_context_feedback.publish(context_signal)               # publish to memory context reporting topic
 
             # 6. Stream from GCE
             self.get_logger().debug(f"📤 GCE messages: {messages}")             # debug — full message context before inference
@@ -244,7 +253,7 @@ class CNC(Node):
             stats = self.mcc.report_memory_stats()                              # log WMC and EMC health after every turn
             stats_signal = String()                                             # create ROS2 String message
             stats_signal.data = json.dumps(stats)                               # serialize payload to JSON string
-            self._memory_stats_response.publish(stats_signal)                   # publish to memory stats reporting topic
+            self._memory_stats_feedback.publish(stats_signal)                   # publish to memory stats reporting topic
             
         except Exception as e:                                                  # unhandled failure in cognitive pipeline
             self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
