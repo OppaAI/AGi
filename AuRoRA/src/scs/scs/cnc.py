@@ -181,6 +181,8 @@ class CNC(Node):
             self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is still thinking…"}) # publish error notification
             return                                                                  # abort early
 
+        self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
+        
         user_prompt_chunk: int = len(user_prompt) // CNS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
         self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt
 
@@ -198,7 +200,6 @@ class CNC(Node):
             5. Register AI response in memory
             6. Report memory stats
         """
-        self._attention_gate = True                                             # close attentional gate — drop incoming stimuli during processing
         cognitive_response: str = ""                                            # accumulates GCE response chunks — empty until inference completes
 
         try:                                                                    # wrap full pipeline — any failure publishes error and resets attention gate
