@@ -2,8 +2,8 @@
 Changelog for AuRoRA · Semantic Cognitive System (SCS)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.0 (2026-05-04)
+------------------
 
 * feat(M1): introduce ``cnc.py`` — ROS2 Central Neural Core; full perception-cognition-response pipeline with dedicated asyncio event loop on background thread; publishes streamed JSON chunks to ``/gce/response``
 * feat(M1): introduce ``mcc.py`` — Memory Coordination Core; single memory interface for CNC coordinating WMC and EMC; assembles full memory context each turn

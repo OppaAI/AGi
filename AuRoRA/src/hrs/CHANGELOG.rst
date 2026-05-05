@@ -2,8 +2,8 @@
 Changelog for AuRoRA · Homeostatic Regulation System (HRS)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.0 (2026-05-04)
+------------------
  
 * feat(M1): introduce ``hrp.py`` — three-tier constant hierarchy (STATIC / INTRINSIC / EXTRINSIC) as system-wide parameter registry under ``AGi`` namespace
 * feat(M1): add ``AGi.CNS`` namespace — cortical capacity, cognitive reserve, neural gateway, engram complex path, units-per-chunk, and text input gateway
