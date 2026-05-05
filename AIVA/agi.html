@@ -672,6 +672,31 @@
       }
     });
 
+    // Memory Context Topic — full GCE input context for debug
+    const contextTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/cns/memory_context',
+        messageType: 'std_msgs/String'
+    });
+    contextTopic.subscribe((msg) => {
+        try {
+            const data = JSON.parse(msg.data);
+            const messages = data.messages;
+            const systemMsg = messages.find(m => m.role === 'system');
+            const chatMsgs = messages.filter(m => m.role !== 'system');
+            const content = [
+                `── System Prompt ──\n${systemMsg?.content || '—'}`,
+                `── Conversation (${chatMsgs.length} turns) ──`,
+                ...chatMsgs.map(m => `[${m.role.toUpperCase()}] ${m.content}`)
+            ].join('\n\n');
+            addStreamEntry('memory-context', content, {
+                turnId: currentTurn?.id,
+                collapsed: true,
+                meta: `${chatMsgs.length} WMC PMTs · system prompt ${systemMsg ? systemMsg.content.length : 0} chars`
+            });
+        } catch(e) {}
+    });
+    
     // Memory Stats Topic (you'll need to publish this from CNC/MCC)
     const statsTopic = new ROSLIB.Topic({
       ros: ros,
@@ -709,24 +734,12 @@
       meta: `Turn #${turnCount} · ${prompt.length} chars · ${Math.ceil(prompt.length / 4)} est. tokens`
     });
 
-    // Simulate memory context (until MCC publishes this)
-    // In real implementation, MCC should publish assembled context to a topic
-    setTimeout(() => {
-      addStreamEntry('memory-context', `[WMC: 4 PMTs | EMC: 2 episodes]\nSystem prompt + episodic context assembled (${Math.ceil(prompt.length * 1.5)} tokens)`, {
-        turnId: turnCount,
-        collapsed: true,
-        meta: 'Click to expand memory context'
-      });
-    }, 50);
-
     // Show "thinking" indicator
-    setTimeout(() => {
-      addStreamEntry('ai-thinking', 'GCE streaming...', {
-        turnId: turnCount,
-        isThinking: true,
-        meta: 'Waiting for first token...'
-      });
-    }, 100);
+    addStreamEntry('ai-thinking', 'GCE streaming...', {
+      turnId: turnCount,
+      isThinking: true,
+      meta: 'Waiting for first token...'
+    });
   }
 
   function handleResponseChunk(data) {
