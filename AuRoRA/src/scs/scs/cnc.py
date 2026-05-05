@@ -31,8 +31,9 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String) — incoming text input signal
-    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String) — streamed cognitive response
+    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
+    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
+    Pub: CNS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
 
 Response format (JSON on GCE.RESPONSE_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
