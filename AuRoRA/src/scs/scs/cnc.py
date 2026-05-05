@@ -138,12 +138,15 @@ class CNC(Node):
         )
         self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
 
-        # Initialize neural gateway for text input and generative cognitive output
-        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # register ROS2 subscriber — fires on every incoming message
-            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10    # String type | topic | callback | QoS depth 10
+        # Initialize neural gateway for text input, generative cognitive output and MCC stats
+        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # ROS2 subscriber — fires on every incoming message
+            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
         )
         self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
-            String, GCE.RESPONSE_GATEWAY, 10                                # String type | topic | QoS depth 10
+            String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
+        )
+        self._memory_stats_response: rclpy.publisher.Publisher = self.create_publisher(        # ROS2 publisher — sends memory stats to the specified topic
+            String, CNC.MEMORY_STATS_GATEWAY, 10                                               # String type | topic | QoS depth 10
         )
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
@@ -236,8 +239,11 @@ class CNC(Node):
                 await self.mcc.register_memory("assistant", cognitive_response) # bind assistant response into WMC — completes the PMT pair
 
             # 8. Report memory stats
-            self.mcc.report_memory_stats()                                      # log WMC and EMC health after every turn
-
+            stats = self.mcc.report_memory_stats()                              # log WMC and EMC health after every turn
+            stats_signal = String()                                             # create ROS2 String message
+            stats_signal.data = json.dumps(stats)                               # serialize payload to JSON string
+            self._memory_stats_response.publish(stats_signal)                   # publish to memory stats reporting topic
+            
         except Exception as e:                                                  # unhandled failure in cognitive pipeline
             self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
             self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)}) # surface error to caller
@@ -366,7 +372,7 @@ class CNC(Node):
             self._cognitive_response.publish(raw_signal)                          # publish to cognitive response topic
         except Exception as e:                                                  
             self.get_logger().error(f"❌ Publish error: {e}")                     # non-fatal — publishing failure must not crash the cognitive cycle
-
+   
     def destroy_node(self) -> None:
         """
         Gracefully shut down CNC — close all cognitive subsystems in reverse boot order.
