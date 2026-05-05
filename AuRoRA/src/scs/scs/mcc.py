@@ -227,10 +227,13 @@ class MemoryCoordinationCore:
             "emc": emc_schema,                               # current stats of engram complex
         }
 
-    def report_memory_stats(self) -> None:
+    def report_memory_stats(self) -> dict:
         """
         Report current memory cortex stats to the log.
         Called by CNC after every turn for health monitoring.
+
+        Returns:
+            dict : Combined memory stats from WMC and EMC cortex layers
 
         TODO:
         - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
@@ -248,6 +251,7 @@ class MemoryCoordinationCore:
             f"{emc_stats.get('buffer_count', 0)} staged | "
             f"{emc_stats.get('physical_volume', 0)} MB"
         )
+        return stats                                       # return the stats collected from all memory cortex layers
 
     def forget_memory(self) -> None:
         """
