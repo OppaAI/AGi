@@ -884,25 +884,26 @@
 
   // ─── Stats Update ───
   function updateStats(stats) {
-    if (stats.wmc_size !== undefined) {
-      document.getElementById('statWmcSize').textContent = stats.wmc_size;
-      const pct = stats.wmc_capacity ? Math.round((stats.wmc_size / stats.wmc_capacity) * 100) : 0;
-      document.getElementById('statWmcPct').textContent = `${pct}% · ${stats.wmc_size}/${stats.wmc_capacity || '?'} chunks`;
-      
-      const wmcEl = document.getElementById('statWmcSize');
-      wmcEl.className = 'stat-value';
-      if (pct > 90) wmcEl.classList.add('danger');
-      else if (pct > 70) wmcEl.classList.add('warning');
-    }
-
-    if (stats.emc_size !== undefined) {
-      document.getElementById('statEmcSize').textContent = stats.emc_size;
-      document.getElementById('statEmcLast').textContent = `Last: ${stats.emc_last_topic || '—'}`;
-    }
-
-    if (stats.gce_model) {
-      document.getElementById('statGceModel').textContent = stats.gce_model;
-    }
+      // WMC
+      if (stats.wmc) {
+          const wmc = stats.wmc;
+          document.getElementById('statWmcSize').textContent = wmc.pmt_count;
+          document.getElementById('statWmcPct').textContent = 
+              `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
+          
+          const wmcEl = document.getElementById('statWmcSize');
+          wmcEl.className = 'stat-value';
+          if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
+          else if (wmc.chunk_occupancy > 70) wmcEl.classList.add('warning');
+      }
+  
+      // EMC
+      if (stats.emc) {
+          const emc = stats.emc;
+          document.getElementById('statEmcSize').textContent = emc.engram_count || 0;
+          document.getElementById('statEmcLast').textContent = 
+              `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
+      }
   }
 
   // ─── Auto-scroll pause on manual scroll ───
