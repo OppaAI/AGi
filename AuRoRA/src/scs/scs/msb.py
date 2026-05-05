@@ -356,7 +356,7 @@ class EngramComplex:
 
     # Schema version — increment when storage schema changes
     # On mismatch, MSB raises clearly rather than silently operating on wrong schema
-    SCHEMA_VERSION: int = 1                                     # set schema version for migration purposes if needed 
+    SCHEMA_VERSION: int = 2                                     # set schema version for migration purposes if needed 
 
     def _build_schema(self) -> None:
         """

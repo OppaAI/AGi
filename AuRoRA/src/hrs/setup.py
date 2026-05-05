@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='TODO: Package description',
+    description='Homeostatic Regulation System for AuRoRA (Autonomous Rover Robotics Assistant)',
     license='GPL-3.0-only',
     extras_require={
         'test': [

@@ -44,7 +44,7 @@ class AGi:                                              # Amazing Grace infrastr
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "hf.co/mradermacher/MN-12B-Mag-Mell-R1-Uncensored-i1-GGUF:Q4_K_M"  # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
             CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
             TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
@@ -74,7 +74,7 @@ Current date: {date}
             
         class GenericGrace:                                                       # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "hf.co/mradermacher/MN-12B-Mag-Mell-R1-Uncensored-i1-GGUF:Q4_K_M"  # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
             TEMPERATURE           : float = 0.7                                   # [INTRINSIC] response creativity — adapts per cognitive state
             PROBABILITY_THRESHOLD : float = 0.9                                   # [INTRINSIC] cumulative probability cutoff for token sampling

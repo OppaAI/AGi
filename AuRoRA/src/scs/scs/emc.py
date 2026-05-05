@@ -100,7 +100,7 @@ Public interface:
     emc.terminate() → None
 
 TODO:
-    M2 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
+    M1.5 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
          engram anchoring at bind time, RECALL_RESERVE trimming, and chronological
          sequencing before reinstatement. Extend EMC_SCHEMA with scaffold metadata
          fields: sequence_index (INTEGER), session_id (TEXT), salience (REAL),
@@ -148,6 +148,16 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
+        # M2a — importance scoring
+        EngramTrace(label="memory_strength",  modality=EngramModality.REAL),                        # how strongly the memory is consolidated -
+        EngramTrace(label="last_recalled_at", modality=EngramModality.TEXT),                        # when the memory was last recalled
+        EngramTrace(label="recall_count",     modality=EngramModality.INTEGER, baseline="0"),       # how many times the memory has been recalled
+        EngramTrace(label="novelty_score",    modality=EngramModality.REAL),                        # how novel the memory is
+        # M2b — versioning
+        EngramTrace(label="conflict",         modality=EngramModality.INTEGER, baseline="0"),       # if the memory is in conflict with another memory
+        EngramTrace(label="superseded_by",    modality=EngramModality.INTEGER),                     # the ID of the memory that superseded this memory
+        EngramTrace(label="valid_from",       modality=EngramModality.TEXT),                        # when the memory is valid from
+        EngramTrace(label="valid_until",      modality=EngramModality.TEXT),                        # when the memory is valid until
     ],
     staging=[
         EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
