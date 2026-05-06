@@ -1,7 +1,7 @@
 """
-RAS — Recticular Activating System 
+ARC — Arousal Reaction Core
 ========================================
-AuRoRA · Semantic Cognitive System (SCS)
+AuRoRA · Recticular Activating System (RAS)
 
 Central config loader and system-wide constant registry for GRACE/AuRoRA CNS
 Loads all YAML configs at startup, exposes clean objects to all other nodes
