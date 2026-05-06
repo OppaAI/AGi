@@ -47,15 +47,15 @@ class AGi:                                              # Amazing Grace infrastr
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
-            RESPONSE_DEPTH        : int   = 384                                   # [INTRINSIC] maximum response tokens per inference
+            COGNITIVE_ENGINE      : str   = "kwangsuklee/Qwen3.5-9B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"  # [EXTRINSIC] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
             CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
-            TEMPERATURE           : float = 0.88                                  # [INTRINSIC] response creativity — adapts per cognitive state
-            PROBABILITY_THRESHOLD : float = 0.92                                  # [INTRINSIC] cumulative probability cutoff for token sampling
+            TEMPERATURE           : float = 0.75                                  # [INTRINSIC] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.88                                  # [INTRINSIC] cumulative probability cutoff for token sampling
             CANDIDATE_THRESHOLD   : int   = 50                                    # [INTRINSIC] maximum candidate tokens considered per step
             PERSEVERATION_DAMPING : float = 1.25                                  # [INTRINSIC] suppresses repetition of already-generated tokens
             HABITUATION_DAMPING   : float = 0.15                                  # [INTRINSIC] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.2                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            NOVELTY_BIAS          : float = 0.05                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
             KEEP_ALIVE            : int | None = -1                               # [EXTRINSIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
             STREAM_LEADING        : str = "start"                                 # [STATIC] streaming onset — first cognitive fragment arriving (cannot change)
@@ -121,20 +121,20 @@ Current date: {date}
             ENCODING_PRIME_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU prime
             ENCODING_PRIME_KEY_LIMIT: int = 256         # [INTRINSIC] maximum characters hashed per prime key in encoding engine
             
-            EPISODE_CONTENT_LIMIT: int  = 6000          # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
+            EPISODE_CONTENT_LIMIT: int  = 3000          # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
             
             THETA_INTERVAL: float       = 2.0           # [INTRINSIC] seconds — periodic theta rhythm fallback for continuous sensor input
             THETA_BATCH_LIMIT: int      = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
             
             RECALL_RESERVE: int         = 2048          # [INTRINSIC] cortical capacity reserved for episodic recall
-            RECALL_SURFACE_LIMIT: int   = 5             # [INTRINSIC] maximum number of episodes surfaced per turn (final RRF output)
-            RECALL_POOL: int            = 10            # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
+            RECALL_SURFACE_LIMIT: int   = 3             # [INTRINSIC] maximum number of episodes surfaced per turn (final RRF output)
+            RECALL_POOL: int            = 15            # [INTRINSIC] candidate pool multiplier — each recall path scores RECALL_SURFACE_LIMIT × RECALL_POOL episodes before fusion
             RECALL_DEPTH: int           = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED] search depth passed to KNN and FTS5 (number of candidates per path)
             RECALL_TIMEOUT: float       = 2.0           # [INTRINSIC] timeout for recall operations (300M param embedding model on Orin Nano CPU)
                                                         # covers encode_query (~500-900ms) + KNN search
                                                         # TODO: increase to 3.0 if model is genuinely int4 quantized
             RECOVERY_BATCH_SIZE: int    = 50            # [INTRINSIC] max unencoded episodes loaded into binding stream per recovery batch
-            RELEVANCE_THRESHOLD: float  = 0.25          # [INTRINSIC] minimum relevance score for an episode to be surfaced
+            RELEVANCE_THRESHOLD: float  = 0.45          # [INTRINSIC] minimum relevance score for an episode to be surfaced
 
         class WMC:                                      # Working Memory Cortex
             PMT_OVERHEAD: int       = 4                 # [STATIC]    overhead chunks per PMT for formatting and metadata
