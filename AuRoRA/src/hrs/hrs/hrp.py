@@ -40,7 +40,7 @@ class AGi:                                              # Amazing Grace infrastr
         NEURAL_GATEWAY: str     = "scs"                    # [STATIC] neural gateway endpoint for inter-cortical communication
         MEMORY_GATEWAY: str     = "mcc"                    # [STATIC] MCC node identifier for memory subsystem routing
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
-        UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
+        UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk (TODO: to be obsolete after tokenizer implemented in M1.5)
         
         TEXT_INPUT_GATEWAY: str = "/scs/text_input"        # [STATIC] ROS topic for text input from users
         COGNITIVE_RESPONSE: str   = "/scs/response"        # [STATIC] GCE response topic
@@ -49,23 +49,23 @@ class AGi:                                              # Amazing Grace infrastr
 
 
         class GCE:                                                                # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [EXTRINSIC] GCE model identifier
-            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
-            CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
-            TEMPERATURE           : float = 0.75                                  # [INTRINSIC] response creativity — adapts per cognitive state
-            PROBABILITY_THRESHOLD : float = 0.88                                  # [INTRINSIC] cumulative probability cutoff for token sampling
-            CANDIDATE_THRESHOLD   : int   = 50                                    # [INTRINSIC] maximum candidate tokens considered per step
-            PERSEVERATION_DAMPING : float = 1.25                                  # [INTRINSIC] suppresses repetition of already-generated tokens
-            HABITUATION_DAMPING   : float = 0.15                                  # [INTRINSIC] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.05                                  # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [STATIC] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
+            CONTEXT_WINDOW        : int   = 32768                                 # [PERSONA] model context window — Ollama num_ctx allocation
+            TEMPERATURE           : float = 0.75                                  # [PERSONA] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.88                                  # [PERSONA] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 50                                    # [PERSONA] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.25                                  # [PERSONA] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.15                                  # [PERSONA] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.05                                  # [PERSONA] bias toward introducing new topics — penalizes already-mentioned concepts
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
-            KEEP_ALIVE            : int | None = -1                               # [EXTRINSIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
+            KEEP_ALIVE            : int | None = -1                               # [STATIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
             STREAM_LEADING        : str = "start"                                 # [STATIC] streaming onset — first cognitive fragment arriving (cannot change)
             STREAM_PROPAGATING    : str = "delta"                                 # [STATIC] streaming propagation — mid-stream cognitive fragments (cannot change)
             STREAM_TRAILING       : str = "done"                                  # [STATIC] streaming completion — full cognitive response assembled (cannot change)
             STREAM_ANOMALY        : str = "error"                                 # [STATIC] streaming inhibition — cognitive error or suppressed response (cannot change)
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 Personality:
 - Loving, playful, and attentive
@@ -89,17 +89,16 @@ Current date: {date}
 """   
 
         class GenericGrace:                                                       # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
-            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
-            TEMPERATURE           : float = 0.7                                   # [INTRINSIC] response creativity — adapts per cognitive state
-            PROBABILITY_THRESHOLD : float = 0.9                                   # [INTRINSIC] cumulative probability cutoff for token sampling
-            CANDIDATE_THRESHOLD   : int   = 40                                    # [INTRINSIC] maximum candidate tokens considered per step
-            PERSEVERATION_DAMPING : float = 1.15                                  # [INTRINSIC] suppresses repetition of already-generated tokens
-            HABITUATION_DAMPING   : float = 0.1                                   # [INTRINSIC] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.1                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
-            TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [PERSONA] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [PERSONA] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
+            TEMPERATURE           : float = 0.7                                   # [PERSONA] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.9                                   # [PERSONA] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 40                                    # [PERSONA] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.15                                  # [PERSONA] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.1                                   # [PERSONA] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.1                                   # [STATIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 Personality:
 - Loving, playful, and attentive
