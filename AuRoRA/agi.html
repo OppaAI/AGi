@@ -297,6 +297,16 @@
       border-left-color: var(--info);
     }
 
+    .stream-entry.system-prompt {
+      background: rgba(139, 92, 246, 0.08);
+      border-left-color: var(--lavender);
+    }
+
+    .badge-system-prompt {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--lavender-soft);
+    }
+
     .stream-entry.ai-thinking {
       background: rgba(251, 191, 36, 0.04);
       border-left-color: var(--warning);
@@ -530,6 +540,7 @@
     }
   </style>
   <base target="_blank">
+<base target="_blank">
 </head>
 
 <body>
@@ -844,7 +855,8 @@
         document.getElementById('statTokensTotal').textContent = `${tokenCount} tokens`;
 
         // For delta chunks, append to existing response entry if same turn
-        const existingResponse = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+        const allResp = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
+        const existingResponse = allResp.length > 0 ? allResp[allResp.length - 1] : null;
 
         if (data.type === 'start' || !existingResponse) {
           addStreamEntry('ai-response', data.content, {
@@ -868,8 +880,9 @@
         document.getElementById('statLatency').textContent = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
 
-        // Convert last streaming entry to done
-        const lastEntry = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+        // Convert last streaming entry to done — search ALL children, not just :last-child
+        const allResponses = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
+        const lastEntry = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
         if (lastEntry) {
           lastEntry.classList.remove('ai-response');
           lastEntry.classList.add('ai-done');
@@ -926,6 +939,7 @@
 
       const badgeMap = {
         'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
+        'system-prompt': { cls: 'badge-system-prompt', icon: '🔧', label: 'SYSTEM' },
         'memory-context': { cls: 'badge-memory', icon: '🧠', label: 'MEMORY' },
         'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
         'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'AI' },
