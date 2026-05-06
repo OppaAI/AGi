@@ -605,3 +605,61 @@ EMC flow could be reasoned about as a system, not just as code.
 
 ---
 
+### 2026-03-26 — Memory API Learns to Describe Itself
+*Binding, assessment, and introspection*
+
+**What landed**
+- Fixed evicted PMT variable naming inconsistencies across
+  MCC and WMC after the previous day's refactor
+- Passed PMT timestamps into `_bind_to_emc_buffer()` — EMC
+  needs temporal data to store episodes properly
+- Renamed stats methods: `get_stats → assess_memory_schema`,
+  `log_stats → report_memory_stats`
+- Renamed WMC chunk recomputation to `_introspect_chunk_load`
+  — WMC inspects its own load, it doesn't just recalculate
+- Added missing `-> None` return type annotation
+
+**Challenges**
+- The previous day's fast renaming left a real bug: evicted
+  PMT variable was renamed but the `if evicted:` check still
+  used the old name — silent failure until caught today
+
+**Reflection**
+March 26 was cleanup, but cleanup that mattered. Passing
+timestamps into EMC was the most substantive fix — without
+temporal data, episodic memory loses its context. The naming
+work was quieter but the architecture was becoming
+self-documenting: reading the method names told you what the
+memory system was doing.
+
+---
+
+### 2026-03-27 — MCC Becomes the Integration Hub
+*Binding evicted PMTs and assembling memory context*
+
+**What landed**
+- Refactored WMC → EMC handoff: MCC binds evicted PMTs via
+  `run_in_executor` — episodic binding no longer blocks active
+  cognition
+- Built memory context assembly: sustained WMC PMTs + recalled
+  EMC episodes → one unified context for the cognitive engine
+- Cleaned MCC public interface into its final shape:
+  `register_memory`, `_bind_to_episodic_buffer`,
+  `assemble_memory_context`, `assess_memory_schema`,
+  `report_memory_stats`, `forget_memory`, `close`
+
+**Challenges**
+- The cognitive engine should not care whether a memory came
+  from working memory or episodic recall — making that
+  abstraction clean required MCC to own the assembly fully,
+  with no leakage into CNC
+
+**Reflection**
+March 27 was the day the memory pipeline became a system.
+WMC and EMC had been evolving separately — today MCC became
+the hub where they converge. The cognitive engine receives
+one unified context. Where each memory came from is MCC's
+problem, not the engine's.
+
+---
+
