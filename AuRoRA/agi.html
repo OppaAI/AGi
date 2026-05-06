@@ -737,7 +737,7 @@
       // Text Input Gateway — User Prompt
       const inputTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/text_input_gateway',
+        name: '/scs/text_input_gateway',
         messageType: 'std_msgs/String'
       });
       inputTopic.subscribe((msg) => {
@@ -753,7 +753,7 @@
       // Response Gateway — AI Response Stream
       const responseTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/gce/response_gateway',
+        name: '/scs/response_gateway',
         messageType: 'std_msgs/String'
       });
       responseTopic.subscribe((msg) => {
@@ -768,7 +768,7 @@
       // Memory Context Topic — full GCE input context for debug
       const contextTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/memory_context',
+        name: '/scs/memory_context',
         messageType: 'std_msgs/String'
       });
       contextTopic.subscribe((msg) => {
@@ -793,7 +793,7 @@
       // Memory Stats Topic (you'll need to publish this from CNC/MCC)
       const statsTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/memory_stats',
+        name: '/scs/memory_stats',
         messageType: 'std_msgs/String'
       });
       statsTopic.subscribe((msg) => {
