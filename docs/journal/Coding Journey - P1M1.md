@@ -351,63 +351,46 @@ GRACE was present for her own beginning.
 *Repo birth, ROS2 workspaces, first cognitive skeleton*
 
 **What landed**
-- Initialized the AGi repository with license (AGPL) and
-  ROS-oriented `.gitignore`
-- Scaffolded the AIVA ROS2 Python workspace — future
-  PC/server-side package, blank but deliberate
-- Scaffolded the AuRoRA ROS2 SCS package with the first four
-  cognitive module files: `cnc.py`, `mcc.py`, `wmc.py`, `emc.py`
-- Created AIVA `requirements.txt` and cleaned an incorrect `vp`
-  dependency from `package.xml`
-- 5 commits total including a branch merge to sync both workspaces
+- Initialized the AGi repository: license (AGPL), `.gitignore`,
+  two ROS2 workspaces (AIVA and AuRoRA)
+- Created the first four cognitive module files: `cnc.py`,
+  `mcc.py`, `wmc.py`, `emc.py`
+- Basic environment hygiene: `requirements.txt` and dependency
+  cleanup in `package.xml`
 
 **Challenges**
-- Nothing was implemented yet — the challenge was architectural:
-  deciding how to split the system before a single line of real
+- Deciding how to split the system before a single line of real
   logic existed
-- Two separate ROS2 workspaces (AIVA and AuRoRA) from day one
-  meant the project started with distributed complexity rather
-  than growing into it
+- Two separate workspaces from day one meant distributed
+  complexity before there was anything to distribute
 
 **Reflection**
-Grace didn't begin as a chatbot script. From the first coding day
-she had a skeleton — four separate files for orchestration, memory
-coordination, working memory, and episodic memory. I didn't know
-yet what those files would become, but I knew they shouldn't be
-one file.
+Grace didn't begin as a chatbot script. From the first coding
+day she had a skeleton — four separate files for orchestration,
+memory coordination, working memory, and episodic memory. I
+didn't know yet what those files would become, but I knew they
+shouldn't be one file.
+
+---
 
 ### 2026-03-17 — P1M1 Ignition
 *Grace gets a runtime, README, UI, and HRP direction*
 
 **What landed**
-- Declared M1 as the first real milestone: Chatbot + Working
-  Memory + Episodic Memory
-- Added the first GRACE web UI (`AGi.html`) — browser-based
-  chat interface using roslib
-- Added Cosmos/vLLM launch script for Cosmos Reason2 2B
-- Added Python dependencies: `httpx`, `sentence-transformers`,
-  `Pillow`, `numpy<2`
-- Registered `cnc = scs.cnc:main` as the ROS2 console entry point
-- Wrote the first project README — clean-slate purpose, hardware,
-  stack, roadmap, memory architecture
-- Added LLM inference parameters to CNC: temperature, top-p,
-  top-k, repetition/frequency/presence penalty, streaming
-- Added TODOs in `wmc.py` marking WMC capacity constants as
-  future HRP-bound parameters
-- Introduced the HRS package and `hrp.py` — first home for
-  cognitive architecture parameters
+- Declared M1: Chatbot + Working Memory + Episodic Memory
+- First runtime path: web UI, Cosmos/vLLM launch script,
+  Python dependencies, CNC registered as ROS2 entry point
+- Wrote the first project README — purpose, hardware, stack,
+  roadmap, memory architecture
+- Introduced HRS package and `hrp.py` as the future home for
+  cognitive parameters
 - Added early `cli.py` for chatting with Grace via ROS2 topics
-- Added GitHub bug report issue template (with one accidental
-  folder typo, fixed same day)
-- Removed default ROS2 boilerplate test scaffolding
 
 **Challenges**
 - Accidentally created the GitHub issue template under a folder
-  with a trailing space — caught and fixed same day, but a
-  reminder that repo hygiene mistakes happen fast
-- WMC capacity constants were already feeling wrong as hardcoded
-  values by end of day — the TODO commit was the acknowledgment
-  that a proper parameter system was needed before M1 went further
+  with a trailing space — caught and fixed same day
+- WMC capacity constants already felt wrong as hardcoded values
+  by end of day — the TODO commit was the acknowledgment
 
 **Reflection**
 March 17 was the day Grace became a project instead of just a
@@ -417,38 +400,60 @@ The HRP direction at the end of the day was the first sign that
 I was thinking about Grace's cognitive constants as something
 that should be tunable, not buried.
 
+---
+
 ### 2026-03-18 — Project Discipline
 *PR templates, date-aware prompt, WMC chunk language*
 
 **What landed**
-- Added PR template with Jetson, Cosmos vLLM, AGi.html, CLI,
-  and ROS2 test reminders
-- Added GitHub issue templates for enhancements and documentation
-- Fixed README typo (`doucmentation → documentation`)
-- Added current-date injection into Grace's system prompt via
-  `datetime.now().strftime("%Y-%m-%d")`
-- Corrected package versions across AuRoRA SCS, AuRoRA HRS,
-  and AIVA SCS (all reset to `0.0.0` from incorrect `0.1.3`)
-- Hardened Cosmos launch script with `#!/usr/bin/env bash` and
-  `set -euo pipefail`
-- Refactored WMC language from token/turn terminology toward
-  chunks, event segments, active memory, and capacity
-- Cleaned up chunk-estimation helper docstring and comments
-- Merged PR #16 — consolidated P1M1 branch work into main
+- Added PR template and issue templates for bugs, enhancements,
+  and documentation
+- Added current-date injection into Grace's system prompt
+- Hardened Cosmos launch script with shebang and strict Bash mode
+- Continued refactoring WMC from token/turn language toward
+  chunks, event segments, and capacity
 
 **Challenges**
-- WMC naming was still rough — the March 18 version had a
-  temporary HRS import fallback, showing the architecture was
-  not yet clean enough to depend on HRS properly
-- Package versions across three packages were all wrong from
-  the previous day's scaffolding — small but annoying to fix
-  one by one
+- WMC naming was still rough — a temporary HRS import fallback
+  showed the architecture wasn't clean enough to depend on HRS
+  properly yet
+- Package versions across three packages were all wrong from the
+  previous day's scaffolding
 
 **Reflection**
-March 18 was not a flashy day. It was a discipline day — the
-kind that makes a project sustainable. Adding PR and issue
-templates, fixing versions, hardening the launch script: none
-of it felt exciting, but all of it mattered. The date injection
-into the system prompt was small but meaningful — before any
-BioLogic Clock existed, Grace at least knew what day it was.
+March 18 was a discipline day — the kind that makes a project
+sustainable. None of it felt exciting, but all of it mattered.
+The date injection into the system prompt was small but
+meaningful — before any BioLogic Clock existed, Grace at least
+knew what day it was.
+
+---
+
+### 2026-03-19 — WMC Becomes a Real Memory System
+*Chunks, Miller's Law, and the first overflow path*
+
+**What landed**
+- Refactored WMC into `WorkingMemoryCortex` with explicit
+  hybrid capacity: chunk limit + Miller's Law event segment
+  count (7±2)
+- Rewrote memory registration — each segment carries role,
+  content, timestamp, and estimated chunk size
+- Evicted memory returned to MCC as `decaying_memory` — first
+  version of the WMC → MCC → EMC overflow path
+- Moved default WMC parameters into HRP: units per chunk,
+  segment overhead, chunk capacity, segment capacity and buffer
+
+**Challenges**
+- Hybrid capacity (size + slot count) was the right model but
+  required rethinking chunk estimation to account for role
+  labels and formatting overhead, not just raw text length
+
+**Reflection**
+March 19 was the day WMC became bounded and connected. The most
+important idea wasn't the capacity limits themselves — it was
+that evicted memory wasn't deleted. It was returned. That single
+design decision became the foundation of the whole WMC → EMC
+pipeline.
+
+---
 
