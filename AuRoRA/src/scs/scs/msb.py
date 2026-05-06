@@ -60,6 +60,7 @@ from pathlib import Path                    # for calculating database size — 
 import re                                   # for lexical cue sanitization
 import sqlite3                              # for engram connection factory
 import struct                               # for packing semantic vectors (fp32)
+import threading                            # for background thread hosting the encoding engine
 
 class EngramModality(Enum):
     """
