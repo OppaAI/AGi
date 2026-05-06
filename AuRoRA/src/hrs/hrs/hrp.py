@@ -118,7 +118,7 @@ Current date: {date}
             ENCODING_PRIME_CAPACITY: int  = 256         # [INTRINSIC] maximum entries in encoding engine's LRU prime
             ENCODING_PRIME_KEY_LIMIT: int = 256         # [INTRINSIC] maximum characters hashed per prime key in encoding engine
             
-            EPISODE_CONTENT_LIMIT: int  = 800           # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
+            EPISODE_CONTENT_LIMIT: int  = 6000          # [INTRINSIC] maximum character length of a PMT bound into episodic buffer
             
             THETA_INTERVAL: float       = 2.0           # [INTRINSIC] seconds — periodic theta rhythm fallback for continuous sensor input
             THETA_BATCH_LIMIT: int      = 32            # [INTRINSIC] max traces encoded per rhythm — prevents spike on crash recovery
