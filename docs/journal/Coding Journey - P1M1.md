@@ -457,3 +457,37 @@ pipeline.
 
 ---
 
+### 2026-03-20 — PMT Is Born
+*Working memory gets its language*
+
+**What landed**
+- Settled on PMT (phonological memory trace) as the core WMC
+  unit — replacing "event segment" and "utterance"
+- Aligned HRP parameter names with WMC: `PMT_OVERHEAD`,
+  `PMT_SLOT_LIMIT`, `PMT_SLOT_BUFFER`, `GLOBAL_CHUNK_LIMIT`
+- Renamed lifecycle stage from "decaying" to "receding" —
+  more accurate: PMTs leave active attention, they don't degrade
+- Expanded README roadmap into M2a/M2b/M2c with importance
+  scoring, Ebbinghaus forgetting, novelty scoring, conflict
+  columns, SMC distillation, and memory health reviews
+
+**Challenges**
+- Finding the right word took most of the day: event segment →
+  utterance → PMT. Each rename forced a rethink of what the
+  unit actually represented and what its lifecycle should be
+  called
+
+**Reflection**
+March 20 was the day Grace's memory stopped being chat history.
+The vocabulary clarified the architecture: PMTs are sustained,
+they recede, they evict — they don't just scroll off a list.
+Once the language was right, the design became easier to reason
+about and easier to build on.
+
+---
+
+### 2026-03-21 — No Commit
+*Pause between WMC language and WMC hardening*
+
+---
+
