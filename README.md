@@ -123,7 +123,11 @@ AGi/
 **Goal:** Close the gaps M2a assumes exist. Validate agentic pipeline before M2a depends on it.
  
 #### Memory Bridges
-- [ ] Anchor vector PMT filtering via embeddinggemma — semantic trivial PMT discard at eviction boundary (replaces M1 length filter)
+- [ ] PMT induction scoring — 5-factor WMC→EMC encoding gate firing at slot induction:
+  depth (meaningful anchor), novelty (filler anchor distance), event boundary (PMT delta),
+  salience stub (placeholder for M2a EEE integration)
+  weighted composite → immediate EMC write if above threshold
+- [ ] Anchor vector filter — safety net at eviction boundary for any PMTs that slipped through induction scoring
 - [ ] Session-end WMC flush to EMC on shutdown — gated on content length threshold
 - [ ] Basic user profile store — personal facts always injected into context (lightweight SMC precursor)
 - [ ] Anti-hallucination grounding instruction in GRACE system prompt — only reference injected memories
@@ -203,6 +207,7 @@ AGi/
     - Dimension 1 — SMC similarity (personal fact anchoring)
     - Dimension 2 — novelty score via embeddinggemma (novel = important, duplicate = expendable)
     - Dimension 3 — content signals (length, questions, named entities, significance markers)
+- [ ] Complete 5-factor induction scoring — salience (EEE) + repetition (recall_count) replace M1.5 stubs
 - [ ] Ebbinghaus forgetting curve: `R = e^(−t/S)`, S set by importance score, +1 on each recall
 - [ ] Duplicate/similarity clustering — cosine > 0.85 = merge candidates
 - [ ] Daily reflection (11pm via SCN) — fast sweep:
