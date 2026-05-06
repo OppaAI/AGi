@@ -3,7 +3,7 @@ WMC — Working Memory Cortex
 ============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Working memory layer of the CNS — mirrors human working memory.
+Working memory layer of the SCS — mirrors human working memory.
 Fast, limited capacity, current focus only.
 
 Responsibilities:
@@ -63,8 +63,8 @@ import json                              # for structured PMT storage — serial
 
 # AGi libraries
 from hrs.hrp import AGi                  # homeostatic regulation parameter registry — system-wide constants
-CNS = AGi.CNS                            # CNS parameter namespace alias — keeps constant references concise
-WMC = CNS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
+SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
+WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
 
 def _estimate_chunk_count(pmt: dict) -> int:
     """
@@ -78,12 +78,12 @@ def _estimate_chunk_count(pmt: dict) -> int:
         int : Number of chunks, including overhead for formatting
     """
     content: str = pmt.get("content", "")                                                                   # extract raw content string from PMT
-    content_chunk_count: int = max(1, (len(content) + CNS.UNITS_PER_CHUNK - 1 ) // CNS.UNITS_PER_CHUNK)     # ceiling division — minimum 1 chunk even for empty content
+    content_chunk_count: int = max(1, (len(content) + SCS.UNITS_PER_CHUNK - 1 ) // SCS.UNITS_PER_CHUNK)     # ceiling division — minimum 1 chunk even for empty content
     return content_chunk_count + WMC.PMT_OVERHEAD                                                           # add fixed overhead for PMT formatting
 
 class WorkingMemoryCortex:
     """
-    Working Memory Cortex — the active conversation window of the CNS.
+    Working Memory Cortex — the active conversation window of the SCS.
 
     Maintains the sustained PMT slot sent to the cognitive engine on every turn.
     Receding PMT schema are evicted when the global chunk limit or PMT slot limit is exceeded,
