@@ -347,6 +347,402 @@ GRACE was present for her own beginning.
 
 ## 📋10. Development Log
 
+# Side Project Dev Log
 
----
+## 2026-03-16
+**Project Foundation & Major Architecture Setup**
 
+- Performed initial commit and established the overall project structure
+- Created full ROS2 workspace with two main packages: AIVA (development) and AuRoRA (robot deployment)
+- Set up complete SCS (Semantic Cognitive System) ROS package including package.xml, setup.py, LICENSE, and test infrastructure
+- Built a stunning cyberpunk-style interactive web GUI (AGi.html) for Grace featuring emotional expressions, petting/poking interactions, floating hearts, and real-time ROS bridge
+- Implemented core memory architecture: WMC (Working Memory Cortex), EMC (Episodic Memory Cortex with async embedding worker), and MCC (Memory Coordination Core)
+- Developed CNC (Central Neural Core) ROS2 node supporting streaming responses from Cosmos-Reason2-2B via vLLM
+- Added cosmos.sh Docker script for running the vLLM server on Jetson Orin with proper GPU configuration
+- Set up project-wide GPL-3.0 licensing and initial requirements.txt files
+
+## 2026-03-17
+**Documentation, CLI Tool & Early Refactoring**
+
+- Created comprehensive README.md with architecture diagram, tech stack, quick start guide, and initial roadmap
+- Established HRS (Homeostatic Regulation System) package with HRP (Homeostatic Regulation Parameters) for centralized constants
+- Added a clean terminal CLI interface (`cli.py`) for chatting with GRACE directly during development without browser
+- Began systematic refactoring of variable and function names toward a more humanistic/biotech-inspired naming scheme
+- Updated system prompt with better personality guidelines and current date formatting
+- Minor fixes and improvements across multiple files
+
+## 2026-03-18
+**Project Tooling & Memory System Refactoring**
+
+- Added professional GitHub issue templates (bug_report.md, enhancement.md, documentation.md)
+- Continued deep refactoring work on WMC and related constants for cleaner structure
+- Updated requirements.txt and various documentation files
+- Performed general code cleanup and improved naming consistency
+- Merged pull request from dev branch
+
+## 2026-03-19
+**Memory Parameters & Humanistic Naming Alignment**
+
+- Updated the new memory registration logic in WMC
+- Added default tunable parameters into HRP (Homeostatic Regulation Parameters)
+- Refactored variable names in both HRP and WMC to better reflect humanistic/neuroscience terminology
+- Standardized naming references for the robot across the codebase
+- Performed minor corrections to naming mistakes
+
+## 2026-03-20
+**Major Neuroscience Terminology Overhaul**
+
+- Executed a comprehensive naming refactor across WMC and HRP using neuroscience-inspired terms (PMT, PMT slot, sustaining/receding/evicting, etc.)
+- Updated memory lifecycle documentation and concepts
+- Significantly expanded the README roadmap with detailed milestones, future phases, and cognitive architecture vision
+- Incorporated ideas from cognitive memory research (arXiv papers) into the long-term development plan
+
+## 2026-03-21
+**WMC Logic Improvements & Safeguards**
+
+- Refactored WMC with improved chunk estimation using ceiling division for higher accuracy
+- Added guard logic to automatically truncate oversized PMTs before they break context window limits
+- Implemented recomputation of sustained chunks as source-of-truth verification
+- Continued refining variable names and memory-related structure
+
+## 2026-03-22
+**Centralized Configuration in HRP**
+
+- Moved scattered MCC constants into the centralized HRP system
+- Continued alignment of code and naming with the humanistic theme
+
+## 2026-03-23
+**Parameter Refinement & Cleanup**
+
+- Renamed multiple parameters across HRP and WMC to better fit the humanistic naming scheme
+- Removed "default" prefixes since parameters are now designed to be tunable by the robot itself
+- Fixed minor naming inconsistencies and improved code comments
+
+## 2026-03-24
+**Class-Based Hierarchical Configuration**
+
+- Converted flat constants into organized class-based structure under the AGi namespace
+- Moved additional parameters into HRP for better central management
+- Improved logging messages and memory statistics reporting
+
+## 2026-03-25
+**Roadmap Expansion & Async Optimization**
+
+- Added a detailed cognitive development roadmap section to README.md
+- Optimized async patterns in MCC for more efficient PMT relay to EMC
+- Updated EMC lifecycle documentation
+- Continued humanistic naming refinements across modules
+
+## 2026-03-26
+**Encoding Engine & Final Naming Polish**
+
+- Refactored the introspect chunk load method in WMC
+- Improved encoding engine activation and error handling logic
+- Updated main project title in README.md
+- Performed various small naming consistency fixes
+
+## 2026-03-27
+**Memory Context Assembly Major Refactor**
+
+- Conducted major overhaul of PMT relay process and memory context assembly in MCC
+- Enhanced the encoding mechanism with cache key limiting
+- Continued extensive refactoring of variable and function names to humanistic scheme
+
+## 2026-03-29
+**Encoding Engine Reliability Improvements**
+
+- Changed encoding engine loading strategy from lazy-load to eager-load at EMC startup for better reliability
+- Performed additional naming refinements for consistency
+
+## 2026-03-30
+**Final Polish & Encoding Enhancements**
+
+- Fixed log message formatting issues in MCC
+- Improved encoding engine activation logic and messages
+- Updated project title and performed final small refinements
+
+## 2026-03-31
+**Memory Coordination & Asynchronous PMT Relay Optimization**
+
+- Optimized async patterns in MCC for more efficient PMT relay from WMC to EMC
+- Updated EMC lifecycle documentation with clearer biological analogies
+- Continued humanistic naming refinements across memory modules
+- Added cognitive development roadmap section to README.md with detailed phases
+
+## 2026-04-01
+**Humanistic Naming Completion for Encoding Engine**
+
+- Finished comprehensive refactor of Encoding Engine to fully humanistic naming scheme
+- Updated variable names, comments, and method signatures across EMC and WMC
+- Improved code clarity and consistency in memory-related modules
+
+## 2026-04-02
+**Database Schema & Encoding Cycle Refinements**
+
+- Updated .gitignore files across workspaces
+- Refactored cache mechanism in Encoding Engine for better performance
+- Continued merging dev branch and minor cleanups
+
+## 2026-04-03
+**Episodic Buffer Redesign & Shared Memory Streams**
+
+- Redesigned the episodic buffer mechanism inside EMC
+- Consolidated a single episodic buffer in EMC shared between intake and recall streams
+- Improved memory coordination between WMC and EMC layers
+
+## 2026-04-05
+**SQLite-vec Integration for Semantic Search**
+
+- Replaced pure-Python cosine similarity with SQLite-vec L2 distance KNN search
+- Updated EMC recall logic to leverage vector search when available
+- Added comprehensive test script for sqlite-vec validation on Jetson
+
+## 2026-04-06
+**PMT Pairing & Interaction-Level Memory**
+
+- Changed "speaker" column back to "role" for consistency
+- Implemented storage of complete interactions (user prompt + AI response) as single engrams
+- Adjusted memory settings and parameters in HRP
+
+## 2026-04-07
+**Major Refactoring & Thread Safety Improvements**
+
+- Performed extensive refactoring across EMC, MCC, and WMC modules
+- Added timing and token tracking to GraceUI for performance monitoring
+- Enhanced recall stream management with proper locking and staging methods
+- Improved thread-safety for episodic buffer operations
+- Fixed multiple bugs and optimized encoding cycle
+
+## 2026-04-08
+**System Prompt & Interaction Handling Polish**
+
+- Updated LLM system prompt with better personality and memory honesty guidelines
+- Refactored MCC to properly handle PMTs as complete interactions
+- Streamlined evicted PMT binding logic for paired turns
+- Removed duplicate user input from memory context assembly
+
+## 2026-04-09
+**Interaction-Level Storage & Final Polish**
+
+- Changed storage strategy to treat user+assistant as one complete interaction (PMT)
+- Updated EMC to store and recall episodes containing full interactions
+- Refactored WMC to pair user prompt and AI response internally before filling into working memory
+- Minor bug fixes and optimization adjustments
+
+## 2026-04-10
+**Memory Binding & Orphaned PMT Recovery**
+
+- Improved handling of pending user PMTs in MCC (local vs global scope)
+- Enhanced recovery mechanism for orphaned prompts and responses during binding
+- Streamlined evicted PMT binding to work with whole interactions
+- Refined comments and logic in binding section for clarity
+
+## 2026-04-11
+**Chatbot Configuration & Model Tuning**
+
+- Switched embedding model from embeddinggemma to BAAI/bge-small-en-v1.5 for better performance
+- Reduced ENCODING_DIM to 384 and RECALL_DEPTH to 3 for efficiency
+- Tightened RECALL_TIMEOUT to 2.0s and adjusted RELEVANCE_THRESHOLD
+- Updated CNC message assembly to separate system and conversation parts
+- Improved episodic memory parsing in MCC for user/assistant pairs
+
+## 2026-04-12
+**Stratified Sampling & Redefined Memory Concepts**
+
+- Replaced recency-biased cosine with stratified sampling (recent + oldest) for balanced recall
+- Redefined PMTs vs episodes in EMC for clearer architecture
+- Added launch.sh script for Cosmos container management
+- Updated logging and documentation across memory modules
+
+## 2026-04-13
+**3-Table SQLite Design & Dual-Path Retrieval**
+
+- Major refactor to 3-table SQLite design (episodic_buffer + episodes + indexes)
+- Implemented dual-path retrieval: semantic (vec KNN) + lexical (FTS5) fused via RRF
+- Enhanced thread safety and FTS5 query sanitization
+- Added comprehensive CLAUDE.md documentation for development guidance
+
+## 2026-04-14
+**Recall & Consolidation Separation**
+
+- Updated EMC recall method to explicitly recall episodes
+- Separated synaptic consolidation (storing in EMC) from systems consolidation (SMC/PMC)
+- Redefined engram vs episode terminology for clarity
+- Improved memory stats output in MCC
+
+## 2026-04-15
+**Episodic Buffer Refinements & JSON PMT Handling**
+
+- Refactored episodic buffer design with atomic deletion after consolidation
+- Improved PMT handling using JSON serialization for crash-safety
+- Updated process priority and theta rhythm wait in encoding cycle
+- Enhanced content parsing and deserialization logic
+
+## 2026-04-16
+**Memory Storage Bank (MSB) Introduction**
+
+- Created MSB.py as shared infrastructure for encoding, vectors, and storage
+- Normalized encoded traces for improved search accuracy
+- Refactored vector math and engram access patterns
+- Added unit tests and documentation for MSB utilities
+
+## 2026-04-17
+**NumPy Optimization & MSB Generalization**
+
+- Optimized vector operations using NumPy for faster normalization and matching
+- Refactored function names and comments for clarity (semantic_search → semantic_match, etc.)
+- Updated MSB to support generic frameworks across memory cortices
+- Enhanced logging and documentation throughout
+
+## 2026-04-18
+**Code Review & General Function Rebuild**
+
+- Performed comprehensive code review after major refactoring
+- Rebuilt functions to be more general and reusable
+- Updated CLAUDE.md with detailed architecture and troubleshooting guidance
+- Minor bug fixes and optimization passes
+
+## 2026-04-19
+**EngramSchema Primitives & Dynamic Schema Generation**
+
+- Introduced EngramSchema primitives for model-specific encoding strategies
+- Converted code to general framework usable by different cortices
+- Refactored MSB for modular schema definition and dynamic SQL generation
+- Improved lexical cue sanitization with OR-based keyword matching
+
+## 2026-04-20
+**RRF Logic Refinements & Logging Improvements**
+
+- Reverted and stabilized RRF score computation/sorting logic
+- Enhanced episode candidate filtering by key in queries
+- Updated memory stats output and logging messages
+- Improved documentation and comments across MSB and EMC
+
+## 2026-04-21
+**Refactor Engram Vector Index & Cleanup**
+
+- Refactored engram vector index activation logic and filters
+- Refined comments, documentation, and imports in MSB dataclasses
+- Updated logger and encoding engine documentation
+- Standardized inline comments to imperative mood throughout MSB
+
+## 2026-04-22
+**Schema & Terminology Refinements**
+
+- Redefined engram vs episode terminology in EMC
+- Updated terminology definitions and comments in MSB
+- Refactored dataclass and initialization docstrings
+- Improved overall code documentation and clarity
+
+## 2026-04-23
+**Blueprint & Transcript Standardization**
+
+- Refactored schema references to use "blueprint" terminology consistently
+- Removed utility functions from MSB and updated normalization calls
+- Standardized SQL column transcript generation logic
+- Updated episode/engram terminology throughout MSB
+
+## 2026-04-24
+**Vector Functions & Schema Building**
+
+- Refactored vector functions (normalize, pack, unpack) into separate module definitions
+- Refactored schema building during EngramComplex initialization
+- Optimized SQL column transcript generation
+- Added episode methods and standardized inline comments
+
+## 2026-04-25
+**EngramComplex & Recall Integration**
+
+- Renamed EngramStorageBank → EngramComplex and streamlined internal API
+- Implemented `recall_engram()` with semantic + lexical RRF fusion
+- Updated terminology from "episode" to "engram" throughout MSB
+- Decoupled engram and cue encoding with deterministic MD5 prime keys
+
+## 2026-04-26
+**Encoding Prefixes & Parallel Connections**
+
+- Added intrinsic parameters for encoding cue/engram prefixes
+- Standardized EncodingEngine interface with separate cue/engram methods
+- Abstracted EngramComplex interface in EMC
+- Optimized SQLite connection management with parallel bifurcated connections
+
+## 2026-04-27
+**Theta Rhythm & Encoding Cycle**
+
+- Added intrinsic parameters for theta rhythm processing
+- Refactored bind_pmt and ripple snapshotting logic
+- Implemented batch limits for binding stream snapshots
+- Optimized draining of episodic buffer
+- Migrated encoding cycle from SWR to theta rhythm
+
+## 2026-04-28
+**EncodingCycle Class & Cleanup**
+
+- Refactored encoding cycle into dedicated `EncodingCycle` class
+- Improved documentation and close/terminate methods
+- Standardized connection closure and resource cleanup
+- Updated EMC architectural documentation and terminology
+- Added stream timeout safety net in GraceCLI
+
+## 2026-04-29
+**Parameter Refactoring & Recall Clarification**
+
+- Refactored constants for consistency across HRP
+- Reordered and expanded engram statistics in assessment
+- Updated EMC recall depth, logging, and parameter naming (prime → cache, recall_limit → surface_limit)
+- Refactored recall_engram to separate search depth from surface limit
+- Updated recall parameters in HRP and cleaned up method signatures
+
+## 2026-04-30
+**Schema Versioning & Binding Stream Guard**
+
+- Implemented schema versioning and integrity check in MSB initialization
+- Added binding stream capacity limit with automatic truncation to prevent OOM
+- Implemented length-based trivial PMT filter for binding in episodic buffer
+- Updated launch script error handling and cleaned up obsolete files
+- Enhanced documentation and project structure
+
+## 2026-05-01
+**Documentation & Project Charter**
+
+- Added Grace OS Operator Dashboard (`agi.html`)
+- Documented Milestone M1 Review and Coding Journey entries
+- Created AGi Project Charter with vision, principles, and roadmap
+- Updated README with architecture, milestones, and detailed specs
+- Refined terminology, schema, and cognitive development phases
+
+## 2026-05-02
+**GCE Integration & Stream Enhancements**
+
+- Added GCE priming and improved shutdown sequence
+- Refactored CNC inference request, streaming state, and response handling
+- Updated topics, busy gate, and system model configuration
+- Added type annotations, improved input handling, and reorganised initialization
+- Enhanced logging, ANSI colors, and model identifiers
+
+## 2026-05-03
+**Cognitive Cycle & Operator Dashboard**
+
+- Implemented background thread loading for encoding engine
+- Added memory stats publication to ROS2 topic for monitoring
+- Enhanced agi.html operator dashboard with real-time stats, debug stream, health, and teleop
+- Updated GCE model and inference parameters
+- Improved CNC orchestration, attention gate, and cognitive cycle thread safety
+
+## 2026-05-04
+**Polish, Schema Prep & Release**
+
+- Finalized M1 acceptance testing and documentation
+- Added importance and versioning columns to EMC schema (forward prep for M2)
+- Implemented migration script for schema v1 → v2
+- Updated package descriptions, model identifiers, and CLI colors
+- Cleaned up development logs and journal entries
+
+## 2026-05-05
+**M1 Tag & Reflection**
+
+- Tagged v0.1.0 — M1 complete
+- Comprehensive documentation of architecture, journey, and lessons learned
+- Updated project charter, README, and milestone artifacts
+- Final refinements to launch script, trivial PMT filter, and GCE configuration
+- Closed M1 with full acceptance test across two sessions (~71 episodes)
