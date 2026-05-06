@@ -694,3 +694,111 @@ collection of modules that happened to cooperate.
 
 ---
 
+### 2026-03-29 — EMC Encoding Engine Activation
+*From lazy embedder to eager encoding core*
+
+**What landed**
+- Renamed `_Embedder` to `_EncodingEngine` — cognitive system
+  language over ML-library language
+- Changed EMC from lazy-loading to eager-loading the encoding
+  engine at initialization — semantic memory ready before first
+  recall
+- Moved encoding cache limit into HRP as `ENCODING_CACHE_LIMIT`
+  — cache behavior now HRP-governed, not hardcoded
+- Added type annotations through WMC's PMT/chunk accounting
+  paths
+
+**Challenges**
+- First commit introduced a `_core` vs `_model` naming mismatch
+  — the class was renamed but internal references weren't all
+  updated, creating a real runtime bug. Fixed in the second
+  commit same day. Good reminder: terminology refactors require
+  updating every internal reference, not just the class name
+
+**Reflection**
+March 29 was about making EMC's semantic memory path visible
+at startup. A lazy-loading encoder hides failures until the
+worst moment — first recall. Eager-loading surfaces them
+early. The `_core` mismatch was a small lesson in the cost of
+fast renaming without a full search pass.
+
+---
+
+### 2026-03-30 — Encoding Engine Polish
+*Activation, cache keys, and AGi identity*
+
+**What landed**
+- Moved encoding engine activation directly into `__init__` —
+  no more separate `_load()` method
+- Activation logs changed from raw model-loading language to
+  subsystem language: "Activating Encoding Engine…" with
+  explicit fallback to mental lexicon access
+- Converted `is_available` from method to property
+- Added `ENCODING_KEY_LIMIT` to HRP — cache-key slice length
+  now HRP-governed, not hardcoded as `text[:300]`
+- Fixed EMC stats to report `EMC.ENCODING_ENGINE` from HRP
+- Removed accidental `joblib`/`sklearn` logger imports from WMC
+- Updated README title from "Autonomous General Intelligence"
+  to "Amazing Grace infrastructure"
+
+**Challenges**
+- Converting `is_available` to a property is a refactor trap:
+  every call site must drop the parentheses or it silently
+  returns the property object instead of the bool
+
+**Reflection**
+March 30 was polish, but the README title change was more than
+that. "Autonomous General Intelligence" was a claim. "Amazing
+Grace infrastructure" is the truth. Getting the identity right
+matters — it changes how every future reader understands what
+the project is.
+
+---
+
+### 2026-03-31 — Repo Hygiene
+*Ignore rules and dev branch sync*
+
+**What landed**
+- Added `log/`, `install/`, and `.vscode/` to AIVA's
+  `.gitignore`
+- Merged March 29–30 dev work into active branch
+
+**Reflection**
+Not every day is a feature day. March 31 was a maintenance
+checkpoint — cleaning the workspace and synchronizing the
+branch before the next round of memory-system development.
+
+---
+
+### 2026-04-01 — Encoding Cache Becomes Imprints
+*Cue, trace, lexical recall, and neural threads*
+
+**What landed**
+- Renamed encoding cache keys to imprints: `ENCODING_KEY_LIMIT`
+  → `ENCODING_IMPRINT_LIMIT`; cache entries prefixed `cue/trace`
+  with hashed imprint instead of raw text slice
+- Changed `encode(text, is_query)` to `encode(trace, is_cue)`
+  — cue triggers recall, trace is the memory content
+- Fallback language settled on "lexical recall" — EMC recalls
+  memories, it doesn't retrieve database rows
+- Encoded vector output renamed to `encoded_trace`
+- EMC async worker became "consolidation worker" on a separate
+  neural thread; WMC docs updated to "main neural thread"
+- Added FAISS migration TODO in cosine helper for when recall
+  set exceeds ~10k vectors
+
+**Challenges**
+- Fallback terminology went through three names in two days:
+  mental lexicon access → lexical retrieval → lexical recall.
+  Getting the right word required sitting with the memory
+  lifecycle until the fit was obvious
+
+**Reflection**
+April 1 was the day EMC's encoder started speaking memory
+language instead of ML-library language. Cue and trace are not
+just prettier names — they carry meaning. A cue is what
+triggers recall. A trace is what gets stored. Once the names
+were right, the encoding interface explained itself.
+
+---
+
