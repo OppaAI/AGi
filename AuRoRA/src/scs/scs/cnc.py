@@ -31,8 +31,10 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String) — incoming text input signal
-    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String) — streamed cognitive response
+    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
+    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
+    Pub: CNS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
+    Pub: CNS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
 
 Response format (JSON on GCE.RESPONSE_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
@@ -47,6 +49,9 @@ Terminology:
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
 
 TODO:
+    M1.x — WebUI operator dashboard: rosbridge_server WebSocket bridge for
+            browser-based debug stream, memory stats, and teleop interface
+    M1.x — MEMORY_CONTEXT_GATEWAY: WebUI memory context debug stream
     M1.x — define and lock NeuralTextInput schema in scs/types.py
            standardize JSON contract across all input sources (CLI, web, voice)
            evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
@@ -138,12 +143,18 @@ class CNC(Node):
         )
         self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
 
-        # Initialize neural gateway for text input and generative cognitive output
-        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # register ROS2 subscriber — fires on every incoming message
-            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10    # String type | topic | callback | QoS depth 10
+        # Initialize neural gateway for text input, generative cognitive output and MCC stats
+        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # ROS2 subscriber — fires on every incoming message
+            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
         )
         self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
-            String, GCE.RESPONSE_GATEWAY, 10                                # String type | topic | QoS depth 10
+            String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
+        )
+        self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends memory context to the specified topic
+            String, CNS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
+        )
+        self._memory_stats_feedback: rclpy.publisher.Publisher = self.create_publisher(    # ROS2 publisher — sends memory stats to the specified topic
+            String, CNS.MEMORY_STATS_GATEWAY, 10                                           # String type | topic | QoS depth 10
         )
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
@@ -192,13 +203,12 @@ class CNC(Node):
 
     async def _process_stimulus(self, user_prompt: str) -> None:
         """
-        Process one full stimulus-response cycle:
-            1. Register user prompt in memory
-            2. Assemble memory context (WMC + EMC)
-            3. Build system prompt with episodic context
-            4. Stream inference through GCE
-            5. Register AI response in memory
-            6. Report memory stats
+        Process one full stimulus-response cycle.
+    
+        Registers the user prompt in memory, assembles the full memory context
+        (WMC PMTs + recalled EMC episodes), builds the system prompt with episodic
+        context injected, streams inference through GCE, registers the assistant
+        response in memory, then reports memory stats.
         """
         cognitive_response: str = ""                                            # accumulates GCE response chunks — empty until inference completes
 
@@ -226,6 +236,10 @@ class CNC(Node):
             messages: list[dict] = [{"role": "system", "content": system_content}]  # system prompt — always first
             messages.extend(short_term_memory)                                  # inject WMC PMTs — chronological conversation history
             messages.append({"role": "user", "content": user_prompt})           # append current user prompt — last message before inference
+            
+            context_signal = String()                                           # create ROS2 String message
+            context_signal.data = json.dumps({"messages": messages})            # serialize payload to JSON string
+            self._memory_context_feedback.publish(context_signal)               # publish to memory context reporting topic
 
             # 6. Stream from GCE
             self.get_logger().debug(f"📤 GCE messages: {messages}")             # debug — full message context before inference
@@ -236,8 +250,11 @@ class CNC(Node):
                 await self.mcc.register_memory("assistant", cognitive_response) # bind assistant response into WMC — completes the PMT pair
 
             # 8. Report memory stats
-            self.mcc.report_memory_stats()                                      # log WMC and EMC health after every turn
-
+            stats = self.mcc.report_memory_stats()                              # log WMC and EMC health after every turn
+            stats_signal = String()                                             # create ROS2 String message
+            stats_signal.data = json.dumps(stats)                               # serialize payload to JSON string
+            self._memory_stats_feedback.publish(stats_signal)                   # publish to memory stats reporting topic
+            
         except Exception as e:                                                  # unhandled failure in cognitive pipeline
             self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
             self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)}) # surface error to caller
@@ -366,7 +383,7 @@ class CNC(Node):
             self._cognitive_response.publish(raw_signal)                          # publish to cognitive response topic
         except Exception as e:                                                  
             self.get_logger().error(f"❌ Publish error: {e}")                     # non-fatal — publishing failure must not crash the cognitive cycle
-
+   
     def destroy_node(self) -> None:
         """
         Gracefully shut down CNC — close all cognitive subsystems in reverse boot order.

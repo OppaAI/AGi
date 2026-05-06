@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grace · Operator Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+<style>
+  /* ─── Grace's Lavender Dark Theme ─── */
+  :root {
+    --bg-deep: #0b0a0f;
+    --bg-panel: rgba(139, 92, 246, 0.06);
+    --glass-border: rgba(167, 139, 250, 0.15);
+    --glass-highlight: rgba(196, 181, 253, 0.08);
+    --lavender: #a78bfa;
+    --lavender-soft: #c4b5fd;
+    --lavender-glow: rgba(167, 139, 250, 0.3);
+    --violet: #8b5cf6;
+    --text-primary: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent-pink: #f0abfc;
+    --danger: #f87171;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --info: #60a5fa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(139,92,246,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(196,181,253,0.05) 0%, transparent 50%);
+  }
+
+  .app {
+    display: flex;
+    height: 100vh;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    width: 220px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(20px);
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px;
+  }
+
+  .brand {
+    font-size: 1.3rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--lavender), var(--accent-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+  }
+
+  .robot-select {
+    background: rgba(15, 15, 25, 0.6);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    outline: none;
+    cursor: pointer;
+    margin-bottom: 24px;
+    backdrop-filter: blur(10px);
+    transition: border-color 0.2s;
+  }
+  .robot-select:hover, .robot-select:focus {
+    border-color: var(--lavender);
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.1);
+  }
+
+  .nav-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    background: transparent;
+  }
+  .nav-tab:hover {
+    background: var(--glass-highlight);
+    color: var(--lavender-soft);
+  }
+  .nav-tab.active {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: var(--glass-border);
+    color: var(--lavender-soft);
+    box-shadow: 0 0 20px rgba(139,92,246,0.1);
+  }
+
+  .connection-status {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding-top: 16px;
+    border-top: 1px solid var(--glass-border);
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+    transition: all 0.3s;
+  }
+  .status-dot.connected {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+  }
+
+  /* ─── Main Content ─── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tab-content {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeIn 0.25s ease;
+  }
+  .tab-content.active {
+    display: flex;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Glass Cards ─── */
+  .glass-card {
+    background: var(--bg-panel);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .glass-card:hover {
+    border-color: rgba(167,139,250,0.25);
+    box-shadow: 0 8px 32px rgba(139,92,246,0.08);
+  }
+
+  .card-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--lavender-soft);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  /* ─── Stats Bar ─── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(15, 15, 25, 0.4);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--lavender-soft);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  .stat-value.warning { color: var(--warning); }
+  .stat-value.danger { color: var(--danger); }
+  .stat-value.success { color: var(--success); }
+
+  .stat-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  /* ─── Debug Stream ─── */
+  .debug-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    line-height: 1.7;
+  }
+
+  .stream-entry {
+    margin-bottom: 2px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border-left: 3px solid transparent;
+    animation: slideIn 0.15s ease;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .stream-entry.user-prompt {
+    background: rgba(139, 92, 246, 0.06);
+    border-left-color: var(--violet);
+  }
+
+  .stream-entry.memory-context {
+    background: rgba(96, 165, 250, 0.04);
+    border-left-color: var(--info);
+  }
+
+  .stream-entry.ai-thinking {
+    background: rgba(251, 191, 36, 0.04);
+    border-left-color: var(--warning);
+  }
+
+  .stream-entry.ai-response {
+    background: rgba(52, 211, 153, 0.06);
+    border-left-color: var(--success);
+  }
+
+  .stream-entry.ai-done {
+    background: rgba(52, 211, 153, 0.1);
+    border-left-color: var(--success);
+  }
+
+  .stream-entry.error {
+    background: rgba(248, 113, 113, 0.08);
+    border-left-color: var(--danger);
+  }
+
+  .stream-entry.system {
+    background: rgba(148, 163, 184, 0.04);
+    border-left-color: var(--text-muted);
+  }
+
+  .stream-time {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    min-width: 60px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .stream-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .badge-user { background: rgba(139,92,246,0.2); color: var(--lavender-soft); }
+  .badge-memory { background: rgba(96,165,250,0.15); color: var(--info); }
+  .badge-thinking { background: rgba(251,191,36,0.15); color: var(--warning); }
+  .badge-ai { background: rgba(52,211,153,0.15); color: var(--success); }
+  .badge-error { background: rgba(248,113,113,0.15); color: var(--danger); }
+  .badge-system { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+
+  .stream-content {
+    color: var(--text-primary);
+    word-break: break-word;
+    flex: 1;
+    white-space: pre-wrap;
+  }
+
+  .stream-content.collapsed {
+    max-height: 60px;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    cursor: pointer;
+  }
+
+  .stream-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* ─── Scrollbar ─── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(167,139,250,0.2);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(167,139,250,0.35);
+  }
+
+  /* ─── Teleop ─── */
+  .teleop-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 80px);
+    gap: 8px;
+    justify-content: center;
+    margin-top: 40px;
+  }
+  .teleop-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-panel);
+    backdrop-filter: blur(10px);
+    color: var(--lavender-soft);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .teleop-btn:hover {
+    background: rgba(139,92,246,0.15);
+    border-color: var(--lavender);
+    box-shadow: 0 0 20px rgba(139,92,246,0.15);
+    transform: scale(1.05);
+  }
+  .teleop-btn:active { transform: scale(0.95); }
+  .teleop-btn.danger {
+    background: rgba(248,113,113,0.1);
+    color: var(--danger);
+    border-color: rgba(248,113,113,0.3);
+    grid-column: 2;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .teleop-btn.danger:hover {
+    background: rgba(248,113,113,0.2);
+    box-shadow: 0 0 20px rgba(248,113,113,0.2);
+  }
+
+  .hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-top: 20px;
+  }
+
+  /* ─── Health ─── */
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--lavender-soft);
+    margin-top: 8px;
+  }
+  .metric-unit {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* ─── Toggle for memory context ─── */
+  .toggle-btn {
+    background: rgba(139,92,246,0.1);
+    border: 1px solid var(--glass-border);
+    color: var(--lavender-soft);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: all 0.2s;
+  }
+  .toggle-btn:hover {
+    background: rgba(139,92,246,0.2);
+  }
+
+  /* ─── Pause indicator ─── */
+  .pause-indicator {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    background: rgba(248,113,113,0.9);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: none;
+    backdrop-filter: blur(10px);
+    z-index: 100;
+  }
+  .pause-indicator.active { display: block; }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<div class="pause-indicator" id="pauseIndicator">⏸ Stream Paused (Scroll to resume)</div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">🌸 Grace OS</div>
+    
+    <select class="robot-select" id="robotSelect">
+      <option value="ws://jetson.local:9090">Grace-01 (jetson.local)</option>
+      <option value="ws://192.168.1.42:9090">Grace-02 (192.168.1.42)</option>
+    </select>
+
+    <nav class="nav-tabs">
+      <div class="nav-tab active" onclick="switchTab('debug')">
+        <span>🔍</span> Debug
+      </div>
+      <div class="nav-tab" onclick="switchTab('chat')">
+        <span>💬</span> Chat Face
+      </div>
+      <div class="nav-tab" onclick="switchTab('teleop')">
+        <span>🎮</span> Teleop
+      </div>
+      <div class="nav-tab" onclick="switchTab('health')">
+        <span>❤️</span> Health
+      </div>
+    </nav>
+
+    <div class="connection-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- ═══ DEBUG TAB ═══ -->
+    <div class="tab-content active" id="tab-debug">
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-item">
+          <div class="stat-label">WMC Size</div>
+          <div class="stat-value" id="statWmcSize">—</div>
+          <div class="stat-sub" id="statWmcPct">— / — chunks</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">EMC Episodes</div>
+          <div class="stat-value" id="statEmcSize">—</div>
+          <div class="stat-sub" id="statEmcLast">Last: —</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Tokens/sec</div>
+          <div class="stat-value" id="statTokensSec">—</div>
+          <div class="stat-sub" id="statTokensTotal">— total</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Latency</div>
+          <div class="stat-value" id="statLatency">—</div>
+          <div class="stat-sub" id="statLatencyAvg">Avg: —</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Turn Count</div>
+          <div class="stat-value" id="statTurnCount">0</div>
+          <div class="stat-sub" id="statUptime">Up: 00:00</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">GCE Status</div>
+          <div class="stat-value success" id="statGceStatus">Ready</div>
+          <div class="stat-sub" id="statGceModel">—</div>
+        </div>
+      </div>
+
+      <!-- Continuous Debug Stream -->
+      <div class="debug-stream" id="debugStream">
+        <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
+          Waiting for Grace to think...
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CHAT TAB ═══ -->
+    <div class="tab-content" id="tab-chat">
+      <div class="glass-card" style="height: calc(100vh - 100px); display:flex; align-items:center; justify-content:center; flex-direction:column;">
+        <div style="font-size:4rem; margin-bottom:16px;">🤖</div>
+        <div style="color:var(--lavender-soft); font-size:1.2rem; font-weight:600;">Grace Chat Interface</div>
+        <div style="color:var(--text-muted); margin-top:8px;">Embed your existing grace.html here</div>
+        <code style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
+          &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
+        </code>
+      </div>
+    </div>
+
+    <!-- ═══ TELEOP TAB ═══ -->
+    <div class="tab-content" id="tab-teleop">
+      <div class="glass-card">
+        <div class="card-title">🎮 Manual Override</div>
+        <div class="teleop-grid">
+          <div></div>
+          <button class="teleop-btn" onclick="teleop('forward')">▲</button>
+          <div></div>
+          <button class="teleop-btn" onclick="teleop('left')">◀</button>
+          <button class="teleop-btn" onclick="teleop('stop')">⏹</button>
+          <button class="teleop-btn" onclick="teleop('right')">▶</button>
+          <div></div>
+          <button class="teleop-btn" onclick="teleop('backward')">▼</button>
+          <div></div>
+        </div>
+        <div class="teleop-grid" style="margin-top:24px;">
+          <button class="teleop-btn danger" onclick="emergencyStop()">STOP</button>
+        </div>
+        <div class="hint">Keyboard: WASD to move, Space to stop, E for emergency stop</div>
+      </div>
+    </div>
+
+    <!-- ═══ HEALTH TAB ═══ -->
+    <div class="tab-content" id="tab-health">
+      <div class="metric-row">
+        <div class="glass-card">
+          <div class="card-title">🔋 Battery</div>
+          <div class="metric-value">87<span class="metric-unit">%</span></div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">🧠 CPU</div>
+          <div class="metric-value">42<span class="metric-unit">%</span></div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">🌡️ Temperature</div>
+          <div class="metric-value">62<span class="metric-unit">°C</span></div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-title">📈 System Log</div>
+        <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ─── State ───
+  let ros = null;
+  let currentRobot = document.getElementById('robotSelect').value;
+  let turnCount = 0;
+  let streamStartTime = null;
+  let tokenCount = 0;
+  let latencies = [];
+  let isAutoScroll = true;
+  let currentTurn = null; // Tracks the current turn being built
+
+  // ─── Tab Switching ───
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // ─── ROS2 Connection ───
+  function connect(url) {
+    if (ros) { ros.close(); ros = null; }
+    
+    document.getElementById('statusDot').classList.remove('connected');
+    document.getElementById('statusText').textContent = 'Connecting...';
+
+    ros = new ROSLIB.Ros({ url: url });
+
+    ros.on('connection', () => {
+      document.getElementById('statusDot').classList.add('connected');
+      document.getElementById('statusText').textContent = 'Connected';
+      clearStream();
+      subscribeTopics();
+    });
+
+    ros.on('error', (err) => {
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').textContent = 'Error';
+      addStreamEntry('system', 'Connection error: ' + err.message, { error: true });
+    });
+
+    ros.on('close', () => {
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').textContent = 'Disconnected';
+    });
+  }
+
+  // ─── Topic Subscriptions ───
+  function subscribeTopics() {
+    // Text Input Gateway — User Prompt
+    const inputTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/cns/text_input_gateway',
+      messageType: 'std_msgs/String'
+    });
+    inputTopic.subscribe((msg) => {
+      try {
+        const data = JSON.parse(msg.data);
+        const prompt = data.text || data.user_prompt || msg.data;
+        startNewTurn(prompt);
+      } catch (e) {
+        startNewTurn(msg.data);
+      }
+    });
+
+    // Response Gateway — AI Response Stream
+    const responseTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/gce/response_gateway',
+      messageType: 'std_msgs/String'
+    });
+    responseTopic.subscribe((msg) => {
+      try {
+        const data = JSON.parse(msg.data);
+        handleResponseChunk(data);
+      } catch (e) {
+        addStreamEntry('system', 'Malformed response: ' + msg.data.substring(0, 100), { error: true });
+      }
+    });
+
+    // Memory Context Topic — full GCE input context for debug
+    const contextTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/cns/memory_context',
+        messageType: 'std_msgs/String'
+    });
+    contextTopic.subscribe((msg) => {
+        try {
+            const data = JSON.parse(msg.data);
+            const messages = data.messages;
+            const systemMsg = messages.find(m => m.role === 'system');
+            const chatMsgs = messages.filter(m => m.role !== 'system');
+            const content = [
+                `── System Prompt ──\n${systemMsg?.content || '—'}`,
+                `── Conversation (${chatMsgs.length} turns) ──`,
+                ...chatMsgs.map(m => `[${m.role.toUpperCase()}] ${m.content}`)
+            ].join('\n\n');
+            addStreamEntry('memory-context', content, {
+                turnId: currentTurn?.id,
+                collapsed: true,
+                meta: `${chatMsgs.length} WMC PMTs · system prompt ${systemMsg ? systemMsg.content.length : 0} chars`
+            });
+        } catch(e) {}
+    });
+    
+    // Memory Stats Topic (you'll need to publish this from CNC/MCC)
+    const statsTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/cns/memory_stats',
+      messageType: 'std_msgs/String'
+    });
+    statsTopic.subscribe((msg) => {
+      try {
+        const stats = JSON.parse(msg.data);
+        updateStats(stats);
+      } catch (e) {
+        // Ignore malformed stats
+      }
+    });
+  }
+
+  // ─── Turn Management ───
+  function startNewTurn(prompt) {
+    turnCount++;
+    document.getElementById('statTurnCount').textContent = turnCount;
+    
+    streamStartTime = Date.now();
+    tokenCount = 0;
+    currentTurn = {
+      id: turnCount,
+      prompt: prompt,
+      response: '',
+      startTime: streamStartTime,
+      chunks: []
+    };
+
+    // Add user prompt entry
+    addStreamEntry('user-prompt', prompt, {
+      turnId: turnCount,
+      meta: `Turn #${turnCount} · ${prompt.length} chars · ${Math.ceil(prompt.length / 4)} est. tokens`
+    });
+
+    // Show "thinking" indicator
+    addStreamEntry('ai-thinking', 'GCE streaming...', {
+      turnId: turnCount,
+      isThinking: true,
+      meta: 'Waiting for first token...'
+    });
+  }
+
+  function handleResponseChunk(data) {
+    if (!currentTurn) return;
+
+    const now = Date.now();
+    const elapsed = (now - currentTurn.startTime) / 1000;
+
+    if (data.type === 'start' || data.type === 'delta') {
+      // Remove thinking indicator if present
+      const thinkingEl = document.querySelector('.stream-entry.ai-thinking');
+      if (thinkingEl && thinkingEl.dataset.turnId == currentTurn.id) {
+        thinkingEl.remove();
+      }
+
+      currentTurn.response += data.content;
+      tokenCount += estimateTokens(data.content);
+      
+      const tps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '—';
+      document.getElementById('statTokensSec').textContent = tps;
+      document.getElementById('statTokensTotal').textContent = `${tokenCount} tokens`;
+
+      // For delta chunks, append to existing response entry if same turn
+      const existingResponse = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+      
+      if (data.type === 'start' || !existingResponse) {
+        addStreamEntry('ai-response', data.content, {
+          turnId: currentTurn.id,
+          isStreaming: true,
+          meta: `Streaming... ${tps} tok/s`
+        });
+      } else {
+        // Append to existing streaming entry
+        const contentEl = existingResponse.querySelector('.stream-content');
+        contentEl.textContent += data.content;
+        const metaEl = existingResponse.querySelector('.stream-meta');
+        if (metaEl) metaEl.textContent = `Streaming... ${tps} tok/s · ${tokenCount} tokens`;
+      }
+    } 
+    else if (data.type === 'done') {
+      const latency = ((now - currentTurn.startTime) / 1000).toFixed(2);
+      latencies.push(parseFloat(latency));
+      const avgLatency = (latencies.reduce((a,b) => a+b, 0) / latencies.length).toFixed(2);
+      
+      document.getElementById('statLatency').textContent = `${latency}s`;
+      document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
+
+      // Convert last streaming entry to done
+      const lastEntry = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+      if (lastEntry) {
+        lastEntry.classList.remove('ai-response');
+        lastEntry.classList.add('ai-done');
+        const badge = lastEntry.querySelector('.stream-badge');
+        if (badge) {
+          badge.className = 'stream-badge badge-ai';
+          badge.innerHTML = '🤖 DONE';
+        }
+        const metaEl = lastEntry.querySelector('.stream-meta');
+        if (metaEl) metaEl.textContent = `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`;
+      } else {
+        addStreamEntry('ai-done', currentTurn.response, {
+          turnId: currentTurn.id,
+          meta: `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`
+        });
+      }
+
+      currentTurn = null;
+    }
+    else if (data.type === 'error') {
+      addStreamEntry('error', data.content, {
+        turnId: currentTurn?.id,
+        meta: 'GCE Error'
+      });
+      currentTurn = null;
+    }
+  }
+
+  function estimateTokens(text) {
+    // Rough estimate: ~4 chars per token for English, ~2 for CJK
+    // This is approximate until you get real token counts from GCE
+    const cjkCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const otherCount = text.length - cjkCount;
+    return Math.ceil(cjkCount / 2 + otherCount / 4) || 1;
+  }
+
+  // ─── Stream Entry Builder ───
+  function addStreamEntry(type, content, options = {}) {
+    const stream = document.getElementById('debugStream');
+    
+    // Remove "waiting" message on first entry
+    if (stream.children.length === 1 && stream.children[0].tagName === 'DIV') {
+      stream.innerHTML = '';
+    }
+
+    const entry = document.createElement('div');
+    entry.className = `stream-entry ${type}`;
+    if (options.turnId) entry.dataset.turnId = options.turnId;
+    if (options.collapsed) entry.classList.add('collapsed');
+
+    const time = new Date().toLocaleTimeString('en-US', { 
+      hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 2 
+    });
+
+    const badgeMap = {
+      'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
+      'memory-context': { cls: 'badge-memory', icon: '🧠', label: 'MEMORY' },
+      'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
+      'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'AI' },
+      'ai-done': { cls: 'badge-ai', icon: '✓', label: 'DONE' },
+      'error': { cls: 'badge-error', icon: '✗', label: 'ERROR' },
+      'system': { cls: 'badge-system', icon: '◆', label: 'SYS' }
+    };
+    const badge = badgeMap[type] || badgeMap['system'];
+
+    entry.innerHTML = `
+      <div class="stream-time">${time}</div>
+      <div class="stream-badge ${badge.cls}">${badge.icon} ${badge.label}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="stream-content">${escapeHtml(content)}</div>
+        ${options.meta ? `<div class="stream-meta">${options.meta}</div>` : ''}
+      </div>
+    `;
+
+    if (options.collapsed) {
+      entry.addEventListener('click', () => {
+        entry.classList.toggle('collapsed');
+      });
+    }
+
+    stream.appendChild(entry);
+    
+    if (isAutoScroll) {
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    // Keep last 200 entries
+    while (stream.children.length > 200) {
+      stream.removeChild(stream.firstChild);
+    }
+  }
+
+  function clearStream() {
+    document.getElementById('debugStream').innerHTML = `
+      <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
+        Connected. Waiting for Grace to think...
+      </div>
+    `;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ─── Stats Update ───
+  function updateStats(stats) {
+      // WMC
+      if (stats.wmc) {
+          const wmc = stats.wmc;
+          document.getElementById('statWmcSize').textContent = wmc.pmt_count;
+          document.getElementById('statWmcPct').textContent = 
+              `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
+          
+          const wmcEl = document.getElementById('statWmcSize');
+          wmcEl.className = 'stat-value';
+          if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
+          else if (wmc.chunk_occupancy > 70) wmcEl.classList.add('warning');
+      }
+  
+      // EMC
+      if (stats.emc) {
+          const emc = stats.emc;
+          document.getElementById('statEmcSize').textContent = emc.engram_count || 0;
+          document.getElementById('statEmcLast').textContent = 
+              `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
+      }
+  }
+
+  // ─── Auto-scroll pause on manual scroll ───
+  const debugStream = document.getElementById('debugStream');
+  debugStream.addEventListener('scroll', () => {
+    const nearBottom = debugStream.scrollHeight - debugStream.scrollTop - debugStream.clientHeight < 50;
+    isAutoScroll = nearBottom;
+    document.getElementById('pauseIndicator').classList.toggle('active', !nearBottom);
+  });
+
+  // ─── Teleop Placeholders ───
+  function teleop(direction) {
+    addStreamEntry('system', `Teleop: ${direction}`, { meta: 'Manual override' });
+  }
+  function emergencyStop() {
+    addStreamEntry('error', '🚨 EMERGENCY STOP ACTIVATED', { meta: 'All motors halted' });
+  }
+
+  // ─── Keyboard Controls ───
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('tab-teleop').classList.contains('active')) {
+      switch(e.key.toLowerCase()) {
+        case 'w': teleop('forward'); break;
+        case 'a': teleop('left'); break;
+        case 's': teleop('backward'); break;
+        case 'd': teleop('right'); break;
+        case ' ': teleop('stop'); e.preventDefault(); break;
+        case 'e': emergencyStop(); break;
+      }
+    }
+  });
+
+  // ─── Uptime Counter ───
+  let uptimeSeconds = 0;
+  setInterval(() => {
+    uptimeSeconds++;
+    const mins = Math.floor(uptimeSeconds / 60).toString().padStart(2, '0');
+    const secs = (uptimeSeconds % 60).toString().padStart(2, '0');
+    document.getElementById('statUptime').textContent = `Up: ${mins}:${secs}`;
+  }, 1000);
+
+  // ─── Robot Selector ───
+  document.getElementById('robotSelect').addEventListener('change', (e) => {
+    currentRobot = e.target.value;
+    connect(currentRobot);
+  });
+
+  // ─── Init ───
+  connect(currentRobot);
+</script>
+
+</body>
+</html>

@@ -141,14 +141,17 @@ class EncodingEngine:
     def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_capacity: int, prime_key_limit: int) -> None:
         """
         Initializes the encoding engine and encoding prime for recent memory traces.
+        Model load is deferred to a background thread — init returns immediately.
+        Lexical-only recall is active from the first turn; semantic recall activates
+        once the background load completes.
     
         Args:
-            logger                      : Logger instance passed from the cortex
-            encoding_engine (str)       : Embedding model to load (e.g. from HRP)
-            encoding_cue_prefix (str)   : Prompt prefix for encoding cues
-            encoding_engram_prefix (str): Prompt prefix for engrams
-            prime_capacity (int)        : Maximum number of entries in the encoding prime
-            prime_key_limit (int)       : Maximum characters hashed for the prime key
+            logger                  : Logger instance passed from the cortex
+            encoding_engine (str)   : Embedding model to load (e.g. from HRP)
+            cue_prefix (str)        : Prompt prefix for encoding cues
+            engram_prefix (str)     : Prompt prefix for engrams
+            prime_capacity (int)    : Maximum number of entries in the encoding prime
+            prime_key_limit (int)   : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
@@ -156,23 +159,38 @@ class EncodingEngine:
         self._engram_prefix: str            = engram_prefix         # prompt prefix for engrams
         self.prime_capacity: int            = prime_capacity        # max prime entries before LRU eviction
         self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
-        self._core                          = None                  # live SentenceTransformer model — None until load succeeds
+        self._core                          = None                  # live SentenceTransformer model — None until background load succeeds
         self._prime: dict[str, list[float]] = {}                    # encoding prime — maps prime key → float vector
         
-        try:                                                                        # attempt to activate SentenceTransformer
-            from sentence_transformers import SentenceTransformer                   # deferred import — avoids hard crash if package missing
-            self.logger.info(f"⏳ Activating Encoding Engine ({self.encoding_engine})…") # log before the blocking load
-            self._core = SentenceTransformer(self.encoding_engine)                  # load model weights into RAM — blocks until complete
-            self.logger.info("✅ Encoding Engine activated")                        # only reached if load succeeded
-        except ImportError:                                                         # trigger if sentence_transformers package not installed
-            self.logger.warning(                                                    # package not installed — _core stays None
+        # Load encoding engine on separate neural thread, not to block main thread
+        threading.Thread(                                           # load model on background thread — init returns immediately
+            target=self._load_engine,                               # deferred load — never blocks EMC or MCC initialization
+            name="encoding-engine-loader",                          # named for thread dump debugging
+            daemon=True,                                            # dies with main process — no clean shutdown needed
+        ).start()                                                   # fire and forget — _core flips to live model when ready
+    
+    def _load_engine(self) -> None:
+        """
+        Load the encoding engine on a background thread.
+        Called once during initialization — never blocks EMC initialization or active cognition.
+        Sets self._core atomically on success — is_available flips True at that moment.
+        Lexical-only recall remains active throughout; semantic recall activates once load completes.
+        CPython GIL guarantees atomic attribute assignment — no lock needed.
+        """
+        try:                                                                                # attempt to load SentenceTransformer on a background thread
+            from sentence_transformers import SentenceTransformer                           # deferred import — avoids hard crash if package missing
+            self.logger.info(f"⏳ Activating Encoding Engine ({self.encoding_engine})…")    # log before the blocking load
+            self._core = SentenceTransformer(self.encoding_engine)                          # blocking model load — safe here, isolated from init path
+            self.logger.info("✅ Encoding Engine activated")                                # only reached if load succeeded — _core is now live
+        except ImportError:                                                                 # package not installed — _core stays None
+            self.logger.warning(                                                            # package not installed — _core stays None
                 "⚠️ Encoding Engine offline - missing inferencing component.\n"
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                      # bad model path, corrupted weights, OOM — _core stays None
-            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")       # log specific failure with reason
-            
+        except Exception as e:                                                              # bad model path, corrupted weights, OOM — _core stays None
+            self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")               # log specific failure with reason
+        
     @property
     def is_available(self) -> bool:
         """
