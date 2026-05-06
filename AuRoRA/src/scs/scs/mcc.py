@@ -105,6 +105,7 @@ class MemoryCoordinationCore:
             Path.home() /               # anchor at OS home (~)
             AGi.ENTITY_GATEWAY /        # descend into the entity gateway directory
             SCS.NEURAL_GATEWAY /        # descend into the neural gateway subdirectory
+            SCS.MEMORY_GATEWAY /        # descend into the memory gateway subdirectory
             SCS.ENGRAM_COMPLEX          # land at the engram complex — where encoded episodes live
         )
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # create all missing parent dirs — no-op if already exists
