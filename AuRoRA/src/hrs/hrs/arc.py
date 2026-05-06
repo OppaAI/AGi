@@ -276,43 +276,24 @@ class ArousedReactionCore(Node):
     # ─── Boot Sequence ────────────────────────────────────────────────────────
 
     def _boot(self) -> None:
-        """
-        Spawn all CNS nodes in dependency order.
-        Each stage waits for ready signal before proceeding.
+    # Future stages uncommented as each system is built
+    
+    # Stage 1 — Infrastructure
+    # self._spawn("eee")
+    # self._wait_ready("/eee/ready", timeout)
 
-        Stage 1 — Infrastructure : EEE (logger)
-        Stage 2 — Regulatory     : HRS (homeostasis)
-        Stage 3 — Memory         : EMC → MCC
-        Stage 4 — Cognition      : CNC
-        """
-        timeout = self.config.ras.boot_timeout
+    # Stage 2 — Regulatory  
+    # self._spawn("hrs")
+    # self._wait_ready("/hrs/ready", timeout)
 
-        self.get_logger().info("🌅 ARC boot sequence initiated")
+    # Stage 3 — Cognition (CNC owns MCC, WMC, EMC internally)
+    self._spawn("cnc")
+    self._wait_ready("/cnc/ready", timeout)
 
-        # Stage 1 — Infrastructure
-        self._spawn("eee")
-        self._wait_ready("/eee/ready", timeout)
-
-        # Stage 2 — Regulatory
-        self._spawn("hrs")
-        self._wait_ready("/hrs/ready", timeout)
-
-        # Stage 3 — Memory substrate then cortices
-        self._spawn("emc")
-        self._wait_ready("/emc/ready", timeout)
-
-        self._spawn("mcc")
-        self._wait_ready("/mcc/ready", timeout)
-
-        # Stage 4 — Cognition last
-        self._spawn("cnc")
-        self._wait_ready("/cnc/ready", timeout)
-
-        # ARC ready — full CNS online
-        msg      = Bool()
-        msg.data = True
-        self._ready_pub.publish(msg)
-        self.get_logger().info("🧠 AuRoRA CNS fully online")
+    msg      = Bool()
+    msg.data = True
+    self._ready_pub.publish(msg)
+    self.get_logger().info("🧠 AuRoRA CNS online")
 
     def _spawn(self, node: str) -> None:
         """Spawn a ROS node as a subprocess."""
