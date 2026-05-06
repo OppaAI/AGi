@@ -34,16 +34,18 @@ TODO:
 class AGi:                                              # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
-    class CNS:                                             # Central Nervous System
+    class SCS:                                             # Central Nervous System
         CORTICAL_CAPACITY: int  = 16384                    # [INTRINSIC] total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int  = 2048                     # [INTRINSIC] cortical capacity reserved for identity and cognition
-        NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
+        NEURAL_GATEWAY: str     = "scs"                    # [STATIC] neural gateway endpoint for inter-cortical communication
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
         
-        TEXT_INPUT_GATEWAY: str = "/cns/text_input"        # [STATIC] ROS topic for text input from users
-        MEMORY_CONTEXT_GATEWAY: str = "/cns/memory_context"# [STATIC] ROS topic for memory context reinstated
-        MEMORY_STATS_GATEWAY: str = "/cns/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
+        TEXT_INPUT_GATEWAY: str = "/scs/text_input"        # [STATIC] ROS topic for text input from users
+        COGNITIVE_RESPONSE: str   = "/scs/response"        # [STATIC] GCE response topic
+        MEMORY_CONTEXT_GATEWAY: str = "/scs/memory_context"# [STATIC] ROS topic for memory context reinstated
+        MEMORY_STATS_GATEWAY: str = "/scs/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
+
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
@@ -62,7 +64,6 @@ class AGi:                                              # Amazing Grace infrastr
             STREAM_PROPAGATING    : str = "delta"                                 # [STATIC] streaming propagation — mid-stream cognitive fragments (cannot change)
             STREAM_TRAILING       : str = "done"                                  # [STATIC] streaming completion — full cognitive response assembled (cannot change)
             STREAM_ANOMALY        : str = "error"                                 # [STATIC] streaming inhibition — cognitive error or suppressed response (cannot change)
-            RESPONSE_GATEWAY      : str   = "/gce/response"                       # [STATIC]    GCE response topic
             SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 Personality:
@@ -97,7 +98,6 @@ Current date: {date}
             HABITUATION_DAMPING   : float = 0.1                                   # [INTRINSIC] suppresses tokens proportional to their frequency
             NOVELTY_BIAS          : float = 0.1                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
-            COGNITIVE_RESPONSE    : str   = "/gce/response"                       # [STATIC]    GCE response topic
             SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 Personality:
@@ -156,8 +156,8 @@ Current date: {date}
             PMT_SLOT_LIMIT: int     = 7                 # [INTRINSIC] maximum slot vacancy for PMTs (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                 # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
         
-AGi.CNS.WMC.GLOBAL_CHUNK_LIMIT: int = (                 # [INTRINSIC] maximum number of chunks WMC can hold, will move to hrs.py
-    AGi.CNS.CORTICAL_CAPACITY - 
-    AGi.CNS.COGNITIVE_RESERVE - 
-    AGi.CNS.EMC.RECALL_RESERVE
+AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT: int = (                 # [INTRINSIC] maximum number of chunks WMC can hold, will move to hrs.py
+    AGi.SCS.CORTICAL_CAPACITY - 
+    AGi.SCS.COGNITIVE_RESERVE - 
+    AGi.SCS.EMC.RECALL_RESERVE
 )
