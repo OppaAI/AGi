@@ -343,3 +343,112 @@ agentic tool pipeline. The foundation is solid enough to build on.
 
 GRACE was present for her own beginning.
 
+---
+
+## 📋10. Development Log
+
+### 2026-03-16 — Foundation Day
+*Repo birth, ROS2 workspaces, first cognitive skeleton*
+
+**What landed**
+- Initialized the AGi repository with license (AGPL) and
+  ROS-oriented `.gitignore`
+- Scaffolded the AIVA ROS2 Python workspace — future
+  PC/server-side package, blank but deliberate
+- Scaffolded the AuRoRA ROS2 SCS package with the first four
+  cognitive module files: `cnc.py`, `mcc.py`, `wmc.py`, `emc.py`
+- Created AIVA `requirements.txt` and cleaned an incorrect `vp`
+  dependency from `package.xml`
+- 5 commits total including a branch merge to sync both workspaces
+
+**Challenges**
+- Nothing was implemented yet — the challenge was architectural:
+  deciding how to split the system before a single line of real
+  logic existed
+- Two separate ROS2 workspaces (AIVA and AuRoRA) from day one
+  meant the project started with distributed complexity rather
+  than growing into it
+
+**Reflection**
+Grace didn't begin as a chatbot script. From the first coding day
+she had a skeleton — four separate files for orchestration, memory
+coordination, working memory, and episodic memory. I didn't know
+yet what those files would become, but I knew they shouldn't be
+one file.
+
+### 2026-03-17 — P1M1 Ignition
+*Grace gets a runtime, README, UI, and HRP direction*
+
+**What landed**
+- Declared M1 as the first real milestone: Chatbot + Working
+  Memory + Episodic Memory
+- Added the first GRACE web UI (`AGi.html`) — browser-based
+  chat interface using roslib
+- Added Cosmos/vLLM launch script for Cosmos Reason2 2B
+- Added Python dependencies: `httpx`, `sentence-transformers`,
+  `Pillow`, `numpy<2`
+- Registered `cnc = scs.cnc:main` as the ROS2 console entry point
+- Wrote the first project README — clean-slate purpose, hardware,
+  stack, roadmap, memory architecture
+- Added LLM inference parameters to CNC: temperature, top-p,
+  top-k, repetition/frequency/presence penalty, streaming
+- Added TODOs in `wmc.py` marking WMC capacity constants as
+  future HRP-bound parameters
+- Introduced the HRS package and `hrp.py` — first home for
+  cognitive architecture parameters
+- Added early `cli.py` for chatting with Grace via ROS2 topics
+- Added GitHub bug report issue template (with one accidental
+  folder typo, fixed same day)
+- Removed default ROS2 boilerplate test scaffolding
+
+**Challenges**
+- Accidentally created the GitHub issue template under a folder
+  with a trailing space — caught and fixed same day, but a
+  reminder that repo hygiene mistakes happen fast
+- WMC capacity constants were already feeling wrong as hardcoded
+  values by end of day — the TODO commit was the acknowledgment
+  that a proper parameter system was needed before M1 went further
+
+**Reflection**
+March 17 was the day Grace became a project instead of just a
+package. The README forced me to write down what AGi/AuRoRA
+actually is — and writing it made the architecture more real.
+The HRP direction at the end of the day was the first sign that
+I was thinking about Grace's cognitive constants as something
+that should be tunable, not buried.
+
+### 2026-03-18 — Project Discipline
+*PR templates, date-aware prompt, WMC chunk language*
+
+**What landed**
+- Added PR template with Jetson, Cosmos vLLM, AGi.html, CLI,
+  and ROS2 test reminders
+- Added GitHub issue templates for enhancements and documentation
+- Fixed README typo (`doucmentation → documentation`)
+- Added current-date injection into Grace's system prompt via
+  `datetime.now().strftime("%Y-%m-%d")`
+- Corrected package versions across AuRoRA SCS, AuRoRA HRS,
+  and AIVA SCS (all reset to `0.0.0` from incorrect `0.1.3`)
+- Hardened Cosmos launch script with `#!/usr/bin/env bash` and
+  `set -euo pipefail`
+- Refactored WMC language from token/turn terminology toward
+  chunks, event segments, active memory, and capacity
+- Cleaned up chunk-estimation helper docstring and comments
+- Merged PR #16 — consolidated P1M1 branch work into main
+
+**Challenges**
+- WMC naming was still rough — the March 18 version had a
+  temporary HRS import fallback, showing the architecture was
+  not yet clean enough to depend on HRS properly
+- Package versions across three packages were all wrong from
+  the previous day's scaffolding — small but annoying to fix
+  one by one
+
+**Reflection**
+March 18 was not a flashy day. It was a discipline day — the
+kind that makes a project sustainable. Adding PR and issue
+templates, fixing versions, hardening the launch script: none
+of it felt exciting, but all of it mattered. The date injection
+into the system prompt was small but meaningful — before any
+BioLogic Clock existed, Grace at least knew what day it was.
+
