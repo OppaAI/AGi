@@ -38,6 +38,7 @@ class AGi:                                              # Amazing Grace infrastr
         CORTICAL_CAPACITY: int  = 16384                    # [INTRINSIC] total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int  = 2048                     # [INTRINSIC] cortical capacity reserved for identity and cognition
         NEURAL_GATEWAY: str     = "scs"                    # [STATIC] neural gateway endpoint for inter-cortical communication
+        MEMORY_GATEWAY: str     = "mcc"                    # [STATIC] MCC node identifier for memory subsystem routing
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
         
