@@ -663,3 +663,34 @@ problem, not the engine's.
 
 ---
 
+### 2026-03-28 — EMC Joins the HRP Namespace
+*Episodic memory parameters find their home*
+
+**What landed**
+- Moved EMC constants into `AGi.CNS.EMC`: encoding engine,
+  vector dimension, engram chunk limit, recall reserve, recall
+  depth, and relevance threshold
+- EMC now consumes `AGi.CNS.EMC` — no more private constants
+- Renamed MCC's memory gate from `RECALL_THRESHOLD` to
+  `RELEVANCE_THRESHOLD` — recalled episodes enter context only
+  if relevant enough
+- Expanded EMC file header into a real cortex description:
+  responsibilities, SQLite design, embedding, retrieval, and
+  public methods
+- Cleaned WMC wording from "active conversation context for
+  GRACE" to "working memory layer of the CNS"
+
+**Challenges**
+- Nothing blocked today — this was coherence work, not new
+  capability. The challenge was recognizing that hidden cortex
+  constants fragment the architecture even when the code works
+
+**Reflection**
+March 28 was quiet but important. EMC had been working fine
+with private constants — but fine isn't coherent. Once EMC
+read its parameters from HRP like WMC did, the nervous system
+felt complete as a governed architecture rather than a
+collection of modules that happened to cooperate.
+
+---
+
