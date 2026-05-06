@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# state.yaml — INTRINSIC Cognitive State
+# ─────────────────────────────────────────────────────────────────────────────
+# AuRoRA · Homeostatic Regulation System (HRS)
+#
+# GRACE's self-tuning cognitive parameters.
+# These may be updated by GRACE herself over time via HRS.
+# Do not edit manually unless tuning during development.
+#
+# Owner:   GRACE / Admin (dev tuning only)
+# Runtime: loaded by RAS at boot from ~/.agi/cns/state.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+scs:
+  cortical_capacity: 16384        # total neural capacity of the active cognitive core
+  cognitive_reserve: 2048         # cortical capacity reserved for identity and cognition
+
+  emc:
+    binding_stream_limit: 512     # max unencoded PMTs in binding stream — OOM guard on encoding engine failure
+    encoding_cycle_timeout: 30.0  # max seconds to wait for encoding thread clean exit on shutdown
+    encoding_prime_capacity: 256  # maximum entries in encoding engine's LRU prime cache
+    encoding_prime_key_limit: 256 # maximum characters hashed per prime key in encoding engine
+
+    episode_content_limit: 3000   # maximum character length of a PMT bound into episodic buffer
+
+    theta_interval: 2.0           # seconds — periodic theta rhythm for continuous sensor input encoding
+    theta_batch_limit: 32         # max traces encoded per theta cycle — prevents spike on crash recovery
+
+    recall_reserve: 2048          # cortical capacity reserved for episodic recall injection
+    recall_surface_limit: 3       # maximum episodes surfaced per turn (final RRF output)
+    recall_pool: 15               # candidate pool multiplier — RECALL_SURFACE_LIMIT × RECALL_POOL episodes scored before fusion
+    recall_timeout: 2.0           # seconds — timeout for recall ops (BGE 300M on Orin Nano CPU)
+                                  # covers encode_query (~500-900ms) + KNN search
+                                  # TODO: increase to 3.0 if model is genuinely int4 quantized
+    recovery_batch_size: 50       # max unencoded episodes loaded into binding stream per recovery batch
+    relevance_threshold: 0.45     # minimum RRF relevance score for an episode to be surfaced
+
+  wmc:
+    pmt_slot_limit: 7             # maximum PMT slot vacancy (Miller's Law 7±2)
+    pmt_slot_buffer: 2            # PMT slot vacancy flexibility (Miller's Law ±2)
