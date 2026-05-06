@@ -839,3 +839,40 @@ polling one row at a time.
 
 ---
 
+### 2026-04-03 — Episodic Buffer Emerges
+*Intake stream, recall stream, engram schema*
+
+**What landed**
+- Hardened EMC initialization: explicit `-> None`, engram
+  connection wrapped in `try/except sqlite3.Error`, encode-
+  cycle startup failure raises loudly
+- Renamed stored vector column from `embedding` to `encoding`
+- Introduced `EpisodicBuffer` dataclass with two streams:
+  `intake_stream` (evicted PMTs pending encoding) and
+  `recall_stream` (recalled episodes pending reinstatement)
+- MCC now references `self.emc.episodic_buffer` — EMC owns
+  the buffer, MCC coordinates through it
+- Fixed `_semantic_match` missing colon from April 2 refactor
+- Completed `is_query → is_cue` switch across encode cycle
+  and recall path
+- Fixed `is_available()` → `is_available` property usage
+
+**Challenges**
+- Still transitional: `EpisodicBuffer` dataclass and a SQLite
+  table both named `episodic_buffer` coexisted — the in-memory
+  vs on-disk boundary wasn't fully clean yet
+
+**Reflection**
+April 3 was the day the episodic buffer stopped being just a
+database table and became a workspace. Two streams — one for
+intake, one for recall — made the buffer's role in the memory
+pipeline explicit. The design was still rough, but the right
+abstraction had arrived.
+
+---
+
+### 2026-04-04 — No Commit
+*Pause between episodic buffer and sqlite-vec search*
+
+---
+
