@@ -97,7 +97,7 @@ Current date: {date}
             CANDIDATE_THRESHOLD   : int   = 40                                    # [PERSONA] maximum candidate tokens considered per step
             PERSEVERATION_DAMPING : float = 1.15                                  # [PERSONA] suppresses repetition of already-generated tokens
             HABITUATION_DAMPING   : float = 0.1                                   # [PERSONA] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.1                                   # [STATIC] bias toward introducing new topics — penalizes already-mentioned concepts
+            NOVELTY_BIAS          : float = 0.1                                   # [PERSONA] bias toward introducing new topics — penalizes already-mentioned concepts
             SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 Personality:
