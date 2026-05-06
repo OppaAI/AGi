@@ -491,3 +491,57 @@ about and easier to build on.
 
 ---
 
+### 2026-03-22 — WMC Capacity Hardening
+*Accurate chunks, oversize guard, safer eviction*
+
+**What landed**
+- Fixed chunk estimation to use ceiling division — prevents WMC
+  from undercounting PMT size and overfilling the context window
+- Added oversize PMT guard — truncates content that would exceed
+  the global chunk budget before it enters WMC
+- Added floor to sustained chunk accounting so eviction can
+  never drive the counter below zero
+- Improved WMC assessment so the cortex can report its own
+  occupancy and verify sustained chunk state
+
+**Challenges**
+- Floor division was silently undercounting — the kind of bug
+  that only shows up under pressure when context windows start
+  overflowing
+
+**Reflection**
+March 22 was a defensive day. WMC already had the right language
+and the right model — today I made the math trustworthy. A
+memory system is only useful if its capacity accounting can be
+relied on.
+
+---
+
+### 2026-03-23 — HRP Becomes the Parameter Authority
+*Separating configuration from coordination*
+
+**What landed**
+- Moved MCC constants into HRP: system prompt reserve, EMC
+  context reserve, recall depth, similarity threshold, DB path
+- Renamed MCC to `MemoryCoordinationCore` — coordinator, not
+  configuration owner
+- Defined HRP's three-tier parameter philosophy: static
+  (architecture limits), intrinsic (self-tuning cognitive),
+  extrinsic (per-user preferences)
+- Removed "default" from WMC parameter names — these are the
+  robot's active cognitive configuration, not fallbacks
+
+**Challenges**
+- Deciding what belongs in HRP vs what belongs in each cortex
+  required thinking clearly about ownership: HRP owns parameters,
+  MCC owns coordination, WMC owns active memory, EMC owns storage
+
+**Reflection**
+March 23 was a separation-of-concerns day. Once MCC stopped
+owning its own configuration, its role became clearer: route
+memory operations, assemble context, coordinate WMC and EMC.
+The three-tier HRP philosophy also planted the seed for the
+later config-refactor roadmap.
+
+---
+
