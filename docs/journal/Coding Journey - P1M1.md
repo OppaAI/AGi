@@ -802,3 +802,40 @@ were right, the encoding interface explained itself.
 
 ---
 
+### 2026-04-02 — EMC Matures
+*Semantic match, relevancy, engram gateway, encode cycle*
+
+**What landed**
+- Renamed cosine helper to `_semantic_match(cue, engram)` —
+  matching a recall cue against a stored engram, not just
+  computing vector math
+- Renamed similarity to relevancy throughout EMC — Grace
+  surfaces contextually relevant memories, not just
+  vector-similar ones
+- Renamed DB language to engram language: `db_path →
+  engram_gateway`, `conn → engram`,
+  `_init_tables() → _init_engram_schema()`
+- Refactored EMC background worker into an encode cycle —
+  wakes on consolidation event, snapshots pending IDs, encodes
+  and stores, leaves failed encodings unprocessed for retry
+- Improved memory stats to show WMC slot occupancy alongside
+  chunk occupancy
+- Cleaned MCC/WMC: keyword args on `fill_pmt`, fixed
+  `_introspect_chunk_load` spacing, reordered EMC init args
+
+**Challenges**
+- The `_semantic_match` rename introduced syntax typos mid-
+  refactor (`dot:f float`, `retreturn`) — fast conceptual
+  renames need a syntax check pass immediately after, not at
+  the end of the session
+
+**Reflection**
+April 2 was the day EMC stopped feeling like a database with
+an embedder bolted on. Semantic match, relevancy, engram
+gateway, encode cycle — each rename clarified the actual
+cognitive role. The encode cycle was the biggest leap: EMC
+now consolidates memory in defined windows rather than
+polling one row at a time.
+
+---
+
