@@ -31,10 +31,10 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: CNS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
+    Sub: SCS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
     Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
-    Pub: CNS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
-    Pub: CNS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
+    Pub: SCS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
+    Pub: SCS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
 
 Response format (JSON on GCE.RESPONSE_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
@@ -85,8 +85,8 @@ from std_msgs.msg import String                            # ROS2 string message
 # AGi libraries
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from hrs.hrp import AGi                                    # homeostatic regulation parameter namespace
-CNS = AGi.CNS                                              # module-level alias — CNS-level constants (topic names, cortical capacity)
-GCE = AGi.CNS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
+SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
+GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
 class CNC(Node):
     """
@@ -145,16 +145,16 @@ class CNC(Node):
 
         # Initialize neural gateway for text input, generative cognitive output and MCC stats
         self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # ROS2 subscriber — fires on every incoming message
-            String, CNS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
+            String, SCS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
         )
         self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
             String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
         )
         self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends memory context to the specified topic
-            String, CNS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
+            String, SCS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
         )
         self._memory_stats_feedback: rclpy.publisher.Publisher = self.create_publisher(    # ROS2 publisher — sends memory stats to the specified topic
-            String, CNS.MEMORY_STATS_GATEWAY, 10                                           # String type | topic | QoS depth 10
+            String, SCS.MEMORY_STATS_GATEWAY, 10                                           # String type | topic | QoS depth 10
         )
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
@@ -165,7 +165,7 @@ class CNC(Node):
 
         self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")   # confirm GCE endpoint
         self.get_logger().info(f"✅ Model       : {GCE.COGNITIVE_ENGINE}")  # confirm GCE model
-        self.get_logger().info(f"✅ Subscribed  : {CNS.TEXT_INPUT_GATEWAY}")# confirm input topic
+        self.get_logger().info(f"✅ Subscribed  : {SCS.TEXT_INPUT_GATEWAY}")# confirm input topic
         self.get_logger().info(f"✅ Publishing  : {GCE.RESPONSE_GATEWAY}")  # confirm output topic
         self.get_logger().info("=" * 60)                                    # visual separator
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
@@ -194,7 +194,7 @@ class CNC(Node):
 
         self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
         
-        user_prompt_chunk: int = len(user_prompt) // CNS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
+        user_prompt_chunk: int = len(user_prompt) // SCS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
         self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt
 
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
