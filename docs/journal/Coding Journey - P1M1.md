@@ -545,3 +545,63 @@ later config-refactor roadmap.
 
 ---
 
+### 2026-03-24 — HRP Becomes a Namespace
+*AGi.CNS.WMC, engram gateway, and forgetting*
+
+**What landed**
+- Converted HRP from flat constants into nested class namespaces:
+  `AGi → CNS → EMC / WMC`
+- Updated WMC and MCC to consume parameters through
+  `AGi.CNS.WMC` — no more loose imports
+- Removed WMC fallback defaults — HRP is now required, not
+  optional; missing parameter system should fail clearly
+- Moved gateway/path constants into HRP: `ENTITY_GATEWAY`,
+  `NEURAL_GATEWAY`, `ENGRAM_COMPLEX`
+- Renamed "discard PMT schema" to "forget PMT schema" — WMC
+  is not deleting data, it is forgetting active traces
+- Improved MCC startup logs to report WMC/EMC connectivity
+  instead of raw budget numbers
+
+**Challenges**
+- Recognizing that `UNITS_PER_CHUNK` didn't belong inside WMC
+  — chunk accounting is a CNS-wide concern, not WMC-only.
+  Flagged it for promotion; it later moved to `AGi.CNS` level
+
+**Reflection**
+March 24 was the day HRP stopped being a settings file and
+started being an architecture map. Once parameters lived under
+`AGi.CNS.WMC`, reading the code told you where in the cognitive
+system you were. That clarity compounded over the weeks ahead.
+
+---
+
+### 2026-03-25 — Memory Pipeline Gets Its Verbs
+*Filling, binding, encoding, reinstatement*
+
+**What landed**
+- Renamed MCC's WMC call from `add_turn` to `fill_pmt` —
+  WMC is no longer a chat-history list
+- Renamed MCC operations: `add_turn → bind_pmt`,
+  `_forward_to_emc_buffer → _bind_to_emc_buffer`
+- Added EMC lifecycle: Binding → Encoding → Consolidation →
+  Storing → Retrieval → Reinstatement
+- Fixed MCC async from `get_event_loop()` to
+  `get_running_loop()` — safer inside a running coroutine
+- Cleaned MCC and WMC startup logs — boot as cognitive organs,
+  not Python objects
+- Added cognitive development roadmap to README: M1 = Phase 1
+  "I can remember"
+
+**Challenges**
+- Nothing blocked, but the EMC lifecycle addition was the most
+  conceptually important work of the day — it completed the
+  vocabulary across both memory cortices
+
+**Reflection**
+March 25 was the day the pipeline got its verbs. WMC fills and
+sustains. MCC binds. EMC encodes, consolidates, and reinstates.
+Once each layer had lifecycle language, the whole WMC → MCC →
+EMC flow could be reasoned about as a system, not just as code.
+
+---
+
