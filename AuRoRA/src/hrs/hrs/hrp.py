@@ -68,7 +68,7 @@ class AGi:                                              # Amazing Grace infrastr
         MEMORY_STATS_GATEWAY: str   = "/scs/memory_stats"     # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
         class GCE:                                                                # Generative Cognitive Engine
-            _manifest_gateway            = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.GENERATIVE_COGNITIVE_ENGINE}"  # ARC hydration target — mapped from active persona params
+            _manifest_gateway            = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.GENERATIVE_COGNITIVE_ENGINE}"  # ARC hydration target — loaded from active persona.yaml
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] Ollama server base URL for GCE
             COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag for GCE
             RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] max tokens per completion
