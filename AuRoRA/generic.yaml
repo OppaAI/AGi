@@ -12,15 +12,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── GenericGrace — Lightweight Reset Target ───────────────────────────────────
-cognitive_engine: "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [PERSONA] Ollama model tag — lighter fallback model
-response_depth: 512               # [PERSONA] max tokens per completion
-context_window: 32768             # [PERSONA] Ollama num_ctx — total token slots allocated to model
-temperature: 0.7                  # [PERSONA] sampling temperature
-probability_threshold: 0.9        # [PERSONA] top-p nucleus sampling cutoff
-candidate_threshold: 40           # [PERSONA] top-k token candidate limit per sampling step
-perseveration_damping: 1.15       # [PERSONA] repetition penalty — scales down already-sampled tokens
-habituation_damping: 0.1          # [PERSONA] frequency penalty — scales down tokens by corpus frequency
-novelty_bias: 0.1                 # [PERSONA] presence penalty — boosts tokens not yet in context
+cognitive_engine: "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # Ollama model tag — lighter fallback model
+response_depth: 512               # max tokens per completion
+context_window: 32768             # Ollama num_ctx — total token slots allocated to model
+temperature: 0.7                  # sampling temperature
+probability_threshold: 0.9        # top-p nucleus sampling cutoff
+candidate_threshold: 40           # top-k token candidate limit per sampling step
+perseveration_damping: 1.15       # repetition penalty — scales down already-sampled tokens
+habituation_damping: 0.1          # frequency penalty — scales down tokens by corpus frequency
+novelty_bias: 0.1                 # presence penalty — boosts tokens not yet in context
 system_prompt: |
   You are GRACE — Generative Reasoning Agentic Cognitive Entity.
   You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
