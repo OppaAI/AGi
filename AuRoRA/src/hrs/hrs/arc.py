@@ -9,7 +9,7 @@ cognitive and regulatory nodes in dependency order, and publishes
 a ready signal before any other node begins processing.
 
 Boot order:
-    ARC → EEE → HRS → EMC → MCC → CNC
+    ARC → EEC → HRS → EMC → MCC → CNC
 
 TODO: DNA genome encryption — dual-helix primary + mirror backup
 """
@@ -29,20 +29,19 @@ from hrp                import AGi
 # ─── Path Convention ──────────────────────────────────────────────────────────
 #
 #   ~/.agi/
-#       aurora.yaml             ← single robot-wide settings file
+#       aurora.yaml             ← robot-wide settings  (AGi.AURORA_SETPOINTS)
 #       personas/
-#           persona.yaml        ← active persona + inference params
-#           generic.yaml        ← default persona reset target (read-only)
-#       users/
-#           oppaai.yaml         ← swappable user profile
+#           persona.yaml        ← active persona + inference params  (AGi.PERSONA_ACTIVE)
+#           generic.yaml        ← default persona reset target       (AGi.PERSONA_GENERIC)
+#       users.yaml              ← all user profiles + per-user extrinsic settings  (AGi.USER_PROFILES)
 #       scs/
 #           emc/
 #               engram_complex.db
 
-AGI_DIR      = Path.home() / AGi.ENTITY_GATEWAY
-AURORA_CFG   = AGI_DIR / "aurora.yaml"
-PERSONA_DIR  = AGI_DIR / "personas"
-USER_DIR     = AGI_DIR / "users"
+AGI_DIR     = Path.home() / AGi.ENTITY_GATEWAY
+AURORA_CFG  = AGI_DIR / AGi.AURORA_SETPOINTS
+PERSONA_DIR = AGI_DIR / "personas"
+USERS_CFG   = AGI_DIR / AGi.USER_PROFILES
 
 # ─── Dataclasses ──────────────────────────────────────────────────────────────
 
@@ -61,11 +60,22 @@ class PersonaConfig:
     params:        InferenceParams = field(default_factory=InferenceParams)
 
 @dataclass
+class ExtrinsicSettings:
+    """Per-user behavioural preferences — loaded from users.yaml alongside the user profile."""
+    response_verbosity:  str   = "concise"      # concise | normal | verbose
+    formality:           str   = "casual"        # casual | formal
+    preferred_language:  str   = "en"            # ISO 639-1 language code
+    emotional_tone:      str   = "warm"          # warm | neutral | professional
+    memory_salience_bias: float = 0.0            # per-user recall bias offset applied to relevance scores
+
+@dataclass
 class UserProfile:
-    name:     str       = "unknown"
-    known_as: str       = "unknown"
-    location: str       = "unknown"
-    notes:    list[str] = field(default_factory=list)
+    id:        str              = "unknown"
+    name:      str              = "unknown"
+    known_as:  str              = "unknown"
+    location:  str              = "unknown"
+    notes:     list[str]        = field(default_factory=list)
+    extrinsic: ExtrinsicSettings = field(default_factory=ExtrinsicSettings)
 
 @dataclass
 class EMCSettings:
@@ -83,33 +93,33 @@ class EMCSettings:
 
 @dataclass
 class WMCSettings:
-    pmt_slot_limit:    int = 7
-    pmt_slot_buffer:   int = 2
+    pmt_slot_limit:     int = 7
+    pmt_slot_buffer:    int = 2
     global_chunk_limit: int = 11264
 
 @dataclass
 class GCESettings:
-    model:               str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"
-    temperature:         float = 0.75
-    top_p:               float = 0.88
-    top_k:               int   = 50
-    max_tokens:          int   = 512
-    context_window:      int   = 32768
-    repetition_penalty:  float = 1.25
-    frequency_penalty:   float = 0.15
-    presence_penalty:    float = 0.05
+    model:              str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"
+    temperature:        float = 0.75
+    top_p:              float = 0.88
+    top_k:              int   = 50
+    max_tokens:         int   = 512
+    context_window:     int   = 32768
+    repetition_penalty: float = 1.25
+    frequency_penalty:  float = 0.15
+    presence_penalty:   float = 0.05
 
 @dataclass
 class SCSSettings:
-    cortical_capacity:  int   = 16384
-    cognitive_reserve:  int   = 2048
+    cortical_capacity:   int   = 16384
+    cognitive_reserve:   int   = 2048
     induction_threshold: float = 0.4
     eviction_threshold:  float = 0.3
     salience_hard_gate:  float = 0.8
     boundary_threshold:  float = 0.35
-    emc: EMCSettings    = field(default_factory=EMCSettings)
-    wmc: WMCSettings    = field(default_factory=WMCSettings)
-    gce: GCESettings    = field(default_factory=GCESettings)
+    emc: EMCSettings     = field(default_factory=EMCSettings)
+    wmc: WMCSettings     = field(default_factory=WMCSettings)
+    gce: GCESettings     = field(default_factory=GCESettings)
 
 @dataclass
 class HRSSettings:
@@ -119,16 +129,16 @@ class HRSSettings:
     battery_critical:  float = 15.0
 
 @dataclass
-class SDSSettings:
-    """Stub — expand as SDS matures."""
+class VDSSettings:
+    """Stub — expand as VDS matures."""
     min_obstacle_distance: float = 0.4
     emergency_stop_dist:   float = 0.2
 
 @dataclass
 class RASSettings:
     boot_timeout:   float = 10.0
-    active_persona: str   = "persona"
-    active_user:    str   = "oppaai"
+    active_persona: str   = "persona"       # filename stem — resolves to AGi.PERSONA_ACTIVE
+    active_user:    str   = "oppaai"        # user id — loaded from AGi.USER_PROFILES
 
 @dataclass
 class AuroraConfig:
@@ -136,7 +146,7 @@ class AuroraConfig:
     ras:     RASSettings   = field(default_factory=RASSettings)
     scs:     SCSSettings   = field(default_factory=SCSSettings)
     hrs:     HRSSettings   = field(default_factory=HRSSettings)
-    sds:     SDSSettings   = field(default_factory=SDSSettings)
+    vds:     VDSSettings   = field(default_factory=VDSSettings)
     persona: PersonaConfig = field(default_factory=PersonaConfig)
     user:    UserProfile   = field(default_factory=UserProfile)
 
@@ -175,7 +185,7 @@ class ArousedReactionCore(Node):
     ARC — Arousal Reaction Core
 
     Bootloader and config registry for the AuRoRA CNS.
-    Loads aurora.yaml + active persona/user at startup.
+    Loads aurora.yaml + active persona and user at startup.
     Spawns all nodes in dependency order, waits for each ready signal
     before proceeding to the next stage.
 
@@ -209,7 +219,7 @@ class ArousedReactionCore(Node):
         """Load aurora.yaml then active persona and user profile."""
         raw = self._read_yaml(AURORA_CFG)
         if not raw:
-            self.get_logger().warning("⚠️  aurora.yaml not found — using defaults")
+            self.get_logger().warning(f"⚠️  {AGi.AURORA_SETPOINTS} not found — using defaults")
         else:
             self._parse_aurora(raw)
 
@@ -242,7 +252,9 @@ class ArousedReactionCore(Node):
                 hrp_key = attr_name.upper()
                 if hasattr(target_class, hrp_key):
                     setattr(target_class, hrp_key, getattr(config_section, attr_name))
-                    self.get_logger().debug(f"Hydrated {section_key}.{hrp_key} = {getattr(config_section, attr_name)}")
+                    self.get_logger().debug(
+                        f"Hydrated {section_key}.{hrp_key} = {getattr(config_section, attr_name)}"
+                    )
 
     def _parse_aurora(self, raw: dict) -> None:
         """Parse aurora.yaml into AuroraConfig dataclasses."""
@@ -312,19 +324,25 @@ class ArousedReactionCore(Node):
             self.get_logger().error(f"❌ HRS settings parse error: {e}")
 
         try:
-            sds = raw.get(AGi.SPATIAL_DETECTION_SYSTEM, {})
-            self.config.sds = SDSSettings(
-                min_obstacle_distance = sds.get("min_obstacle_distance", 0.4),
-                emergency_stop_dist   = sds.get("emergency_stop_dist",   0.2),
+            vds = raw.get(AGi.VULNERABILITY_DETECTION_SYSTEM, {})
+            self.config.vds = VDSSettings(
+                min_obstacle_distance = vds.get("min_obstacle_distance", 0.4),
+                emergency_stop_dist   = vds.get("emergency_stop_dist",   0.2),
             )
         except Exception as e:
-            self.get_logger().error(f"❌ SDS settings parse error: {e}")
+            self.get_logger().error(f"❌ VDS settings parse error: {e}")
 
     def _load_persona(self, name: str) -> PersonaConfig:
-        """Load active persona from ~/.agi/personas/{name}.yaml"""
-        raw = self._read_yaml(PERSONA_DIR / f"{name}.yaml")
+        """
+        Load persona from ~/.agi/personas/{name}.yaml
+        Falls back to AGi.PERSONA_GENERIC if the active persona file is missing.
+        """
+        path = PERSONA_DIR / (
+            AGi.PERSONA_ACTIVE if name == "persona" else AGi.PERSONA_GENERIC
+        )
+        raw = self._read_yaml(path)
         if not raw:
-            self.get_logger().warning(f"⚠️  personas/{name}.yaml not found — using defaults")
+            self.get_logger().warning(f"⚠️  {path.name} not found — using defaults")
             return PersonaConfig()
         try:
             p      = raw.get("persona", {})
@@ -341,24 +359,43 @@ class ArousedReactionCore(Node):
                 )
             )
         except Exception as e:
-            self.get_logger().error(f"❌ Persona parse error ({name}): {e}")
+            self.get_logger().error(f"❌ Persona parse error ({path.name}): {e}")
             return PersonaConfig()
 
-    def _load_user(self, name: str) -> UserProfile:
-        """Load active user profile from ~/.agi/users/{name}.yaml"""
-        raw = self._read_yaml(USER_DIR / f"{name}.yaml")
+    def _load_user(self, user_id: str) -> UserProfile:
+        """
+        Load user profile + extrinsic settings from ~/.agi/users.yaml by id.
+        Falls back to default UserProfile if id is not found.
+        """
+        raw = self._read_yaml(USERS_CFG)
         if not raw:
-            self.get_logger().warning(f"⚠️  users/{name}.yaml not found — using defaults")
+            self.get_logger().warning(f"⚠️  {AGi.USER_PROFILES} not found — using defaults")
             return UserProfile()
+
+        users: list[dict] = raw.get("users", [])
+        entry = next((u for u in users if u.get("id") == user_id), None)
+        if not entry:
+            self.get_logger().warning(f"⚠️  User '{user_id}' not found in {AGi.USER_PROFILES} — using defaults")
+            return UserProfile()
+
         try:
+            ext = entry.get("extrinsic", {})
             return UserProfile(
-                name     = raw.get("name",     "unknown"),
-                known_as = raw.get("known_as", "unknown"),
-                location = raw.get("location", "unknown"),
-                notes    = raw.get("notes",    []),
+                id       = entry.get("id",       "unknown"),
+                name     = entry.get("name",     "unknown"),
+                known_as = entry.get("known_as", "unknown"),
+                location = entry.get("location", "unknown"),
+                notes    = entry.get("notes",    []),
+                extrinsic = ExtrinsicSettings(
+                    response_verbosity   = ext.get("response_verbosity",   "concise"),
+                    formality            = ext.get("formality",            "casual"),
+                    preferred_language   = ext.get("preferred_language",   "en"),
+                    emotional_tone       = ext.get("emotional_tone",       "warm"),
+                    memory_salience_bias = ext.get("memory_salience_bias", 0.0),
+                ),
             )
         except Exception as e:
-            self.get_logger().error(f"❌ User profile parse error ({name}): {e}")
+            self.get_logger().error(f"❌ User profile parse error ({user_id}): {e}")
             return UserProfile()
 
     # ─── Boot Sequence ────────────────────────────────────────────────────────
@@ -369,16 +406,16 @@ class ArousedReactionCore(Node):
         # Future stages uncommented as each system is built
 
         # Stage 1 — Infrastructure
-        # self._spawn(AGi.ELECTRO_ENCEPHALIC_ENGINE)
-        # self._wait_ready(f"/{AGi.ELECTRO_ENCEPHALIC_ENGINE}/ready", timeout)
+        # self._spawn(AGi.EMERGENCY_EXCEPTION_CORE)
+        # self._wait_ready(f"/{AGi.EMERGENCY_EXCEPTION_CORE}/ready", timeout)
 
         # Stage 2 — Regulatory
         # self._spawn(AGi.HOMEOSTATIC_REGULATION_SYSTEM)
         # self._wait_ready(f"/{AGi.HOMEOSTATIC_REGULATION_SYSTEM}/ready", timeout)
 
         # Stage 3 — Cognition (CNC owns MCC, WMC, EMC internally)
-        self._spawn(AGi.CENTRAL_NERVOUS_CONTROLLER)
-        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CONTROLLER}/ready", timeout)
+        self._spawn(AGi.CENTRAL_NERVOUS_CORE)
+        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CORE}/ready", timeout)
 
         msg      = Bool()
         msg.data = True
