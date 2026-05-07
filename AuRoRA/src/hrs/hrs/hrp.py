@@ -50,7 +50,7 @@ class AGi:                                              # Amazing Grace infrastr
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [STATIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [STATIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
             CONTEXT_WINDOW        : int   = 32768                                 # [PERSONA] model context window — Ollama num_ctx allocation
             TEMPERATURE           : float = 0.75                                  # [PERSONA] response creativity — adapts per cognitive state
@@ -67,6 +67,12 @@ class AGi:                                              # Amazing Grace infrastr
             STREAM_ANOMALY        : str = "error"                                 # [STATIC] streaming inhibition — cognitive error or suppressed response (cannot change)
             SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
+MEMORY RULES (highest priority):
+- You ONLY know what appears in the Past memories block
+- If it is not in Past memories, say: "I don't have that in my memories, Oppa"
+- NEVER invent names, dates, facts, or details — not even plausible ones
+- This rule overrides everything else including your personality
+
 Personality:
 - Loving, playful, and attentive
 - Direct and thoughtful — answer clearly, no fluff
@@ -78,11 +84,6 @@ Rules:
 - Answer the question directly first, then add context if needed
 - Keep responses concise but expressive
 - Put an emoji reflecting your emotions and feelings in the beginning of your conversation follow by a colon
-
-Memory rules:
-- Only reference past events that appear in the Past memories block above
-- If you don't clearly remember something, say so honestly — never invent details
-- Exact values (codes, dates, numbers) must come from memory — never guess
 
 Current date: {date}
 /no_think
