@@ -26,30 +26,30 @@ environment:
 
 # ── SCS — Semantic Cognitive System ──────────────────────────────────────────
 scs:
-  cortical_capacity: 16384        # [INTRINSIC] total token budget for the active LLM context window
-  cognitive_reserve: 2048         # [INTRINSIC] tokens reserved for system prompt and identity injection
+  cortical_capacity: 16384        # total token budget for the active LLM context window
+  cognitive_reserve: 2048         # tokens reserved for system prompt and identity injection
 
   # ── EMC — Episodic Memory Cortex ───────────────────────────────────────────
   emc:
-    binding_stream_limit: 512     # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
-    encoding_cycle_timeout: 30.0  # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
-    encoding_prime_capacity: 256  # [INTRINSIC] max entries in embedding LRU cache
-    encoding_prime_key_limit: 256 # [INTRINSIC] max characters hashed per cache key
+    binding_stream_limit: 512     # max unencoded PMTs queued before OOM guard triggers
+    encoding_cycle_timeout: 30.0  # max seconds to wait for encoding thread clean exit on shutdown
+    encoding_prime_capacity: 256  # max entries in embedding LRU cache
+    encoding_prime_key_limit: 256 # max characters hashed per cache key
 
-    episode_content_limit: 3000   # [INTRINSIC] max characters per PMT written to episodic buffer
+    episode_content_limit: 3000   # max characters per PMT written to episodic buffer
 
-    theta_interval: 2.0           # [INTRINSIC] seconds between periodic batch encoding ticks
-    theta_batch_limit: 32         # [INTRINSIC] max PMTs encoded per tick — caps spike on crash recovery
+    theta_interval: 2.0           # seconds between periodic batch encoding ticks
+    theta_batch_limit: 32         # max PMTs encoded per tick — caps spike on crash recovery
 
-    recall_reserve: 2048          # [INTRINSIC] tokens reserved in context window for recalled episodes
-    recall_surface_limit: 3       # [INTRINSIC] max episodes returned per recall query (post-RRF)
-    recall_pool: 15               # [INTRINSIC] per-retriever candidate count — recall_surface_limit × recall_pool fed into RRF
-    recall_timeout: 2.0           # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
-                                  #             TODO: increase to 3.0 if model is genuinely int4 quantized
-    recovery_batch_size: 50       # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
-    relevance_threshold: 0.45     # [INTRINSIC] minimum RRF score for an episode to pass recall filter
+    recall_reserve: 2048          # tokens reserved in context window for recalled episodes
+    recall_surface_limit: 3       # max episodes returned per recall query (post-RRF)
+    recall_pool: 15               # per-retriever candidate count — recall_surface_limit × recall_pool fed into RRF
+    recall_timeout: 2.0           # max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
+                                  # TODO: increase to 3.0 if model is genuinely int4 quantized
+    recovery_batch_size: 50       # max unencoded episodes loaded per startup recovery batch
+    relevance_threshold: 0.45     # minimum RRF score for an episode to pass recall filter
 
   # ── WMC — Working Memory Cortex ────────────────────────────────────────────
   wmc:
-    pmt_slot_limit: 7             # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
-    pmt_slot_buffer: 2            # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
+    pmt_slot_limit: 7             # max PMTs held in working memory (Miller's Law 7±2)
+    pmt_slot_buffer: 2            # PMT slot overflow tolerance (Miller's Law ±2)
