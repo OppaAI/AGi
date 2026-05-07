@@ -230,6 +230,20 @@ class ArousedReactionCore(Node):
         self.config.persona = self._load_persona()
         self.config.user    = self._load_user(self.config.ras.active_user)
 
+        # Sync persona inference params into scs.gce so _hydrate() pushes them into AGi.SCS.GCE
+        p = self.config.persona
+        self.config.scs.gce = GCESettings(
+            cognitive_engine      = p.cognitive_engine,
+            response_depth        = p.response_depth,
+            context_window        = p.context_window,
+            temperature           = p.temperature,
+            probability_threshold = p.probability_threshold,
+            candidate_threshold   = p.candidate_threshold,
+            perseveration_damping = p.perseveration_damping,
+            habituation_damping   = p.habituation_damping,
+            novelty_bias          = p.novelty_bias,
+        )
+
         self.get_logger().info(
             f"✅ Config loaded — persona: {self.config.ras.active_persona} "
             f"| user: {self.config.ras.active_user}"
@@ -289,9 +303,8 @@ class ArousedReactionCore(Node):
 
         try:
             scs = raw.get(AGi.SEMANTIC_COGNITIVE_SYSTEM, {})
-            emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX,      {})
-            wmc = scs.get(AGi.WORKING_MEMORY_CORTEX,       {})
-            gce = scs.get(AGi.GENERATIVE_COGNITIVE_ENGINE, {})
+            emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
+            wmc = scs.get(AGi.WORKING_MEMORY_CORTEX,  {})
             self.config.scs = SCSSettings(
                 cortical_capacity   = scs.get("cortical_capacity",   16384),
                 cognitive_reserve   = scs.get("cognitive_reserve",   2048),
@@ -300,37 +313,27 @@ class ArousedReactionCore(Node):
                 salience_hard_gate  = scs.get("salience_hard_gate",  0.8),
                 boundary_threshold  = scs.get("boundary_threshold",  0.35),
                 emc = EMCSettings(
-                    binding_stream_limit    = emc.get("binding_stream_limit",    512),
-                    encoding_cycle_timeout  = emc.get("encoding_cycle_timeout",  30.0),
-                    encoding_prime_capacity = emc.get("encoding_prime_capacity", 256),
-                    encoding_prime_key_limit= emc.get("encoding_prime_key_limit",256),
-                    episode_content_limit   = emc.get("episode_content_limit",   3000),
-                    theta_interval          = emc.get("theta_interval",          2.0),
-                    theta_batch_limit       = emc.get("theta_batch_limit",       32),
-                    recall_reserve          = emc.get("recall_reserve",          2048),
-                    recall_surface_limit    = emc.get("recall_surface_limit",    3),
-                    recall_pool             = emc.get("recall_pool",             15),
+                    binding_stream_limit     = emc.get("binding_stream_limit",     512),
+                    encoding_cycle_timeout   = emc.get("encoding_cycle_timeout",   30.0),
+                    encoding_prime_capacity  = emc.get("encoding_prime_capacity",  256),
+                    encoding_prime_key_limit = emc.get("encoding_prime_key_limit", 256),
+                    episode_content_limit    = emc.get("episode_content_limit",    3000),
+                    theta_interval           = emc.get("theta_interval",           2.0),
+                    theta_batch_limit        = emc.get("theta_batch_limit",        32),
+                    recall_reserve           = emc.get("recall_reserve",           2048),
+                    recall_surface_limit     = emc.get("recall_surface_limit",     3),
+                    recall_pool              = emc.get("recall_pool",              15),
                     # recall_depth — [DERIVED] — computed in _derive()
-                    recall_timeout          = emc.get("recall_timeout",          2.0),
-                    recovery_batch_size     = emc.get("recovery_batch_size",     50),
-                    relevance_threshold     = emc.get("relevance_threshold",     0.45),
+                    recall_timeout           = emc.get("recall_timeout",           2.0),
+                    recovery_batch_size      = emc.get("recovery_batch_size",      50),
+                    relevance_threshold      = emc.get("relevance_threshold",      0.45),
                 ),
                 wmc = WMCSettings(
                     pmt_slot_limit  = wmc.get("pmt_slot_limit",  7),
                     pmt_slot_buffer = wmc.get("pmt_slot_buffer", 2),
                     # global_chunk_limit — [DERIVED] — computed in _derive()
                 ),
-                gce = GCESettings(
-                    cognitive_engine      = gce.get("cognitive_engine",      "huihui_ai/granite4.1-abliterated:8b-q8_0"),
-                    response_depth        = gce.get("response_depth",        512),
-                    context_window        = gce.get("context_window",        32768),
-                    temperature           = gce.get("temperature",           0.75),
-                    probability_threshold = gce.get("probability_threshold", 0.88),
-                    candidate_threshold   = gce.get("candidate_threshold",   50),
-                    perseveration_damping = gce.get("perseveration_damping", 1.25),
-                    habituation_damping   = gce.get("habituation_damping",   0.15),
-                    novelty_bias          = gce.get("novelty_bias",          0.05),
-                ),
+                # gce — [PERSONA] — populated from _load_persona() in _load_config()
             )
         except Exception as e:
             self.get_logger().error(f"❌ SCS settings parse error: {e}")
