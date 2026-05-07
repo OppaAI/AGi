@@ -40,7 +40,7 @@ from hrp            import AGi
 #       personas/
 #           persona.yaml        ← active persona + inference params  (AGi.PERSONA_ACTIVE)
 #           generic.yaml        ← default persona reset target       (AGi.PERSONA_GENERIC)
-#       users.yaml              ← all user profiles + per-user extrinsic settings  (AGi.USER_PROFILES)
+#       users.yaml              ← all user profiles + per-user preferences  (AGi.USER_PROFILES)
 #       scs/
 #           emc/
 #               engram_complex.db
@@ -73,7 +73,7 @@ class PersonaConfig:
     novelty_bias:          float
 
 @dataclass
-class ExtrinsicSettings:
+class PreferencesSettings:
     """Per-user behavioural preferences — loaded from users.yaml alongside the user profile."""
     response_verbosity:   str
     formality:            str
@@ -88,7 +88,7 @@ class UserProfile:
     known_as:  str
     location:  str
     notes:     list[str]
-    extrinsic: ExtrinsicSettings
+    preferences: PreferencesSettings
 
 @dataclass
 class EMCSettings:
@@ -145,8 +145,8 @@ class HRSSettings:
     battery_critical:  float
 
 @dataclass
-class SDSSettings:
-    """Stub — expand as SDS matures."""
+class VDSSettings:
+    """Stub — expand as VDS matures."""
     min_obstacle_distance: float
     emergency_stop_dist:   float
 
@@ -162,7 +162,7 @@ class AuroraConfig:
     ras:     RASSettings
     scs:     SCSSettings
     hrs:     HRSSettings
-    sds:     SDSSettings
+    vds:     VDSSettings
     persona: PersonaConfig
     user:    UserProfile
 
@@ -232,7 +232,7 @@ class ArousedReactionCore(Node):
         Returns a fully populated AuroraConfig — no partial states.
         """
         raw = self._read_yaml(AURORA_CFG)
-        ras, scs, hrs, sds = self._parse_aurora(raw)
+        ras, scs, hrs, vds = self._parse_aurora(raw)
 
         # Derive computed constants from parsed intrinsic values
         scs = self._derive(scs)
@@ -276,7 +276,7 @@ class ArousedReactionCore(Node):
             ras     = ras,
             scs     = scs,
             hrs     = hrs,
-            sds     = sds,
+            vds     = vds,
             persona = persona,
             user    = user,
         )
@@ -322,7 +322,7 @@ class ArousedReactionCore(Node):
                         f"Hydrated {section_key}.{hrp_key} = {getattr(config_section, attr_name)}"
                     )
 
-    def _parse_aurora(self, raw: dict) -> tuple[RASSettings, SCSSettings, HRSSettings, SDSSettings]:
+    def _parse_aurora(self, raw: dict) -> tuple[RASSettings, SCSSettings, HRSSettings, VDSSettings]:
         """
         Parse aurora.yaml into config dataclasses.
         Raises RuntimeError on any missing required section or key.
@@ -331,14 +331,14 @@ class ArousedReactionCore(Node):
         self._require_section(raw, AGi.RETICULAR_ACTIVATING_SYSTEM, AGi.AURORA_SETPOINTS)
         self._require_section(raw, AGi.SEMANTIC_COGNITIVE_SYSTEM,    AGi.AURORA_SETPOINTS)
         self._require_section(raw, AGi.HOMEOSTATIC_REGULATION_SYSTEM, AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.SELF_DEFENSE_SYSTEM, AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.VULNERABILITY_DETECTION_SYSTEM, AGi.AURORA_SETPOINTS)
 
         ras_raw = raw[AGi.RETICULAR_ACTIVATING_SYSTEM]
         scs_raw = raw[AGi.SEMANTIC_COGNITIVE_SYSTEM]
         emc_raw = scs_raw.get(AGi.EPISODIC_MEMORY_CORTEX, {})
         wmc_raw = scs_raw.get(AGi.WORKING_MEMORY_CORTEX,  {})
         hrs_raw = raw[AGi.HOMEOSTATIC_REGULATION_SYSTEM]
-        sds_raw = raw[AGi.SELF_DEFENSE_SYSTEM]
+        vds_raw = raw[AGi.VULNERABILITY_DETECTION_SYSTEM]
 
         ras = RASSettings(
             boot_timeout   = self._require_key(ras_raw, "boot_timeout",   AGi.RETICULAR_ACTIVATING_SYSTEM),
@@ -400,12 +400,12 @@ class ArousedReactionCore(Node):
             battery_critical  = self._require_key(hrs_raw, "battery_critical",  AGi.HOMEOSTATIC_REGULATION_SYSTEM),
         )
 
-        sds = SDSSettings(
-            min_obstacle_distance = self._require_key(sds_raw, "min_obstacle_distance", AGi.SELF_DEFENSE_SYSTEM),
-            emergency_stop_dist   = self._require_key(sds_raw, "emergency_stop_dist",   AGi.SELF_DEFENSE_SYSTEM),
+        vds = VDSSettings(
+            min_obstacle_distance = self._require_key(vds_raw, "min_obstacle_distance", AGi.VULNERABILITY_DETECTION_SYSTEM),
+            emergency_stop_dist   = self._require_key(vds_raw, "emergency_stop_dist",   AGi.VULNERABILITY_DETECTION_SYSTEM),
         )
 
-        return ras, scs, hrs, sds
+        return ras, scs, hrs, vds
 
     def _load_persona(self, persona_stem: str) -> PersonaConfig:
         """
@@ -432,7 +432,7 @@ class ArousedReactionCore(Node):
 
     def _load_user(self, user_id: str) -> UserProfile:
         """
-        Load user profile + extrinsic settings from ~/.agi/users.yaml by id.
+        Load user profile + preferences from ~/.agi/users.yaml by id.
         Raises RuntimeError if file is missing or user_id is not found.
         """
         raw   = self._read_yaml(USERS_CFG)
@@ -444,7 +444,7 @@ class ArousedReactionCore(Node):
                 f"❌ ARC boot failed — user '{user_id}' not found in {AGi.USER_PROFILES}"
             )
 
-        ext = self._require_key(entry, "extrinsic", f"user:{user_id}")
+        prefs = self._require_key(entry, "preferences", f"user:{user_id}")
 
         return UserProfile(
             id       = self._require_key(entry, "id",       f"user:{user_id}"),
@@ -452,12 +452,12 @@ class ArousedReactionCore(Node):
             known_as = self._require_key(entry, "known_as", f"user:{user_id}"),
             location = self._require_key(entry, "location", f"user:{user_id}"),
             notes    = entry.get("notes", []),   # notes are optional — empty list is valid
-            extrinsic = ExtrinsicSettings(
-                response_verbosity   = self._require_key(ext, "response_verbosity",   f"user:{user_id}.extrinsic"),
-                formality            = self._require_key(ext, "formality",            f"user:{user_id}.extrinsic"),
-                preferred_language   = self._require_key(ext, "preferred_language",   f"user:{user_id}.extrinsic"),
-                emotional_tone       = self._require_key(ext, "emotional_tone",       f"user:{user_id}.extrinsic"),
-                memory_salience_bias = self._require_key(ext, "memory_salience_bias", f"user:{user_id}.extrinsic"),
+            preferences = PreferencesSettings(
+                response_verbosity   = self._require_key(prefs, "response_verbosity",   f"user:{user_id}.preferences"),
+                formality            = self._require_key(prefs, "formality",            f"user:{user_id}.preferences"),
+                preferred_language   = self._require_key(prefs, "preferred_language",   f"user:{user_id}.preferences"),
+                emotional_tone       = self._require_key(prefs, "emotional_tone",       f"user:{user_id}.preferences"),
+                memory_salience_bias = self._require_key(prefs, "memory_salience_bias", f"user:{user_id}.preferences"),
             ),
         )
 
