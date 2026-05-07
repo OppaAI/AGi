@@ -29,18 +29,6 @@ scs:
   cortical_capacity: 16384        # [INTRINSIC] total token budget for the active LLM context window
   cognitive_reserve: 2048         # [INTRINSIC] tokens reserved for system prompt and identity injection
 
-  # ── GCE — Generative Cognitive Engine ──────────────────────────────────────
-  gce:
-    cognitive_engine: "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag
-    response_depth: 512           # [PERSONA] max tokens per completion
-    context_window: 32768         # [PERSONA] Ollama num_ctx — total token slots allocated to model
-    temperature: 0.75             # [PERSONA] sampling temperature
-    probability_threshold: 0.88   # [PERSONA] top-p nucleus sampling cutoff
-    candidate_threshold: 50       # [PERSONA] top-k token candidate limit per sampling step
-    perseveration_damping: 1.25   # [PERSONA] repetition penalty — scales down already-sampled tokens
-    habituation_damping: 0.15     # [PERSONA] frequency penalty — scales down tokens by corpus frequency
-    novelty_bias: 0.05            # [PERSONA] presence penalty — boosts tokens not yet in context
-
   # ── EMC — Episodic Memory Cortex ───────────────────────────────────────────
   emc:
     binding_stream_limit: 512     # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
