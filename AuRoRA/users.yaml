@@ -11,12 +11,8 @@
 # Runtime: loaded by RAS at boot from ~/.agi/cns/config.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
-deployment:
-  inference_backend: ollama       # ollama | vllm — controls which API contract CNC uses
-  neural_endpoint: "http://AIVA:11434"  # inference server address
-  active_persona: grace           # persona key to load from persona.yaml (grace | generic_grace)
-
-environment:
-  mission: "general assistance"   # current operational mission
-  location: "Vancouver, BC, Canada"
-  context: "indoor"               # indoor | outdoor
+name: "OppaAI"                    # user's full name
+known_as: "OppaAI"                # what GRACE calls you (nickname or first name)
+location: "British Columbia, BC"  # user's location for context-aware responses
+notes:                            # anything GRACE should always know about you
+  - ""
