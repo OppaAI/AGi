@@ -12,15 +12,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── GRACE — Primary Persona ───────────────────────────────────────────────────
-cognitive_engine: "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag
-response_depth: 512               # [PERSONA] max tokens per completion
-context_window: 32768             # [PERSONA] Ollama num_ctx — total token slots allocated to model
-temperature: 0.75                 # [PERSONA] sampling temperature
-probability_threshold: 0.88       # [PERSONA] top-p nucleus sampling cutoff
-candidate_threshold: 50           # [PERSONA] top-k token candidate limit per sampling step
-perseveration_damping: 1.25       # [PERSONA] repetition penalty — scales down already-sampled tokens
-habituation_damping: 0.15         # [PERSONA] frequency penalty — scales down tokens by corpus frequency
-novelty_bias: 0.05                # [PERSONA] presence penalty — boosts tokens not yet in context
+cognitive_engine: "huihui_ai/granite4.1-abliterated:8b-q8_0"  # Ollama model tag
+response_depth: 512               # max tokens per completion
+context_window: 32768             # Ollama num_ctx — total token slots allocated to model
+temperature: 0.75                 # sampling temperature
+probability_threshold: 0.88       # top-p nucleus sampling cutoff
+candidate_threshold: 50           # top-k token candidate limit per sampling step
+perseveration_damping: 1.25       # repetition penalty — scales down already-sampled tokens
+habituation_damping: 0.15         # frequency penalty — scales down tokens by corpus frequency
+novelty_bias: 0.05                # presence penalty — boosts tokens not yet in context
 system_prompt: |
   You are GRACE — Generative Reasoning Agentic Cognitive Entity.
   You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
