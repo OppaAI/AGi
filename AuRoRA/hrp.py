@@ -52,8 +52,8 @@ class AGi:                                              # Amazing Grace infrastr
         MEMORY_STATS_GATEWAY: str   = "/scs/memory_stats"   # [STATIC] ROS topic — memory stats published by all memory cortices
 
         class GCE:                                      # Generative Cognitive Engine
-            NEURAL_ENDPOINT  : str        = "http://AIVA:11434"                          # [STATIC] inference server address
-            COGNITIVE_ENGINE : str        = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [STATIC] active model — change when best model is found
+            NEURAL_ENDPOINT  : str        = "http://AIVA:11434"# [STATIC] inference server address
+            COGNITIVE_ENGINE : str        = "ministral-3:14b"  # [STATIC] active model — change when best model is found
             TIMEOUT           : float      = 60.0       # [STATIC] seconds before abandoning inference
             KEEP_ALIVE        : int | None = -1         # [STATIC] VRAM retention — -1 = forever, 0 = unload, n = seconds (Ollama only)
             STREAM_LEADING    : str        = "start"    # [STATIC] streaming onset marker — first cognitive fragment arriving
