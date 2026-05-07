@@ -32,11 +32,11 @@ Architecture:
 
 Topics:
     Sub: SCS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
-    Pub: GCE.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
+    Pub: SCS.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
     Pub: SCS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
     Pub: SCS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
 
-Response format (JSON on GCE.RESPONSE_GATEWAY):
+Response format (JSON on SCS.RESPONSE_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
     {"type": "delta", "content": "<fragment>"}
     {"type": "done",  "content": "<full cognitive response>"}
@@ -148,7 +148,7 @@ class CNC(Node):
             String, SCS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
         )
         self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
-            String, GCE.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
+            String, SCS.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
         )
         self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends memory context to the specified topic
             String, SCS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
@@ -166,7 +166,7 @@ class CNC(Node):
         self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")   # confirm GCE endpoint
         self.get_logger().info(f"✅ Model       : {GCE.COGNITIVE_ENGINE}")  # confirm GCE model
         self.get_logger().info(f"✅ Subscribed  : {SCS.TEXT_INPUT_GATEWAY}")# confirm input topic
-        self.get_logger().info(f"✅ Publishing  : {GCE.RESPONSE_GATEWAY}")  # confirm output topic
+        self.get_logger().info(f"✅ Publishing  : {SCS.RESPONSE_GATEWAY}")  # confirm output topic
         self.get_logger().info("=" * 60)                                    # visual separator
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator

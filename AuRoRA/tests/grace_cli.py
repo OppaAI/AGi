@@ -12,8 +12,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from hrs.hrp import AGi  # import HRP constants so this standalone tool knows the same topic names
-CNS = AGi.CNS
-GCE = AGi.CNS.GCE
+SCS = AGi.SCS
+GCE = AGi.SCS.GCE
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"
@@ -26,7 +26,7 @@ STREAM_LEADING    = GCE.STREAM_LEADING
 STREAM_PROPAGATING = GCE.STREAM_PROPAGATING
 STREAM_TRAILING   = GCE.STREAM_TRAILING
 STREAM_ANOMALY    = GCE.STREAM_ANOMALY
-TOPIC_INPUT    = CNS.TEXT_INPUT_GATEWAY
+TOPIC_INPUT    = SCS.TEXT_INPUT_GATEWAY
 TOPIC_RESPONSE = GCE.RESPONSE_GATEWAY
 
 # If no trailing arrives within this many seconds, auto-unlock the prompt.

@@ -43,7 +43,7 @@ class AGi:                                              # Amazing Grace infrastr
         UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk (TODO: to be obsolete after tokenizer implemented in M1.5)
         
         TEXT_INPUT_GATEWAY: str = "/scs/text_input"        # [STATIC] ROS topic for text input from users
-        COGNITIVE_RESPONSE: str   = "/scs/response"        # [STATIC] GCE response topic
+        RESPONSE_GATEWAY: str   = "/scs/response"        # [STATIC] GCE response topic
         MEMORY_CONTEXT_GATEWAY: str = "/scs/memory_context"# [STATIC] ROS topic for memory context reinstated
         MEMORY_STATS_GATEWAY: str = "/scs/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
 
