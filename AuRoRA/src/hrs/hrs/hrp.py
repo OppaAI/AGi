@@ -45,14 +45,21 @@ TODO:
 class AGi:                                              # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                             # [STATIC] root directory for all AGi core system state
 
-    class SCS:                                          # Semantic Cognitive System
-        _manifest_gateway       = "scs"                 # ARC hydration target
-        CORTICAL_CAPACITY: int  = 16384                 # [INTRINSIC] total token budget for the active LLM context window
-        COGNITIVE_RESERVE: int  = 2048                  # [INTRINSIC] tokens reserved for system prompt and identity injection
-        NEURAL_GATEWAY: str     = "scs"                 # [STATIC] ROS node name for the SCS
-        MEMORY_GATEWAY: str     = "mcc"                 # [STATIC] ROS node name for the MCC
-        ENGRAM_COMPLEX: str     = "engram_complex.db"   # [STATIC] SQLite filename for long-term memory storage
-        UNITS_PER_CHUNK: int    = 4                     # [STATIC] tokens per chunk unit (TODO: obsolete post-tokenizer M1.5)
+    # Module registry — single source of truth for all subsystem identifiers
+    SEMANTIC_COGNITIVE_SYSTEM   : str = "scs"           # Semantic Cognitive System
+    MEMORY_COORDINATION_CORE    : str = "mcc"
+    WORKING_MEMORY_CORTEX       : str = "wmc"
+    EPISODIC_MEMORY_CORTEX      : str = "emc"
+    SEMANTIC_MEMORY_CORTEX      : str = "smc"
+    
+    class SCS:                                                  # Semantic Cognitive System
+        _manifest_gateway       = SEMANTIC_COGNITIVE_SYSTEM     # ARC hydration target
+        CORTICAL_CAPACITY: int  = 16384                         # [INTRINSIC] total token budget for the active LLM context window
+        COGNITIVE_RESERVE: int  = 2048                          # [INTRINSIC] tokens reserved for system prompt and identity injection
+        NEURAL_GATEWAY: str     = SEMANTIC_COGNITIVE_SYSTEM     # [STATIC] ROS node name for the SCS
+        MEMORY_GATEWAY: str     = MEMORY_COORDINATION_CORE      # [STATIC] ROS node name for the MCC
+        ENGRAM_COMPLEX: str     = "engram_complex.db"           # [STATIC] SQLite filename for long-term memory storage
+        UNITS_PER_CHUNK: int    = 4                             # [STATIC] tokens per chunk unit (TODO: obsolete post-tokenizer M1.5)
 
         TEXT_INPUT_GATEWAY: str     = "/scs/text_input"       # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = "/scs/response"         # [STATIC] ROS topic — outbound LLM response
@@ -100,7 +107,6 @@ Rules:
 Current date: {date}
 /no_think
 """
-
         class GenericGrace:                                                       # Generic Persona
             _manifest_gateway            = "persona"                              # ARC hydration target — mapped from active persona params
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [PERSONA] Ollama server base URL
@@ -134,16 +140,15 @@ Memory rules:
 Current date: {date}
 /no_think
 """
-
         class SMC:                                          # Semantic Memory Cortex
-            _manifest_gateway           = "scs.smc"                 # ARC hydration target
+            _manifest_gateway           = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.SEMANTIC_MEMORY_CORTEX}"        # ARC hydration target
             ENCODING_ENGINE: str        = "BAAI/bge-base-en-v1.5"   # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int           = 768                       # [STATIC] embedding vector dimensionality
 
         class EMC:                                          # Episodic Memory Cortex
-            _manifest_gateway                 = "scs.emc"   # ARC hydration target
+            _manifest_gateway                 = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.EPISODIC_MEMORY_CORTEX}"  # ARC hydration target
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
-            ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"            # [STATIC] sentence-transformers model for episodic embeddings
+            ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for episodic embeddings
             ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
             ENCODING_ENGRAM_PREFIX: str       = ""          # [STATIC] document-side prompt prefix — empty for storage embeddings
             ENCODING_CYCLE_TIMEOUT: float     = 30.0        # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
@@ -159,13 +164,13 @@ Current date: {date}
             RECALL_RESERVE: int               = 2048        # [INTRINSIC] tokens reserved in context window for recalled episodes
             RECALL_SURFACE_LIMIT: int         = 3           # [INTRINSIC] max episodes returned per recall query (post-RRF)
             RECALL_POOL: int                  = 15          # [INTRINSIC] per-retriever candidate count — RECALL_SURFACE_LIMIT × RECALL_POOL fed into RRF
-            RECALL_DEPTH: int                 = 45          # [DERIVED]   RECALL_SURFACE_LIMIT × RECALL_POOL — recomputed by arc._derive()
+            RECALL_DEPTH: int                 = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED]   RECALL_SURFACE_LIMIT × RECALL_POOL — recomputed by arc._derive()
             RECALL_TIMEOUT: float             = 2.0         # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
             RECOVERY_BATCH_SIZE: int          = 50          # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
         class WMC:                                          # Working Memory Cortex
-            _manifest_gateway       = "scs.wmc"             # ARC hydration target
+            _manifest_gateway       = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.WORKING_MEMORY_CORTEX}"  # ARC hydration target
             PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
