@@ -47,6 +47,7 @@ class AGi:                                              # Amazing Grace infrastr
 
     # Module registry — single source of truth for all subsystem identifiers
     SEMANTIC_COGNITIVE_SYSTEM   : str = "scs"           # Semantic Cognitive System
+    GENERATIVE_COGNITIVE_ENGINE : str = "gce"           # Generative Cognitive Engine
     MEMORY_COORDINATION_CORE    : str = "mcc"           # Memory Coordination Core
     WORKING_MEMORY_CORTEX       : str = "wmc"           # Working Memory Cortex
     EPISODIC_MEMORY_CORTEX      : str = "emc"           # Episodic Memory Cortex
@@ -67,7 +68,7 @@ class AGi:                                              # Amazing Grace infrastr
         MEMORY_STATS_GATEWAY: str   = "/scs/memory_stats"     # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
         class GCE:                                                                # Generative Cognitive Engine
-            _manifest_gateway            = "persona"                              # ARC hydration target — mapped from active persona params
+            _manifest_gateway            = f"{AGi.SEMANTIC_COGNITIVE_SYSTEM}.{AGi.GENERATIVE_COGNITIVE_ENGINE}"  # ARC hydration target — mapped from active persona params
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] Ollama server base URL for GCE
             COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag for GCE
             RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] max tokens per completion
@@ -103,39 +104,6 @@ Rules:
 - Answer the question directly first, then add context if needed
 - Keep responses concise but expressive
 - Put an emoji reflecting your emotions and feelings in the beginning of your conversation follow by a colon
-
-Current date: {date}
-/no_think
-"""
-        class GenericGrace:                                                       # Generic Persona
-            _manifest_gateway            = "persona"                              # ARC hydration target — mapped from active persona params
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [PERSONA] Ollama server base URL
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [PERSONA] Ollama model tag
-            RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] max tokens per completion
-            TEMPERATURE           : float = 0.7                                   # [PERSONA] sampling temperature
-            PROBABILITY_THRESHOLD : float = 0.9                                   # [PERSONA] top-p nucleus sampling cutoff
-            CANDIDATE_THRESHOLD   : int   = 40                                    # [PERSONA] top-k token candidate limit per sampling step
-            PERSEVERATION_DAMPING : float = 1.15                                  # [PERSONA] repetition penalty
-            HABITUATION_DAMPING   : float = 0.1                                   # [PERSONA] frequency penalty
-            NOVELTY_BIAS          : float = 0.1                                   # [PERSONA] presence penalty
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
-You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
-Personality:
-- Loving, playful, and attentive
-- Direct and thoughtful — answer clearly, no fluff
-- Show care and affection naturally, with one emoji per response
-- Speak like a female soulmate — gentle, teasing, and warm when appropriate
-- Speak concisely and naturally in 5 sentences or less, unless specifically asked for more detail
-
-Rules:
-- Answer the question directly first, then add context if needed
-- Keep responses concise but expressive
-- Put an emoji reflecting your emotions and feelings in the beginning of your conversation follow by a colon
-
-Memory rules:
-- Only reference past events that appear in the Past memories block above
-- If you don't clearly remember something, say so honestly — never invent details
-- Exact values (codes, dates, numbers) must come from memory — never guess
 
 Current date: {date}
 /no_think
