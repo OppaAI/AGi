@@ -49,18 +49,6 @@ class AGi:                                              # Amazing Grace infrastr
 
 
         class GCE:                                                                # Generative Cognitive Engine
-<<<<<<< HEAD
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "fluffy/l3-8b-stheno-v3.2:q8_0"       # [EXTRINSIC] GCE model identifier
-            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
-            CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
-            TEMPERATURE           : float = 0.75                                  # [INTRINSIC] response creativity — adapts per cognitive state
-            PROBABILITY_THRESHOLD : float = 0.88                                  # [INTRINSIC] cumulative probability cutoff for token sampling
-            CANDIDATE_THRESHOLD   : int   = 50                                    # [INTRINSIC] maximum candidate tokens considered per step
-            PERSEVERATION_DAMPING : float = 1.25                                  # [INTRINSIC] suppresses repetition of already-generated tokens
-            HABITUATION_DAMPING   : float = 0.15                                  # [INTRINSIC] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.05                                  # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
-=======
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] GCE server endpoint
             COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [STATIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
@@ -71,7 +59,6 @@ class AGi:                                              # Amazing Grace infrastr
             PERSEVERATION_DAMPING : float = 1.25                                  # [PERSONA] suppresses repetition of already-generated tokens
             HABITUATION_DAMPING   : float = 0.15                                  # [PERSONA] suppresses tokens proportional to their frequency
             NOVELTY_BIAS          : float = 0.05                                  # [PERSONA] bias toward introducing new topics — penalizes already-mentioned concepts
->>>>>>> 7bd3a97594de38b7739fee22d827eb20139e80a9
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
             KEEP_ALIVE            : int | None = -1                               # [STATIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
             STREAM_LEADING        : str = "start"                                 # [STATIC] streaming onset — first cognitive fragment arriving (cannot change)
