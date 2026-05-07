@@ -16,7 +16,6 @@ TODO: DNA genome encryption — dual-helix primary + mirror backup
 
 import rclpy
 import subprocess
-import asyncio
 import time
 import yaml
 
@@ -25,24 +24,27 @@ from std_msgs.msg       import Bool
 from pathlib            import Path
 from dataclasses        import dataclass, field
 
+from hrp                import AGi
+
 # ─── Path Convention ──────────────────────────────────────────────────────────
 #
 #   ~/.agi/
 #       aurora.yaml             ← single robot-wide settings file
 #       personas/
-#           grace.yaml          ← swappable persona + inference params
+#           persona.yaml        ← active persona + inference params
+#           generic.yaml        ← default persona reset target (read-only)
 #       users/
 #           oppaai.yaml         ← swappable user profile
 #       scs/
 #           emc/
 #               engram_complex.db
 
-AGI_DIR      = Path.home() / ".agi"
+AGI_DIR      = Path.home() / AGi.ENTITY_GATEWAY
 AURORA_CFG   = AGI_DIR / "aurora.yaml"
 PERSONA_DIR  = AGI_DIR / "personas"
 USER_DIR     = AGI_DIR / "users"
 
-# ─── Dataclasses ─────────────────────────────────────────────────────────────
+# ─── Dataclasses ──────────────────────────────────────────────────────────────
 
 @dataclass
 class InferenceParams:
@@ -66,24 +68,55 @@ class UserProfile:
     notes:    list[str] = field(default_factory=list)
 
 @dataclass
+class EMCSettings:
+    binding_stream_limit:  int   = 512
+    recall_surface_limit:  int   = 3
+    recall_pool:           int   = 15
+    recall_depth:          int   = 45
+    relevance_threshold:   float = 0.45
+    recall_timeout:        float = 2.0
+    recovery_batch_size:   int   = 50
+    episode_content_limit: int   = 3000
+    theta_interval:        float = 2.0
+    theta_batch_limit:     int   = 32
+    recall_reserve:        int   = 2048
+
+@dataclass
+class WMCSettings:
+    pmt_slot_limit:    int = 7
+    pmt_slot_buffer:   int = 2
+    global_chunk_limit: int = 11264
+
+@dataclass
+class GCESettings:
+    model:               str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"
+    temperature:         float = 0.75
+    top_p:               float = 0.88
+    top_k:               int   = 50
+    max_tokens:          int   = 512
+    context_window:      int   = 32768
+    repetition_penalty:  float = 1.25
+    frequency_penalty:   float = 0.15
+    presence_penalty:    float = 0.05
+
+@dataclass
 class SCSSettings:
-    cortical_capacity:    int   = 8
-    recall_depth:         int   = 10
-    recall_surface_limit: int   = 5
-    relevance_threshold:  float = 0.25
-    recall_timeout:       float = 2.0
-    units_per_chunk:      int   = 350
-    induction_threshold:  float = 0.4
-    eviction_threshold:   float = 0.3
-    salience_hard_gate:   float = 0.8
-    boundary_threshold:   float = 0.35
+    cortical_capacity:  int   = 16384
+    cognitive_reserve:  int   = 2048
+    induction_threshold: float = 0.4
+    eviction_threshold:  float = 0.3
+    salience_hard_gate:  float = 0.8
+    boundary_threshold:  float = 0.35
+    emc: EMCSettings    = field(default_factory=EMCSettings)
+    wmc: WMCSettings    = field(default_factory=WMCSettings)
+    gce: GCESettings    = field(default_factory=GCESettings)
 
 @dataclass
 class HRSSettings:
     """Stub — expand as HRS matures."""
-    watchdog_interval:  float = 5.0
-    thermal_limit:      float = 85.0
-    battery_critical:   float = 15.0
+    watchdog_interval: float = 5.0
+    thermal_limit:     float = 85.0
+    battery_critical:  float = 15.0
 
 @dataclass
 class SDSSettings:
@@ -94,7 +127,7 @@ class SDSSettings:
 @dataclass
 class RASSettings:
     boot_timeout:   float = 10.0
-    active_persona: str   = "grace"
+    active_persona: str   = "persona"
     active_user:    str   = "oppaai"
 
 @dataclass
@@ -153,13 +186,17 @@ class ArousedReactionCore(Node):
     """
 
     def __init__(self):
-        super().__init__("arc")
+        super().__init__(AGi.RETICULAR_ACTIVATING_SYSTEM)
 
         # ── Public config — all nodes read from here ──────────────────────────
         self.config: AuroraConfig = AuroraConfig()
 
         # ── Ready publisher ───────────────────────────────────────────────────
-        self._ready_pub = self.create_publisher(Bool, "/ras/ready", 1)
+        self._ready_pub = self.create_publisher(
+            Bool,
+            f"/{AGi.RETICULAR_ACTIVATING_SYSTEM}/ready",
+            1,
+        )
 
         # ── Boot sequence ─────────────────────────────────────────────────────
         self._load_config()
@@ -176,7 +213,7 @@ class ArousedReactionCore(Node):
         else:
             self._parse_aurora(raw)
 
-        # Persona and user loaded after RAS settings so active_persona/active_user are known
+        # Persona and user loaded after RAS so active_persona/active_user are known
         self.config.persona = self._load_persona(self.config.ras.active_persona)
         self.config.user    = self._load_user(self.config.ras.active_user)
 
@@ -184,65 +221,88 @@ class ArousedReactionCore(Node):
             f"✅ Config loaded — persona: {self.config.ras.active_persona} "
             f"| user: {self.config.ras.active_user}"
         )
-        
+
     def _hydrate(self) -> None:
         """
-        Introspectively hydrate AGi hierarchy from config.
-        Maps config attributes to AGi class attributes by name matching.
+        Hydrate AGi.HRP class tree from loaded AuroraConfig.
+        Maps nested config dataclass attributes to AGi class constants by name.
+        Only UPPER_CASE attributes are written — private and dunder skipped.
         """
-        # Map config sections to AGi class paths
         section_map = {
-            "scs": AGi.SCS,
-            "emc": AGi.SCS.EMC,
-            "wmc": AGi.SCS.WMC,
-            "gce": AGi.SCS.GCE,
+            AGi.SEMANTIC_COGNITIVE_SYSTEM   : (self.config.scs,     AGi.SCS),
+            AGi.EPISODIC_MEMORY_CORTEX      : (self.config.scs.emc, AGi.SCS.EMC),
+            AGi.WORKING_MEMORY_CORTEX       : (self.config.scs.wmc, AGi.SCS.WMC),
+            AGi.GENERATIVE_COGNITIVE_ENGINE : (self.config.scs.gce, AGi.SCS.GCE),
         }
-        
-        for section_name, target_class in section_map.items():
-            section_config = getattr(self.config, section_name, None)
-            if not section_config:
-                continue
-            
-            # For each attribute in the config section
-            for attr_name in vars(section_config):
-                if attr_name.startswith("_"):  # skip private
+
+        for section_key, (config_section, target_class) in section_map.items():
+            for attr_name in vars(config_section):
+                if attr_name.startswith("_"):
                     continue
-                value = getattr(section_config, attr_name)
-                if hasattr(target_class, attr_name):
-                    setattr(target_class, attr_name, value)
-                    self.get_logger().debug(f"Hydrated {section_name}.{attr_name} = {value}")
-                
+                hrp_key = attr_name.upper()
+                if hasattr(target_class, hrp_key):
+                    setattr(target_class, hrp_key, getattr(config_section, attr_name))
+                    self.get_logger().debug(f"Hydrated {section_key}.{hrp_key} = {getattr(config_section, attr_name)}")
+
     def _parse_aurora(self, raw: dict) -> None:
         """Parse aurora.yaml into AuroraConfig dataclasses."""
         try:
-            ras = raw.get("ras", {})
+            ras = raw.get(AGi.RETICULAR_ACTIVATING_SYSTEM, {})
             self.config.ras = RASSettings(
                 boot_timeout   = ras.get("boot_timeout",   10.0),
-                active_persona = ras.get("active_persona", "grace"),
+                active_persona = ras.get("active_persona", "persona"),
                 active_user    = ras.get("active_user",    "oppaai"),
             )
         except Exception as e:
             self.get_logger().error(f"❌ RAS settings parse error: {e}")
 
         try:
-            scs = raw.get("scs", {})
+            scs = raw.get(AGi.SEMANTIC_COGNITIVE_SYSTEM, {})
+            emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
+            wmc = scs.get(AGi.WORKING_MEMORY_CORTEX, {})
+            gce = scs.get(AGi.GENERATIVE_COGNITIVE_ENGINE, {})
             self.config.scs = SCSSettings(
-                cortical_capacity    = scs.get("cortical_capacity",    8),
-                recall_depth         = scs.get("recall_depth",         10),
-                recall_surface_limit = scs.get("recall_surface_limit", 5),
-                relevance_threshold  = scs.get("relevance_threshold",  0.25),
-                recall_timeout       = scs.get("recall_timeout",       2.0),
-                units_per_chunk      = scs.get("units_per_chunk",      350),
-                induction_threshold  = scs.get("induction_threshold",  0.4),
-                eviction_threshold   = scs.get("eviction_threshold",   0.3),
-                salience_hard_gate   = scs.get("salience_hard_gate",   0.8),
-                boundary_threshold   = scs.get("boundary_threshold",   0.35),
+                cortical_capacity   = scs.get("cortical_capacity",   16384),
+                cognitive_reserve   = scs.get("cognitive_reserve",   2048),
+                induction_threshold = scs.get("induction_threshold", 0.4),
+                eviction_threshold  = scs.get("eviction_threshold",  0.3),
+                salience_hard_gate  = scs.get("salience_hard_gate",  0.8),
+                boundary_threshold  = scs.get("boundary_threshold",  0.35),
+                emc = EMCSettings(
+                    binding_stream_limit  = emc.get("binding_stream_limit",  512),
+                    recall_surface_limit  = emc.get("recall_surface_limit",  3),
+                    recall_pool           = emc.get("recall_pool",           15),
+                    recall_depth          = emc.get("recall_depth",          45),
+                    relevance_threshold   = emc.get("relevance_threshold",   0.45),
+                    recall_timeout        = emc.get("recall_timeout",        2.0),
+                    recovery_batch_size   = emc.get("recovery_batch_size",   50),
+                    episode_content_limit = emc.get("episode_content_limit", 3000),
+                    theta_interval        = emc.get("theta_interval",        2.0),
+                    theta_batch_limit     = emc.get("theta_batch_limit",     32),
+                    recall_reserve        = emc.get("recall_reserve",        2048),
+                ),
+                wmc = WMCSettings(
+                    pmt_slot_limit     = wmc.get("pmt_slot_limit",     7),
+                    pmt_slot_buffer    = wmc.get("pmt_slot_buffer",    2),
+                    global_chunk_limit = wmc.get("global_chunk_limit", 11264),
+                ),
+                gce = GCESettings(
+                    model              = gce.get("model",              "huihui_ai/granite4.1-abliterated:8b-q8_0"),
+                    temperature        = gce.get("temperature",        0.75),
+                    top_p              = gce.get("top_p",              0.88),
+                    top_k              = gce.get("top_k",              50),
+                    max_tokens         = gce.get("max_tokens",         512),
+                    context_window     = gce.get("context_window",     32768),
+                    repetition_penalty = gce.get("repetition_penalty", 1.25),
+                    frequency_penalty  = gce.get("frequency_penalty",  0.15),
+                    presence_penalty   = gce.get("presence_penalty",   0.05),
+                ),
             )
         except Exception as e:
             self.get_logger().error(f"❌ SCS settings parse error: {e}")
 
         try:
-            hrs = raw.get("hrs", {})
+            hrs = raw.get(AGi.HOMEOSTATIC_REGULATION_SYSTEM, {})
             self.config.hrs = HRSSettings(
                 watchdog_interval = hrs.get("watchdog_interval", 5.0),
                 thermal_limit     = hrs.get("thermal_limit",     85.0),
@@ -252,7 +312,7 @@ class ArousedReactionCore(Node):
             self.get_logger().error(f"❌ HRS settings parse error: {e}")
 
         try:
-            sds = raw.get("sds", {})
+            sds = raw.get(AGi.SPATIAL_DETECTION_SYSTEM, {})
             self.config.sds = SDSSettings(
                 min_obstacle_distance = sds.get("min_obstacle_distance", 0.4),
                 emergency_stop_dist   = sds.get("emergency_stop_dist",   0.2),
@@ -304,24 +364,26 @@ class ArousedReactionCore(Node):
     # ─── Boot Sequence ────────────────────────────────────────────────────────
 
     def _boot(self) -> None:
-    # Future stages uncommented as each system is built
-    
-    # Stage 1 — Infrastructure
-    # self._spawn("eee")
-    # self._wait_ready("/eee/ready", timeout)
+        timeout = self.config.ras.boot_timeout
 
-    # Stage 2 — Regulatory  
-    # self._spawn("hrs")
-    # self._wait_ready("/hrs/ready", timeout)
+        # Future stages uncommented as each system is built
 
-    # Stage 3 — Cognition (CNC owns MCC, WMC, EMC internally)
-    self._spawn("cnc")
-    self._wait_ready("/cnc/ready", timeout)
+        # Stage 1 — Infrastructure
+        # self._spawn(AGi.ELECTRO_ENCEPHALIC_ENGINE)
+        # self._wait_ready(f"/{AGi.ELECTRO_ENCEPHALIC_ENGINE}/ready", timeout)
 
-    msg      = Bool()
-    msg.data = True
-    self._ready_pub.publish(msg)
-    self.get_logger().info("🧠 AuRoRA CNS online")
+        # Stage 2 — Regulatory
+        # self._spawn(AGi.HOMEOSTATIC_REGULATION_SYSTEM)
+        # self._wait_ready(f"/{AGi.HOMEOSTATIC_REGULATION_SYSTEM}/ready", timeout)
+
+        # Stage 3 — Cognition (CNC owns MCC, WMC, EMC internally)
+        self._spawn(AGi.CENTRAL_NERVOUS_CONTROLLER)
+        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CONTROLLER}/ready", timeout)
+
+        msg      = Bool()
+        msg.data = True
+        self._ready_pub.publish(msg)
+        self.get_logger().info("🧠 AuRoRA CNS online")
 
     def _spawn(self, node: str) -> None:
         """Spawn a ROS node as a subprocess."""
