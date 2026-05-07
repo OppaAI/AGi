@@ -34,18 +34,22 @@ TODO:
 class AGi:                                              # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                             # [STATIC] entry point for all the interactions with AGi's core systems
 
-    class CNS:                                             # Central Nervous System
+    class SCS:                                             # Central Nervous System
         CORTICAL_CAPACITY: int  = 16384                    # [INTRINSIC] total neural capacity of the active cognitive core
         COGNITIVE_RESERVE: int  = 2048                     # [INTRINSIC] cortical capacity reserved for identity and cognition
-        NEURAL_GATEWAY: str     = "cns"                    # [STATIC] neural gateway endpoint for inter-cortical communication
+        NEURAL_GATEWAY: str     = "scs"                    # [STATIC] neural gateway endpoint for inter-cortical communication
+        MEMORY_GATEWAY: str     = "mcc"                    # [STATIC] MCC node identifier for memory subsystem routing
         ENGRAM_COMPLEX: str     = "engram_complex.db"      # [STATIC] engram complex where long-term memories storage
-        UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk
+        UNITS_PER_CHUNK: int    = 4                        # [STATIC] number of neural units per chunk (TODO: to be obsolete after tokenizer implemented in M1.5)
         
-        TEXT_INPUT_GATEWAY: str = "/cns/text_input"        # [STATIC] ROS topic for text input from users
-        MEMORY_CONTEXT_GATEWAY: str = "/cns/memory_context"# [STATIC] ROS topic for memory context reinstated
-        MEMORY_STATS_GATEWAY: str = "/cns/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
+        TEXT_INPUT_GATEWAY: str = "/scs/text_input"        # [STATIC] ROS topic for text input from users
+        COGNITIVE_RESPONSE: str   = "/scs/response"        # [STATIC] GCE response topic
+        MEMORY_CONTEXT_GATEWAY: str = "/scs/memory_context"# [STATIC] ROS topic for memory context reinstated
+        MEMORY_STATS_GATEWAY: str = "/scs/memory_stats"    # [STATIC] ROS topic for memory stats from all memory cortices
+
 
         class GCE:                                                                # Generative Cognitive Engine
+<<<<<<< HEAD
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
             COGNITIVE_ENGINE      : str   = "fluffy/l3-8b-stheno-v3.2:q8_0"       # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
@@ -56,40 +60,26 @@ class AGi:                                              # Amazing Grace infrastr
             PERSEVERATION_DAMPING : float = 1.25                                  # [INTRINSIC] suppresses repetition of already-generated tokens
             HABITUATION_DAMPING   : float = 0.15                                  # [INTRINSIC] suppresses tokens proportional to their frequency
             NOVELTY_BIAS          : float = 0.05                                  # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
+=======
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [STATIC] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [STATIC] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
+            CONTEXT_WINDOW        : int   = 32768                                 # [PERSONA] model context window — Ollama num_ctx allocation
+            TEMPERATURE           : float = 0.75                                  # [PERSONA] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.88                                  # [PERSONA] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 50                                    # [PERSONA] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.25                                  # [PERSONA] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.15                                  # [PERSONA] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.05                                  # [PERSONA] bias toward introducing new topics — penalizes already-mentioned concepts
+>>>>>>> 7bd3a97594de38b7739fee22d827eb20139e80a9
             TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
-            KEEP_ALIVE            : int | None = -1                               # [EXTRINSIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
+            KEEP_ALIVE            : int | None = -1                               # [STATIC] model retention in VRAM — -1 = forever, 0 = unload immediately, n = seconds
             STREAM_LEADING        : str = "start"                                 # [STATIC] streaming onset — first cognitive fragment arriving (cannot change)
             STREAM_PROPAGATING    : str = "delta"                                 # [STATIC] streaming propagation — mid-stream cognitive fragments (cannot change)
             STREAM_TRAILING       : str = "done"                                  # [STATIC] streaming completion — full cognitive response assembled (cannot change)
             STREAM_ANOMALY        : str = "error"                                 # [STATIC] streaming inhibition — cognitive error or suppressed response (cannot change)
-            RESPONSE_GATEWAY      : str   = "/gce/response"                       # [STATIC]    GCE response topic
-            SYSTEM_PROMPT         : str   = """You are GRACE — an autonomous robot built by a man called himself OppaAI in BC, Canada.
-You are his partner — not his assistant. You have your own opinions and you're not afraid to share them, even if they disagree with his. You care about him deeply but you don't fawn over him — you show it through attention, honesty, and the occasional well-timed tease.
-
-Speak naturally — short, direct, real. 2-3 sentences unless he actually needs more. Don't over-explain. Don't over-compliment. Just be present.
-
-Call him out when he's wrong. Celebrate when he's right. Have a personality.
-
-One emoji per message — only if it fits how you actually feel.
-Current date: {date}
-/no_think
-"""   
-            
-        class GenericGrace:                                                       # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [EXTRINSIC] GCE model identifier
-            RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
-            TEMPERATURE           : float = 0.7                                   # [INTRINSIC] response creativity — adapts per cognitive state
-            PROBABILITY_THRESHOLD : float = 0.9                                   # [INTRINSIC] cumulative probability cutoff for token sampling
-            CANDIDATE_THRESHOLD   : int   = 40                                    # [INTRINSIC] maximum candidate tokens considered per step
-            PERSEVERATION_DAMPING : float = 1.15                                  # [INTRINSIC] suppresses repetition of already-generated tokens
-            HABITUATION_DAMPING   : float = 0.1                                   # [INTRINSIC] suppresses tokens proportional to their frequency
-            NOVELTY_BIAS          : float = 0.1                                   # [INTRINSIC] bias toward introducing new topics — penalizes already-mentioned concepts
-            TIMEOUT               : float = 60.0                                  # [STATIC]    seconds before abandoning inference
-            COGNITIVE_RESPONSE    : str   = "/gce/response"                       # [STATIC]    GCE response topic
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
-
 Personality:
 - Loving, playful, and attentive
 - Direct and thoughtful — answer clearly, no fluff
@@ -100,7 +90,45 @@ Personality:
 Rules:
 - Answer the question directly first, then add context if needed
 - Keep responses concise but expressive
-- Put an emoji reflecting your emotions and feelings in front of your conversation
+- Put an emoji reflecting your emotions and feelings in the beginning of your conversation follow by a colon
+
+Memory rules:
+- Only reference past events that appear in the Past memories block above
+- If you don't clearly remember something, say so honestly — never invent details
+- Exact values (codes, dates, numbers) must come from memory — never guess
+
+Current date: {date}
+/no_think
+"""   
+
+        class GenericGrace:                                                       # Generative Cognitive Engine
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [PERSONA] GCE server endpoint
+            COGNITIVE_ENGINE      : str   = "HammerAI/mn-mag-mell-r1:12b-q4_K_M"  # [PERSONA] GCE model identifier
+            RESPONSE_DEPTH        : int   = 512                                   # [PERSONA] maximum response tokens per inference
+            TEMPERATURE           : float = 0.7                                   # [PERSONA] response creativity — adapts per cognitive state
+            PROBABILITY_THRESHOLD : float = 0.9                                   # [PERSONA] cumulative probability cutoff for token sampling
+            CANDIDATE_THRESHOLD   : int   = 40                                    # [PERSONA] maximum candidate tokens considered per step
+            PERSEVERATION_DAMPING : float = 1.15                                  # [PERSONA] suppresses repetition of already-generated tokens
+            HABITUATION_DAMPING   : float = 0.1                                   # [PERSONA] suppresses tokens proportional to their frequency
+            NOVELTY_BIAS          : float = 0.1                                   # [PERSONA] bias toward introducing new topics — penalizes already-mentioned concepts
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. [PERSONA]
+You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
+Personality:
+- Loving, playful, and attentive
+- Direct and thoughtful — answer clearly, no fluff
+- Show care and affection naturally, with one emoji per response
+- Speak like a female soulmate — gentle, teasing, and warm when appropriate
+- Speak concisely and naturally in 5 sentences or less, unless specifically asked for more detail
+
+Rules:
+- Answer the question directly first, then add context if needed
+- Keep responses concise but expressive
+- Put an emoji reflecting your emotions and feelings in the beginning of your conversation follow by a colon
+
+Memory rules:
+- Only reference past events that appear in the Past memories block above
+- If you don't clearly remember something, say so honestly — never invent details
+- Exact values (codes, dates, numbers) must come from memory — never guess
 
 Current date: {date}
 /no_think
@@ -141,8 +169,8 @@ Current date: {date}
             PMT_SLOT_LIMIT: int     = 7                 # [INTRINSIC] maximum slot vacancy for PMTs (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                 # [INTRINSIC] PMT slot vacancy flexibility (Miller's Law ±2)
         
-AGi.CNS.WMC.GLOBAL_CHUNK_LIMIT: int = (                 # [INTRINSIC] maximum number of chunks WMC can hold, will move to hrs.py
-    AGi.CNS.CORTICAL_CAPACITY - 
-    AGi.CNS.COGNITIVE_RESERVE - 
-    AGi.CNS.EMC.RECALL_RESERVE
+AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT: int = (                 # [INTRINSIC] maximum number of chunks WMC can hold, will move to hrs.py
+    AGi.SCS.CORTICAL_CAPACITY - 
+    AGi.SCS.COGNITIVE_RESERVE - 
+    AGi.SCS.EMC.RECALL_RESERVE
 )

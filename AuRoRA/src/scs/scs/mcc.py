@@ -23,11 +23,11 @@ Architecture:
     engram; to it, they are all active cognition.
 
     Cortical capacity budget:
-        Identity and cognition          →  CNS.COGNITIVE_RESERVE
-        EMC recalled engrams            →  CNS.EMC.RECALL_RESERVE
-        WMC sustained PMTs              →  CNS.WMC.GLOBAL_CHUNK_LIMIT
+        Identity and cognition          →  SCS.COGNITIVE_RESERVE
+        EMC recalled engrams            →  SCS.EMC.RECALL_RESERVE
+        WMC sustained PMTs              →  SCS.WMC.GLOBAL_CHUNK_LIMIT
         ─────────────────────────────────────────────────────────────────────
-        Total active cognitive core     →  CNS.CORTICAL_CAPACITY
+        Total active cognitive core     →  SCS.CORTICAL_CAPACITY
 
 Terminology:
     Buffer      — temporary staging area for memory traces in transition
@@ -77,11 +77,11 @@ from pathlib import Path                            # for constructing and creat
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 from hrs.hrp import AGi                             # homeostatic regulation parameter registry — system-wide constants
-CNS = AGi.CNS                                       # CNS parameter namespace alias — keeps constant references concise
+SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 
 class MemoryCoordinationCore:
     """
-    Memory Coordination Core — the memory manager of the CNS.
+    Memory Coordination Core — the memory manager of the SCS.
 
     Central relay between CNC and the memory cortex layers (WMC, EMC).
     Instantiated once at startup. All memory operations go through MCC
@@ -104,8 +104,9 @@ class MemoryCoordinationCore:
         self.engram_gateway = (         # construct absolute path to the engram complex on disk
             Path.home() /               # anchor at OS home (~)
             AGi.ENTITY_GATEWAY /        # descend into the entity gateway directory
-            CNS.NEURAL_GATEWAY /        # descend into the neural gateway subdirectory
-            CNS.ENGRAM_COMPLEX          # land at the engram complex — where encoded episodes live
+            SCS.NEURAL_GATEWAY /        # descend into the neural gateway subdirectory
+            SCS.MEMORY_GATEWAY /        # descend into the memory gateway subdirectory
+            SCS.ENGRAM_COMPLEX          # land at the engram complex — where encoded episodes live
         )
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # create all missing parent dirs — no-op if already exists
 
@@ -114,7 +115,7 @@ class MemoryCoordinationCore:
         self.wmc = WorkingMemoryCortex(logger=logger)                                       # boot WMC — owns the active PMT slot
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # boot EMC — owns the engram complex on disk
 
-        self._recall_timeout = CNS.EMC.RECALL_TIMEOUT                                        # cache recall timeout — EMC runs on a thread and must not stall inference
+        self._recall_timeout = SCS.EMC.RECALL_TIMEOUT                                        # cache recall timeout — EMC runs on a thread and must not stall inference
 
         self.logger.info("✅ Memory Coordination Core Activated")                           # log entry on successful MCC activation
 

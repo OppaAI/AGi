@@ -288,13 +288,23 @@
     }
 
     .stream-entry.user-prompt {
-      background: rgba(139, 92, 246, 0.06);
-      border-left-color: var(--violet);
+      background: rgba(34, 211, 238, 0.08);
+      border-left-color: #22d3ee;
     }
 
     .stream-entry.memory-context {
-      background: rgba(96, 165, 250, 0.04);
-      border-left-color: var(--info);
+      background: rgba(253, 224, 71, 0.08);
+      border-left-color: #fde047;
+    }
+
+    .stream-entry.system-prompt {
+      background: rgba(139, 92, 246, 0.10);
+      border-left-color: #a78bfa;
+    }
+
+    .badge-system-prompt {
+      background: rgba(139, 92, 246, 0.25);
+      color: #c4b5fd;
     }
 
     .stream-entry.ai-thinking {
@@ -303,13 +313,13 @@
     }
 
     .stream-entry.ai-response {
-      background: rgba(52, 211, 153, 0.06);
-      border-left-color: var(--success);
+      background: rgba(167, 139, 250, 0.10);
+      border-left-color: #a78bfa;
     }
 
     .stream-entry.ai-done {
-      background: rgba(52, 211, 153, 0.1);
-      border-left-color: var(--success);
+      background: rgba(196, 181, 253, 0.12);
+      border-left-color: #c4b5fd;
     }
 
     .stream-entry.error {
@@ -345,13 +355,13 @@
     }
 
     .badge-user {
-      background: rgba(139, 92, 246, 0.2);
-      color: var(--lavender-soft);
+      background: rgba(34, 211, 238, 0.18);
+      color: #67e8f9;
     }
 
     .badge-memory {
-      background: rgba(96, 165, 250, 0.15);
-      color: var(--info);
+      background: rgba(253, 224, 71, 0.18);
+      color: #fef08a;
     }
 
     .badge-thinking {
@@ -360,8 +370,8 @@
     }
 
     .badge-ai {
-      background: rgba(52, 211, 153, 0.15);
-      color: var(--success);
+      background: rgba(167, 139, 250, 0.20);
+      color: #c4b5fd;
     }
 
     .badge-error {
@@ -530,6 +540,8 @@
     }
   </style>
   <base target="_blank">
+<base target="_blank">
+<base target="_blank">
 </head>
 
 <body>
@@ -725,7 +737,7 @@
       // Text Input Gateway — User Prompt
       const inputTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/text_input_gateway',
+        name: '/scs/text_input_gateway',
         messageType: 'std_msgs/String'
       });
       inputTopic.subscribe((msg) => {
@@ -741,7 +753,7 @@
       // Response Gateway — AI Response Stream
       const responseTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/gce/response_gateway',
+        name: '/scs/response_gateway',
         messageType: 'std_msgs/String'
       });
       responseTopic.subscribe((msg) => {
@@ -756,7 +768,7 @@
       // Memory Context Topic — full GCE input context for debug
       const contextTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/memory_context',
+        name: '/scs/memory_context',
         messageType: 'std_msgs/String'
       });
       contextTopic.subscribe((msg) => {
@@ -781,7 +793,7 @@
       // Memory Stats Topic (you'll need to publish this from CNC/MCC)
       const statsTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/cns/memory_stats',
+        name: '/scs/memory_stats',
         messageType: 'std_msgs/String'
       });
       statsTopic.subscribe((msg) => {
@@ -844,7 +856,8 @@
         document.getElementById('statTokensTotal').textContent = `${tokenCount} tokens`;
 
         // For delta chunks, append to existing response entry if same turn
-        const existingResponse = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+        const allResp = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
+        const existingResponse = allResp.length > 0 ? allResp[allResp.length - 1] : null;
 
         if (data.type === 'start' || !existingResponse) {
           addStreamEntry('ai-response', data.content, {
@@ -868,8 +881,9 @@
         document.getElementById('statLatency').textContent = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
 
-        // Convert last streaming entry to done
-        const lastEntry = document.querySelector(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]:last-child`);
+        // Convert last streaming entry to done — search ALL children, not just :last-child
+        const allResponses = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
+        const lastEntry = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
         if (lastEntry) {
           lastEntry.classList.remove('ai-response');
           lastEntry.classList.add('ai-done');
@@ -926,6 +940,7 @@
 
       const badgeMap = {
         'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
+        'system-prompt': { cls: 'badge-system-prompt', icon: '🔧', label: 'SYSTEM' },
         'memory-context': { cls: 'badge-memory', icon: '🧠', label: 'MEMORY' },
         'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
         'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'AI' },

@@ -3,7 +3,7 @@ EMC — Episodic Memory Cortex
 ==============================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Episodic memory layer of the CNS — "I remember that specific moment."
+Episodic memory layer of the SCS — "I remember that specific moment."
 Stores conversational PMTs as dated, semantically encoded engrams for future recall.
 No expiry — 1TB NVMe means Grace remembers everything.
 
@@ -127,8 +127,8 @@ from dataclasses import dataclass, field    # for EpisodicBuffer and episode dat
 
 # AGi libraries
 from hrs.hrp import AGi                     # homeostatic regulation parameter namespace
-CNS = AGi.CNS                               # CNS-level constants — e.g. UNITS_PER_CHUNK
-EMC = AGi.CNS.EMC                           # EMC constants — encoding engine, limits, dims
+SCS = AGi.SCS                               # SCS-level constants — e.g. UNITS_PER_CHUNK
+EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 
 from scs.msb import (                       # shared memory storage bank substrate
     EngramSchema,                           # blueprint for engram table structure
@@ -363,7 +363,7 @@ class EncodingCycle:
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # log the warning message of unavailability of the encoding engine
                         f"EMC encode skipped (encoding engine unavailable): "
-                        f"{len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks"
+                        f"{len(episode['content']) // SCS.UNITS_PER_CHUNK + 1} chunks"
                     )
                     with self._episodic_buffer_lock:                                # hold lock for appendleft
                         self._episodic_buffer._binding_stream.appendleft(episode)   # requeue for next theta cycle
@@ -375,7 +375,7 @@ class EncodingCycle:
                 self._synaptic_consolidate(encoder_conn, episode, encoding_blob)    # consolidate the episode from episodic buffer into engram
     
                 self.logger.debug(
-                    f"EMC coded and stored → episodes: {len(episode['content']) // CNS.UNITS_PER_CHUNK + 1} chunks" # log the number of chunks in the episode
+                    f"EMC coded and stored → episodes: {len(episode['content']) // SCS.UNITS_PER_CHUNK + 1} chunks" # log the number of chunks in the episode
                     f" (date={episode['date']})",                                   # log the date of the episode
                 )
     
@@ -539,7 +539,7 @@ class EpisodicMemoryCortex:
                 _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
             self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
             self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
-                f"EMC buffer ← {len(content) // CNS.UNITS_PER_CHUNK + 1} chunks"
+                f"EMC buffer ← {len(content) // SCS.UNITS_PER_CHUNK + 1} chunks"
             )
             return True                                                             # indicate successful binding
         except Exception as e:

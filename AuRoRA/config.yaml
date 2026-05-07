@@ -1,0 +1,22 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# config.yaml — EXTRINSIC Deployment Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# AuRoRA · Homeostatic Regulation System (HRS)
+#
+# Deployment and environment parameters set by admin per installation.
+# Controls inference backend, hardware targets, and operational context.
+# Not for end users — requires technical knowledge to modify safely.
+#
+# Owner:   Admin (OppaAI)
+# Runtime: loaded by RAS at boot from ~/.agi/cns/config.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+deployment:
+  inference_backend: ollama       # ollama | vllm — controls which API contract CNC uses
+  neural_endpoint: "http://AIVA:11434"  # inference server address
+  active_persona: grace           # persona key to load from persona.yaml (grace | generic_grace)
+
+environment:
+  mission: "general assistance"   # current operational mission
+  location: "Vancouver, BC, Canada"
+  context: "indoor"               # indoor | outdoor
