@@ -4,19 +4,30 @@ ARC — Arousal Reaction Core
 AuRoRA · Reticular Activating System (RAS)
 
 Bootloader and central config registry for the AuRoRA CNS.
-Loads aurora.yaml + active persona/user at startup, spawns all
-cognitive and regulatory nodes in dependency order, and publishes
-a ready signal before any other node begins processing.
+Loads aurora.yaml + active persona/user at startup, hydrates the AGi
+class tree, spawns all cognitive and regulatory nodes in dependency
+order, and publishes a ready signal before any other node begins
+processing.
 
 Boot order:
-    ARC → EEC → HRS → EMC → MCC → CNC
+    ARC → EEC → HRS → CNC
 
 Design contract:
-    - HRP is the single source of truth for all constants and structure.
-    - ARC owns YAML deserialization only — no defaults live here.
-    - If any required config is missing or unreadable, ARC raises and halts.
-    - No node spawns until ARC has fully loaded, validated, and hydrated config.
-    - Fail loud, fail early, fail at ARC — never silently downstream.
+    - HRP is the static schema and fallback defaults.
+    - ARC loads YAML and overrides AGi class attributes in place.
+    - AGi is re-exported from arc so all other modules do:
+          from arc import AGi
+      and get fully hydrated runtime values — one import change, nothing else.
+    - No node spawns until ARC has fully loaded, validated, and hydrated AGi.
+    - Boot order guarantees all child processes import arc after hydration.
+    - Read AGi constants inside __init__ or methods, never at module level.
+
+Usage (all other modules):
+    from arc import AGi
+
+    EMC          = AGi.SCS.EMC
+    recall_depth = AGi.SCS.EMC.RECALL_DEPTH   # hydrated runtime value
+    recall_depth = EMC.RECALL_DEPTH            # same, shorthand alias
 
 TODO: DNA genome encryption — dual-helix primary + mirror backup
 """
@@ -31,16 +42,16 @@ from std_msgs.msg   import Bool
 from pathlib        import Path
 from dataclasses    import dataclass, field
 
-from hrp            import AGi
+from hrp            import AGi                  # ARC owns HRP — hydrates and re-exports it
 
 # ─── Path Convention ──────────────────────────────────────────────────────────
 #
 #   ~/.agi/
-#       aurora.yaml             ← robot-wide settings  (AGi.AURORA_SETPOINTS)
+#       aurora.yaml             ← robot-wide settings         (AGi.AURORA_SETPOINTS)
 #       personas/
-#           persona.yaml        ← active persona + inference params  (AGi.PERSONA_ACTIVE)
-#           generic.yaml        ← default persona reset target       (AGi.PERSONA_GENERIC)
-#       users.yaml              ← all user profiles + per-user preferences  (AGi.USER_PROFILES)
+#           persona.yaml        ← active persona              (AGi.PERSONA_ACTIVE)
+#           generic.yaml        ← default reset target        (AGi.PERSONA_GENERIC)
+#       users.yaml              ← all user profiles           (AGi.USER_PROFILES)
 #       scs/
 #           emc/
 #               engram_complex.db
@@ -52,119 +63,56 @@ USERS_CFG   = AGI_DIR / AGi.USER_PROFILES
 
 # ─── Dataclasses ──────────────────────────────────────────────────────────────
 #
-#   Pure structure — no defaults. Every field must be explicitly populated
-#   by ARC during config load. Missing values are config errors, not
-#   opportunities for silent substitution.
+#   YAML deserialization layer only — pure structure, no logic.
+#   Defaults are driven from HRP constants so there is one source of truth.
+#   ARC populates these from YAML, then writes final values back into AGi.
 #
-#   Type annotations are documentation + static analysis only.
-#   HRP is the authoritative source for what values are valid.
+#   PersonaConfig and UserProfile are runtime objects carried on AuroraConfig
+#   for direct access by nodes that need persona/user context (e.g. CNC).
+#   They are NOT hydrated into AGi — persona inference params go via AGi.SCS.GCE.
 
 @dataclass
 class PersonaConfig:
-    system_prompt:         str
-    cognitive_engine:      str
-    response_depth:        int
-    context_window:        int
-    temperature:           float
-    probability_threshold: float
-    candidate_threshold:   int
-    perseveration_damping: float
-    habituation_damping:   float
-    novelty_bias:          float
+    """Active persona — loaded from ~/.agi/personas/<stem>.yaml."""
+    system_prompt:         str   = AGi.SCS.GCE.SYSTEM_PROMPT
+    cognitive_engine:      str   = AGi.SCS.GCE.COGNITIVE_ENGINE
+    response_depth:        int   = AGi.SCS.GCE.RESPONSE_DEPTH
+    context_window:        int   = AGi.SCS.GCE.CONTEXT_WINDOW
+    temperature:           float = AGi.SCS.GCE.TEMPERATURE
+    probability_threshold: float = AGi.SCS.GCE.PROBABILITY_THRESHOLD
+    candidate_threshold:   int   = AGi.SCS.GCE.CANDIDATE_THRESHOLD
+    perseveration_damping: float = AGi.SCS.GCE.PERSEVERATION_DAMPING
+    habituation_damping:   float = AGi.SCS.GCE.HABITUATION_DAMPING
+    novelty_bias:          float = AGi.SCS.GCE.NOVELTY_BIAS
 
 @dataclass
 class PreferencesSettings:
-    """Per-user behavioural preferences — loaded from users.yaml alongside the user profile."""
-    response_verbosity:   str
-    formality:            str
-    preferred_language:   str
-    emotional_tone:       str
-    memory_salience_bias: float
+    """Per-user behavioural preferences — loaded from users.yaml."""
+    response_verbosity:   str   = "concise"
+    formality:            str   = "casual"
+    preferred_language:   str   = "en"
+    emotional_tone:       str   = "warm"
+    memory_salience_bias: float = 0.0
 
 @dataclass
 class UserProfile:
-    id:        str
-    name:      str
-    known_as:  str
-    location:  str
-    notes:     list[str]
-    preferences: PreferencesSettings
-
-@dataclass
-class EMCSettings:
-    binding_stream_limit:    int
-    encoding_cycle_timeout:  float
-    encoding_prime_capacity: int
-    encoding_prime_key_limit: int
-    episode_content_limit:   int
-    theta_interval:          float
-    theta_batch_limit:       int
-    recall_reserve:          int
-    recall_surface_limit:    int
-    recall_pool:             int
-    recall_depth:            int   # [DERIVED] — computed by _derive(), not read from YAML
-    recall_timeout:          float
-    recovery_batch_size:     int
-    relevance_threshold:     float
-
-@dataclass
-class WMCSettings:
-    pmt_slot_limit:     int
-    pmt_slot_buffer:    int
-    global_chunk_limit: int   # [DERIVED] — computed by _derive(), not read from YAML
-
-@dataclass
-class GCESettings:
-    cognitive_engine:      str
-    response_depth:        int
-    context_window:        int
-    temperature:           float
-    probability_threshold: float
-    candidate_threshold:   int
-    perseveration_damping: float
-    habituation_damping:   float
-    novelty_bias:          float
-
-@dataclass
-class SCSSettings:
-    cortical_capacity:   int
-    cognitive_reserve:   int
-    induction_threshold: float   # placeholder — M1.5
-    eviction_threshold:  float   # placeholder — M1.5
-    salience_hard_gate:  float   # placeholder — M1.5
-    boundary_threshold:  float   # placeholder — M1.5
-    emc: EMCSettings
-    wmc: WMCSettings
-    gce: GCESettings
-
-@dataclass
-class HRSSettings:
-    """Stub — expand as HRS matures."""
-    watchdog_interval: float
-    thermal_limit:     float
-    battery_critical:  float
-
-@dataclass
-class VDSSettings:
-    """Stub — expand as VDS matures."""
-    min_obstacle_distance: float
-    emergency_stop_dist:   float
-
-@dataclass
-class RASSettings:
-    boot_timeout:   float
-    active_persona: str   # filename stem — resolves to AGi.PERSONA_ACTIVE
-    active_user:    str   # user id — loaded from AGi.USER_PROFILES
+    """User identity and preferences — loaded from users.yaml by id."""
+    id:          str                 = "unknown"
+    name:        str                 = "unknown"
+    known_as:    str                 = "unknown"
+    location:    str                 = "unknown"
+    notes:       list[str]           = field(default_factory=list)
+    preferences: PreferencesSettings = field(default_factory=PreferencesSettings)
 
 @dataclass
 class AuroraConfig:
-    """Single robot-wide config object — ARC loads once, all nodes read from it."""
-    ras:     RASSettings
-    scs:     SCSSettings
-    hrs:     HRSSettings
-    vds:     VDSSettings
-    persona: PersonaConfig
-    user:    UserProfile
+    """
+    Runtime config object — ARC loads once, carried for direct node access.
+    AGi class tree is the hydrated constant registry — nodes read from AGi.
+    AuroraConfig carries persona and user context not represented in AGi.
+    """
+    persona: PersonaConfig = field(default_factory=PersonaConfig)
+    user:    UserProfile   = field(default_factory=UserProfile)
 
 # ─── Encryption Interface (stub) ──────────────────────────────────────────────
 
@@ -201,16 +149,18 @@ class ArousedReactionCore(Node):
     ARC — Arousal Reaction Core
 
     Bootloader and config registry for the AuRoRA CNS.
-    Loads aurora.yaml + active persona and user at startup.
-    Spawns all nodes in dependency order, waits for each ready signal
-    before proceeding to the next stage.
 
-    Exposes a single AuroraConfig object — all other nodes import
-    ARC and read config from it. No node does its own file I/O.
+    Boot sequence:
+        1. Load aurora.yaml  → override AGi static defaults
+        2. Load persona.yaml → override AGi.SCS.GCE constants
+        3. Load users.yaml   → populate AuroraConfig.user
+        4. _derive()         → recompute derived constants in AGi
+        5. AGi is now fully hydrated — all child processes will import it correctly
+        6. Spawn nodes in dependency order
 
-    Contract:
-        _load_config() must succeed completely before _hydrate() or _boot() run.
-        Any missing required key raises ConfigError — robot does not boot.
+    All other modules:
+        from arc import AGi     ← one line change from: from hrp import AGi
+        AGi.SCS.EMC.RECALL_DEPTH  ← hydrated runtime value
 
     Topic: /ras/ready — published True when full boot sequence completes.
     """
@@ -218,247 +168,168 @@ class ArousedReactionCore(Node):
     def __init__(self):
         super().__init__(AGi.RETICULAR_ACTIVATING_SYSTEM)
 
-        # ── Boot sequence — config must be fully loaded before anything spawns ─
-        self.config: AuroraConfig = self._load_config()
-        self._hydrate()
+        # ── Boot sequence ─────────────────────────────────────────────────────
+        # Order matters — hydrate AGi completely before spawning any node
+        self._load_aurora()
+        self._load_persona()
+        self.config = self._load_user()
+        self._derive()
         self._boot()
 
     # ─── Config Loading ───────────────────────────────────────────────────────
 
-    def _load_config(self) -> AuroraConfig:
+    def _load_aurora(self) -> None:
         """
-        Load and validate the complete robot config.
-        Raises RuntimeError if any required file or key is missing.
-        Returns a fully populated AuroraConfig — no partial states.
+        Load aurora.yaml and override AGi class attributes.
+        Missing keys fall back to HRP static defaults already set in AGi.
+        Required sections must be present — missing section raises RuntimeError.
         """
         raw = self._read_yaml(AURORA_CFG)
-        ras, scs, hrs, vds = self._parse_aurora(raw)
 
-        # Derive computed constants from parsed intrinsic values
-        scs = self._derive(scs)
-
-        # Persona and user loaded after RAS so active_persona/active_user are known
-        persona = self._load_persona(ras.active_persona)
-        user    = self._load_user(ras.active_user)
-
-        # Sync persona inference params into scs.gce so _hydrate() pushes them into AGi.SCS.GCE
-        gce = GCESettings(
-            cognitive_engine      = persona.cognitive_engine,
-            response_depth        = persona.response_depth,
-            context_window        = persona.context_window,
-            temperature           = persona.temperature,
-            probability_threshold = persona.probability_threshold,
-            candidate_threshold   = persona.candidate_threshold,
-            perseveration_damping = persona.perseveration_damping,
-            habituation_damping   = persona.habituation_damping,
-            novelty_bias          = persona.novelty_bias,
-        )
-
-        # Replace stub GCE with persona-sourced GCE
-        scs = SCSSettings(
-            cortical_capacity   = scs.cortical_capacity,
-            cognitive_reserve   = scs.cognitive_reserve,
-            induction_threshold = scs.induction_threshold,
-            eviction_threshold  = scs.eviction_threshold,
-            salience_hard_gate  = scs.salience_hard_gate,
-            boundary_threshold  = scs.boundary_threshold,
-            emc                 = scs.emc,
-            wmc                 = scs.wmc,
-            gce                 = gce,
-        )
-
-        self.get_logger().info(
-            f"✅ Config loaded — persona: {ras.active_persona} "
-            f"| user: {ras.active_user}"
-        )
-
-        return AuroraConfig(
-            ras     = ras,
-            scs     = scs,
-            hrs     = hrs,
-            vds     = vds,
-            persona = persona,
-            user    = user,
-        )
-
-    def _derive(self, scs: SCSSettings) -> SCSSettings:
-        """
-        Recompute [DERIVED] constants from parsed intrinsic values.
-        Called after _parse_aurora so all inputs are already loaded from YAML.
-        Mirrors arc._derive() contract in hrp.py — keep in sync.
-        """
-        scs.emc.recall_depth = (
-            scs.emc.recall_surface_limit
-            * scs.emc.recall_pool
-        )
-        scs.wmc.global_chunk_limit = (
-            scs.cortical_capacity
-            - scs.cognitive_reserve
-            - scs.emc.recall_reserve
-        )
-        return scs
-
-    def _hydrate(self) -> None:
-        """
-        Hydrate AGi.HRP class tree from loaded AuroraConfig.
-        Maps nested config dataclass attributes to AGi class constants by name.
-        Only UPPER_CASE attributes are written — private and dunder skipped.
-        """
-        section_map = {
-            AGi.SEMANTIC_COGNITIVE_SYSTEM   : (self.config.scs,     AGi.SCS),
-            AGi.EPISODIC_MEMORY_CORTEX      : (self.config.scs.emc, AGi.SCS.EMC),
-            AGi.WORKING_MEMORY_CORTEX       : (self.config.scs.wmc, AGi.SCS.WMC),
-            AGi.GENERATIVE_COGNITIVE_ENGINE : (self.config.scs.gce, AGi.SCS.GCE),
-        }
-
-        for section_key, (config_section, target_class) in section_map.items():
-            for attr_name in vars(config_section):
-                if attr_name.startswith("_"):
-                    continue
-                hrp_key = attr_name.upper()
-                if hasattr(target_class, hrp_key):
-                    setattr(target_class, hrp_key, getattr(config_section, attr_name))
-                    self.get_logger().debug(
-                        f"Hydrated {section_key}.{hrp_key} = {getattr(config_section, attr_name)}"
-                    )
-
-    def _parse_aurora(self, raw: dict) -> tuple[RASSettings, SCSSettings, HRSSettings, VDSSettings]:
-        """
-        Parse aurora.yaml into config dataclasses.
-        Raises RuntimeError on any missing required section or key.
-        No defaults — every value must be present in YAML.
-        """
-        self._require_section(raw, AGi.RETICULAR_ACTIVATING_SYSTEM, AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.SEMANTIC_COGNITIVE_SYSTEM,    AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.HOMEOSTATIC_REGULATION_SYSTEM, AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.RETICULAR_ACTIVATING_SYSTEM,   AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.SEMANTIC_COGNITIVE_SYSTEM,      AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.HOMEOSTATIC_REGULATION_SYSTEM,  AGi.AURORA_SETPOINTS)
         self._require_section(raw, AGi.VULNERABILITY_DETECTION_SYSTEM, AGi.AURORA_SETPOINTS)
 
-        ras_raw = raw[AGi.RETICULAR_ACTIVATING_SYSTEM]
-        scs_raw = raw[AGi.SEMANTIC_COGNITIVE_SYSTEM]
-        emc_raw = scs_raw.get(AGi.EPISODIC_MEMORY_CORTEX, {})
-        wmc_raw = scs_raw.get(AGi.WORKING_MEMORY_CORTEX,  {})
-        hrs_raw = raw[AGi.HOMEOSTATIC_REGULATION_SYSTEM]
-        vds_raw = raw[AGi.VULNERABILITY_DETECTION_SYSTEM]
+        ras = raw[AGi.RETICULAR_ACTIVATING_SYSTEM]
+        scs = raw[AGi.SEMANTIC_COGNITIVE_SYSTEM]
+        emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
+        wmc = scs.get(AGi.WORKING_MEMORY_CORTEX,  {})
 
-        ras = RASSettings(
-            boot_timeout   = self._require_key(ras_raw, "boot_timeout",   AGi.RETICULAR_ACTIVATING_SYSTEM),
-            active_persona = self._require_key(ras_raw, "active_persona", AGi.RETICULAR_ACTIVATING_SYSTEM),
-            active_user    = self._require_key(ras_raw, "active_user",    AGi.RETICULAR_ACTIVATING_SYSTEM),
-        )
+        # ── RAS ───────────────────────────────────────────────────────────────
+        # boot_timeout, active_persona, active_user carried as instance attrs
+        # (not in AGi — RAS has no HRP class equivalent yet)
+        self._boot_timeout   = ras.get("boot_timeout",   10.0)
+        self._active_persona = self._require_key(ras, "active_persona", AGi.RETICULAR_ACTIVATING_SYSTEM)
+        self._active_user    = self._require_key(ras, "active_user",    AGi.RETICULAR_ACTIVATING_SYSTEM)
 
-        emc = EMCSettings(
-            binding_stream_limit     = self._require_key(emc_raw, "binding_stream_limit",     AGi.EPISODIC_MEMORY_CORTEX),
-            encoding_cycle_timeout   = self._require_key(emc_raw, "encoding_cycle_timeout",   AGi.EPISODIC_MEMORY_CORTEX),
-            encoding_prime_capacity  = self._require_key(emc_raw, "encoding_prime_capacity",  AGi.EPISODIC_MEMORY_CORTEX),
-            encoding_prime_key_limit = self._require_key(emc_raw, "encoding_prime_key_limit", AGi.EPISODIC_MEMORY_CORTEX),
-            episode_content_limit    = self._require_key(emc_raw, "episode_content_limit",    AGi.EPISODIC_MEMORY_CORTEX),
-            theta_interval           = self._require_key(emc_raw, "theta_interval",           AGi.EPISODIC_MEMORY_CORTEX),
-            theta_batch_limit        = self._require_key(emc_raw, "theta_batch_limit",        AGi.EPISODIC_MEMORY_CORTEX),
-            recall_reserve           = self._require_key(emc_raw, "recall_reserve",           AGi.EPISODIC_MEMORY_CORTEX),
-            recall_surface_limit     = self._require_key(emc_raw, "recall_surface_limit",     AGi.EPISODIC_MEMORY_CORTEX),
-            recall_pool              = self._require_key(emc_raw, "recall_pool",              AGi.EPISODIC_MEMORY_CORTEX),
-            recall_depth             = 0,    # [DERIVED] — populated by _derive()
-            recall_timeout           = self._require_key(emc_raw, "recall_timeout",           AGi.EPISODIC_MEMORY_CORTEX),
-            recovery_batch_size      = self._require_key(emc_raw, "recovery_batch_size",      AGi.EPISODIC_MEMORY_CORTEX),
-            relevance_threshold      = self._require_key(emc_raw, "relevance_threshold",      AGi.EPISODIC_MEMORY_CORTEX),
-        )
+        # ── SCS ───────────────────────────────────────────────────────────────
+        AGi.SCS.CORTICAL_CAPACITY = scs.get("cortical_capacity", AGi.SCS.CORTICAL_CAPACITY)
+        AGi.SCS.COGNITIVE_RESERVE = scs.get("cognitive_reserve", AGi.SCS.COGNITIVE_RESERVE)
 
-        wmc = WMCSettings(
-            pmt_slot_limit     = self._require_key(wmc_raw, "pmt_slot_limit",  AGi.WORKING_MEMORY_CORTEX),
-            pmt_slot_buffer    = self._require_key(wmc_raw, "pmt_slot_buffer", AGi.WORKING_MEMORY_CORTEX),
-            global_chunk_limit = 0,    # [DERIVED] — populated by _derive()
-        )
+        # ── EMC ───────────────────────────────────────────────────────────────
+        AGi.SCS.EMC.BINDING_STREAM_LIMIT     = emc.get("binding_stream_limit",     AGi.SCS.EMC.BINDING_STREAM_LIMIT)
+        AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT   = emc.get("encoding_cycle_timeout",   AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT)
+        AGi.SCS.EMC.ENCODING_PRIME_CAPACITY  = emc.get("encoding_prime_capacity",  AGi.SCS.EMC.ENCODING_PRIME_CAPACITY)
+        AGi.SCS.EMC.ENCODING_PRIME_KEY_LIMIT = emc.get("encoding_prime_key_limit", AGi.SCS.EMC.ENCODING_PRIME_KEY_LIMIT)
+        AGi.SCS.EMC.EPISODE_CONTENT_LIMIT    = emc.get("episode_content_limit",    AGi.SCS.EMC.EPISODE_CONTENT_LIMIT)
+        AGi.SCS.EMC.THETA_INTERVAL           = emc.get("theta_interval",           AGi.SCS.EMC.THETA_INTERVAL)
+        AGi.SCS.EMC.THETA_BATCH_LIMIT        = emc.get("theta_batch_limit",        AGi.SCS.EMC.THETA_BATCH_LIMIT)
+        AGi.SCS.EMC.RECALL_RESERVE           = emc.get("recall_reserve",           AGi.SCS.EMC.RECALL_RESERVE)
+        AGi.SCS.EMC.RECALL_SURFACE_LIMIT     = emc.get("recall_surface_limit",     AGi.SCS.EMC.RECALL_SURFACE_LIMIT)
+        AGi.SCS.EMC.RECALL_POOL              = emc.get("recall_pool",              AGi.SCS.EMC.RECALL_POOL)
+        AGi.SCS.EMC.RECALL_TIMEOUT           = emc.get("recall_timeout",           AGi.SCS.EMC.RECALL_TIMEOUT)
+        AGi.SCS.EMC.RECOVERY_BATCH_SIZE      = emc.get("recovery_batch_size",      AGi.SCS.EMC.RECOVERY_BATCH_SIZE)
+        AGi.SCS.EMC.RELEVANCE_THRESHOLD      = emc.get("relevance_threshold",      AGi.SCS.EMC.RELEVANCE_THRESHOLD)
 
-        # GCE stub — real values injected from persona in _load_config()
-        gce = GCESettings(
-            cognitive_engine      = "",
-            response_depth        = 0,
-            context_window        = 0,
-            temperature           = 0.0,
-            probability_threshold = 0.0,
-            candidate_threshold   = 0,
-            perseveration_damping = 0.0,
-            habituation_damping   = 0.0,
-            novelty_bias          = 0.0,
-        )
+        # ── WMC ───────────────────────────────────────────────────────────────
+        AGi.SCS.WMC.PMT_SLOT_LIMIT  = wmc.get("pmt_slot_limit",  AGi.SCS.WMC.PMT_SLOT_LIMIT)
+        AGi.SCS.WMC.PMT_SLOT_BUFFER = wmc.get("pmt_slot_buffer", AGi.SCS.WMC.PMT_SLOT_BUFFER)
 
-        scs = SCSSettings(
-            cortical_capacity   = self._require_key(scs_raw, "cortical_capacity",   AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            cognitive_reserve   = self._require_key(scs_raw, "cognitive_reserve",   AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            induction_threshold = self._require_key(scs_raw, "induction_threshold", AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            eviction_threshold  = self._require_key(scs_raw, "eviction_threshold",  AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            salience_hard_gate  = self._require_key(scs_raw, "salience_hard_gate",  AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            boundary_threshold  = self._require_key(scs_raw, "boundary_threshold",  AGi.SEMANTIC_COGNITIVE_SYSTEM),
-            emc = emc,
-            wmc = wmc,
-            gce = gce,
-        )
+        # ── HRS (stub) ────────────────────────────────────────────────────────
+        # AGi.HRS.* — expand when HRS matures
 
-        hrs = HRSSettings(
-            watchdog_interval = self._require_key(hrs_raw, "watchdog_interval", AGi.HOMEOSTATIC_REGULATION_SYSTEM),
-            thermal_limit     = self._require_key(hrs_raw, "thermal_limit",     AGi.HOMEOSTATIC_REGULATION_SYSTEM),
-            battery_critical  = self._require_key(hrs_raw, "battery_critical",  AGi.HOMEOSTATIC_REGULATION_SYSTEM),
-        )
+        # ── VDS (stub) ────────────────────────────────────────────────────────
+        # AGi.VDS.* — expand when VDS matures
 
-        vds = VDSSettings(
-            min_obstacle_distance = self._require_key(vds_raw, "min_obstacle_distance", AGi.VULNERABILITY_DETECTION_SYSTEM),
-            emergency_stop_dist   = self._require_key(vds_raw, "emergency_stop_dist",   AGi.VULNERABILITY_DETECTION_SYSTEM),
-        )
+        self.get_logger().info("✅ aurora.yaml loaded")
 
-        return ras, scs, hrs, vds
-
-    def _load_persona(self, persona_stem: str) -> PersonaConfig:
+    def _load_persona(self) -> None:
         """
         Load active persona from ~/.agi/personas/<stem>.yaml.
-        Flat YAML structure — all keys at root level.
-        Raises RuntimeError if file is missing or any required key is absent.
-        generic.yaml is a read-only reset target and is never loaded at runtime.
+        Overrides AGi.SCS.GCE inference constants in place.
+        Raises RuntimeError if file or any required key is missing.
+        generic.yaml is a read-only reset target — never loaded at runtime.
         """
-        path = PERSONA_DIR / f"{persona_stem}.yaml"
+        path = PERSONA_DIR / f"{self._active_persona}.yaml"
         raw  = self._read_yaml(path)
 
-        return PersonaConfig(
-            system_prompt         = self._require_key(raw, "system_prompt",         path.name),
-            cognitive_engine      = self._require_key(raw, "cognitive_engine",      path.name),
-            response_depth        = self._require_key(raw, "response_depth",        path.name),
-            context_window        = self._require_key(raw, "context_window",        path.name),
-            temperature           = self._require_key(raw, "temperature",           path.name),
-            probability_threshold = self._require_key(raw, "probability_threshold", path.name),
-            candidate_threshold   = self._require_key(raw, "candidate_threshold",   path.name),
-            perseveration_damping = self._require_key(raw, "perseveration_damping", path.name),
-            habituation_damping   = self._require_key(raw, "habituation_damping",   path.name),
-            novelty_bias          = self._require_key(raw, "novelty_bias",          path.name),
+        AGi.SCS.GCE.COGNITIVE_ENGINE      = self._require_key(raw, "cognitive_engine",      path.name)
+        AGi.SCS.GCE.RESPONSE_DEPTH        = self._require_key(raw, "response_depth",        path.name)
+        AGi.SCS.GCE.CONTEXT_WINDOW        = self._require_key(raw, "context_window",        path.name)
+        AGi.SCS.GCE.TEMPERATURE           = self._require_key(raw, "temperature",           path.name)
+        AGi.SCS.GCE.PROBABILITY_THRESHOLD = self._require_key(raw, "probability_threshold", path.name)
+        AGi.SCS.GCE.CANDIDATE_THRESHOLD   = self._require_key(raw, "candidate_threshold",   path.name)
+        AGi.SCS.GCE.PERSEVERATION_DAMPING = self._require_key(raw, "perseveration_damping", path.name)
+        AGi.SCS.GCE.HABITUATION_DAMPING   = self._require_key(raw, "habituation_damping",   path.name)
+        AGi.SCS.GCE.NOVELTY_BIAS          = self._require_key(raw, "novelty_bias",          path.name)
+        AGi.SCS.GCE.SYSTEM_PROMPT         = self._require_key(raw, "system_prompt",         path.name)
+
+        self.get_logger().info(
+            f"✅ Persona loaded — {self._active_persona} "
+            f"| engine: {AGi.SCS.GCE.COGNITIVE_ENGINE}"
         )
 
-    def _load_user(self, user_id: str) -> UserProfile:
+    def _load_user(self) -> AuroraConfig:
         """
         Load user profile + preferences from ~/.agi/users.yaml by id.
+        Returns AuroraConfig carrying persona snapshot + user profile.
         Raises RuntimeError if file is missing or user_id is not found.
         """
         raw   = self._read_yaml(USERS_CFG)
         users = raw.get("users", [])
-        entry = next((u for u in users if u.get("id") == user_id), None)
+        entry = next((u for u in users if u.get("id") == self._active_user), None)
 
         if not entry:
             raise RuntimeError(
-                f"❌ ARC boot failed — user '{user_id}' not found in {AGi.USER_PROFILES}"
+                f"❌ ARC boot failed — user '{self._active_user}' not found in {AGi.USER_PROFILES}"
             )
 
-        prefs = self._require_key(entry, "preferences", f"user:{user_id}")
+        prefs = self._require_key(entry, "preferences", f"user:{self._active_user}")
 
-        return UserProfile(
-            id       = self._require_key(entry, "id",       f"user:{user_id}"),
-            name     = self._require_key(entry, "name",     f"user:{user_id}"),
-            known_as = self._require_key(entry, "known_as", f"user:{user_id}"),
-            location = self._require_key(entry, "location", f"user:{user_id}"),
-            notes    = entry.get("notes", []),   # notes are optional — empty list is valid
+        user = UserProfile(
+            id       = self._require_key(entry, "id",       f"user:{self._active_user}"),
+            name     = self._require_key(entry, "name",     f"user:{self._active_user}"),
+            known_as = self._require_key(entry, "known_as", f"user:{self._active_user}"),
+            location = self._require_key(entry, "location", f"user:{self._active_user}"),
+            notes    = entry.get("notes", []),
             preferences = PreferencesSettings(
-                response_verbosity   = self._require_key(prefs, "response_verbosity",   f"user:{user_id}.preferences"),
-                formality            = self._require_key(prefs, "formality",            f"user:{user_id}.preferences"),
-                preferred_language   = self._require_key(prefs, "preferred_language",   f"user:{user_id}.preferences"),
-                emotional_tone       = self._require_key(prefs, "emotional_tone",       f"user:{user_id}.preferences"),
-                memory_salience_bias = self._require_key(prefs, "memory_salience_bias", f"user:{user_id}.preferences"),
+                response_verbosity   = self._require_key(prefs, "response_verbosity",   f"user:{self._active_user}.preferences"),
+                formality            = self._require_key(prefs, "formality",            f"user:{self._active_user}.preferences"),
+                preferred_language   = self._require_key(prefs, "preferred_language",   f"user:{self._active_user}.preferences"),
+                emotional_tone       = self._require_key(prefs, "emotional_tone",       f"user:{self._active_user}.preferences"),
+                memory_salience_bias = self._require_key(prefs, "memory_salience_bias", f"user:{self._active_user}.preferences"),
             ),
+        )
+
+        # Persona snapshot — built from now-hydrated AGi.SCS.GCE values
+        persona = PersonaConfig(
+            system_prompt         = AGi.SCS.GCE.SYSTEM_PROMPT,
+            cognitive_engine      = AGi.SCS.GCE.COGNITIVE_ENGINE,
+            response_depth        = AGi.SCS.GCE.RESPONSE_DEPTH,
+            context_window        = AGi.SCS.GCE.CONTEXT_WINDOW,
+            temperature           = AGi.SCS.GCE.TEMPERATURE,
+            probability_threshold = AGi.SCS.GCE.PROBABILITY_THRESHOLD,
+            candidate_threshold   = AGi.SCS.GCE.CANDIDATE_THRESHOLD,
+            perseveration_damping = AGi.SCS.GCE.PERSEVERATION_DAMPING,
+            habituation_damping   = AGi.SCS.GCE.HABITUATION_DAMPING,
+            novelty_bias          = AGi.SCS.GCE.NOVELTY_BIAS,
+        )
+
+        self.get_logger().info(
+            f"✅ User loaded — {user.known_as} ({user.id}) | {user.location}"
+        )
+
+        return AuroraConfig(persona=persona, user=user)
+
+    def _derive(self) -> None:
+        """
+        Recompute [DERIVED] AGi constants from hydrated intrinsic values.
+        Called after all YAML is loaded so all inputs are final.
+        """
+        AGi.SCS.EMC.RECALL_DEPTH = (
+            AGi.SCS.EMC.RECALL_SURFACE_LIMIT
+            * AGi.SCS.EMC.RECALL_POOL
+        )
+        AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT = (
+            AGi.SCS.CORTICAL_CAPACITY
+            - AGi.SCS.COGNITIVE_RESERVE
+            - AGi.SCS.EMC.RECALL_RESERVE
+        )
+        self.get_logger().info(
+            f"✅ AGi hydrated — "
+            f"RECALL_DEPTH={AGi.SCS.EMC.RECALL_DEPTH} | "
+            f"GLOBAL_CHUNK_LIMIT={AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT}"
         )
 
     # ─── Boot Sequence ────────────────────────────────────────────────────────
@@ -466,8 +337,8 @@ class ArousedReactionCore(Node):
     def _boot(self) -> None:
         """
         Spawn cognitive nodes in dependency order.
-        Each stage waits for the previous node's ready signal before proceeding.
-        ARC does not publish its own ready signal until all stages complete.
+        AGi is fully hydrated before any node is spawned — boot order is the guarantee.
+        Each stage blocks until the node signals ready before proceeding.
         """
         ready_pub = self.create_publisher(
             Bool,
@@ -475,21 +346,17 @@ class ArousedReactionCore(Node):
             1,
         )
 
-        timeout = self.config.ras.boot_timeout
-
-        # Future stages uncommented as each system is built
-
         # Stage 1 — Infrastructure
         # self._spawn(AGi.EMERGENCY_EXCEPTION_CORE)
-        # self._wait_ready(f"/{AGi.EMERGENCY_EXCEPTION_CORE}/ready", timeout)
+        # self._wait_ready(f"/{AGi.EMERGENCY_EXCEPTION_CORE}/ready", self._boot_timeout)
 
         # Stage 2 — Regulatory
         # self._spawn(AGi.HOMEOSTATIC_REGULATION_SYSTEM)
-        # self._wait_ready(f"/{AGi.HOMEOSTATIC_REGULATION_SYSTEM}/ready", timeout)
+        # self._wait_ready(f"/{AGi.HOMEOSTATIC_REGULATION_SYSTEM}/ready", self._boot_timeout)
 
-        # Stage 3 — Cognition (CNC owns MCC, WMC, EMC internally)
+        # Stage 3 — Cognition
         self._spawn(AGi.CENTRAL_NERVOUS_CORE)
-        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CORE}/ready", timeout)
+        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CORE}/ready", self._boot_timeout)
 
         msg      = Bool()
         msg.data = True
@@ -535,7 +402,7 @@ class ArousedReactionCore(Node):
 
     def _require_section(self, raw: dict, key: str, source: str) -> None:
         """Raise RuntimeError if a required top-level section is missing from YAML."""
-        if key not in raw:
+        if not raw or key not in raw:
             raise RuntimeError(
                 f"❌ ARC boot failed — required section '{key}' missing from {source}"
             )
