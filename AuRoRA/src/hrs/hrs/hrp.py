@@ -47,7 +47,7 @@ class AGi:                                              # Amazing Grace infrastr
 
         class GCE:                                                                # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                   # [EXTRINSIC] GCE server endpoint
-            COGNITIVE_ENGINE      : str   = "huihui_ai/Qwen3.6-abliterated:35b-Claude-4.7"  # [EXTRINSIC] GCE model identifier
+            COGNITIVE_ENGINE      : str   = "fluffy/l3-8b-stheno-v3.2:q8_0"       # [EXTRINSIC] GCE model identifier
             RESPONSE_DEPTH        : int   = 512                                   # [INTRINSIC] maximum response tokens per inference
             CONTEXT_WINDOW        : int   = 32768                                 # [EXTRINSIC] model context window — Ollama num_ctx allocation
             TEMPERATURE           : float = 0.75                                  # [INTRINSIC] response creativity — adapts per cognitive state
