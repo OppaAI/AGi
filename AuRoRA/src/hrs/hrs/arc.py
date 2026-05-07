@@ -163,6 +163,7 @@ class ArousedReactionCore(Node):
 
         # ── Boot sequence ─────────────────────────────────────────────────────
         self._load_config()
+        self._hydrate()
         self._boot()
 
     # ─── Config Loading ───────────────────────────────────────────────────────
@@ -183,7 +184,34 @@ class ArousedReactionCore(Node):
             f"✅ Config loaded — persona: {self.config.ras.active_persona} "
             f"| user: {self.config.ras.active_user}"
         )
-
+        
+    def _hydrate(self) -> None:
+        """
+        Introspectively hydrate AGi hierarchy from config.
+        Maps config attributes to AGi class attributes by name matching.
+        """
+        # Map config sections to AGi class paths
+        section_map = {
+            "scs": AGi.SCS,
+            "emc": AGi.SCS.EMC,
+            "wmc": AGi.SCS.WMC,
+            "gce": AGi.SCS.GCE,
+        }
+        
+        for section_name, target_class in section_map.items():
+            section_config = getattr(self.config, section_name, None)
+            if not section_config:
+                continue
+            
+            # For each attribute in the config section
+            for attr_name in vars(section_config):
+                if attr_name.startswith("_"):  # skip private
+                    continue
+                value = getattr(section_config, attr_name)
+                if hasattr(target_class, attr_name):
+                    setattr(target_class, attr_name, value)
+                    self.get_logger().debug(f"Hydrated {section_name}.{attr_name} = {value}")
+                
     def _parse_aurora(self, raw: dict) -> None:
         """Parse aurora.yaml into AuroraConfig dataclasses."""
         try:
