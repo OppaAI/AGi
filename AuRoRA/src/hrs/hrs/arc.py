@@ -46,77 +46,79 @@ USERS_CFG   = AGI_DIR / AGi.USER_PROFILES
 # ─── Dataclasses ──────────────────────────────────────────────────────────────
 
 @dataclass
-class InferenceParams:
-    model:       str   = "mag-mell-r1:12b"
-    temperature: float = 0.7
-    top_p:       float = 0.9
-    max_tokens:  int   = 512
-    stream:      bool  = True
-
-@dataclass
 class PersonaConfig:
-    name:          str             = "GRACE"
-    system_prompt: str             = ""
-    params:        InferenceParams = field(default_factory=InferenceParams)
+    system_prompt:        str   = ""
+    cognitive_engine:     str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag
+    response_depth:       int   = 512                                           # [PERSONA] max tokens per completion
+    context_window:       int   = 32768                                         # [PERSONA] Ollama num_ctx — total token slots allocated to model
+    temperature:          float = 0.75                                          # [PERSONA] sampling temperature
+    probability_threshold: float = 0.88                                         # [PERSONA] top-p nucleus sampling cutoff
+    candidate_threshold:  int   = 50                                            # [PERSONA] top-k token candidate limit per sampling step
+    perseveration_damping: float = 1.25                                         # [PERSONA] repetition penalty — scales down already-sampled tokens
+    habituation_damping:  float = 0.15                                          # [PERSONA] frequency penalty — scales down tokens by corpus frequency
+    novelty_bias:         float = 0.05                                          # [PERSONA] presence penalty — boosts tokens not yet in context
 
 @dataclass
 class ExtrinsicSettings:
     """Per-user behavioural preferences — loaded from users.yaml alongside the user profile."""
-    response_verbosity:  str   = "concise"      # concise | normal | verbose
-    formality:           str   = "casual"        # casual | formal
-    preferred_language:  str   = "en"            # ISO 639-1 language code
-    emotional_tone:      str   = "warm"          # warm | neutral | professional
-    memory_salience_bias: float = 0.0            # per-user recall bias offset applied to relevance scores
+    response_verbosity:   str   = "concise"   # concise | normal | verbose
+    formality:            str   = "casual"    # casual | formal
+    preferred_language:   str   = "en"        # ISO 639-1 language code
+    emotional_tone:       str   = "warm"      # warm | neutral | professional
+    memory_salience_bias: float = 0.0         # per-user recall bias offset applied to relevance scores
 
 @dataclass
 class UserProfile:
-    id:        str              = "unknown"
-    name:      str              = "unknown"
-    known_as:  str              = "unknown"
-    location:  str              = "unknown"
-    notes:     list[str]        = field(default_factory=list)
+    id:        str               = "unknown"
+    name:      str               = "unknown"
+    known_as:  str               = "unknown"
+    location:  str               = "unknown"
+    notes:     list[str]         = field(default_factory=list)
     extrinsic: ExtrinsicSettings = field(default_factory=ExtrinsicSettings)
 
 @dataclass
 class EMCSettings:
-    binding_stream_limit:  int   = 512
-    recall_surface_limit:  int   = 3
-    recall_pool:           int   = 15
-    recall_depth:          int   = 45
-    relevance_threshold:   float = 0.45
-    recall_timeout:        float = 2.0
-    recovery_batch_size:   int   = 50
-    episode_content_limit: int   = 3000
-    theta_interval:        float = 2.0
-    theta_batch_limit:     int   = 32
-    recall_reserve:        int   = 2048
+    binding_stream_limit:   int   = 512    # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
+    encoding_cycle_timeout: float = 30.0   # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
+    encoding_prime_capacity: int  = 256    # [INTRINSIC] max entries in embedding LRU cache
+    encoding_prime_key_limit: int = 256    # [INTRINSIC] max characters hashed per cache key
+    episode_content_limit:  int   = 3000   # [INTRINSIC] max characters per PMT written to episodic buffer
+    theta_interval:         float = 2.0    # [INTRINSIC] seconds between periodic batch encoding ticks
+    theta_batch_limit:      int   = 32     # [INTRINSIC] max PMTs encoded per tick — caps spike on crash recovery
+    recall_reserve:         int   = 2048   # [INTRINSIC] tokens reserved in context window for recalled episodes
+    recall_surface_limit:   int   = 3      # [INTRINSIC] max episodes returned per recall query (post-RRF)
+    recall_pool:            int   = 15     # [INTRINSIC] per-retriever candidate count — recall_surface_limit × recall_pool fed into RRF
+    recall_depth:           int   = 45     # [DERIVED]   recall_surface_limit × recall_pool — recomputed by _derive()
+    recall_timeout:         float = 2.0    # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
+    recovery_batch_size:    int   = 50     # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
+    relevance_threshold:    float = 0.45   # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
 @dataclass
 class WMCSettings:
-    pmt_slot_limit:     int = 7
-    pmt_slot_buffer:    int = 2
-    global_chunk_limit: int = 11264
+    pmt_slot_limit:     int = 7        # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
+    pmt_slot_buffer:    int = 2        # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
+    global_chunk_limit: int = 11264    # [DERIVED]   cortical_capacity - cognitive_reserve - recall_reserve — recomputed by _derive()
 
 @dataclass
 class GCESettings:
-    model:              str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"
-    temperature:        float = 0.75
-    top_p:              float = 0.88
-    top_k:              int   = 50
-    max_tokens:         int   = 512
-    context_window:     int   = 32768
-    repetition_penalty: float = 1.25
-    frequency_penalty:  float = 0.15
-    presence_penalty:   float = 0.05
+    cognitive_engine:      str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag
+    response_depth:        int   = 512                                           # [PERSONA] max tokens per completion
+    context_window:        int   = 32768                                         # [PERSONA] Ollama num_ctx — total token slots allocated to model
+    temperature:           float = 0.75                                          # [PERSONA] sampling temperature
+    probability_threshold: float = 0.88                                          # [PERSONA] top-p nucleus sampling cutoff
+    candidate_threshold:   int   = 50                                            # [PERSONA] top-k token candidate limit per sampling step
+    perseveration_damping: float = 1.25                                          # [PERSONA] repetition penalty — scales down already-sampled tokens
+    habituation_damping:   float = 0.15                                          # [PERSONA] frequency penalty — scales down tokens by corpus frequency
+    novelty_bias:          float = 0.05                                          # [PERSONA] presence penalty — boosts tokens not yet in context
 
 @dataclass
 class SCSSettings:
-    cortical_capacity:   int   = 16384
-    cognitive_reserve:   int   = 2048
-    induction_threshold: float = 0.4
-    eviction_threshold:  float = 0.3
-    salience_hard_gate:  float = 0.8
-    boundary_threshold:  float = 0.35
+    cortical_capacity:   int   = 16384   # [INTRINSIC] total token budget for the active LLM context window
+    cognitive_reserve:   int   = 2048    # [INTRINSIC] tokens reserved for system prompt and identity injection
+    induction_threshold: float = 0.4    # placeholder — M1.5
+    eviction_threshold:  float = 0.3    # placeholder — M1.5
+    salience_hard_gate:  float = 0.8    # placeholder — M1.5
+    boundary_threshold:  float = 0.35   # placeholder — M1.5
     emc: EMCSettings     = field(default_factory=EMCSettings)
     wmc: WMCSettings     = field(default_factory=WMCSettings)
     gce: GCESettings     = field(default_factory=GCESettings)
@@ -137,8 +139,8 @@ class VDSSettings:
 @dataclass
 class RASSettings:
     boot_timeout:   float = 10.0
-    active_persona: str   = "persona"       # filename stem — resolves to AGi.PERSONA_ACTIVE
-    active_user:    str   = "oppaai"        # user id — loaded from AGi.USER_PROFILES
+    active_persona: str   = "persona"   # filename stem — resolves to AGi.PERSONA_ACTIVE
+    active_user:    str   = "oppaai"    # user id — loaded from AGi.USER_PROFILES
 
 @dataclass
 class AuroraConfig:
@@ -216,20 +218,37 @@ class ArousedReactionCore(Node):
     # ─── Config Loading ───────────────────────────────────────────────────────
 
     def _load_config(self) -> None:
-        """Load aurora.yaml then active persona and user profile."""
+        """Load aurora.yaml, derive computed constants, then load active persona and user profile."""
         raw = self._read_yaml(AURORA_CFG)
         if not raw:
             self.get_logger().warning(f"⚠️  {AGi.AURORA_SETPOINTS} not found — using defaults")
         else:
             self._parse_aurora(raw)
+            self._derive()
 
         # Persona and user loaded after RAS so active_persona/active_user are known
-        self.config.persona = self._load_persona(self.config.ras.active_persona)
+        self.config.persona = self._load_persona()
         self.config.user    = self._load_user(self.config.ras.active_user)
 
         self.get_logger().info(
             f"✅ Config loaded — persona: {self.config.ras.active_persona} "
             f"| user: {self.config.ras.active_user}"
+        )
+
+    def _derive(self) -> None:
+        """
+        Recompute derived constants from parsed intrinsic values.
+        Called after _parse_aurora so inputs are already hydrated from YAML.
+        Mirrors arc._derive() in hrp.py — keep in sync.
+        """
+        self.config.scs.emc.recall_depth = (
+            self.config.scs.emc.recall_surface_limit
+            * self.config.scs.emc.recall_pool
+        )
+        self.config.scs.wmc.global_chunk_limit = (
+            self.config.scs.cortical_capacity
+            - self.config.scs.cognitive_reserve
+            - self.config.scs.emc.recall_reserve
         )
 
     def _hydrate(self) -> None:
@@ -270,8 +289,8 @@ class ArousedReactionCore(Node):
 
         try:
             scs = raw.get(AGi.SEMANTIC_COGNITIVE_SYSTEM, {})
-            emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
-            wmc = scs.get(AGi.WORKING_MEMORY_CORTEX, {})
+            emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX,      {})
+            wmc = scs.get(AGi.WORKING_MEMORY_CORTEX,       {})
             gce = scs.get(AGi.GENERATIVE_COGNITIVE_ENGINE, {})
             self.config.scs = SCSSettings(
                 cortical_capacity   = scs.get("cortical_capacity",   16384),
@@ -281,33 +300,36 @@ class ArousedReactionCore(Node):
                 salience_hard_gate  = scs.get("salience_hard_gate",  0.8),
                 boundary_threshold  = scs.get("boundary_threshold",  0.35),
                 emc = EMCSettings(
-                    binding_stream_limit  = emc.get("binding_stream_limit",  512),
-                    recall_surface_limit  = emc.get("recall_surface_limit",  3),
-                    recall_pool           = emc.get("recall_pool",           15),
-                    recall_depth          = emc.get("recall_depth",          45),
-                    relevance_threshold   = emc.get("relevance_threshold",   0.45),
-                    recall_timeout        = emc.get("recall_timeout",        2.0),
-                    recovery_batch_size   = emc.get("recovery_batch_size",   50),
-                    episode_content_limit = emc.get("episode_content_limit", 3000),
-                    theta_interval        = emc.get("theta_interval",        2.0),
-                    theta_batch_limit     = emc.get("theta_batch_limit",     32),
-                    recall_reserve        = emc.get("recall_reserve",        2048),
+                    binding_stream_limit    = emc.get("binding_stream_limit",    512),
+                    encoding_cycle_timeout  = emc.get("encoding_cycle_timeout",  30.0),
+                    encoding_prime_capacity = emc.get("encoding_prime_capacity", 256),
+                    encoding_prime_key_limit= emc.get("encoding_prime_key_limit",256),
+                    episode_content_limit   = emc.get("episode_content_limit",   3000),
+                    theta_interval          = emc.get("theta_interval",          2.0),
+                    theta_batch_limit       = emc.get("theta_batch_limit",       32),
+                    recall_reserve          = emc.get("recall_reserve",          2048),
+                    recall_surface_limit    = emc.get("recall_surface_limit",    3),
+                    recall_pool             = emc.get("recall_pool",             15),
+                    # recall_depth — [DERIVED] — computed in _derive()
+                    recall_timeout          = emc.get("recall_timeout",          2.0),
+                    recovery_batch_size     = emc.get("recovery_batch_size",     50),
+                    relevance_threshold     = emc.get("relevance_threshold",     0.45),
                 ),
                 wmc = WMCSettings(
-                    pmt_slot_limit     = wmc.get("pmt_slot_limit",     7),
-                    pmt_slot_buffer    = wmc.get("pmt_slot_buffer",    2),
-                    global_chunk_limit = wmc.get("global_chunk_limit", 11264),
+                    pmt_slot_limit  = wmc.get("pmt_slot_limit",  7),
+                    pmt_slot_buffer = wmc.get("pmt_slot_buffer", 2),
+                    # global_chunk_limit — [DERIVED] — computed in _derive()
                 ),
                 gce = GCESettings(
-                    model              = gce.get("model",              "huihui_ai/granite4.1-abliterated:8b-q8_0"),
-                    temperature        = gce.get("temperature",        0.75),
-                    top_p              = gce.get("top_p",              0.88),
-                    top_k              = gce.get("top_k",              50),
-                    max_tokens         = gce.get("max_tokens",         512),
-                    context_window     = gce.get("context_window",     32768),
-                    repetition_penalty = gce.get("repetition_penalty", 1.25),
-                    frequency_penalty  = gce.get("frequency_penalty",  0.15),
-                    presence_penalty   = gce.get("presence_penalty",   0.05),
+                    cognitive_engine      = gce.get("cognitive_engine",      "huihui_ai/granite4.1-abliterated:8b-q8_0"),
+                    response_depth        = gce.get("response_depth",        512),
+                    context_window        = gce.get("context_window",        32768),
+                    temperature           = gce.get("temperature",           0.75),
+                    probability_threshold = gce.get("probability_threshold", 0.88),
+                    candidate_threshold   = gce.get("candidate_threshold",   50),
+                    perseveration_damping = gce.get("perseveration_damping", 1.25),
+                    habituation_damping   = gce.get("habituation_damping",   0.15),
+                    novelty_bias          = gce.get("novelty_bias",          0.05),
                 ),
             )
         except Exception as e:
@@ -332,31 +354,30 @@ class ArousedReactionCore(Node):
         except Exception as e:
             self.get_logger().error(f"❌ VDS settings parse error: {e}")
 
-    def _load_persona(self, name: str) -> PersonaConfig:
+    def _load_persona(self) -> PersonaConfig:
         """
-        Load persona from ~/.agi/personas/{name}.yaml
-        Falls back to AGi.PERSONA_GENERIC if the active persona file is missing.
+        Load active persona from ~/.agi/personas/persona.yaml.
+        Flat YAML structure — all keys at root level.
+        Falls back to PersonaConfig defaults if file is missing or unreadable.
+        generic.yaml is a read-only reset target and is never loaded at runtime.
         """
-        path = PERSONA_DIR / (
-            AGi.PERSONA_ACTIVE if name == "persona" else AGi.PERSONA_GENERIC
-        )
-        raw = self._read_yaml(path)
+        path = PERSONA_DIR / AGi.PERSONA_ACTIVE
+        raw  = self._read_yaml(path)
         if not raw:
             self.get_logger().warning(f"⚠️  {path.name} not found — using defaults")
             return PersonaConfig()
         try:
-            p      = raw.get("persona", {})
-            params = raw.get("params",  {})
             return PersonaConfig(
-                name          = p.get("name",          "GRACE"),
-                system_prompt = p.get("system_prompt", ""),
-                params        = InferenceParams(
-                    model       = params.get("model",       "mag-mell-r1:12b"),
-                    temperature = params.get("temperature", 0.7),
-                    top_p       = params.get("top_p",       0.9),
-                    max_tokens  = params.get("max_tokens",  512),
-                    stream      = params.get("stream",      True),
-                )
+                system_prompt         = raw.get("system_prompt",         ""),
+                cognitive_engine      = raw.get("cognitive_engine",      "huihui_ai/granite4.1-abliterated:8b-q8_0"),
+                response_depth        = raw.get("response_depth",        512),
+                context_window        = raw.get("context_window",        32768),
+                temperature           = raw.get("temperature",           0.75),
+                probability_threshold = raw.get("probability_threshold", 0.88),
+                candidate_threshold   = raw.get("candidate_threshold",   50),
+                perseveration_damping = raw.get("perseveration_damping", 1.25),
+                habituation_damping   = raw.get("habituation_damping",   0.15),
+                novelty_bias          = raw.get("novelty_bias",          0.05),
             )
         except Exception as e:
             self.get_logger().error(f"❌ Persona parse error ({path.name}): {e}")
