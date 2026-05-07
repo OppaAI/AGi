@@ -33,7 +33,7 @@
     }
 
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
       background: var(--bg-deep);
       color: var(--text-primary);
       height: 100vh;
@@ -81,6 +81,7 @@
       margin-bottom: 24px;
       backdrop-filter: blur(10px);
       transition: border-color 0.2s;
+      font-family: inherit;
     }
 
     .robot-select:hover,
@@ -167,15 +168,8 @@
     }
 
     @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(6px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
     /* ─── Glass Cards ─── */
@@ -233,111 +227,134 @@
       font-size: 1.3rem;
       font-weight: 700;
       color: var(--lavender-soft);
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-variant-numeric: tabular-nums;
     }
 
-    .stat-value.warning {
-      color: var(--warning);
-    }
-
-    .stat-value.danger {
-      color: var(--danger);
-    }
-
-    .stat-value.success {
-      color: var(--success);
-    }
+    .stat-value.warning { color: var(--warning); }
+    .stat-value.danger  { color: var(--danger); }
+    .stat-value.success { color: var(--success); }
 
     .stat-sub {
       font-size: 0.75rem;
       color: var(--text-muted);
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-variant-numeric: tabular-nums;
     }
 
     /* ─── Debug Stream ─── */
     .debug-stream {
       flex: 1;
       overflow-y: auto;
-      padding: 16px 24px;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.82rem;
-      line-height: 1.7;
+      padding: 12px 20px;
+      font-size: 0.88rem;
+      line-height: 1.6;
     }
 
     .stream-entry {
-      margin-bottom: 2px;
+      margin-bottom: 3px;
       padding: 8px 12px;
       border-radius: 10px;
       border-left: 3px solid transparent;
       animation: slideIn 0.15s ease;
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: flex-start;
     }
 
     @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateX(-8px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
     }
 
+    /* ── Block colours ── */
+
+    /* USER PROMPT — Cyan */
     .stream-entry.user-prompt {
-      background: rgba(34, 211, 238, 0.08);
+      background: rgba(34, 211, 238, 0.07);
       border-left-color: #22d3ee;
     }
+    .badge-user {
+      background: rgba(34, 211, 238, 0.18);
+      color: #67e8f9;
+    }
 
+    /* SYSTEM PROMPT — Red */
+    .stream-entry.system-prompt {
+      background: rgba(248, 113, 113, 0.08);
+      border-left-color: #f87171;
+    }
+    .badge-system-prompt {
+      background: rgba(248, 113, 113, 0.20);
+      color: #fca5a5;
+    }
+
+    /* EMC MEMORY — Orange */
+    .stream-entry.emc-context {
+      background: rgba(251, 146, 60, 0.08);
+      border-left-color: #fb923c;
+    }
+    .badge-emc {
+      background: rgba(251, 146, 60, 0.20);
+      color: #fdba74;
+    }
+
+    /* WMC MEMORY — Yellow */
     .stream-entry.memory-context {
-      background: rgba(253, 224, 71, 0.08);
+      background: rgba(253, 224, 71, 0.07);
       border-left-color: #fde047;
     }
-
-    .stream-entry.system-prompt {
-      background: rgba(139, 92, 246, 0.10);
-      border-left-color: #a78bfa;
+    .badge-memory {
+      background: rgba(253, 224, 71, 0.18);
+      color: #fef08a;
     }
 
-    .badge-system-prompt {
-      background: rgba(139, 92, 246, 0.25);
-      color: #c4b5fd;
-    }
-
+    /* AI THINKING */
     .stream-entry.ai-thinking {
       background: rgba(251, 191, 36, 0.04);
       border-left-color: var(--warning);
     }
+    .badge-thinking {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--warning);
+    }
 
-    .stream-entry.ai-response {
-      background: rgba(167, 139, 250, 0.10);
+    /* GRACE RESPONSE — Lavender */
+    .stream-entry.ai-response,
+    .stream-entry.ai-done {
+      background: rgba(167, 139, 250, 0.08);
       border-left-color: #a78bfa;
     }
-
-    .stream-entry.ai-done {
-      background: rgba(196, 181, 253, 0.12);
-      border-left-color: #c4b5fd;
+    .badge-ai {
+      background: rgba(167, 139, 250, 0.20);
+      color: #c4b5fd;
     }
 
+    /* ERROR */
     .stream-entry.error {
       background: rgba(248, 113, 113, 0.08);
       border-left-color: var(--danger);
     }
+    .badge-error {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--danger);
+    }
 
+    /* SYSTEM */
     .stream-entry.system {
       background: rgba(148, 163, 184, 0.04);
       border-left-color: var(--text-muted);
     }
+    .badge-system {
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-muted);
+    }
 
     .stream-time {
       color: var(--text-muted);
-      font-size: 0.75rem;
-      min-width: 60px;
+      font-size: 0.72rem;
+      min-width: 64px;
       flex-shrink: 0;
-      margin-top: 1px;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
     }
 
     .stream-badge {
@@ -346,42 +363,13 @@
       gap: 4px;
       padding: 2px 8px;
       border-radius: 6px;
-      font-size: 0.68rem;
+      font-size: 0.67rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    .badge-user {
-      background: rgba(34, 211, 238, 0.18);
-      color: #67e8f9;
-    }
-
-    .badge-memory {
-      background: rgba(253, 224, 71, 0.18);
-      color: #fef08a;
-    }
-
-    .badge-thinking {
-      background: rgba(251, 191, 36, 0.15);
-      color: var(--warning);
-    }
-
-    .badge-ai {
-      background: rgba(167, 139, 250, 0.20);
-      color: #c4b5fd;
-    }
-
-    .badge-error {
-      background: rgba(248, 113, 113, 0.15);
-      color: var(--danger);
-    }
-
-    .badge-system {
-      background: rgba(148, 163, 184, 0.1);
-      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
     }
 
     .stream-content {
@@ -400,29 +388,17 @@
     }
 
     .stream-meta {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 3px;
       font-style: italic;
     }
 
     /* ─── Scrollbar ─── */
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: rgba(167, 139, 250, 0.2);
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(167, 139, 250, 0.35);
-    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.35); }
 
     /* ─── Teleop ─── */
     .teleop-grid {
@@ -456,9 +432,7 @@
       transform: scale(1.05);
     }
 
-    .teleop-btn:active {
-      transform: scale(0.95);
-    }
+    .teleop-btn:active { transform: scale(0.95); }
 
     .teleop-btn.danger {
       background: rgba(248, 113, 113, 0.1);
@@ -502,23 +476,6 @@
       font-weight: 400;
     }
 
-    /* ─── Toggle for memory context ─── */
-    .toggle-btn {
-      background: rgba(139, 92, 246, 0.1);
-      border: 1px solid var(--glass-border);
-      color: var(--lavender-soft);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.7rem;
-      cursor: pointer;
-      margin-left: 8px;
-      transition: all 0.2s;
-    }
-
-    .toggle-btn:hover {
-      background: rgba(139, 92, 246, 0.2);
-    }
-
     /* ─── Pause indicator ─── */
     .pause-indicator {
       position: fixed;
@@ -535,17 +492,31 @@
       z-index: 100;
     }
 
-    .pause-indicator.active {
-      display: block;
+    .pause-indicator.active { display: block; }
+
+    /* ─── Legend ─── */
+    .stream-legend {
+      display: flex;
+      gap: 10px;
+      padding: 8px 20px;
+      background: rgba(15, 15, 25, 0.3);
+      border-bottom: 1px solid var(--glass-border);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .legend-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-right: 4px;
     }
   </style>
   <base target="_blank">
-<base target="_blank">
-<base target="_blank">
 </head>
 
 <body>
-
   <div class="pause-indicator" id="pauseIndicator">⏸ Stream Paused (Scroll to resume)</div>
 
   <div class="app">
@@ -558,16 +529,16 @@
       </select>
 
       <nav class="nav-tabs">
-        <div class="nav-tab active" onclick="switchTab('debug')">
+        <div class="nav-tab active" onclick="switchTab('debug', this)">
           <span>🔍</span> Debug
         </div>
-        <div class="nav-tab" onclick="switchTab('chat')">
+        <div class="nav-tab" onclick="switchTab('chat', this)">
           <span>💬</span> Chat Face
         </div>
-        <div class="nav-tab" onclick="switchTab('teleop')">
+        <div class="nav-tab" onclick="switchTab('teleop', this)">
           <span>🎮</span> Teleop
         </div>
-        <div class="nav-tab" onclick="switchTab('health')">
+        <div class="nav-tab" onclick="switchTab('health', this)">
           <span>❤️</span> Health
         </div>
       </nav>
@@ -580,6 +551,7 @@
 
     <!-- Main -->
     <main class="main">
+
       <!-- ═══ DEBUG TAB ═══ -->
       <div class="tab-content active" id="tab-debug">
         <!-- Stats Bar -->
@@ -616,6 +588,17 @@
           </div>
         </div>
 
+        <!-- Legend -->
+        <div class="stream-legend">
+          <span class="legend-label">Legend:</span>
+          <span class="stream-badge badge-system-prompt">🔴 SYSTEM</span>
+          <span class="stream-badge badge-emc">🟠 EMC</span>
+          <span class="stream-badge badge-memory">🟡 WMC</span>
+          <span class="stream-badge badge-user">🔵 USER</span>
+          <span class="stream-badge badge-ai">🟣 GRACE</span>
+          <span class="stream-badge badge-error">✗ ERROR</span>
+        </div>
+
         <!-- Continuous Debug Stream -->
         <div class="debug-stream" id="debugStream">
           <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
@@ -631,10 +614,9 @@
           <div style="font-size:4rem; margin-bottom:16px;">🤖</div>
           <div style="color:var(--lavender-soft); font-size:1.2rem; font-weight:600;">Grace Chat Interface</div>
           <div style="color:var(--text-muted); margin-top:8px;">Embed your existing grace.html here</div>
-          <code
-            style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
-          &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
-        </code>
+          <code style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
+            &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
+          </code>
         </div>
       </div>
 
@@ -678,10 +660,10 @@
         </div>
         <div class="glass-card">
           <div class="card-title">📈 System Log</div>
-          <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.
-          </div>
+          <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.</div>
         </div>
       </div>
+
     </main>
   </div>
 
@@ -694,14 +676,14 @@
     let tokenCount = 0;
     let latencies = [];
     let isAutoScroll = true;
-    let currentTurn = null; // Tracks the current turn being built
+    let currentTurn = null;
 
     // ─── Tab Switching ───
-    function switchTab(tabName) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+    function switchTab(tabName, el) {
+      document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
       document.getElementById('tab-' + tabName).classList.add('active');
-      event.currentTarget.classList.add('active');
+      if (el) el.classList.add('active');
     }
 
     // ─── ROS2 Connection ───
@@ -734,7 +716,7 @@
 
     // ─── Topic Subscriptions ───
     function subscribeTopics() {
-      // Text Input Gateway — User Prompt
+      // User Prompt
       const inputTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/text_input_gateway',
@@ -750,7 +732,7 @@
         }
       });
 
-      // Response Gateway — AI Response Stream
+      // Response Gateway
       const responseTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/response_gateway',
@@ -765,7 +747,7 @@
         }
       });
 
-      // Memory Context Topic — full GCE input context for debug
+      // Memory Context (WMC)
       const contextTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/memory_context',
@@ -776,33 +758,62 @@
           const data = JSON.parse(msg.data);
           const messages = data.messages;
           const systemMsg = messages.find(m => m.role === 'system');
-          const chatMsgs = messages.filter(m => m.role !== 'system');
-          const content = [
-            `── System Prompt ──\n${systemMsg?.content || '—'}`,
-            `── Conversation (${chatMsgs.length} turns) ──`,
-            ...chatMsgs.map(m => `[${m.role.toUpperCase()}] ${m.content}`)
-          ].join('\n\n');
-          addStreamEntry('memory-context', content, {
-            turnId: currentTurn?.id,
-            collapsed: true,
-            meta: `${chatMsgs.length} WMC PMTs · system prompt ${systemMsg ? systemMsg.content.length : 0} chars`
-          });
+          const chatMsgs  = messages.filter(m => m.role !== 'system');
+
+          // System Prompt — red block
+          if (systemMsg) {
+            addStreamEntry('system-prompt', systemMsg.content, {
+              turnId: currentTurn?.id,
+              collapsed: true,
+              meta: `System prompt · ${systemMsg.content.length} chars`
+            });
+          }
+
+          // WMC (conversation window) — yellow block
+          if (chatMsgs.length > 0) {
+            const wmcContent = chatMsgs.map(m => `[${m.role.toUpperCase()}] ${m.content}`).join('\n\n');
+            addStreamEntry('memory-context', wmcContent, {
+              turnId: currentTurn?.id,
+              collapsed: true,
+              meta: `WMC · ${chatMsgs.length} turns in window`
+            });
+          }
         } catch (e) { }
       });
 
-      // Memory Stats Topic (you'll need to publish this from CNC/MCC)
+      // EMC Context — orange block
+      const emcTopic = new ROSLIB.Topic({
+        ros: ros,
+        name: '/scs/emc_context',
+        messageType: 'std_msgs/String'
+      });
+      emcTopic.subscribe((msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          const content = data.episodes
+            ? data.episodes.map((ep, i) => `[${i+1}] ${ep}`).join('\n')
+            : (data.content || msg.data);
+          addStreamEntry('emc-context', content, {
+            turnId: currentTurn?.id,
+            collapsed: true,
+            meta: `EMC · ${data.count || '?'} episodes recalled · score ${data.score || '—'}`
+          });
+        } catch (e) {
+          addStreamEntry('emc-context', msg.data, {
+            collapsed: true,
+            meta: 'EMC recall'
+          });
+        }
+      });
+
+      // Memory Stats
       const statsTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/memory_stats',
         messageType: 'std_msgs/String'
       });
       statsTopic.subscribe((msg) => {
-        try {
-          const stats = JSON.parse(msg.data);
-          updateStats(stats);
-        } catch (e) {
-          // Ignore malformed stats
-        }
+        try { updateStats(JSON.parse(msg.data)); } catch (e) { }
       });
     }
 
@@ -818,16 +829,13 @@
         prompt: prompt,
         response: '',
         startTime: streamStartTime,
-        chunks: []
       };
 
-      // Add user prompt entry
       addStreamEntry('user-prompt', prompt, {
         turnId: turnCount,
-        meta: `Turn #${turnCount} · ${prompt.length} chars · ${Math.ceil(prompt.length / 4)} est. tokens`
+        meta: `Turn #${turnCount} · ${prompt.length} chars · ~${Math.ceil(prompt.length / 4)} tokens`
       });
 
-      // Show "thinking" indicator
       addStreamEntry('ai-thinking', 'GCE streaming...', {
         turnId: turnCount,
         isThinking: true,
@@ -838,15 +846,13 @@
     function handleResponseChunk(data) {
       if (!currentTurn) return;
 
-      const now = Date.now();
+      const now     = Date.now();
       const elapsed = (now - currentTurn.startTime) / 1000;
 
       if (data.type === 'start' || data.type === 'delta') {
-        // Remove thinking indicator if present
+        // Remove thinking indicator
         const thinkingEl = document.querySelector('.stream-entry.ai-thinking');
-        if (thinkingEl && thinkingEl.dataset.turnId == currentTurn.id) {
-          thinkingEl.remove();
-        }
+        if (thinkingEl && thinkingEl.dataset.turnId == currentTurn.id) thinkingEl.remove();
 
         currentTurn.response += data.content;
         tokenCount += estimateTokens(data.content);
@@ -855,7 +861,6 @@
         document.getElementById('statTokensSec').textContent = tps;
         document.getElementById('statTokensTotal').textContent = `${tokenCount} tokens`;
 
-        // For delta chunks, append to existing response entry if same turn
         const allResp = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
         const existingResponse = allResp.length > 0 ? allResp[allResp.length - 1] : null;
 
@@ -866,32 +871,26 @@
             meta: `Streaming... ${tps} tok/s`
           });
         } else {
-          // Append to existing streaming entry
-          const contentEl = existingResponse.querySelector('.stream-content');
-          contentEl.textContent += data.content;
+          existingResponse.querySelector('.stream-content').textContent += data.content;
           const metaEl = existingResponse.querySelector('.stream-meta');
           if (metaEl) metaEl.textContent = `Streaming... ${tps} tok/s · ${tokenCount} tokens`;
         }
       }
       else if (data.type === 'done') {
-        const latency = ((now - currentTurn.startTime) / 1000).toFixed(2);
+        const latency    = ((now - currentTurn.startTime) / 1000).toFixed(2);
         latencies.push(parseFloat(latency));
         const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
 
-        document.getElementById('statLatency').textContent = `${latency}s`;
+        document.getElementById('statLatency').textContent    = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
 
-        // Convert last streaming entry to done — search ALL children, not just :last-child
         const allResponses = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
-        const lastEntry = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
+        const lastEntry    = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
         if (lastEntry) {
           lastEntry.classList.remove('ai-response');
           lastEntry.classList.add('ai-done');
           const badge = lastEntry.querySelector('.stream-badge');
-          if (badge) {
-            badge.className = 'stream-badge badge-ai';
-            badge.innerHTML = '🤖 DONE';
-          }
+          if (badge) { badge.className = 'stream-badge badge-ai'; badge.innerHTML = '✓ DONE'; }
           const metaEl = lastEntry.querySelector('.stream-meta');
           if (metaEl) metaEl.textContent = `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`;
         } else {
@@ -900,22 +899,16 @@
             meta: `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`
           });
         }
-
         currentTurn = null;
       }
       else if (data.type === 'error') {
-        addStreamEntry('error', data.content, {
-          turnId: currentTurn?.id,
-          meta: 'GCE Error'
-        });
+        addStreamEntry('error', data.content, { turnId: currentTurn?.id, meta: 'GCE Error' });
         currentTurn = null;
       }
     }
 
     function estimateTokens(text) {
-      // Rough estimate: ~4 chars per token for English, ~2 for CJK
-      // This is approximate until you get real token counts from GCE
-      const cjkCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const cjkCount   = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
       const otherCount = text.length - cjkCount;
       return Math.ceil(cjkCount / 2 + otherCount / 4) || 1;
     }
@@ -924,98 +917,85 @@
     function addStreamEntry(type, content, options = {}) {
       const stream = document.getElementById('debugStream');
 
-      // Remove "waiting" message on first entry
       if (stream.children.length === 1 && stream.children[0].tagName === 'DIV') {
         stream.innerHTML = '';
       }
 
-      const entry = document.createElement('div');
-      entry.className = `stream-entry ${type}`;
+      const entry       = document.createElement('div');
+      entry.className   = `stream-entry ${type}`;
       if (options.turnId) entry.dataset.turnId = options.turnId;
-      if (options.collapsed) entry.classList.add('collapsed');
+
+      const contentEl   = document.createElement('div');
+      contentEl.className = 'stream-content' + (options.collapsed ? ' collapsed' : '');
+      contentEl.textContent = content;
 
       const time = new Date().toLocaleTimeString('en-US', {
-        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 2
+        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
       });
 
       const badgeMap = {
-        'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
-        'system-prompt': { cls: 'badge-system-prompt', icon: '🔧', label: 'SYSTEM' },
-        'memory-context': { cls: 'badge-memory', icon: '🧠', label: 'MEMORY' },
-        'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
-        'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'AI' },
-        'ai-done': { cls: 'badge-ai', icon: '✓', label: 'DONE' },
-        'error': { cls: 'badge-error', icon: '✗', label: 'ERROR' },
-        'system': { cls: 'badge-system', icon: '◆', label: 'SYS' }
+        'user-prompt':    { cls: 'badge-user',          icon: '👤', label: 'USER'   },
+        'system-prompt':  { cls: 'badge-system-prompt', icon: '🔴', label: 'SYSTEM' },
+        'emc-context':    { cls: 'badge-emc',           icon: '🟠', label: 'EMC'    },
+        'memory-context': { cls: 'badge-memory',        icon: '🟡', label: 'WMC'    },
+        'ai-thinking':    { cls: 'badge-thinking',      icon: '⚡', label: 'THINK'  },
+        'ai-response':    { cls: 'badge-ai',            icon: '🤖', label: 'GRACE'  },
+        'ai-done':        { cls: 'badge-ai',            icon: '✓',  label: 'DONE'   },
+        'error':          { cls: 'badge-error',         icon: '✗',  label: 'ERROR'  },
+        'system':         { cls: 'badge-system',        icon: '◆',  label: 'SYS'    }
       };
       const badge = badgeMap[type] || badgeMap['system'];
 
       entry.innerHTML = `
-      <div class="stream-time">${time}</div>
-      <div class="stream-badge ${badge.cls}">${badge.icon} ${badge.label}</div>
-      <div style="flex:1; min-width:0;">
-        <div class="stream-content">${escapeHtml(content)}</div>
-        ${options.meta ? `<div class="stream-meta">${options.meta}</div>` : ''}
-      </div>
-    `;
+        <div class="stream-time">${time}</div>
+        <div class="stream-badge ${badge.cls}">${badge.icon} ${badge.label}</div>
+        <div style="flex:1; min-width:0;">
+        </div>
+      `;
+      entry.querySelector('div:last-child').appendChild(contentEl);
+      if (options.meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'stream-meta';
+        metaEl.textContent = options.meta;
+        entry.querySelector('div:last-child').appendChild(metaEl);
+      }
 
       if (options.collapsed) {
-        entry.addEventListener('click', () => {
-          entry.classList.toggle('collapsed');
-        });
+        entry.addEventListener('click', () => contentEl.classList.toggle('collapsed'));
       }
 
       stream.appendChild(entry);
-
-      if (isAutoScroll) {
-        stream.scrollTop = stream.scrollHeight;
-      }
-
-      // Keep last 200 entries
-      while (stream.children.length > 200) {
-        stream.removeChild(stream.firstChild);
-      }
+      if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
+      while (stream.children.length > 200) stream.removeChild(stream.firstChild);
     }
 
     function clearStream() {
       document.getElementById('debugStream').innerHTML = `
-      <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
-        Connected. Waiting for Grace to think...
-      </div>
-    `;
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+        <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
+          Connected. Waiting for Grace to think...
+        </div>
+      `;
     }
 
     // ─── Stats Update ───
     function updateStats(stats) {
-      // WMC
       if (stats.wmc) {
         const wmc = stats.wmc;
         document.getElementById('statWmcSize').textContent = wmc.pmt_count;
-        document.getElementById('statWmcPct').textContent =
-          `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
-
+        document.getElementById('statWmcPct').textContent  = `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
         const wmcEl = document.getElementById('statWmcSize');
         wmcEl.className = 'stat-value';
-        if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
+        if (wmc.chunk_occupancy > 90)      wmcEl.classList.add('danger');
         else if (wmc.chunk_occupancy > 70) wmcEl.classList.add('warning');
       }
-
-      // EMC
       if (stats.emc) {
         const emc = stats.emc;
         document.getElementById('statEmcSize').textContent = emc.engram_count || 0;
-        document.getElementById('statEmcLast').textContent =
-          `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
+        document.getElementById('statEmcLast').textContent = `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
       }
     }
 
-    // ─── Auto-scroll pause on manual scroll ───
+    // ─── Auto-scroll pause ───
     const debugStream = document.getElementById('debugStream');
     debugStream.addEventListener('scroll', () => {
       const nearBottom = debugStream.scrollHeight - debugStream.scrollTop - debugStream.clientHeight < 50;
@@ -1023,7 +1003,7 @@
       document.getElementById('pauseIndicator').classList.toggle('active', !nearBottom);
     });
 
-    // ─── Teleop Placeholders ───
+    // ─── Teleop ───
     function teleop(direction) {
       addStreamEntry('system', `Teleop: ${direction}`, { meta: 'Manual override' });
     }
@@ -1035,12 +1015,12 @@
     document.addEventListener('keydown', (e) => {
       if (document.getElementById('tab-teleop').classList.contains('active')) {
         switch (e.key.toLowerCase()) {
-          case 'w': teleop('forward'); break;
-          case 'a': teleop('left'); break;
+          case 'w': teleop('forward');  break;
+          case 'a': teleop('left');     break;
           case 's': teleop('backward'); break;
-          case 'd': teleop('right'); break;
+          case 'd': teleop('right');    break;
           case ' ': teleop('stop'); e.preventDefault(); break;
-          case 'e': emergencyStop(); break;
+          case 'e': emergencyStop();    break;
         }
       }
     });
@@ -1065,5 +1045,4 @@
   </script>
 
 </body>
-
 </html>
