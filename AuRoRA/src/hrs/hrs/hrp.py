@@ -47,10 +47,10 @@ class AGi:                                              # Amazing Grace infrastr
 
     # Module registry — single source of truth for all subsystem identifiers
     SEMANTIC_COGNITIVE_SYSTEM   : str = "scs"           # Semantic Cognitive System
-    MEMORY_COORDINATION_CORE    : str = "mcc"
-    WORKING_MEMORY_CORTEX       : str = "wmc"
-    EPISODIC_MEMORY_CORTEX      : str = "emc"
-    SEMANTIC_MEMORY_CORTEX      : str = "smc"
+    MEMORY_COORDINATION_CORE    : str = "mcc"           # Memory Coordination Core
+    WORKING_MEMORY_CORTEX       : str = "wmc"           # Working Memory Cortex
+    EPISODIC_MEMORY_CORTEX      : str = "emc"           # Episodic Memory Cortex
+    SEMANTIC_MEMORY_CORTEX      : str = "smc"           # Semantic Memory Cortex
     
     class SCS:                                                  # Semantic Cognitive System
         _manifest_gateway       = SEMANTIC_COGNITIVE_SYSTEM     # ARC hydration target
