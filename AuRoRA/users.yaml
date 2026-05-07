@@ -1,18 +1,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# users.yaml — EXTRINSIC Deployment Configuration
+# users.yaml — User Profiles
 # ─────────────────────────────────────────────────────────────────────────────
-# AuRoRA · Homeostatic Regulation System (HRS)
+# AuRoRA · Reticular Activating System (RAS)
 #
-# Deployment and environment parameters set by admin per installation.
-# Controls inference backend, hardware targets, and operational context.
-# Not for end users — requires technical knowledge to modify safely.
+# All user profiles known to GRACE.
+# Each entry is loaded by ARC at boot by matching active_user id from aurora.yaml.
 #
 # Owner:   Admin (OppaAI)
-# Runtime: loaded by RAS at boot from ~/.agi/cns/config.yaml
+# Runtime: loaded by ARC at boot from ~/.agi/users.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: "OppaAI"                    # user's full name
-known_as: "OppaAI"                # what GRACE calls you (nickname or first name)
-location: "British Columbia, BC"  # user's location for context-aware responses
-notes:                            # anything GRACE should always know about you
-  - ""
+users:
+  - id:       "oppaai"
+    name:     "OppaAI"
+    known_as: "Oppa"                        # what GRACE calls you
+    location: "British Columbia, Canada"    # for context-aware responses
+    notes:                                  # anything GRACE should always know about you
+      - "Creator and developer of AuRoRA"
+      - "Based in Beautiful British Columbia, Canada"
+
+    preferences:
+      response_verbosity:   "concise"   # concise | normal | verbose
+      formality:            "casual"    # casual | formal
+      preferred_language:   "en"        # ISO 639-1 language code
+      emotional_tone:       "warm"      # warm | neutral | professional
+      memory_salience_bias: 0.0         # per-user recall bias offset applied to relevance scores
