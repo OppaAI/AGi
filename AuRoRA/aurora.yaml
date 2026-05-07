@@ -1,40 +1,67 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# aurora.yaml — INTRINSIC Cognitive State
+# aurora.yaml — Robot-Wide Settings
 # ─────────────────────────────────────────────────────────────────────────────
-# AuRoRA · Homeostatic Regulation System (HRS)
+# AuRoRA · Reticular Activating System (RAS)
 #
-# GRACE's self-tuning cognitive parameters.
-# These may be updated by GRACE herself over time via HRS.
+# Single source of truth for robot-wide boot configuration and
+# GRACE's self-tuning cognitive parameters (INTRINSIC).
+# Cognitive params may be updated by GRACE herself over time via HRS.
 # Do not edit manually unless tuning during development.
 #
 # Owner:   GRACE / Admin (dev tuning only)
-# Runtime: loaded by RAS at boot from ~/.agi/cns/state.yaml
+# Runtime: ~/.agi/aurora.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── RAS — Boot Configuration ──────────────────────────────────────────────────
+ras:
+  boot_timeout: 10.0              # seconds before a node ready signal is considered failed
+  active_persona: grace           # persona key — matches filename stem in ~/.agi/personas/
+  active_user: oppaai             # user id — matches entry in ~/.agi/users.yaml
+
+# ── Environment — Operational Context ────────────────────────────────────────
+environment:
+  mission: "general assistance"   # current operational mission
+  location: "Vancouver, BC, Canada"
+  context: "indoor"               # indoor | outdoor
+
+# ── SCS — Semantic Cognitive System ──────────────────────────────────────────
 scs:
-  cortical_capacity: 16384        # total neural capacity of the active cognitive core
-  cognitive_reserve: 2048         # cortical capacity reserved for identity and cognition
+  cortical_capacity: 16384        # [INTRINSIC] total token budget for the active LLM context window
+  cognitive_reserve: 2048         # [INTRINSIC] tokens reserved for system prompt and identity injection
 
+  # ── GCE — Generative Cognitive Engine ──────────────────────────────────────
+  gce:
+    cognitive_engine: "huihui_ai/granite4.1-abliterated:8b-q8_0"  # [PERSONA] Ollama model tag
+    response_depth: 512           # [PERSONA] max tokens per completion
+    context_window: 32768         # [PERSONA] Ollama num_ctx — total token slots allocated to model
+    temperature: 0.75             # [PERSONA] sampling temperature
+    probability_threshold: 0.88   # [PERSONA] top-p nucleus sampling cutoff
+    candidate_threshold: 50       # [PERSONA] top-k token candidate limit per sampling step
+    perseveration_damping: 1.25   # [PERSONA] repetition penalty — scales down already-sampled tokens
+    habituation_damping: 0.15     # [PERSONA] frequency penalty — scales down tokens by corpus frequency
+    novelty_bias: 0.05            # [PERSONA] presence penalty — boosts tokens not yet in context
+
+  # ── EMC — Episodic Memory Cortex ───────────────────────────────────────────
   emc:
-    binding_stream_limit: 512     # max unencoded PMTs in binding stream — OOM guard on encoding engine failure
-    encoding_cycle_timeout: 30.0  # max seconds to wait for encoding thread clean exit on shutdown
-    encoding_prime_capacity: 256  # maximum entries in encoding engine's LRU prime cache
-    encoding_prime_key_limit: 256 # maximum characters hashed per prime key in encoding engine
+    binding_stream_limit: 512     # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
+    encoding_cycle_timeout: 30.0  # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
+    encoding_prime_capacity: 256  # [INTRINSIC] max entries in embedding LRU cache
+    encoding_prime_key_limit: 256 # [INTRINSIC] max characters hashed per cache key
 
-    episode_content_limit: 3000   # maximum character length of a PMT bound into episodic buffer
+    episode_content_limit: 3000   # [INTRINSIC] max characters per PMT written to episodic buffer
 
-    theta_interval: 2.0           # seconds — periodic theta rhythm for continuous sensor input encoding
-    theta_batch_limit: 32         # max traces encoded per theta cycle — prevents spike on crash recovery
+    theta_interval: 2.0           # [INTRINSIC] seconds between periodic batch encoding ticks
+    theta_batch_limit: 32         # [INTRINSIC] max PMTs encoded per tick — caps spike on crash recovery
 
-    recall_reserve: 2048          # cortical capacity reserved for episodic recall injection
-    recall_surface_limit: 3       # maximum episodes surfaced per turn (final RRF output)
-    recall_pool: 15               # candidate pool multiplier — RECALL_SURFACE_LIMIT × RECALL_POOL episodes scored before fusion
-    recall_timeout: 2.0           # seconds — timeout for recall ops (BGE 300M on Orin Nano CPU)
-                                  # covers encode_query (~500-900ms) + KNN search
-                                  # TODO: increase to 3.0 if model is genuinely int4 quantized
-    recovery_batch_size: 50       # max unencoded episodes loaded into binding stream per recovery batch
-    relevance_threshold: 0.45     # minimum RRF relevance score for an episode to be surfaced
+    recall_reserve: 2048          # [INTRINSIC] tokens reserved in context window for recalled episodes
+    recall_surface_limit: 3       # [INTRINSIC] max episodes returned per recall query (post-RRF)
+    recall_pool: 15               # [INTRINSIC] per-retriever candidate count — recall_surface_limit × recall_pool fed into RRF
+    recall_timeout: 2.0           # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
+                                  #             TODO: increase to 3.0 if model is genuinely int4 quantized
+    recovery_batch_size: 50       # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
+    relevance_threshold: 0.45     # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
+  # ── WMC — Working Memory Cortex ────────────────────────────────────────────
   wmc:
-    pmt_slot_limit: 7             # maximum PMT slot vacancy (Miller's Law 7±2)
-    pmt_slot_buffer: 2            # PMT slot vacancy flexibility (Miller's Law ±2)
+    pmt_slot_limit: 7             # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
+    pmt_slot_buffer: 2            # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
