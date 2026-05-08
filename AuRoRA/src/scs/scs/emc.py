@@ -126,7 +126,7 @@ from collections import deque               # for O(1) append/popleft in binding
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi libraries
-from hrs.hrp import AGi                     # homeostatic regulation parameter namespace
+from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
 SCS = AGi.SCS                               # SCS-level constants — e.g. UNITS_PER_CHUNK
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 

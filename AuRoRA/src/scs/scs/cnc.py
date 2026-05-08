@@ -83,6 +83,7 @@ from rclpy.executors import MultiThreadedExecutor          # allows concurrent c
 from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
 # AGi libraries
+from scs.rac import RAC, AuroraConfig                      # bootloader — hydrates AGi & spawns nodes
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
@@ -103,8 +104,9 @@ class CNC(Node):
         architecture.
 
         Initializes all cognitive subsystems in order:
+            - Reticular Activating Compartment (RAC) — activation reaction that hydrates AGi and spawns all nodes
             - Generative Cognitive Engine (GCE) — persistent connection for inference of generative cognition
-            - Memory Coordination Core (MCC) — short-term and long-term memory management
+            - Memory Coordination Cortex (MCC) — short-term and long-term memory management
             - Neural threads — dedicated asyncio loops for parallel operations
             - Neural gateways — ROS2 topics for text input and cognitive output
 
@@ -115,7 +117,9 @@ class CNC(Node):
         self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
-        
+        # Initialize RAC and configuration
+        self.config: AuroraConfig = RAC(self).ignite()                      # bootloads all cognitive subsystems and hydrates settings
+
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
             max_workers=2,                                                  # two workers — memory and inference can run concurrently

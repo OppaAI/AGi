@@ -76,7 +76,7 @@ from pathlib import Path                            # for constructing and creat
 # AGi libraries
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
-from hrs.hrp import AGi                             # homeostatic regulation parameter registry — system-wide constants
+from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 
 class MemoryCoordinationCore:

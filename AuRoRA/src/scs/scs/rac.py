@@ -56,14 +56,14 @@ from pathlib     import Path
 from rclpy.node  import Node
 from std_msgs.msg import Bool
 
-from scs.hrm import AGi                             # HRM — static schema + fallback defaults
+import hrs.hrm                            # HRM — static schema + fallback defaults
 
 # ─── Path Convention ──────────────────────────────────────────────────────────
 
-AGI_DIR     = Path.home() / AGi.ENTITY_GATEWAY
-AURORA_CFG  = AGI_DIR / AGi.AURORA_SETPOINTS
+AGI_DIR     = Path.home() / hrs.hrm.ENTITY_GATEWAY / hrs.hrm.SEMANTIC_COGNITIVE_SYSTEM / hrs.hrm.RETICULAR_ACTIVATING_COMPARTMENT
+AURORA_CFG  = AGI_DIR / hrs.hrm.SCS.AURORA_SETPOINTS
 PERSONA_DIR = AGI_DIR / "personas"
-USERS_CFG   = AGI_DIR / AGi.USER_PROFILES
+USERS_CFG   = AGI_DIR / hrs.hrm.SCS.USER_PROFILES
 
 # ─── Config Dataclasses ───────────────────────────────────────────────────────
 #

@@ -62,7 +62,7 @@ from collections import deque            # for PMT slot — O(1) append and popl
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi libraries
-from hrs.hrp import AGi                  # homeostatic regulation parameter registry — system-wide constants
+from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
 

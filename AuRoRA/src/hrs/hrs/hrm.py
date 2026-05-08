@@ -42,15 +42,17 @@ TODO:
                   — add HRS startup/shutdown lifecycle management
                   — add recency parameter for identification of the most recent event segments in EMC
 """
+
 # Module registry — single source of truth for all subsystem identifiers
 # Semantic Cognitive System
-SEMANTIC_COGNITIVE_SYSTEM      : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
-CENTRAL_NERVOUS_CORE           : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
-GENERATIVE_COGNITIVE_ENGINE    : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
-MEMORY_COORDINATION_CORTEX     : str = "MCC"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Core
-WORKING_MEMORY_CORTEX          : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
-EPISODIC_MEMORY_CORTEX         : str = "emc"        # [STATIC] ROS namespace + YAML key for the Episodic Memory Cortex
-SEMANTIC_MEMORY_CORTEX         : str = "smc"        # [STATIC] ROS namespace + YAML key for the Semantic Memory Cortex
+SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
+CENTRAL_NERVOUS_CORE            : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
+RETICULAR_ACTIVATING_COMPARTMENT: str = "rac"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
+GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
+MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
+WORKING_MEMORY_CORTEX           : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
+EPISODIC_MEMORY_CORTEX          : str = "emc"        # [STATIC] ROS namespace + YAML key for the Episodic Memory Cortex
+SEMANTIC_MEMORY_CORTEX          : str = "smc"        # [STATIC] ROS namespace + YAML key for the Semantic Memory Cortex
 
 # Homeostatic Regulation System
 HOMEOSTATIC_REGULATION_SYSTEM  : str = "hrs"        # [STATIC] ROS namespace + YAML key for the Homeostatic Regulation System
@@ -58,16 +60,6 @@ EMERGENCY_EXCEPTION_CORE       : str = "eec"        # [STATIC] ROS namespace + Y
 
 # Self Defense System
 SELF_DEFENSE_SYSTEM            : str = "sds"        # [STATIC] ROS namespace + YAML key for the Self Defense System
-
-# Reticular Activating System
-RETICULAR_ACTIVATING_SYSTEM    : str = "ras"        # [STATIC] ROS namespace + YAML key for the Reticular Activating System
-AROUSAL_REACTION_CORE          : str = "arc"        # [STATIC] ROS namespace + YAML key for the Arousal Reaction Core
-
-# Config file registry — single source of truth for all YAML filenames
-AURORA_SETPOINTS : str = "aurora.yaml"              # [STATIC] robot-wide settings
-USER_PROFILES    : str = "users.yaml"               # [STATIC] all user profiles + per-user extrinsic settings
-PERSONA_ACTIVE   : str = "persona.yaml"             # [STATIC] active persona — mutable
-PERSONA_GENERIC  : str = "generic.yaml"             # [STATIC] default persona reset target — read-only
 
 # Metadata classes
 class _SCSType(type):
@@ -83,6 +75,7 @@ class _EMCType(type):
         return cls.RECALL_SURFACE_LIMIT * cls.RECALL_POOL                                    # [DERIVED] total recall candidate pool
 
 class AGi:                                              # Amazing Grace infrastructure
+
     ENTITY_GATEWAY = ".agi"                             # [STATIC] root directory for all AGi core system state
 
 
@@ -91,9 +84,15 @@ class AGi:                                              # Amazing Grace infrastr
         CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
         NEURAL_GATEWAY: str     = f"{SEMANTIC_COGNITIVE_SYSTEM}"        # [STATIC] ROS namespace prefix for SCS topics
-        MEMORY_GATEWAY: str     = f"{MEMORY_COORDINATION_CORE}"         # [STATIC] ROS namespace prefix for MCC topics
+        MEMORY_GATEWAY: str     = f"{MEMORY_COORDINATION_CORTEX}"       # [STATIC] ROS namespace prefix for MCC topics
         ENGRAM_COMPLEX: str     = "engram_complex.db"                   # [STATIC] SQLite filename for long-term memory storage
         UNITS_PER_CHUNK: int    = 4                                     # [STATIC] tokens per chunk unit (TODO: obsolete post-tokenizer M1.5)
+
+        # Config file registry — single source of truth for all YAML filenames
+        AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
+        USER_PROFILES    : str = "users.yaml"                           # [STATIC] all user profiles + per-user extrinsic settings
+        PERSONA_ACTIVE   : str = "persona.yaml"                         # [STATIC] active persona — mutable
+        PERSONA_GENERIC  : str = "generic.yaml"                         # [STATIC] default persona reset target — read-only
 
         TEXT_INPUT_GATEWAY: str     = f"/{NEURAL_GATEWAY}/text_input"    # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = f"/{NEURAL_GATEWAY}/response"      # [STATIC] ROS topic — outbound LLM response
@@ -147,7 +146,7 @@ Current date: {date}
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int                 = 768                      # [STATIC] embedding vector dimensionality
 
-        class EMCmetaclass=_EMCType):                       # Episodic Memory Cortex
+        class EMC(metaclass=_EMCType):                       # Episodic Memory Cortex
             _manifest_gateway: str            = f"{SEMANTIC_COGNITIVE_SYSTEM}.{EPISODIC_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC]    sentence-transformers model for episodic embeddings
