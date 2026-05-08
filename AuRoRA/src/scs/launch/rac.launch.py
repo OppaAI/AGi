@@ -40,20 +40,11 @@ from hrs.hrm import RRR, AGi
 #
 #   Constructed from HRM constants — single source of truth, no magic strings.
 
-_ACTIVE_PERSONA = "grace"                           # M1 stub — replace with login sequence
-
 _AURORA_PATH = (
     Path.home()
     / AGi.ENTITY_GATEWAY
     / RRR.SEMANTIC_COGNITIVE_SYSTEM
     / AGi.SCS.AURORA_SETPOINTS                      # "aurora.yaml"
-)
-
-_PERSONA_PATH = (
-    Path.home()
-    / AGi.ENTITY_GATEWAY
-    / "personas"
-    / f"{_ACTIVE_PERSONA}.yaml"                     # "grace.yaml"
 )
 
 # ─── Parameter Files ──────────────────────────────────────────────────────────
@@ -69,20 +60,15 @@ _aurora_params = ParameterFile(
     allow_substs=True,
 )
 
-_persona_params = ParameterFile(
-    param_file=str(_PERSONA_PATH),
-    allow_substs=True,
-)
-
 # ─── Nodes ────────────────────────────────────────────────────────────────────
 
 # Stage 3 — Cognition
 _cnc = Node(
     package    = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "scs"
-    executable = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
-    name       = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
+    executable = RRR.CENTRAL_NEURAL_CORE,           # "cnc"
+    name       = RRR.CENTRAL_NEURAL_CORE,           # "cnc"
     namespace  = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "/scs"
-    parameters = [_aurora_params, _persona_params], # aurora first — persona overlays on top
+    parameters = [_aurora_params],                  # aurora first — persona overlays on top
     output     = "screen",
 )
 
