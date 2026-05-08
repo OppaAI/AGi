@@ -3,9 +3,6 @@ RAC — Reticular Activation Compartment
 ========================================
 AuRoRA · Semantic Cognitive System (SCS)
 
-ROS2 launch file — replaces the plain-Python RAC bootloader.
-Replaces: scs/rac.py
-
 Responsibilities:
     1. Construct the AGi config path from HRM constants
     2. Load aurora.yaml as ROS parameters — distributed to all nodes before any start
