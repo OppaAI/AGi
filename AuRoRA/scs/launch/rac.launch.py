@@ -43,7 +43,7 @@ _YAML_PATH = (
     Path.home()
     / AGi.ENTITY_GATEWAY
     / RRR.SEMANTIC_COGNITIVE_SYSTEM
-    / RRR.SCS.AURORA_SETPOINTS
+    / AGi.SCS.AURORA_SETPOINTS
 )
 
 # ─── Parameter File ───────────────────────────────────────────────────────────
