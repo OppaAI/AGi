@@ -190,10 +190,13 @@ class CNC(Node):
             self.get_logger().warning(f"⚠️ No persona file at {path} — using HRM default")
             return
         try:
-            with open(path) as f:
-                data = yaml.safe_load(f)
-            AGi.SCS.GCE.SYSTEM_PROMPT = data["gce"]["system_prompt"]
-            self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
+            data = yaml.safe_load(path.read_text())
+            prompt = (data or {}).get("gce", {}).get("system_prompt")
+            if prompt:
+                AGi.SCS.GCE.SYSTEM_PROMPT = prompt
+                self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
+            else:
+                self.get_logger().warning("⚠️ Persona missing gce.system_prompt — using HRM default")
         except Exception as e:
             self.get_logger().error(f"❌ Failed to load persona: {e}")
         
