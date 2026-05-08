@@ -121,7 +121,7 @@ class CNC(Node):
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
-        self._loadpersona()
+        self._load_persona()
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -178,13 +178,18 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
    
-    def _load_system_prompt(self) -> None:
+    def _load_persona(self) -> None:
         path = (
             Path.home()
             / AGi.ENTITY_GATEWAY
             / "personas"
             / f"{self._active_persona}.yaml"
         )
+        if not path.exists():                                        # ← missing
+            self.get_logger().warning(                               # ← missing
+                f"⚠️ No persona file — using HRM default"           # ← missing
+            )                                                        # ← missing
+            return                                                   # ← missing
         with open(path) as f:
             data = yaml.safe_load(f)
         AGi.SCS.GCE.SYSTEM_PROMPT = data["gce"]["system_prompt"]
