@@ -24,10 +24,13 @@ Path convention (mirrors original RAC):
 from pathlib import Path
 
 from launch                            import LaunchDescription
-from launch.actions                    import RegisterEventHandler, LogInfo, TimerAction
-from launch.event_handlers             import OnProcessStart
+from launch.actions                    import LogInfo
 from launch_ros.actions                import Node
 from launch_ros.parameter_descriptions import ParameterFile
+
+# Future imports — uncomment when staged boot activates
+# from launch.actions        import RegisterEventHandler, TimerAction
+# from launch.event_handlers import OnProcessStart
 
 from hrs.hrm import RRR, AGi
 
