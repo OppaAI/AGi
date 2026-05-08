@@ -109,22 +109,22 @@ class AGi:                                                              # Amazin
 
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
-            COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"          # [PERSONA] Ollama model tag
-            RESPONSE_DEPTH        : int   = 512                                                 # [PERSONA] max tokens per completion
-            CONTEXT_WINDOW        : int   = 32768                                               # [PERSONA] Ollama num_ctx — total token slots allocated to model
-            TEMPERATURE           : float = 0.7                                                 # [PERSONA] sampling temperature
-            PROBABILITY_THRESHOLD : float = 0.9                                                 # [PERSONA] top-p nucleus sampling cutoff
-            CANDIDATE_THRESHOLD   : int   = 40                                                  # [PERSONA] top-k token candidate limit per sampling step
-            PERSEVERATION_DAMPING : float = 1.15                                                # [PERSONA] repetition penalty — scales down already-sampled tokens
-            HABITUATION_DAMPING   : float = 0.1                                                 # [PERSONA] frequency penalty — scales down tokens by corpus frequency
-            NOVELTY_BIAS          : float = 0.1                                                 # [PERSONA] presence penalty — boosts tokens not yet in context
+            COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"          # [STATIC] Ollama model tag
+            RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
+            CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
+            TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
+            PROBABILITY_THRESHOLD : float = 0.9                                                 # [INTRINSIC] top-p nucleus sampling cutoff
+            CANDIDATE_THRESHOLD   : int   = 40                                                  # [INTRINSIC] top-k token candidate limit per sampling step
+            PERSEVERATION_DAMPING : float = 1.15                                                # [INTRINSIC] repetition penalty — scales down already-sampled tokens
+            HABITUATION_DAMPING   : float = 0.1                                                 # [INTRINSIC] frequency penalty — scales down tokens by corpus frequency
+            NOVELTY_BIAS          : float = 0.1                                                 # [INTRINSIC] presence penalty — boosts tokens not yet in context
             TIMEOUT               : float = 60.0                                                # [STATIC]  seconds before inference request is aborted
             KEEP_ALIVE            : int | None = -1                                             # [STATIC]  VRAM retention — -1 = permanent, 0 = unload, n = TTL seconds
             STREAM_LEADING        : str = "start"                                               # [STATIC]  stream event type — first chunk
             STREAM_PROPAGATING    : str = "delta"                                               # [STATIC]  stream event type — intermediate chunk
             STREAM_TRAILING       : str = "done"                                                # [STATIC]  stream event type — final chunk
             STREAM_ANOMALY        : str = "error"                                               # [STATIC]  stream event type — failure signal
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. # [PERSONA]  system prompt of LLM
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 
 MEMORY RULES (highest priority):
