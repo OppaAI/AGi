@@ -69,11 +69,24 @@ USER_PROFILES    : str = "users.yaml"               # [STATIC] all user profiles
 PERSONA_ACTIVE   : str = "persona.yaml"             # [STATIC] active persona — mutable
 PERSONA_GENERIC  : str = "generic.yaml"             # [STATIC] default persona reset target — read-only
 
+# Metadata classes
+class _SCSType(type):
+    @property
+    def GLOBAL_CHUNK_LIMIT(cls) -> int:
+        """[DERIVED] Total usable token budget — CORTICAL_CAPACITY minus all reserves."""
+        return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE        # [DERIVED] total usable token budget
+
+class _EMCType(type):
+    @property
+    def RECALL_DEPTH(cls) -> int:
+        """[DERIVED] Total recall candidate pool — RECALL_SURFACE_LIMIT × RECALL_POOL."""
+        return cls.RECALL_SURFACE_LIMIT * cls.RECALL_POOL                                    # [DERIVED] total recall candidate pool
+
 class AGi:                                              # Amazing Grace infrastructure
     ENTITY_GATEWAY = ".agi"                             # [STATIC] root directory for all AGi core system state
 
 
-    class SCS:                                                          # Semantic Cognitive System
+    class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
         _manifest_gateway : str = f"{SEMANTIC_COGNITIVE_SYSTEM}"        # [STATIC] ARC hydration target — stamped at module load
         CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
@@ -134,7 +147,7 @@ Current date: {date}
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int                 = 768                      # [STATIC] embedding vector dimensionality
 
-        class EMC:                                          # Episodic Memory Cortex
+        class EMCmetaclass=_EMCType):                       # Episodic Memory Cortex
             _manifest_gateway: str            = f"{SEMANTIC_COGNITIVE_SYSTEM}.{EPISODIC_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC]    sentence-transformers model for episodic embeddings
@@ -153,7 +166,6 @@ Current date: {date}
             RECALL_RESERVE: int               = 2048        # [INTRINSIC] tokens reserved in context window for recalled episodes
             RECALL_SURFACE_LIMIT: int         = 3           # [INTRINSIC] max episodes returned per recall query (post-RRF)
             RECALL_POOL: int                  = 15          # [INTRINSIC] per-retriever candidate count — RECALL_SURFACE_LIMIT × RECALL_POOL fed into RRF
-            RECALL_DEPTH: int                 = RECALL_SURFACE_LIMIT * RECALL_POOL  # [DERIVED]   RECALL_SURFACE_LIMIT × RECALL_POOL — recomputed by arc._derive()
             RECALL_TIMEOUT: float             = 2.0         # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
             RECOVERY_BATCH_SIZE: int          = 50          # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
@@ -163,4 +175,3 @@ Current date: {date}
             PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
-            GLOBAL_CHUNK_LIMIT: int = 11264                 # [DERIVED]   CORTICAL_CAPACITY - COGNITIVE_RESERVE - RECALL_RESERVE — recomputed by arc._derive()
