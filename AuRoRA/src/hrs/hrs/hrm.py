@@ -108,7 +108,6 @@ class AGi:                                                              # Amazin
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
         class GCE:                                                                              # Generative Cognitive Engine
-            _manifest_gateway     : str   = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.GENERATIVE_COGNITIVE_ENGINE}"  # [STATIC] ARC hydration target — loaded from active persona.yaml
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
             COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"          # [PERSONA] Ollama model tag
             RESPONSE_DEPTH        : int   = 512                                                 # [PERSONA] max tokens per completion
@@ -150,12 +149,10 @@ Current date: {date}
 """
 
         class SMC:                                                       # Semantic Memory Cortex
-            _manifest_gateway: str            = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.SEMANTIC_MEMORY_CORTEX}"   # [STATIC] ARC hydration target
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int                 = 768                      # [STATIC] embedding vector dimensionality
 
         class EMC(metaclass=_EMCType):                       # Episodic Memory Cortex
-            _manifest_gateway: str            = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.EPISODIC_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC]    sentence-transformers model for episodic embeddings
             ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
@@ -178,7 +175,6 @@ Current date: {date}
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
         class WMC:                                          # Working Memory Cortex
-            _manifest_gateway: str  = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.WORKING_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
