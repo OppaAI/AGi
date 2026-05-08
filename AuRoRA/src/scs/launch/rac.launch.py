@@ -128,7 +128,6 @@ def generate_launch_description() -> LaunchDescription:
         LogInfo(msg="=" * 60),
         LogInfo(msg="⚡ RAC — Reticular Activation Compartment igniting…"),
         LogInfo(msg=f"   Aurora  : {_AURORA_PATH}"),
-        LogInfo(msg=f"   Persona : {_PERSONA_PATH}"),
         LogInfo(msg="=" * 60),
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
