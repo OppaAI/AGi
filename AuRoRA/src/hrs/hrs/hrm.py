@@ -11,55 +11,64 @@ Architecture:
 
     [STATIC]    — Frozen in code. Hardware and architecture ceilings.
                   Admin only. Never changes at runtime.
-                  Lives here in hrp.py permanently.
 
     [INTRINSIC] — GRACE's self-tuning cognitive parameters.
                   Adaptive — GRACE may update these over time via hrs.py.
-                  Runtime home: ~/.agi/cns/state.yaml
+                  Runtime home: AuRoRA Setpoints
 
     [EXTRINSIC] — Per-user preferences shaping GRACE's behaviour.
-                  Runtime home: ~/.agi/users.yaml (per-user block, loaded by id)
+                  Runtime home: User Profile (per-user block, loaded by id)
 
     [PERSONA]   — Inference and personality parameters for the active persona.
-                  Runtime home: ~/.agi/personas/persona.yaml  (active, mutable)
-                  Baseline:     ~/.agi/personas/generic.yaml  (default, read-only reset target)
+                  Runtime home: Active Persona   (active, mutable)
+                  Baseline:     Generic Persona  (default, read-only reset target)
 
-Hydration:
-    ARC walks this class tree at boot. Any class with a _manifest_gateway attribute
-    is hydrated from the corresponding YAML section. UPPER_CASE constants are
-    matched to their lowercase yaml keys automatically.
+    [DERIVED]   — Computed from other constants via metaclass properties.
+                  Never set directly. Recomputed on every access.
 
-    To add a constant:   add it here with a default + add to the yaml. Done.
-    To add a subsystem:  add a class with _manifest_gateway here. Done.
+Parameters:
+    Defaults live here in hrm.py. At boot, RAC loads aurora.yaml into the
+    ROS parameter server via ParameterFile. Each node declares its parameters
+    with hrm.py constants as defaults — ROS uses the YAML value if present,
+    falls back to the hrm.py default if the key is missing.
 
-    [STATIC] constants have no yaml key — they are never overwritten by ARC.
-    [DERIVED] constants are recomputed in arc._derive() after hydration.
+    AuRoRA Setpoints    — robot-wide settings, loaded by RAC at boot into ROS param server
+    User Profile        — per-user profiles, loaded by CNC at session start
+    Active Persona      — active persona inference + personality, loaded by GCE at init
+    Generic Persona     — default persona baseline, read-only reset target
+
+    To add a constant:   add it here with a default + add to AuRoRA Setpoints. Done.
+    To add a subsystem:  add a class to AGi here + add a ROS node. Done.
 
 TODO:
     HRS milestone — build hrs.py to allow GRACE to update [INTRINSIC] constants
-                    at runtime and persist changes back to state.yaml.
-                  — add gateway initialization for CNC to access HRS parameters via AGi_ENTITY_GATEWAY.
+                    at runtime and persist changes back to aurora.yaml.
                   — add HRS startup/shutdown lifecycle management
                   — add recency parameter for identification of the most recent event segments in EMC
 """
 
-# Module registry — single source of truth for all subsystem identifiers
-# Semantic Cognitive System
-SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
-CENTRAL_NERVOUS_CORE            : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
-RETICULAR_ACTIVATING_COMPARTMENT: str = "rac"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
-GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
-MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
-WORKING_MEMORY_CORTEX           : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
-EPISODIC_MEMORY_CORTEX          : str = "emc"        # [STATIC] ROS namespace + YAML key for the Episodic Memory Cortex
-SEMANTIC_MEMORY_CORTEX          : str = "smc"        # [STATIC] ROS namespace + YAML key for the Semantic Memory Cortex
-
-# Homeostatic Regulation System
-HOMEOSTATIC_REGULATION_SYSTEM  : str = "hrs"        # [STATIC] ROS namespace + YAML key for the Homeostatic Regulation System
-EMERGENCY_EXCEPTION_CORE       : str = "eec"        # [STATIC] ROS namespace + YAML key for the Emergency Exception Core
-
-# Self Defense System
-SELF_DEFENSE_SYSTEM            : str = "sds"        # [STATIC] ROS namespace + YAML key for the Self Defense System
+class RRR:
+    """Resource Router Registry — canonical identifier manifest for all AuRoRA subsystems."""
+    # Module registry — single source of truth for all subsystem identifiers
+    # Robot entity
+    ROBOT_ENTITY                    : str = "agi"        # [STATIC] ROS namespace + YAML key for the robot entity
+    
+    # Semantic Cognitive System
+    SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
+    CENTRAL_NERVOUS_CORE            : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
+    RETICULAR_ACTIVATING_COMPARTMENT: str = "rac"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
+    GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
+    MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
+    WORKING_MEMORY_CORTEX           : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
+    EPISODIC_MEMORY_CORTEX          : str = "emc"        # [STATIC] ROS namespace + YAML key for the Episodic Memory Cortex
+    SEMANTIC_MEMORY_CORTEX          : str = "smc"        # [STATIC] ROS namespace + YAML key for the Semantic Memory Cortex
+    
+    # Homeostatic Regulation System
+    HOMEOSTATIC_REGULATION_SYSTEM  : str = "hrs"        # [STATIC] ROS namespace + YAML key for the Homeostatic Regulation System
+    EMERGENCY_EXCEPTION_CORE       : str = "eec"        # [STATIC] ROS namespace + YAML key for the Emergency Exception Core
+    
+    # Self Defense System
+    SELF_DEFENSE_SYSTEM            : str = "sds"        # [STATIC] ROS namespace + YAML key for the Self Defense System
 
 # Metadata classes
 class _SCSType(type):
@@ -74,17 +83,16 @@ class _EMCType(type):
         """[DERIVED] Total recall candidate pool — RECALL_SURFACE_LIMIT × RECALL_POOL."""
         return cls.RECALL_SURFACE_LIMIT * cls.RECALL_POOL                                    # [DERIVED] total recall candidate pool
 
-class AGi:                                              # Amazing Grace infrastructure
+class AGi:                                                              # Amazing Grace infrastructure
 
-    ENTITY_GATEWAY = ".agi"                             # [STATIC] root directory for all AGi core system state
+    ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
 
 
     class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
-        _manifest_gateway : str = f"{SEMANTIC_COGNITIVE_SYSTEM}"        # [STATIC] ARC hydration target — stamped at module load
         CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
-        NEURAL_GATEWAY: str     = f"{SEMANTIC_COGNITIVE_SYSTEM}"        # [STATIC] ROS namespace prefix for SCS topics
-        MEMORY_GATEWAY: str     = f"{MEMORY_COORDINATION_CORTEX}"       # [STATIC] ROS namespace prefix for MCC topics
+        NEURAL_GATEWAY: str     = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}"    # [STATIC] ROS namespace prefix for SCS topics
+        MEMORY_GATEWAY: str     = f"{RRR.MEMORY_COORDINATION_CORTEX}"   # [STATIC] ROS namespace prefix for MCC topics
         ENGRAM_COMPLEX: str     = "engram_complex.db"                   # [STATIC] SQLite filename for long-term memory storage
         UNITS_PER_CHUNK: int    = 4                                     # [STATIC] tokens per chunk unit (TODO: obsolete post-tokenizer M1.5)
 
@@ -94,13 +102,13 @@ class AGi:                                              # Amazing Grace infrastr
         PERSONA_ACTIVE   : str = "persona.yaml"                         # [STATIC] active persona — mutable
         PERSONA_GENERIC  : str = "generic.yaml"                         # [STATIC] default persona reset target — read-only
 
-        TEXT_INPUT_GATEWAY: str     = f"/{NEURAL_GATEWAY}/text_input"    # [STATIC] ROS topic — inbound user text
-        RESPONSE_GATEWAY: str       = f"/{NEURAL_GATEWAY}/response"      # [STATIC] ROS topic — outbound LLM response
-        MEMORY_CONTEXT_GATEWAY: str = f"/{NEURAL_GATEWAY}/memory_context" # [STATIC] ROS topic — reinstated memory context injected into prompt
-        MEMORY_STATS_GATEWAY: str   = f"/{NEURAL_GATEWAY}/memory_stats"  # [STATIC] ROS topic — memory diagnostics from all memory subsystems
+        TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
+        RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
+        MEMORY_CONTEXT_GATEWAY: str = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_context"        # [STATIC] ROS topic — reinstated memory context injected into prompt
+        MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
         class GCE:                                                                              # Generative Cognitive Engine
-            _manifest_gateway     : str   = f"{SEMANTIC_COGNITIVE_SYSTEM}.{GENERATIVE_COGNITIVE_ENGINE}"  # [STATIC] ARC hydration target — loaded from active persona.yaml
+            _manifest_gateway     : str   = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.GENERATIVE_COGNITIVE_ENGINE}"  # [STATIC] ARC hydration target — loaded from active persona.yaml
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
             COGNITIVE_ENGINE      : str   = "huihui_ai/granite4.1-abliterated:8b-q8_0"          # [PERSONA] Ollama model tag
             RESPONSE_DEPTH        : int   = 512                                                 # [PERSONA] max tokens per completion
@@ -141,13 +149,13 @@ Current date: {date}
 /no_think
 """
 
-        class SMC:                                          # Semantic Memory Cortex
-            _manifest_gateway: str            = f"{SEMANTIC_COGNITIVE_SYSTEM}.{SEMANTIC_MEMORY_CORTEX}"   # [STATIC] ARC hydration target
+        class SMC:                                                       # Semantic Memory Cortex
+            _manifest_gateway: str            = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.SEMANTIC_MEMORY_CORTEX}"   # [STATIC] ARC hydration target
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int                 = 768                      # [STATIC] embedding vector dimensionality
 
         class EMC(metaclass=_EMCType):                       # Episodic Memory Cortex
-            _manifest_gateway: str            = f"{SEMANTIC_COGNITIVE_SYSTEM}.{EPISODIC_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
+            _manifest_gateway: str            = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.EPISODIC_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC]    sentence-transformers model for episodic embeddings
             ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
@@ -170,7 +178,7 @@ Current date: {date}
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
         class WMC:                                          # Working Memory Cortex
-            _manifest_gateway: str  = f"{SEMANTIC_COGNITIVE_SYSTEM}.{WORKING_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
+            _manifest_gateway: str  = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}.{RRR.WORKING_MEMORY_CORTEX}"  # [STATIC] ARC hydration target
             PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
