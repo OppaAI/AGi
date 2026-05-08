@@ -121,6 +121,7 @@ class CNC(Node):
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
+        self._loadpersona()
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -177,6 +178,18 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
    
+    def _load_system_prompt(self) -> None:
+        path = (
+            Path.home()
+            / AGi.ENTITY_GATEWAY
+            / "personas"
+            / f"{self._active_persona}.yaml"
+        )
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        AGi.SCS.GCE.SYSTEM_PROMPT = data["gce"]["system_prompt"]
+        self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
+        
     def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
