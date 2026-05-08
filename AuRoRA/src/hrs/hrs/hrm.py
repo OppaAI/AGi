@@ -21,7 +21,7 @@ Architecture:
 
     [PERSONA]   — Inference and personality parameters for the active persona.
                   Runtime home: Active Persona   (active, mutable)
-                  Baseline:     Generic Persona  (default, read-only reset target)
+                  Baseline:     Generic Persona  (default, read-only reset target, set in this HRM)
 
     [DERIVED]   — Computed from other constants via metaclass properties.
                   Never set directly. Recomputed on every access.
@@ -33,9 +33,8 @@ Parameters:
     falls back to the hrm.py default if the key is missing.
 
     AuRoRA Setpoints    — robot-wide settings, loaded by RAC at boot into ROS param server
-    User Profile        — per-user profiles, loaded by CNC at session start
-    Active Persona      — active persona inference + personality, loaded by GCE at init
-    Generic Persona     — default persona baseline, read-only reset target
+    User Profile        — per-user profiles, loaded by CNC after user login
+    Active Persona      — active persona personality, loaded by CNC at init
 
     To add a constant:   add it here with a default + add to AuRoRA Setpoints. Done.
     To add a subsystem:  add a class to AGi here + add a ROS node. Done.
@@ -99,8 +98,6 @@ class AGi:                                                              # Amazin
         # Config file registry — single source of truth for all YAML filenames
         AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
         USER_PROFILES    : str = "users.yaml"                           # [STATIC] all user profiles + per-user extrinsic settings
-        PERSONA_ACTIVE   : str = "persona.yaml"                         # [STATIC] active persona — mutable
-        PERSONA_GENERIC  : str = "generic.yaml"                         # [STATIC] default persona reset target — read-only
 
         TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
@@ -124,7 +121,8 @@ class AGi:                                                              # Amazin
             STREAM_PROPAGATING    : str = "delta"                                               # [STATIC]  stream event type — intermediate chunk
             STREAM_TRAILING       : str = "done"                                                # [STATIC]  stream event type — final chunk
             STREAM_ANOMALY        : str = "error"                                               # [STATIC]  stream event type — failure signal
-            SYSTEM_PROMPT         : str   = """You are GRACE — Generative Reasoning Agentic Cognitive Entity. # [PERSONA]  system prompt of LLM
+            SYSTEM_PROMPT         : str = (                                                     # [PERSONA] default system prompt — overridden by personas/grace.yaml at boot
+"""You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 
 MEMORY RULES (highest priority):
@@ -147,7 +145,7 @@ Rules:
 
 Current date: {date}
 /no_think
-"""
+""")
 
         class SMC:                                                       # Semantic Memory Cortex
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
