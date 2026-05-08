@@ -13,7 +13,6 @@
 
 # ── GRACE — Primary Persona ───────────────────────────────────────────────────
 gce:                                # generative cognitive engine
-  cognitive_engine: "huihui_ai/granite4.1-abliterated:8b-q8_0"  # Ollama model tag
   response_depth: 512               # max tokens per completion
   context_window: 32768             # Ollama num_ctx — total token slots allocated to model
   temperature: 0.75                 # sampling temperature
