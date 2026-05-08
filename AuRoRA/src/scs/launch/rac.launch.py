@@ -6,9 +6,8 @@ AuRoRA · Semantic Cognitive System (SCS)
 Responsibilities:
     1. Construct the AGi config path from HRM constants
     2. Load aurora.yaml as ROS parameters — distributed to all nodes before any start
-    3. Load persona.yaml as ROS parameters — Grace's identity, universal across all users
-    4. Spawn downstream ROS2 nodes in dependency order
-    5. ROS2 guarantees parameters are set before nodes initialise — no race condition
+    3. Spawn downstream ROS2 nodes in dependency order
+    4. ROS2 guarantees parameters are set before nodes initialise — no race condition
 
 Boot order (current → future):
     Stage 1 — Infrastructure : EEC  (stub — uncomment when ready)
@@ -20,7 +19,6 @@ Usage:
 
 Path convention:
     ~/.agi/scs/aurora.yaml
-    ~/.agi/personas/grace.yaml
 """
 
 from pathlib import Path
@@ -50,9 +48,8 @@ _AURORA_PATH = (
 # ─── Parameter Files ──────────────────────────────────────────────────────────
 #
 #   aurora.yaml  — robot-wide intrinsic params (scs.emc.*, scs.wmc.*, etc.)
-#   persona.yaml — Grace's identity params (gce.temperature, gce.system_prompt, etc.)
 #
-#   Both are distributed to all nodes before any node starts.
+#   Params are distributed to all nodes before any node starts.
 #   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
 
 _aurora_params = ParameterFile(
@@ -68,7 +65,7 @@ _cnc = Node(
     executable = RRR.CENTRAL_NEURAL_CORE,           # "cnc"
     name       = RRR.CENTRAL_NEURAL_CORE,           # "cnc"
     namespace  = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "/scs"
-    parameters = [_aurora_params],                  # aurora first — persona overlays on top
+    parameters = [_aurora_params],                  # aurora params
     output     = "screen",
 )
 
