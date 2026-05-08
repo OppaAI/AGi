@@ -16,7 +16,17 @@
 scs:
   cortical_capacity: 16384        # total token budget for the active LLM context window
   cognitive_reserve: 2048         # tokens reserved for system prompt and identity injection
-
+  # ── GCE — Generative Cognitive Engine ──────────────────────────────────────
+  gce:                                # generative cognitive engine
+    response_depth: 512               # max tokens per completion
+    context_window: 32768             # Ollama num_ctx — total token slots allocated to model
+    temperature: 0.75                 # sampling temperature
+    probability_threshold: 0.88       # top-p nucleus sampling cutoff
+    candidate_threshold: 50           # top-k token candidate limit per sampling step
+    perseveration_damping: 1.25       # repetition penalty — scales down already-sampled tokens
+    habituation_damping: 0.15         # frequency penalty — scales down tokens by corpus frequency
+    novelty_bias: 0.05                # presence penalty — boosts tokens not yet in context
+    
   # ── EMC — Episodic Memory Cortex ───────────────────────────────────────────
   emc:
     binding_stream_limit: 512     # max unencoded PMTs queued before OOM guard triggers
