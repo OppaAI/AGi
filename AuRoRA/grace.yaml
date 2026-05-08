@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# persona.yaml — Active Persona
+# grace.yaml — Active Persona (Grace)
 # ─────────────────────────────────────────────────────────────────────────────
 # AuRoRA · Reticular Activating System (RAS)
 #
@@ -8,7 +8,7 @@
 # To reset to defaults, delete this file — CNC falls back to HRM default.
 #
 # Owner:   Admin (OppaAI)
-# Runtime: ~/.agi/personas/persona.yaml
+# Runtime: ~/.agi/personas/grace.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── GRACE — Primary Persona ───────────────────────────────────────────────────
