@@ -189,15 +189,25 @@ Current date: {date}
             node: ROS2 Node instance — provides declare_parameter / get_parameter
             prefix: YAML hierarchy root to walk (default 'scs')
         """
-        target = next(
-            (getattr(cls, n) for n in vars(cls)
-             if isinstance(getattr(cls, n), type) and n.lower() == prefix),
-            None
-        )
+        target = cls._find_subclass(cls, prefix)
         if target is None:
             raise RuntimeError(f"❌ AGi has no subclass matching prefix '{prefix}'")
         cls._declare_and_read(node, target, prefix)
 
+    @classmethod
+    def _find_subclass(cls, root, prefix: str):
+        """Recursively search the AGi tree for a class matching the prefix."""
+        for name in vars(root):
+            val = getattr(root, name)
+            if not isinstance(val, type) or name.startswith('_'):
+                continue
+            if name.lower() == prefix:
+                return val
+            found = cls._find_subclass(val, prefix)
+            if found:
+                return found
+        return None
+        
     @classmethod
     def _declare_and_read(cls, node, target, prefix: str) -> None:
         """
@@ -215,27 +225,3 @@ Current date: {date}
             elif isinstance(val, (int, float, bool)):
                 node.declare_parameter(key, val)
                 setattr(target, name, node.get_parameter(key).value)
-
-    @classmethod
-    def hydrate_from_yaml(cls, path) -> None:
-        """
-        Load a YAML file and apply matching keys to the AGi class tree.
-        Used by CNC to load persona.yaml into AGi.SCS.GCE.
-        Can be reused for any flat YAML → class override pattern.
-
-        Args:
-            path: Path to YAML file
-        """
-        import yaml
-        raw = yaml.safe_load(open(path).read())
-        cls._apply_yaml(cls.SCS.GCE, raw)
-
-    @classmethod
-    def _apply_yaml(cls, target, raw: dict) -> None:
-        """Apply matching YAML keys to a target class — sets attributes in place."""
-        for name in vars(target):
-            if name.startswith('_'):
-                continue
-            key = name.lower()
-            if key in raw:
-                setattr(target, name, raw[key])
