@@ -83,7 +83,6 @@ from rclpy.executors import MultiThreadedExecutor          # allows concurrent c
 from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
 # AGi libraries
-from scs.rac import RAC, AuroraConfig                      # bootloader — hydrates AGi & spawns nodes
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
@@ -117,8 +116,11 @@ class CNC(Node):
         self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
-        # Initialize RAC and configuration
-        self.config: AuroraConfig = RAC(self).ignite()                      # bootloads all cognitive subsystems and hydrates settings
+        # Initialize configuration through hydration
+        self._hydrate_agi()                          # read ROS2 params → populate AGi
+        self._active_persona = "grace"               # M1 stub — replace with login sequence
+        self._active_user    = "oppaai"              # M1 stub — replace with login sequence
+        self._load_persona()                         # load persona.yaml → GCE inference params
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -175,6 +177,80 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
 
+    def _hydrate_agi(self) -> None:
+        """Read ROS2 parameters into AGi — RAC pre-loaded aurora.yaml before this node started."""
+        self.declare_parameter('scs.cortical_capacity',           AGi.SCS.CORTICAL_CAPACITY)
+        self.declare_parameter('scs.cognitive_reserve',           AGi.SCS.COGNITIVE_RESERVE)
+        self.declare_parameter('scs.emc.binding_stream_limit',    AGi.SCS.EMC.BINDING_STREAM_LIMIT)
+        self.declare_parameter('scs.emc.encoding_cycle_timeout',  AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT)
+        self.declare_parameter('scs.emc.encoding_prime_capacity', AGi.SCS.EMC.ENCODING_PRIME_CAPACITY)
+        self.declare_parameter('scs.emc.encoding_prime_key_limit',AGi.SCS.EMC.ENCODING_PRIME_KEY_LIMIT)
+        self.declare_parameter('scs.emc.episode_content_limit',   AGi.SCS.EMC.EPISODE_CONTENT_LIMIT)
+        self.declare_parameter('scs.emc.theta_interval',          AGi.SCS.EMC.THETA_INTERVAL)
+        self.declare_parameter('scs.emc.theta_batch_limit',       AGi.SCS.EMC.THETA_BATCH_LIMIT)
+        self.declare_parameter('scs.emc.recall_reserve',          AGi.SCS.EMC.RECALL_RESERVE)
+        self.declare_parameter('scs.emc.recall_surface_limit',    AGi.SCS.EMC.RECALL_SURFACE_LIMIT)
+        self.declare_parameter('scs.emc.recall_pool',             AGi.SCS.EMC.RECALL_POOL)
+        self.declare_parameter('scs.emc.recall_timeout',          AGi.SCS.EMC.RECALL_TIMEOUT)
+        self.declare_parameter('scs.emc.recovery_batch_size',     AGi.SCS.EMC.RECOVERY_BATCH_SIZE)
+        self.declare_parameter('scs.emc.relevance_threshold',     AGi.SCS.EMC.RELEVANCE_THRESHOLD)
+        self.declare_parameter('scs.wmc.pmt_slot_limit',          AGi.SCS.WMC.PMT_SLOT_LIMIT)
+        self.declare_parameter('scs.wmc.pmt_slot_buffer',         AGi.SCS.WMC.PMT_SLOT_BUFFER)
+    
+        AGi.SCS.CORTICAL_CAPACITY           = self.get_parameter('scs.cortical_capacity').value
+        AGi.SCS.COGNITIVE_RESERVE           = self.get_parameter('scs.cognitive_reserve').value
+        AGi.SCS.EMC.BINDING_STREAM_LIMIT    = self.get_parameter('scs.emc.binding_stream_limit').value
+        AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT  = self.get_parameter('scs.emc.encoding_cycle_timeout').value
+        AGi.SCS.EMC.ENCODING_PRIME_CAPACITY = self.get_parameter('scs.emc.encoding_prime_capacity').value
+        AGi.SCS.EMC.ENCODING_PRIME_KEY_LIMIT= self.get_parameter('scs.emc.encoding_prime_key_limit').value
+        AGi.SCS.EMC.EPISODE_CONTENT_LIMIT   = self.get_parameter('scs.emc.episode_content_limit').value
+        AGi.SCS.EMC.THETA_INTERVAL          = self.get_parameter('scs.emc.theta_interval').value
+        AGi.SCS.EMC.THETA_BATCH_LIMIT       = self.get_parameter('scs.emc.theta_batch_limit').value
+        AGi.SCS.EMC.RECALL_RESERVE          = self.get_parameter('scs.emc.recall_reserve').value
+        AGi.SCS.EMC.RECALL_SURFACE_LIMIT    = self.get_parameter('scs.emc.recall_surface_limit').value
+        AGi.SCS.EMC.RECALL_POOL             = self.get_parameter('scs.emc.recall_pool').value
+        AGi.SCS.EMC.RECALL_TIMEOUT          = self.get_parameter('scs.emc.recall_timeout').value
+        AGi.SCS.EMC.RECOVERY_BATCH_SIZE     = self.get_parameter('scs.emc.recovery_batch_size').value
+        AGi.SCS.EMC.RELEVANCE_THRESHOLD     = self.get_parameter('scs.emc.relevance_threshold').value
+        AGi.SCS.WMC.PMT_SLOT_LIMIT          = self.get_parameter('scs.wmc.pmt_slot_limit').value
+        AGi.SCS.WMC.PMT_SLOT_BUFFER         = self.get_parameter('scs.wmc.pmt_slot_buffer').value
+    
+        self.get_logger().info(
+            f"✅ AGi hydrated"
+            f" | cortical capacity: {AGi.SCS.CORTICAL_CAPACITY}"
+            f" | recall depth: {AGi.SCS.EMC.RECALL_DEPTH}"
+        )
+    
+    def _load_persona(self) -> None:
+        """
+        Load active persona from ~/.agi/personas/<stem>.yaml.
+        Overrides AGi.SCS.GCE inference constants in place.
+        Raises RuntimeError if file or any required key is missing.
+        """
+        import yaml
+        from pathlib import Path
+    
+        path = Path.home() / AGi.ENTITY_GATEWAY / "personas" / f"{self._active_persona}.yaml"
+        if not path.exists():
+            raise RuntimeError(f"❌ Persona file not found: {path}")
+    
+        raw = yaml.safe_load(path.read_text())
+    
+        AGi.SCS.GCE.COGNITIVE_ENGINE      = raw["cognitive_engine"]
+        AGi.SCS.GCE.RESPONSE_DEPTH        = raw["response_depth"]
+        AGi.SCS.GCE.CONTEXT_WINDOW        = raw["context_window"]
+        AGi.SCS.GCE.TEMPERATURE           = raw["temperature"]
+        AGi.SCS.GCE.PROBABILITY_THRESHOLD = raw["probability_threshold"]
+        AGi.SCS.GCE.CANDIDATE_THRESHOLD   = raw["candidate_threshold"]
+        AGi.SCS.GCE.PERSEVERATION_DAMPING = raw["perseveration_damping"]
+        AGi.SCS.GCE.HABITUATION_DAMPING   = raw["habituation_damping"]
+        AGi.SCS.GCE.NOVELTY_BIAS          = raw["novelty_bias"]
+        AGi.SCS.GCE.SYSTEM_PROMPT         = raw["system_prompt"]
+    
+        self.get_logger().info(
+            f"✅ Persona loaded — {self._active_persona}"
+            f" | engine: {AGi.SCS.GCE.COGNITIVE_ENGINE}"
+        )
     def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
