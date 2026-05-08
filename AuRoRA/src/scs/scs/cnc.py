@@ -76,6 +76,7 @@ import httpx                                               # async HTTP client f
 import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
 from pathlib import Path
 import threading                                           # for cnc-asyncio background thread hosting the event loop
+import yaml
 
 # ROS2 libraries
 import rclpy                                               # ROS2 Python client library — node lifecycle and spin
