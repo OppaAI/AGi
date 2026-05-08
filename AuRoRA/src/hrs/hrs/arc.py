@@ -173,7 +173,6 @@ class ArousedReactionCore(Node):
         self._load_aurora()
         self._load_persona()
         self.config = self._load_user()
-        self._derive()
         self._boot()
 
     # ─── Config Loading ───────────────────────────────────────────────────────
@@ -311,26 +310,6 @@ class ArousedReactionCore(Node):
         )
 
         return AuroraConfig(persona=persona, user=user)
-
-    def _derive(self) -> None:
-        """
-        Recompute [DERIVED] AGi constants from hydrated intrinsic values.
-        Called after all YAML is loaded so all inputs are final.
-        """
-        AGi.SCS.EMC.RECALL_DEPTH = (
-            AGi.SCS.EMC.RECALL_SURFACE_LIMIT
-            * AGi.SCS.EMC.RECALL_POOL
-        )
-        AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT = (
-            AGi.SCS.CORTICAL_CAPACITY
-            - AGi.SCS.COGNITIVE_RESERVE
-            - AGi.SCS.EMC.RECALL_RESERVE
-        )
-        self.get_logger().info(
-            f"✅ AGi hydrated — "
-            f"RECALL_DEPTH={AGi.SCS.EMC.RECALL_DEPTH} | "
-            f"GLOBAL_CHUNK_LIMIT={AGi.SCS.WMC.GLOBAL_CHUNK_LIMIT}"
-        )
 
     # ─── Boot Sequence ────────────────────────────────────────────────────────
 
