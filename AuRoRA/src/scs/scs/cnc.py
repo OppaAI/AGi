@@ -74,6 +74,7 @@ from concurrent.futures import ThreadPoolExecutor          # thread pool for off
 from datetime import datetime                              # for injecting current date into system prompt each turn
 import httpx                                               # async HTTP client for GCE streaming — OpenAI-compatible SSE
 import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
+from pathlib import Path
 import threading                                           # for cnc-asyncio background thread hosting the event loop
 
 # ROS2 libraries
@@ -117,8 +118,7 @@ class CNC(Node):
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
         # Initialize configuration through hydration
-        AGi.hydrate_from_ros(self, prefix='scs')    # covers aurora.yaml intrinsics
-        AGi.hydrate_from_ros(self, prefix='gce')    # covers persona.yaml GCE params
+        AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
 
