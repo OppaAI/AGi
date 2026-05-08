@@ -1,6 +1,6 @@
 """
 WMC — Working Memory Cortex
-============================
+===========================
 AuRoRA · Semantic Cognitive System (SCS)
 
 Working memory layer of the SCS — mirrors human working memory.
@@ -94,7 +94,7 @@ class WorkingMemoryCortex:
     """
 
     def __init__(self, logger, 
-                global_chunk_limit: int = WMC.GLOBAL_CHUNK_LIMIT, 
+                global_chunk_limit: int = SCS.GLOBAL_CHUNK_LIMIT, 
                 pmt_slot_limit: int = WMC.PMT_SLOT_LIMIT,
                 pmt_slot_buffer: int = WMC.PMT_SLOT_BUFFER
                 ) -> None:

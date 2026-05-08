@@ -1,6 +1,6 @@
 """
-HRP — Homeostatic Regulation Parameters
-========================================
+HRM — Homeostatic Regulation Manifest
+=====================================
 AuRoRA · Homeostatic Regulation System (HRS)
 
 Single source of truth for all cognitive architecture parameters
@@ -47,7 +47,7 @@ TODO:
 SEMANTIC_COGNITIVE_SYSTEM      : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
 CENTRAL_NERVOUS_CORE           : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
 GENERATIVE_COGNITIVE_ENGINE    : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
-MEMORY_COORDINATION_CORE       : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Core
+MEMORY_COORDINATION_CORTEX     : str = "MCC"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Core
 WORKING_MEMORY_CORTEX          : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
 EPISODIC_MEMORY_CORTEX         : str = "emc"        # [STATIC] ROS namespace + YAML key for the Episodic Memory Cortex
 SEMANTIC_MEMORY_CORTEX         : str = "smc"        # [STATIC] ROS namespace + YAML key for the Semantic Memory Cortex

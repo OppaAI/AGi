@@ -1,5 +1,5 @@
 """
-MCC — Memory Coordination Core
+MCC — Memory Coordination Cortex
 ================================
 AuRoRA · Semantic Cognitive System (SCS)
 
@@ -25,7 +25,7 @@ Architecture:
     Cortical capacity budget:
         Identity and cognition          →  SCS.COGNITIVE_RESERVE
         EMC recalled engrams            →  SCS.EMC.RECALL_RESERVE
-        WMC sustained PMTs              →  SCS.WMC.GLOBAL_CHUNK_LIMIT
+        WMC sustained PMTs              →  SCS.GLOBAL_CHUNK_LIMIT
         ─────────────────────────────────────────────────────────────────────
         Total active cognitive core     →  SCS.CORTICAL_CAPACITY
 

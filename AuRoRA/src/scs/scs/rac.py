@@ -1,212 +1,197 @@
 """
-ARC — Arousal Reaction Core
+RAC — Reticular Activation Compartment
 ========================================
-AuRoRA · Reticular Activating System (RAS)
+AuRoRA · Semantic Cognitive System (SCS)
 
-Bootloader and central config registry for the AuRoRA CNS.
-Loads aurora.yaml + active persona/user at startup, hydrates the AGi
-class tree, spawns all cognitive and regulatory nodes in dependency
-order, and publishes a ready signal before any other node begins
-processing.
+Plain Python bootloader — called once by CNC at startup.
+Not a ROS2 node. No spin, no topics, no lifecycle.
 
-Boot order:
-    ARC → EEC → HRS → CNC
+Responsibilities:
+    1. Hydrate AGi from YAML — aurora.yaml, persona.yaml, users.yaml
+    2. Recompute derived constants via _derive()
+    3. Spawn downstream ROS2 nodes in dependency order
+    4. Return AuroraConfig to CNC — persona + user context for the session
+
+CNC delegates boot here and takes over once ignite() returns:
+
+    class CNC(Node):
+        def __init__(self):
+            super().__init__("cnc")
+            self.config = RAC(self).ignite()    # delegate boot — CNC takes over after
 
 Design contract:
-    - HRP is the static schema and fallback defaults.
-    - ARC loads YAML and overrides AGi class attributes in place.
-    - AGi is re-exported from arc so all other modules do:
-          from arc import AGi
-      and get fully hydrated runtime values — one import change, nothing else.
-    - No node spawns until ARC has fully loaded, validated, and hydrated AGi.
-    - Boot order guarantees all child processes import arc after hydration.
+    - HRM is the static schema and fallback defaults.
+    - RAC loads YAML and overrides AGi class attributes in place.
+    - AGi is the single hydrated constant registry for this process.
+    - All other modules import AGi after RAC has run — values are always hydrated.
     - Read AGi constants inside __init__ or methods, never at module level.
 
-Usage (all other modules):
-    from arc import AGi
+    Correct (read inside method — RAC has run by this point):
+        def __init__(self):
+            self.limit = AGi.SCS.EMC.RECALL_SURFACE_LIMIT   # ✅ hydrated
 
-    EMC          = AGi.SCS.EMC
-    recall_depth = AGi.SCS.EMC.RECALL_DEPTH   # hydrated runtime value
-    recall_depth = EMC.RECALL_DEPTH            # same, shorthand alias
+    Incorrect (read at module level — RAC has not run yet):
+        LIMIT = AGi.SCS.EMC.RECALL_SURFACE_LIMIT             # ❌ unhydrated default
 
-TODO: DNA genome encryption — dual-helix primary + mirror backup
+Path convention:
+    ~/.agi/
+        aurora.yaml             ← robot-wide settings
+        personas/
+            persona.yaml        ← active persona    (mutable)
+            generic.yaml        ← default reset target (read-only)
+        users.yaml              ← all user profiles
+
+TODO:
+    — spawn EEC, HRS nodes when those systems mature
+    — GenomeEncryption.decrypt() before yaml.safe_load() in _read_yaml()
+    — GenomeEncryption.validate_mirror() for backup strand integrity
 """
 
-import rclpy
 import subprocess
 import time
 import yaml
 
-from rclpy.node     import Node
-from std_msgs.msg   import Bool
-from pathlib        import Path
-from dataclasses    import dataclass, field
+from dataclasses import dataclass, field
+from pathlib     import Path
+from rclpy.node  import Node
+from std_msgs.msg import Bool
 
-from hrp            import AGi                  # ARC owns HRP — hydrates and re-exports it
+from scs.hrm import AGi                             # HRM — static schema + fallback defaults
 
 # ─── Path Convention ──────────────────────────────────────────────────────────
-#
-#   ~/.agi/
-#       aurora.yaml             ← robot-wide settings         (AGi.AURORA_SETPOINTS)
-#       personas/
-#           persona.yaml        ← active persona              (AGi.PERSONA_ACTIVE)
-#           generic.yaml        ← default reset target        (AGi.PERSONA_GENERIC)
-#       users.yaml              ← all user profiles           (AGi.USER_PROFILES)
-#       scs/
-#           emc/
-#               engram_complex.db
 
 AGI_DIR     = Path.home() / AGi.ENTITY_GATEWAY
 AURORA_CFG  = AGI_DIR / AGi.AURORA_SETPOINTS
 PERSONA_DIR = AGI_DIR / "personas"
 USERS_CFG   = AGI_DIR / AGi.USER_PROFILES
 
-# ─── Dataclasses ──────────────────────────────────────────────────────────────
+# ─── Config Dataclasses ───────────────────────────────────────────────────────
 #
 #   YAML deserialization layer only — pure structure, no logic.
-#   Defaults are driven from HRP constants so there is one source of truth.
-#   ARC populates these from YAML, then writes final values back into AGi.
+#   Defaults driven from HRM constants — one source of truth.
+#   RAC populates these from YAML and returns them to CNC as AuroraConfig.
 #
 #   PersonaConfig and UserProfile are runtime objects carried on AuroraConfig
-#   for direct access by nodes that need persona/user context (e.g. CNC).
+#   for direct node access (e.g. CNC injecting user context into prompts).
 #   They are NOT hydrated into AGi — persona inference params go via AGi.SCS.GCE.
 
 @dataclass
 class PersonaConfig:
-    """Active persona — loaded from ~/.agi/personas/<stem>.yaml."""
-    system_prompt:         str   = AGi.SCS.GCE.SYSTEM_PROMPT
-    cognitive_engine:      str   = AGi.SCS.GCE.COGNITIVE_ENGINE
-    response_depth:        int   = AGi.SCS.GCE.RESPONSE_DEPTH
-    context_window:        int   = AGi.SCS.GCE.CONTEXT_WINDOW
-    temperature:           float = AGi.SCS.GCE.TEMPERATURE
-    probability_threshold: float = AGi.SCS.GCE.PROBABILITY_THRESHOLD
-    candidate_threshold:   int   = AGi.SCS.GCE.CANDIDATE_THRESHOLD
-    perseveration_damping: float = AGi.SCS.GCE.PERSEVERATION_DAMPING
-    habituation_damping:   float = AGi.SCS.GCE.HABITUATION_DAMPING
-    novelty_bias:          float = AGi.SCS.GCE.NOVELTY_BIAS
+    """Active persona snapshot — built from hydrated AGi.SCS.GCE after persona.yaml loads."""
+    system_prompt         : str   = AGi.SCS.GCE.SYSTEM_PROMPT
+    cognitive_engine      : str   = AGi.SCS.GCE.COGNITIVE_ENGINE
+    response_depth        : int   = AGi.SCS.GCE.RESPONSE_DEPTH
+    context_window        : int   = AGi.SCS.GCE.CONTEXT_WINDOW
+    temperature           : float = AGi.SCS.GCE.TEMPERATURE
+    probability_threshold : float = AGi.SCS.GCE.PROBABILITY_THRESHOLD
+    candidate_threshold   : int   = AGi.SCS.GCE.CANDIDATE_THRESHOLD
+    perseveration_damping : float = AGi.SCS.GCE.PERSEVERATION_DAMPING
+    habituation_damping   : float = AGi.SCS.GCE.HABITUATION_DAMPING
+    novelty_bias          : float = AGi.SCS.GCE.NOVELTY_BIAS
 
 @dataclass
 class PreferencesSettings:
     """Per-user behavioural preferences — loaded from users.yaml."""
-    response_verbosity:   str   = "concise"
-    formality:            str   = "casual"
-    preferred_language:   str   = "en"
-    emotional_tone:       str   = "warm"
-    memory_salience_bias: float = 0.0
+    response_verbosity   : str   = "concise"
+    formality            : str   = "casual"
+    preferred_language   : str   = "en"
+    emotional_tone       : str   = "warm"
+    memory_salience_bias : float = 0.0
 
 @dataclass
 class UserProfile:
     """User identity and preferences — loaded from users.yaml by id."""
-    id:          str                 = "unknown"
-    name:        str                 = "unknown"
-    known_as:    str                 = "unknown"
-    location:    str                 = "unknown"
-    notes:       list[str]           = field(default_factory=list)
-    preferences: PreferencesSettings = field(default_factory=PreferencesSettings)
+    id          : str                 = "unknown"
+    name        : str                 = "unknown"
+    known_as    : str                 = "unknown"
+    location    : str                 = "unknown"
+    notes       : list[str]           = field(default_factory=list)
+    preferences : PreferencesSettings = field(default_factory=PreferencesSettings)
 
 @dataclass
 class AuroraConfig:
     """
-    Runtime config object — ARC loads once, carried for direct node access.
+    Runtime config object — returned by RAC.ignite(), carried by CNC for the session.
+
     AGi class tree is the hydrated constant registry — nodes read from AGi.
     AuroraConfig carries persona and user context not represented in AGi.
     """
-    persona: PersonaConfig = field(default_factory=PersonaConfig)
-    user:    UserProfile   = field(default_factory=UserProfile)
+    persona : PersonaConfig = field(default_factory=PersonaConfig)
+    user    : UserProfile   = field(default_factory=UserProfile)
 
-# ─── Encryption Interface (stub) ──────────────────────────────────────────────
+# ─── Reticular Activation Compartment ────────────────────────────────────────
 
-class GenomeEncryption:
+class RAC:
     """
-    DNA genome encryption — stub for future implementation.
+    Reticular Activation Compartment — plain Python bootloader.
 
-    Architecture intent:
-        Primary helix  : encrypted config payload
-        Mirror helix   : complementary backup/validation strand
-        Decryption key : derived from device identity or hardware token
+    Called once from CNC.__init__. Not a ROS2 node.
+    Hydrates AGi, spawns downstream nodes, returns AuroraConfig to CNC.
 
-    When implemented, _read_yaml() calls decrypt() before yaml.safe_load()
-    and validate_mirror() confirms backup strand integrity.
-    Files on disk will be opaque — only ARC can read them.
+    Args:
+        cnc (Node): CNC node reference — used for logging and node spawning.
     """
 
-    @staticmethod
-    def encrypt(data: str) -> bytes:
-        raise NotImplementedError
+    def __init__(self, cnc: Node):
+        self._cnc = cnc                             # CNC node — logger + spawner
+        self._log = cnc.get_logger()                # ROS2 logger — stdout + /rosout
 
-    @staticmethod
-    def decrypt(data: bytes) -> str:
-        raise NotImplementedError
+    # ─── Public Interface ─────────────────────────────────────────────────────
 
-    @staticmethod
-    def validate_mirror(primary: bytes, mirror: bytes) -> bool:
-        raise NotImplementedError
+    def ignite(self) -> AuroraConfig:
+        """
+        Execute full boot sequence — hydrate AGi and spawn downstream nodes.
 
-# ─── ARC Node ─────────────────────────────────────────────────────────────────
+        Boot sequence:
+            1. Load aurora.yaml  → override AGi static defaults
+            2. Load persona.yaml → override AGi.SCS.GCE inference constants
+            3. Load users.yaml   → build UserProfile
+            4. _derive()         → recompute derived constants
+            5. Spawn nodes       → dependency order, each blocks until ready
 
-class ArousedReactionCore(Node):
-    """
-    ARC — Arousal Reaction Core
+        Returns:
+            AuroraConfig: Hydrated persona snapshot + active user profile.
+        """
+        self._log.info("=" * 60)
+        self._log.info("⚡ RAC — Reticular Activation Compartment igniting…")
+        self._log.info("=" * 60)
 
-    Bootloader and config registry for the AuRoRA CNS.
-
-    Boot sequence:
-        1. Load aurora.yaml  → override AGi static defaults
-        2. Load persona.yaml → override AGi.SCS.GCE constants
-        3. Load users.yaml   → populate AuroraConfig.user
-        4. _derive()         → recompute derived constants in AGi
-        5. AGi is now fully hydrated — all child processes will import it correctly
-        6. Spawn nodes in dependency order
-
-    All other modules:
-        from arc import AGi     ← one line change from: from hrp import AGi
-        AGi.SCS.EMC.RECALL_DEPTH  ← hydrated runtime value
-
-    Topic: /ras/ready — published True when full boot sequence completes.
-    """
-
-    def __init__(self):
-        super().__init__(AGi.RETICULAR_ACTIVATING_SYSTEM)
-
-        # ── Boot sequence ─────────────────────────────────────────────────────
-        # Order matters — hydrate AGi completely before spawning any node
         self._load_aurora()
         self._load_persona()
-        self.config = self._load_user()
-        self._boot()
+        config = self._load_user()
+        self._derive()
+        self._spawn_nodes()
 
-    # ─── Config Loading ───────────────────────────────────────────────────────
+        self._log.info("✅ RAC boot complete — AGi hydrated, nodes spawned")
+        return config
+
+    # ─── Hydration ────────────────────────────────────────────────────────────
 
     def _load_aurora(self) -> None:
         """
-        Load aurora.yaml and override AGi class attributes.
-        Missing keys fall back to HRP static defaults already set in AGi.
+        Load aurora.yaml and override AGi class attributes in place.
+        Missing keys fall back to HRM static defaults already set in AGi.
         Required sections must be present — missing section raises RuntimeError.
         """
         raw = self._read_yaml(AURORA_CFG)
 
-        self._require_section(raw, AGi.RETICULAR_ACTIVATING_SYSTEM,   AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.SEMANTIC_COGNITIVE_SYSTEM,      AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.HOMEOSTATIC_REGULATION_SYSTEM,  AGi.AURORA_SETPOINTS)
-        self._require_section(raw, AGi.VULNERABILITY_DETECTION_SYSTEM, AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.SEMANTIC_COGNITIVE_SYSTEM,     AGi.AURORA_SETPOINTS)
+        self._require_section(raw, AGi.HOMEOSTATIC_REGULATION_SYSTEM, AGi.AURORA_SETPOINTS)
 
-        ras = raw[AGi.RETICULAR_ACTIVATING_SYSTEM]
-        scs = raw[AGi.SEMANTIC_COGNITIVE_SYSTEM]
-        emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
-        wmc = scs.get(AGi.WORKING_MEMORY_CORTEX,  {})
-
-        # ── RAS ───────────────────────────────────────────────────────────────
-        # boot_timeout, active_persona, active_user carried as instance attrs
-        # (not in AGi — RAS has no HRP class equivalent yet)
-        self._boot_timeout   = ras.get("boot_timeout",   10.0)
-        self._active_persona = self._require_key(ras, "active_persona", AGi.RETICULAR_ACTIVATING_SYSTEM)
-        self._active_user    = self._require_key(ras, "active_user",    AGi.RETICULAR_ACTIVATING_SYSTEM)
+        # ── Boot settings ─────────────────────────────────────────────────────
+        # boot_timeout and active_persona/user live as instance attrs — not in AGi
+        boot              = raw.get("boot", {})
+        self._boot_timeout   = boot.get("boot_timeout",   10.0)
+        self._active_persona = self._require_key(boot, "active_persona", "boot")
+        self._active_user    = self._require_key(boot, "active_user",    "boot")
 
         # ── SCS ───────────────────────────────────────────────────────────────
+        scs = raw[AGi.SEMANTIC_COGNITIVE_SYSTEM]
         AGi.SCS.CORTICAL_CAPACITY = scs.get("cortical_capacity", AGi.SCS.CORTICAL_CAPACITY)
         AGi.SCS.COGNITIVE_RESERVE = scs.get("cognitive_reserve", AGi.SCS.COGNITIVE_RESERVE)
 
         # ── EMC ───────────────────────────────────────────────────────────────
+        emc = scs.get(AGi.EPISODIC_MEMORY_CORTEX, {})
         AGi.SCS.EMC.BINDING_STREAM_LIMIT     = emc.get("binding_stream_limit",     AGi.SCS.EMC.BINDING_STREAM_LIMIT)
         AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT   = emc.get("encoding_cycle_timeout",   AGi.SCS.EMC.ENCODING_CYCLE_TIMEOUT)
         AGi.SCS.EMC.ENCODING_PRIME_CAPACITY  = emc.get("encoding_prime_capacity",  AGi.SCS.EMC.ENCODING_PRIME_CAPACITY)
@@ -222,6 +207,7 @@ class ArousedReactionCore(Node):
         AGi.SCS.EMC.RELEVANCE_THRESHOLD      = emc.get("relevance_threshold",      AGi.SCS.EMC.RELEVANCE_THRESHOLD)
 
         # ── WMC ───────────────────────────────────────────────────────────────
+        wmc = scs.get(AGi.WORKING_MEMORY_CORTEX, {})
         AGi.SCS.WMC.PMT_SLOT_LIMIT  = wmc.get("pmt_slot_limit",  AGi.SCS.WMC.PMT_SLOT_LIMIT)
         AGi.SCS.WMC.PMT_SLOT_BUFFER = wmc.get("pmt_slot_buffer", AGi.SCS.WMC.PMT_SLOT_BUFFER)
 
@@ -231,7 +217,7 @@ class ArousedReactionCore(Node):
         # ── SDS (stub) ────────────────────────────────────────────────────────
         # AGi.SDS.* — expand when SDS matures
 
-        self.get_logger().info("✅ aurora.yaml loaded")
+        self._log.info("✅ aurora.yaml loaded")
 
     def _load_persona(self) -> None:
         """
@@ -254,7 +240,7 @@ class ArousedReactionCore(Node):
         AGi.SCS.GCE.NOVELTY_BIAS          = self._require_key(raw, "novelty_bias",          path.name)
         AGi.SCS.GCE.SYSTEM_PROMPT         = self._require_key(raw, "system_prompt",         path.name)
 
-        self.get_logger().info(
+        self._log.info(
             f"✅ Persona loaded — {self._active_persona} "
             f"| engine: {AGi.SCS.GCE.COGNITIVE_ENGINE}"
         )
@@ -271,7 +257,7 @@ class ArousedReactionCore(Node):
 
         if not entry:
             raise RuntimeError(
-                f"❌ ARC boot failed — user '{self._active_user}' not found in {AGi.USER_PROFILES}"
+                f"❌ RAC boot failed — user '{self._active_user}' not found in {AGi.USER_PROFILES}"
             )
 
         prefs = self._require_key(entry, "preferences", f"user:{self._active_user}")
@@ -305,26 +291,37 @@ class ArousedReactionCore(Node):
             novelty_bias          = AGi.SCS.GCE.NOVELTY_BIAS,
         )
 
-        self.get_logger().info(
+        self._log.info(
             f"✅ User loaded — {user.known_as} ({user.id}) | {user.location}"
         )
 
         return AuroraConfig(persona=persona, user=user)
 
-    # ─── Boot Sequence ────────────────────────────────────────────────────────
-
-    def _boot(self) -> None:
+    def _derive(self) -> None:
         """
-        Spawn cognitive nodes in dependency order.
-        AGi is fully hydrated before any node is spawned — boot order is the guarantee.
-        Each stage blocks until the node signals ready before proceeding.
+        Recompute derived constants after hydration.
+        Metaclass properties (GLOBAL_CHUNK_LIMIT, RECALL_DEPTH) self-compute —
+        nothing to do here yet. Expand as derived constants grow.
         """
-        ready_pub = self.create_publisher(
-            Bool,
-            f"/{AGi.RETICULAR_ACTIVATING_SYSTEM}/ready",
-            1,
+        self._log.info(
+            f"✅ AGi hydrated "
+            f"| cortical capacity: {AGi.SCS.CORTICAL_CAPACITY} tokens "
+            f"| recall depth: {AGi.SCS.EMC.RECALL_DEPTH} candidates"
         )
 
+    # ─── Node Spawning ────────────────────────────────────────────────────────
+
+    def _spawn_nodes(self) -> None:
+        """
+        Spawn downstream ROS2 nodes in dependency order.
+        Each stage blocks until the node signals ready before proceeding.
+        CNC itself is already running — only downstream nodes spawned here.
+
+        Boot order:
+            Stage 1 — Infrastructure : EEC  (stub — commented until ready)
+            Stage 2 — Regulatory     : HRS  (stub — commented until ready)
+            Stage 3 — Cognition      : (CNC is the caller — already running)
+        """
         # Stage 1 — Infrastructure
         # self._spawn(AGi.EMERGENCY_EXCEPTION_CORE)
         # self._wait_ready(f"/{AGi.EMERGENCY_EXCEPTION_CORE}/ready", self._boot_timeout)
@@ -333,31 +330,25 @@ class ArousedReactionCore(Node):
         # self._spawn(AGi.HOMEOSTATIC_REGULATION_SYSTEM)
         # self._wait_ready(f"/{AGi.HOMEOSTATIC_REGULATION_SYSTEM}/ready", self._boot_timeout)
 
-        # Stage 3 — Cognition
-        self._spawn(AGi.CENTRAL_NERVOUS_CORE)
-        self._wait_ready(f"/{AGi.CENTRAL_NERVOUS_CORE}/ready", self._boot_timeout)
-
-        msg      = Bool()
-        msg.data = True
-        ready_pub.publish(msg)
-        self.get_logger().info("🧠 AuRoRA CNS online")
+        pass                                        # no downstream nodes active yet — expand per milestone
 
     def _spawn(self, node: str) -> None:
-        """Spawn a ROS node as a subprocess."""
-        self.get_logger().info(f"⚡ Spawning {node.upper()}...")
+        """Spawn a ROS2 node as a subprocess."""
+        self._log.info(f"⚡ Spawning {node.upper()}…")
         subprocess.Popen(
             ["ros2", "run", "aurora", node],
-            stdout = subprocess.DEVNULL,
-            stderr = subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
     def _wait_ready(self, topic: str, timeout: float) -> None:
         """
         Block until a ready signal arrives on the given topic.
         Logs a warning and continues if timeout is exceeded —
-        non-critical nodes should not stall the full boot sequence.
+        non-critical nodes must not stall the full boot sequence.
         """
-        self.get_logger().info(f"⏳ Waiting for {topic}...")
+        import rclpy
+        self._log.info(f"⏳ Waiting for {topic}…")
         ready    = False
         deadline = time.time() + timeout
 
@@ -366,16 +357,16 @@ class ArousedReactionCore(Node):
             if msg.data:
                 ready = True
 
-        sub = self.create_subscription(Bool, topic, _cb, 1)
+        sub = self._cnc.create_subscription(Bool, topic, _cb, 1)
         while not ready and time.time() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
+            rclpy.spin_once(self._cnc, timeout_sec=0.1)
 
-        self.destroy_subscription(sub)
+        self._cnc.destroy_subscription(sub)
 
         if ready:
-            self.get_logger().info(f"✅ {topic} ready")
+            self._log.info(f"✅ {topic} ready")
         else:
-            self.get_logger().warning(f"⚠️  {topic} timed out after {timeout}s — continuing")
+            self._log.warning(f"⚠️  {topic} timed out after {timeout}s — continuing")
 
     # ─── Validation Helpers ───────────────────────────────────────────────────
 
@@ -383,14 +374,14 @@ class ArousedReactionCore(Node):
         """Raise RuntimeError if a required top-level section is missing from YAML."""
         if not raw or key not in raw:
             raise RuntimeError(
-                f"❌ ARC boot failed — required section '{key}' missing from {source}"
+                f"❌ RAC boot failed — required section '{key}' missing from {source}"
             )
 
     def _require_key(self, raw: dict, key: str, source: str):
         """Raise RuntimeError if a required key is missing from a YAML section."""
         if raw is None or key not in raw:
             raise RuntimeError(
-                f"❌ ARC boot failed — required key '{key}' missing from [{source}]"
+                f"❌ RAC boot failed — required key '{key}' missing from [{source}]"
             )
         return raw[key]
 
@@ -405,23 +396,12 @@ class ArousedReactionCore(Node):
         """
         if not path.exists():
             raise RuntimeError(
-                f"❌ ARC boot failed — required config file not found: {path}"
+                f"❌ RAC boot failed — required config file not found: {path}"
             )
         try:
             with open(path, "r") as f:
                 return yaml.safe_load(f)
         except Exception as e:
             raise RuntimeError(
-                f"❌ ARC boot failed — could not parse {path.name}: {e}"
+                f"❌ RAC boot failed — could not parse {path.name}: {e}"
             )
-
-# ─── Entry Point ──────────────────────────────────────────────────────────────
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = ArousedReactionCore()
-    rclpy.spin(node)
-    rclpy.shutdown()
-
-if __name__ == "__main__":
-    main()
