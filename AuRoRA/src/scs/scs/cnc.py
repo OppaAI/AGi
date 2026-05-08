@@ -186,15 +186,16 @@ class CNC(Node):
             / "personas"
             / f"{self._active_persona}.yaml"
         )
-        if not path.exists():                                        # ← missing
-            self.get_logger().warning(                               # ← missing
-                f"⚠️ No persona file — using HRM default"           # ← missing
-            )                                                        # ← missing
-            return                                                   # ← missing
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        AGi.SCS.GCE.SYSTEM_PROMPT = data["gce"]["system_prompt"]
-        self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
+        if not path.exists():
+            self.get_logger().warning(f"⚠️ No persona file at {path} — using HRM default")
+            return
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f)
+            AGi.SCS.GCE.SYSTEM_PROMPT = data["gce"]["system_prompt"]
+            self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to load persona: {e}")
         
     def _receive_text_input(self, msg: String) -> None:
         """
