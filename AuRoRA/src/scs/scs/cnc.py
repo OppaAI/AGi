@@ -121,7 +121,6 @@ class CNC(Node):
         AGi.hydrate_from_ros(self, prefix='gce')    # covers persona.yaml GCE params
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
-        self._load_persona()                         # load persona.yaml → GCE inference params
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -178,21 +177,6 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
    
-    def _load_persona(self) -> None:
-    """
-    Load active persona from ~/.agi/personas/<stem>.yaml.
-    Overrides AGi.SCS.GCE inference constants in place.
-    Raises RuntimeError if persona file is missing.
-    """
-    path = Path.home() / AGi.ENTITY_GATEWAY / "personas" / f"{self._active_persona}.yaml"
-    if not path.exists():
-        raise RuntimeError(f"❌ Persona file not found: {path}")
-    AGi.hydrate_from_yaml(path)
-    self.get_logger().info(
-        f"✅ Persona loaded — {self._active_persona}"
-        f" | engine: {AGi.SCS.GCE.COGNITIVE_ENGINE}"
-    )
-    
     def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
