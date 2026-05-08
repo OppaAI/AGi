@@ -117,7 +117,8 @@ class CNC(Node):
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
         # Initialize configuration through hydration
-        AGi.hydrate_from_ros(self, prefix='scs')                          # read ROS2 params → populate AGi
+        AGi.hydrate_from_ros(self, prefix='scs')    # covers aurora.yaml intrinsics
+        AGi.hydrate_from_ros(self, prefix='gce')    # covers persona.yaml GCE params
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
         self._load_persona()                         # load persona.yaml → GCE inference params
