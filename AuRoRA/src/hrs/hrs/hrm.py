@@ -221,6 +221,6 @@ Current date: {date}
 
             if isinstance(val, type):
                 cls._declare_and_read(node, val, key)
-            elif isinstance(val, (int, float, bool)):
+            elif isinstance(val, (int, float, bool, str)):
                 node.declare_parameter(key, val)
                 setattr(target, name, node.get_parameter(key).value)
