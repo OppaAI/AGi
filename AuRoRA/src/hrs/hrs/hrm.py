@@ -55,7 +55,7 @@ class RRR:
     
     # Semantic Cognitive System
     SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
-    CENTRAL_NERVOUS_CORE            : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Nervous Core
+    CENTRAL_NEURAL_CORE             : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Neural Core
     RETICULAR_ACTIVATING_COMPARTMENT: str = "rac"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
     GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
     MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
