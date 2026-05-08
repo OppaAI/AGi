@@ -12,18 +12,6 @@
 # Runtime: ~/.agi/aurora.yaml
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── RAS — Boot Configuration ──────────────────────────────────────────────────
-boot:
-  boot_timeout: 10.0              # seconds before a node ready signal is considered failed
-  active_persona: grace           # persona key — matches filename stem in ~/.agi/personas/
-  active_user: oppaai             # user id — matches entry in ~/.agi/users.yaml
-
-# ── Environment — Operational Context ────────────────────────────────────────
-environment:
-  mission: "general assistance"   # current operational mission
-  location: "Vancouver, BC, Canada"
-  context: "indoor"               # indoor | outdoor
-
 # ── SCS — Semantic Cognitive System ──────────────────────────────────────────
 scs:
   cortical_capacity: 16384        # total token budget for the active LLM context window
