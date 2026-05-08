@@ -178,3 +178,64 @@ Current date: {date}
             PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
             PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
+
+    @classmethod
+    def hydrate_from_ros(cls, node, prefix: str = 'scs') -> None:
+        """
+        Declare and read all intrinsic AGi parameters from the ROS2 param server.
+        Called once per node at init — walks the class tree from the given prefix.
+        
+        Args:
+            node: ROS2 Node instance — provides declare_parameter / get_parameter
+            prefix: YAML hierarchy root to walk (default 'scs')
+        """
+        target = next(
+            (getattr(cls, n) for n in vars(cls)
+             if isinstance(getattr(cls, n), type) and n.lower() == prefix),
+            None
+        )
+        if target is None:
+            raise RuntimeError(f"❌ AGi has no subclass matching prefix '{prefix}'")
+        cls._declare_and_read(node, target, prefix)
+
+    @classmethod
+    def _declare_and_read(cls, node, target, prefix: str) -> None:
+        """
+        Recursively walk a class tree, declare ROS2 parameters, write values back.
+        Skips STATIC constants (str, None). Only touches int, float, bool.
+        """
+        for name in vars(target):
+            if name.startswith('_'):
+                continue
+            val = getattr(target, name)
+            key = f"{prefix}.{name.lower()}"
+
+            if isinstance(val, type):
+                cls._declare_and_read(node, val, key)
+            elif isinstance(val, (int, float, bool)):
+                node.declare_parameter(key, val)
+                setattr(target, name, node.get_parameter(key).value)
+
+    @classmethod
+    def hydrate_from_yaml(cls, path) -> None:
+        """
+        Load a YAML file and apply matching keys to the AGi class tree.
+        Used by CNC to load persona.yaml into AGi.SCS.GCE.
+        Can be reused for any flat YAML → class override pattern.
+
+        Args:
+            path: Path to YAML file
+        """
+        import yaml
+        raw = yaml.safe_load(open(path).read())
+        cls._apply_yaml(cls.SCS.GCE, raw)
+
+    @classmethod
+    def _apply_yaml(cls, target, raw: dict) -> None:
+        """Apply matching YAML keys to a target class — sets attributes in place."""
+        for name in vars(target):
+            if name.startswith('_'):
+                continue
+            key = name.lower()
+            if key in raw:
+                setattr(target, name, raw[key])
