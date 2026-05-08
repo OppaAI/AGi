@@ -315,9 +315,6 @@ class CNC(Node):
             "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
             "stream"             : True,                                    # enable SSE streaming — fragments published as they arrive
         }
-        if GCE.KEEP_ALIVE is not None:                                      # Ollama only — vLLM keeps models loaded permanently
-            inference_packet["keep_alive"] = GCE.KEEP_ALIVE                 # pin model in VRAM for session duration
-
         cognitive_response: str = ""                                        # accumulates response fragments into full response
         leading_fragment: bool = True                                       # tracks first fragment — triggers start event type
 
@@ -392,8 +389,6 @@ class CNC(Node):
                 "max_tokens": 1,                                            # single token response — minimizes priming cost
                 "stream"   : False,                                         # no streaming needed for priming
             }
-            if GCE.KEEP_ALIVE is not None:                                  # Ollama only — vLLM keeps models loaded permanently
-                inference_packet["keep_alive"] = GCE.KEEP_ALIVE             # pin model in VRAM for session duration
             await self._gce_gateway.post("/v1/chat/completions", json=inference_packet)  # submit priming request to GCE
             self.get_logger().info("✅ GCE primed successfully — activated into memory")  # log the successful activation of GCE
         except Exception as e:
