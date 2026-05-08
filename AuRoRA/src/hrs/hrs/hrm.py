@@ -116,7 +116,6 @@ class AGi:                                                              # Amazin
             HABITUATION_DAMPING   : float = 0.1                                                 # [INTRINSIC] frequency penalty — scales down tokens by corpus frequency
             NOVELTY_BIAS          : float = 0.1                                                 # [INTRINSIC] presence penalty — boosts tokens not yet in context
             TIMEOUT               : float = 60.0                                                # [STATIC]  seconds before inference request is aborted
-            KEEP_ALIVE            : int | None = -1                                             # [STATIC]  VRAM retention — -1 = permanent, 0 = unload, n = TTL seconds
             STREAM_LEADING        : str = "start"                                               # [STATIC]  stream event type — first chunk
             STREAM_PROPAGATING    : str = "delta"                                               # [STATIC]  stream event type — intermediate chunk
             STREAM_TRAILING       : str = "done"                                                # [STATIC]  stream event type — final chunk
