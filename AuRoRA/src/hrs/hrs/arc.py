@@ -229,8 +229,8 @@ class ArousedReactionCore(Node):
         # ── HRS (stub) ────────────────────────────────────────────────────────
         # AGi.HRS.* — expand when HRS matures
 
-        # ── VDS (stub) ────────────────────────────────────────────────────────
-        # AGi.VDS.* — expand when VDS matures
+        # ── SDS (stub) ────────────────────────────────────────────────────────
+        # AGi.SDS.* — expand when SDS matures
 
         self.get_logger().info("✅ aurora.yaml loaded")
 
