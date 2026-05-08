@@ -32,7 +32,7 @@ from launch.event_handlers             import OnProcessStart
 from launch_ros.actions                import Node
 from launch_ros.parameter_descriptions import ParameterFile
 
-import hrs.hrm as hrm
+from hrs.hrm import RRR, AGi
 
 # ─── Config Path ──────────────────────────────────────────────────────────────
 #
@@ -41,9 +41,9 @@ import hrs.hrm as hrm
 
 _YAML_PATH = (
     Path.home()
-    / hrm.AGi.ENTITY_GATEWAY
-    / hrm.SEMANTIC_COGNITIVE_SYSTEM
-    / hrm.AGi.SCS.AURORA_SETPOINTS
+    / AGi.ENTITY_GATEWAY
+    / RRR.SEMANTIC_COGNITIVE_SYSTEM
+    / RRR.SCS.AURORA_SETPOINTS
 )
 
 # ─── Parameter File ───────────────────────────────────────────────────────────
@@ -60,30 +60,30 @@ _params = ParameterFile(
 
 # Stage 3 — Cognition
 _cnc = Node(
-    package    = hrm.SEMANTIC_COGNITIVE_SYSTEM,     # "scs"
-    executable = hrm.CENTRAL_NERVOUS_CORE,          # "cnc"
-    name       = hrm.CENTRAL_NERVOUS_CORE,          # "cnc"
-    namespace  = hrm.SEMANTIC_COGNITIVE_SYSTEM,     # "/scs"
+    package    = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "scs"
+    executable = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
+    name       = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
+    namespace  = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "/scs"
     parameters = [_params],
     output     = "screen",
 )
 
 # Stage 1 — Infrastructure (stub)
 # _eec = Node(
-#     package    = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
-#     executable = hrm.EMERGENCY_EXCEPTION_CORE,
-#     name       = hrm.EMERGENCY_EXCEPTION_CORE,
-#     namespace  = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
+#     package    = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
+#     executable = RRR.EMERGENCY_EXCEPTION_CORE,
+#     name       = RRR.EMERGENCY_EXCEPTION_CORE,
+#     namespace  = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
 #     parameters = [_params],
 #     output     = "screen",
 # )
 
 # Stage 2 — Regulatory (stub)
 # _hrs = Node(
-#     package    = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
-#     executable = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
-#     name       = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
-#     namespace  = hrm.HOMEOSTATIC_REGULATION_SYSTEM,
+#     package    = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
+#     executable = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
+#     name       = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
+#     namespace  = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
 #     parameters = [_params],
 #     output     = "screen",
 # )
