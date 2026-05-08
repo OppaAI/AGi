@@ -6,8 +6,9 @@ AuRoRA · Semantic Cognitive System (SCS)
 Responsibilities:
     1. Construct the AGi config path from HRM constants
     2. Load aurora.yaml as ROS parameters — distributed to all nodes before any start
-    3. Spawn downstream ROS2 nodes in dependency order
-    4. ROS2 guarantees parameters are set before nodes initialise — no race condition
+    3. Load persona.yaml as ROS parameters — Grace's identity, universal across all users
+    4. Spawn downstream ROS2 nodes in dependency order
+    5. ROS2 guarantees parameters are set before nodes initialise — no race condition
 
 Boot order (current → future):
     Stage 1 — Infrastructure : EEC  (stub — uncomment when ready)
@@ -17,8 +18,9 @@ Boot order (current → future):
 Usage:
     ros2 launch scs rac.launch.py
 
-Path convention (mirrors original RAC):
+Path convention:
     ~/.agi/scs/aurora.yaml
+    ~/.agi/personas/grace.yaml
 """
 
 from pathlib import Path
@@ -34,25 +36,41 @@ from launch_ros.parameter_descriptions import ParameterFile
 
 from hrs.hrm import RRR, AGi
 
-# ─── Config Path ──────────────────────────────────────────────────────────────
+# ─── Config Paths ─────────────────────────────────────────────────────────────
 #
 #   Constructed from HRM constants — single source of truth, no magic strings.
-#   Mirrors the path convention from the original RAC bootloader.
 
-_YAML_PATH = (
+_ACTIVE_PERSONA = "grace"                           # M1 stub — replace with login sequence
+
+_AURORA_PATH = (
     Path.home()
     / AGi.ENTITY_GATEWAY
     / RRR.SEMANTIC_COGNITIVE_SYSTEM
-    / AGi.SCS.AURORA_SETPOINTS
+    / AGi.SCS.AURORA_SETPOINTS                      # "aurora.yaml"
 )
 
-# ─── Parameter File ───────────────────────────────────────────────────────────
-#
-#   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
-#   Parameters are distributed to all nodes before any node starts.
+_PERSONA_PATH = (
+    Path.home()
+    / AGi.ENTITY_GATEWAY
+    / "personas"
+    / f"{_ACTIVE_PERSONA}.yaml"                     # "grace.yaml"
+)
 
-_params = ParameterFile(
-    param_file=str(_YAML_PATH),
+# ─── Parameter Files ──────────────────────────────────────────────────────────
+#
+#   aurora.yaml  — robot-wide intrinsic params (scs.emc.*, scs.wmc.*, etc.)
+#   persona.yaml — Grace's identity params (gce.temperature, gce.system_prompt, etc.)
+#
+#   Both are distributed to all nodes before any node starts.
+#   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
+
+_aurora_params = ParameterFile(
+    param_file=str(_AURORA_PATH),
+    allow_substs=True,
+)
+
+_persona_params = ParameterFile(
+    param_file=str(_PERSONA_PATH),
     allow_substs=True,
 )
 
@@ -64,7 +82,7 @@ _cnc = Node(
     executable = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
     name       = RRR.CENTRAL_NERVOUS_CORE,          # "cnc"
     namespace  = RRR.SEMANTIC_COGNITIVE_SYSTEM,     # "/scs"
-    parameters = [_params],
+    parameters = [_aurora_params, _persona_params], # aurora first — persona overlays on top
     output     = "screen",
 )
 
@@ -74,7 +92,7 @@ _cnc = Node(
 #     executable = RRR.EMERGENCY_EXCEPTION_CORE,
 #     name       = RRR.EMERGENCY_EXCEPTION_CORE,
 #     namespace  = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
-#     parameters = [_params],
+#     parameters = [_aurora_params],
 #     output     = "screen",
 # )
 
@@ -84,7 +102,7 @@ _cnc = Node(
 #     executable = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
 #     name       = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
 #     namespace  = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
-#     parameters = [_params],
+#     parameters = [_aurora_params],
 #     output     = "screen",
 # )
 
@@ -123,7 +141,8 @@ def generate_launch_description() -> LaunchDescription:
 
         LogInfo(msg="=" * 60),
         LogInfo(msg="⚡ RAC — Reticular Activation Compartment igniting…"),
-        LogInfo(msg=f"   Config: {_YAML_PATH}"),
+        LogInfo(msg=f"   Aurora  : {_AURORA_PATH}"),
+        LogInfo(msg=f"   Persona : {_PERSONA_PATH}"),
         LogInfo(msg="=" * 60),
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
