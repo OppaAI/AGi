@@ -5,7 +5,7 @@
 #
 # GCE inference parameters and system prompt for the active persona.
 # This file is mutable — Admin may update to swap GRACE's active identity.
-# To reset to defaults, copy generic.yaml over this file.
+# To reset to defaults, delete this file — CNC falls back to HRM default.
 #
 # Owner:   Admin (OppaAI)
 # Runtime: ~/.agi/personas/persona.yaml
