@@ -300,12 +300,7 @@ class CNC(Node):
             long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]    # extract system blocks
             short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"]  # extract conversation turns
 
-            # 4. Assemble system prompt with date
-            system_prompt: str = GCE.SYSTEM_PROMPT.format(                      # inject current date into system prompt
-                date=datetime.now().strftime("%Y-%m-%d")                        # ISO date — Grace knows what day it is
-            )
-            
-            # Inject user preferences into system prompt
+            # 4. Assemble system prompt with date and inject user preferences into system prompt
             system_prompt: str = GCE.SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d"),
                 known_as=self._user_prefs.get("known_as", "Oppa"),
