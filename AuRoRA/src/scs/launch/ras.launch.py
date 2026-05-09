@@ -1,5 +1,5 @@
 """
-RAC — Reticular Activation Compartment
+RAS — Reticular Activation System
 ========================================
 AuRoRA · Semantic Cognitive System (SCS)
 
@@ -15,7 +15,7 @@ Boot order (current → future):
     Stage 3 — Cognition      : CNC
 
 Usage:
-    ros2 launch scs rac.launch.py
+    ros2 launch scs ras.launch.py
 
 Path convention:
     ~/.agi/scs/aurora.yaml
@@ -123,7 +123,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
 
         LogInfo(msg="=" * 60),
-        LogInfo(msg="⚡ RAC — Reticular Activation Compartment igniting…"),
+        LogInfo(msg="⚡ RAS — Reticular Activation System igniting…"),
         LogInfo(msg=f"   Aurora  : {_AURORA_PATH}"),
         LogInfo(msg="=" * 60),
 
