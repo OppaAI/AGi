@@ -185,7 +185,7 @@ class CNC(Node):
         path = (
             Path.home()
             / AGi.ENTITY_GATEWAY
-            / "personas"
+            / AGi.SCS.PERSONA_PROFILES
             / f"{self._active_persona}.yaml"
         )
         if not path.exists():
