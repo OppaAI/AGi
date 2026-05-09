@@ -121,8 +121,9 @@ class CNC(Node):
         # Initialize configuration through hydration
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
         self._active_persona = "grace"               # M1 stub — replace with login sequence
-        self._active_user    = "oppaai"              # M1 stub — replace with login sequence
         self._load_persona()
+        self._active_user    = "oppaai"              # M1 stub — replace with login sequence
+        self._load_user()
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -199,6 +200,26 @@ class CNC(Node):
                 self.get_logger().warning("⚠️ Persona missing gce.system_prompt — using HRM default")
         except Exception as e:
             self.get_logger().error(f"❌ Failed to load persona: {e}")
+
+    def _load_user(self) -> None:
+        path = (
+            Path.home()
+            / AGi.ENTITY_GATEWAY
+            / AGi.SCS.USER_PROFILES                         # "users.yaml"
+        )
+        if not path.exists():
+            self.get_logger().warning(f"⚠️ No users file at {path} — using HRM defaults")
+            return
+        try:
+            data = yaml.safe_load(path.read_text())
+            user = (data or {}).get("users", {}).get(self._active_user)
+            if user:
+                self.get_logger().info(f"✅ User profile loaded — {self._active_user}")
+                # TODO: apply user extrinsic settings to AGi here when HRS milestone defines the schema
+            else:
+                self.get_logger().warning(f"⚠️ User '{self._active_user}' not found in users.yaml — using HRM defaults")
+        except Exception as e:
+            self.get_logger().error(f"❌ Failed to load user profile: {e}")
         
     def _receive_text_input(self, msg: String) -> None:
         """
