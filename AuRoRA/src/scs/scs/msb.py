@@ -629,11 +629,11 @@ class EngramComplex:
         Returns:
             list[dict]: Engram traces with relevancy field, sorted by descending RRF score.
         """
-        semantic_matches = self._semantic_recall(cue.vector, recall_depth, date_range)    # recall by meaning
-        lexical_matches  = self._lexical_recall(cue.text, recall_depth, date_range)       # recall by keyword
+        semantic_matches = self._semantic_recall(user_id, cue.vector, recall_depth, date_range)    # recall by meaning
+        lexical_matches  = self._lexical_recall(user_id, cue.text, recall_depth, date_range)       # recall by keyword
         return self._converge_memories(semantic_matches, lexical_matches, surface_limit)  # fuse into unified ranking
 
-    def _semantic_recall(self, cue: list[float], recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _semantic_recall(self, user_id: str, cue: list[float], recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the vector index by semantic similarity to the cue.
 
@@ -663,11 +663,12 @@ class EngramComplex:
                 FROM {self._vector_schema} vec
                 JOIN {self._storage_schema} store ON store.id = vec.rowid
                 WHERE vec.{self._blueprint.semantic_traces} MATCH ?
+                {user_filter}
                 {temporal_filter}
                 AND k = ?
                 ORDER BY vec.distance, store.id DESC
                 """,
-                [pack_vector(cue), *temporal_params, recall_depth],             # only pass temporal params if schema has a temporal trace column
+                [pack_vector(cue), *user_params, *temporal_params, recall_depth], # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                        # return all matching engrams by semantic similarity
 
             if not matches:                                                     # if no matches found,
@@ -720,11 +721,12 @@ class EngramComplex:
                 FROM {self._lexical_schema} lexeme
                 JOIN {self._storage_schema} store on store.id = lexeme.rowid
                 WHERE {self._lexical_schema} MATCH ? 
+                {user_filter}
                 {temporal_filter}
                 ORDER BY lexeme.rank, store.id DESC
                 LIMIT ?
                 """,
-                [clean_cue, *temporal_params, recall_depth],                # only pass temporal params if schema has a temporal trace column
+                [clean_cue, *user_params, *temporal_params, recall_depth],  # only pass temporal params if schema has a temporal trace column
             ).fetchall()                                                    # fetch all matching engrams
 
             if not matches:                                                 # if no matches found,

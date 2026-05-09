@@ -180,6 +180,7 @@ class WorkingMemoryCortex:
             # Decay induced PMT into evictable PMT
             content: dict = self._induced_pmt["content"]            # extract complete interaction
             induced_pmt: dict = {                                   # assemble evictable PMT
+                "user_id": self._user_id,                           # store user ID for isolation
                 "timestamp": self._induced_pmt["timestamp"],        # preserve original induction timestamp
                 "content":   json.dumps({                           # serialize user/assistant pair into single content string
                                  "user": content["prompt"],
