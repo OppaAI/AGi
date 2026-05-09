@@ -176,7 +176,7 @@ class WorkingMemoryCortex:
 
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
-                self._induced_pmt["content"]["response"]: str = content  # pair AI response into induced PMT — exchange complete
+                self._induced_pmt["content"]["response"] = content  # pair AI response into induced PMT — exchange complete
 
             # Decay induced PMT into evictable PMT
             content: dict = self._induced_pmt["content"]            # extract complete interaction
