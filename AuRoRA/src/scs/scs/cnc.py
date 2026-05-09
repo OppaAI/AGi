@@ -317,7 +317,7 @@ class CNC(Node):
 
             # 7. Register assistant turn in memory
             if cognitive_response:                                              # only register non-empty responses — empty means GCE failed
-                await self.mcc.register_memory("assistant", cognitive_response) # bind assistant response into WMC — completes the PMT pair
+                await self.mcc.register_memory(role="assistant", user_id=None, content=cognitive_response) # bind assistant response into WMC — completes the PMT pair
 
             # 8. Report memory stats
             stats = self.mcc.report_memory_stats()                              # log WMC and EMC health after every turn
