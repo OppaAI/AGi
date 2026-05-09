@@ -123,6 +123,7 @@ class CNC(Node):
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._load_persona()
         self._active_user    = "oppaai"              # M1 stub — replace with login sequence
+        self._user_prefs: dict = {}
         self._load_user()
 
         # Initialize separate execution thread for memory and blocking operations
@@ -205,7 +206,7 @@ class CNC(Node):
         path = (
             Path.home()
             / AGi.ENTITY_GATEWAY
-            / AGi.SCS.USER_PROFILES                         # "users.yaml"
+            / AGi.SCS.USER_PROFILES                             # "users.yaml"
         )
         if not path.exists():
             self.get_logger().warning(f"⚠️ No users file at {path} — using HRM defaults")
@@ -215,7 +216,10 @@ class CNC(Node):
             user = (data or {}).get("users", {}).get(self._active_user)
             if user:
                 self.get_logger().info(f"✅ User profile loaded — {self._active_user}")
-                # TODO: apply user extrinsic settings to AGi here when HRS milestone defines the schema
+                prefs = (user or {}).get("preferences", {})
+                self._user_prefs = prefs                                    # store for prompt injection
+                if prefs.get("memory_salience_bias") is not None:
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= prefs["memory_salience_bias"]  # apply per-user recall bias
             else:
                 self.get_logger().warning(f"⚠️ User '{self._active_user}' not found in users.yaml — using HRM defaults")
         except Exception as e:
@@ -277,6 +281,21 @@ class CNC(Node):
             system_prompt: str = GCE.SYSTEM_PROMPT.format(                      # inject current date into system prompt
                 date=datetime.now().strftime("%Y-%m-%d")                        # ISO date — Grace knows what day it is
             )
+            
+            # Inject user preferences into system prompt
+            if self._user_prefs:
+                verbosity  = self._user_prefs.get("response_verbosity", "concise")
+                formality  = self._user_prefs.get("formality", "casual")
+                tone       = self._user_prefs.get("emotional_tone", "warm")
+                language   = self._user_prefs.get("preferred_language", "en")
+                system_prompt += (
+                    f"\n\nUser preferences:"
+                    f"\n- Respond in {language}"
+                    f"\n- Verbosity: {verbosity}"
+                    f"\n- Formality: {formality}"
+                    f"\n- Emotional tone: {tone}"
+                )
+    
             if long_term_memory:                                                # episodic context available — append to system prompt
                 system_content: str = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
             else:
