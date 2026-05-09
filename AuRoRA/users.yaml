@@ -4,24 +4,19 @@
 # AuRoRA · Reticular Activating System (RAS)
 #
 # All user profiles known to GRACE.
-# Each entry is loaded by ARC at boot by matching active_user id from aurora.yaml.
+# Each entry is loaded by CNC at boot by matching active_user id.
 #
 # Owner:   Admin (OppaAI)
-# Runtime: loaded by ARC at boot from ~/.agi/users.yaml
+# Runtime: ~/.agi/users.yaml
 # ─────────────────────────────────────────────────────────────────────────────
-
 users:
-  - id:       "oppaai"
+  oppaai:
     name:     "OppaAI"
     known_as: "Oppa"                        # what GRACE calls you
     location: "British Columbia, Canada"    # for context-aware responses
-    notes:                                  # anything GRACE should always know about you
-      - "Creator and developer of AuRoRA"
-      - "Based in Beautiful British Columbia, Canada"
-
     preferences:
-      response_verbosity:   "concise"   # concise | normal | verbose
-      formality:            "casual"    # casual | formal
-      preferred_language:   "en"        # ISO 639-1 language code
-      emotional_tone:       "warm"      # warm | neutral | professional
-      memory_salience_bias: 0.0         # per-user recall bias offset applied to relevance scores
+      response_verbosity:   "concise"       # concise | normal | verbose
+      formality:            "casual"        # casual | formal | professional
+      preferred_language:   "en"            # ISO 639-1 code — en | fr | zh | ja | es | ko
+      emotional_tone:       "warm"          # warm | neutral | playful | empathetic | professional
+      memory_salience_bias: 0.0             # per-user recall bias offset applied to relevance scores
