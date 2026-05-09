@@ -145,7 +145,7 @@ class CNC(Node):
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
         self._active_persona = "grace"               # M1 stub — replace with login sequence
         self._load_persona()
-        self._active_user    = "oppaai"              # M1 stub — replace with login sequence
+        self._active_user    = "jensen"              # M1 stub — replace with login sequence
         self._user_prefs: dict = {}
         self._load_user()
 
@@ -230,6 +230,7 @@ class CNC(Node):
         path = (
             Path.home()
             / AGi.ENTITY_GATEWAY
+            / RRR.SEMANTIC_COGNITIVE_SYSTEM
             / AGi.SCS.USER_PROFILES                             # "users.yaml"
         )
         if not path.exists():
@@ -242,7 +243,8 @@ class CNC(Node):
                 self.get_logger().info(f"✅ User profile loaded — {self._active_user}")
                 self._user_prefs = user                                         # store full profile
                 if user.get("preferences", {}).get("memory_salience_bias") is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= user["preferences"]["memory_salience_bias"] 
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= user["preferences"]["memory_salience_bias"]
+                    self.get_logger().info(f"✅ Memory salience bias applied — {self._active_user}") 
             else:
                 self.get_logger().warning(f"⚠️ User '{self._active_user}' not found in users.yaml — using HRM defaults")
         except Exception as e:
