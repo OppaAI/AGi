@@ -240,10 +240,9 @@ class CNC(Node):
             user = (data or {}).get("users", {}).get(self._active_user)
             if user:
                 self.get_logger().info(f"✅ User profile loaded — {self._active_user}")
-                prefs = (user or {}).get("preferences", {})
-                self._user_prefs = prefs                                    # store for prompt injection
-                if prefs.get("memory_salience_bias") is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= prefs["memory_salience_bias"]  # apply per-user recall bias
+                self._user_prefs = user                                         # store full profile
+                if user.get("preferences", {}).get("memory_salience_bias") is not None:
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= user["preferences"]["memory_salience_bias"] 
             else:
                 self.get_logger().warning(f"⚠️ User '{self._active_user}' not found in users.yaml — using HRM defaults")
         except Exception as e:
@@ -310,10 +309,10 @@ class CNC(Node):
             system_prompt: str = GCE.SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d"),
                 known_as=self._user_prefs.get("known_as", "Oppa"),
-                language=self._user_prefs.get("preferred_language", "en"),
-                verbosity=_verbosity_instruction(self._user_prefs.get("response_verbosity", "concise")),
-                formality=_formality_instruction(self._user_prefs.get("formality", "casual")),
-                tone=_tone_instruction(self._user_prefs.get("emotional_tone", "warm")),
+                language=self._user_prefs.get("preferences", {}).get("preferred_language", "en"),
+                verbosity=_verbosity_instruction(self._user_prefs.get("preferences", {}).get("response_verbosity", "concise")),
+                formality=_formality_instruction(self._user_prefs.get("preferences", {}).get("formality", "casual")),
+                tone=_tone_instruction(self._user_prefs.get("preferences", {}).get("emotional_tone", "warm")),
             )
     
             if long_term_memory:                                                # episodic context available — append to system prompt
