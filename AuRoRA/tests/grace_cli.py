@@ -11,7 +11,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
-from hrs.hrp import AGi  # import HRP constants so this standalone tool knows the same topic names
+from hrs.hrm import AGi  # import HRP constants so this standalone tool knows the same topic names
 SCS = AGi.SCS
 GCE = AGi.SCS.GCE
 

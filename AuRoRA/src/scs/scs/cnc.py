@@ -86,7 +86,7 @@ from std_msgs.msg import String                            # ROS2 string message
 
 # AGi libraries
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
+from hrs.hrm import AGi, RRR                               # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
@@ -185,7 +185,8 @@ class CNC(Node):
         path = (
             Path.home()
             / AGi.ENTITY_GATEWAY
-            / AGi.SCS.PERSONA_PROFILES
+            / RRR.SEMANTIC_COGNITIVE_SYSTEM
+            / RRR.GENERATIVE_COGNITIVE_ENGINE
             / f"{self._active_persona}.yaml"
         )
         if not path.exists():
