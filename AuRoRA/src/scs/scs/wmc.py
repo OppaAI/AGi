@@ -45,11 +45,11 @@ Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
 Public interface:
-    wmc.fill_pmt(speaker, content) → list[evicted_pmt]
-    wmc.recall_pmt_schema() → list[dict]
-    wmc.forget_pmt_schema() → list[dict]
-    wmc.assess_pmt_schema() → dict
-    wmc.is_empty → bool
+    wmc.fill_pmt(user_id, role, content) -> list[evicted_pmt]
+    wmc.recall_pmt_schema() -> list[dict]
+    wmc.forget_pmt_schema() -> list[dict]
+    wmc.assess_pmt_schema() -> dict
+    wmc.is_empty -> bool
 
 TODO:
     M2 — integrate HRS.BLC for biological clock timestamps
@@ -120,20 +120,21 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
         
-    def fill_pmt(self, speaker: str, content: str) -> list[dict]:
+    def fill_pmt(self, user_id: str | None, role: str, content: str) -> list[dict]:
         """
         Induce a conversation turn and pair it into a complete interaction.
         Fill the complete interaction into working memory.
         Evict receding PMTs until the induced PMT fits within capacity.
 
         Args:
-            speaker (str) : User ID of the speaker — 'user' or 'assistant'
-            content (str) : Content of the conversation turn
+            user_id (str | None) : User ID of the interacting user; None for assistant
+            role (str)           : Role of the speaker — 'user' or 'assistant'
+            content (str)        : Content of the conversation turn
 
         Returns:
             list[dict] : List of evicted PMTs [{timestamp, content}], empty if no eviction occurred
         """
-        if speaker == "user":                                   # user turn — stage as induced PMT pending AI response
+        if role == "user":                                      # user turn — stage as induced PMT pending AI response
             if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
                 unpaired_user_prompt: str = self._induced_pmt["content"]["prompt"]   # retrieve existing unpaired prompt
                 self._induced_pmt["content"]["prompt"] = (      # append new message — preserve both
@@ -146,9 +147,9 @@ class WorkingMemoryCortex:
 
             # Induce unpaired user prompt — pending for AI response
             self._induced_pmt = {                               # stage induced PMT — pending AI response
+                "user_id": user_id,                             # user ID of the speaker
                 "timestamp": datetime.now().isoformat(),        # wall-clock induction time (TODO M2: use ROS2 time)
                 "content": {                                    # embed both user prompt and AI response in the same PMT
-                    "speaker": speaker,                         # user ID of the speaker
                     "prompt": content,                          # user prompt — paired with AI response on next turn
                     "response": ""                              # empty until AI responds
                 }
@@ -158,15 +159,15 @@ class WorkingMemoryCortex:
             )
             return []                                           # exchange incomplete — nothing to fill or evict
 
-        elif speaker == "assistant":                            # assistant turn — complete the pairing
+        elif role == "assistant":                               # assistant turn — complete the pairing
             if self._induced_pmt is None:                       # no induced PMT — unpaired AI response
                 self.logger.warning(                            # log the warning of unpaired AI response
                     "WMC: AI response induced without user prompt — wrapping with placeholder"
                 )
                 self._induced_pmt = {                           # wrap unpaired AI response with placeholder
+                    "user_id": None,                            # None since no user prompt was provided
                     "timestamp": datetime.now().isoformat(),    # wall-clock induction time
                     "content": {                                # embed the unpaired AI response with placeholder
-                        "speaker": "user",                      # placeholder speaker
                         "prompt": "[context missing]",          # placeholder for missing user prompt
                         "response": content                     # AI response preserved
                     }
@@ -212,7 +213,7 @@ class WorkingMemoryCortex:
             self._sustained_chunks += induced_pmt_chunks      # increment sustained chunk count
 
             self.logger.debug(                                # log the filling and eviction for development/troubleshooting
-                f"WMC filled [{speaker}] | "
+                f"WMC filled [{user_id}] | "
                 f"sustained={len(self._pmt_slot)} | "
                 f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
                 f"evicted={len(evicted_pmt_slot)}"

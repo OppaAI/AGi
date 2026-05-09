@@ -269,10 +269,10 @@ class CNC(Node):
 
         try:                                                                    # wrap full pipeline — any failure publishes error and resets attention gate
             # 1. Register user turn in memory
-            await self.mcc.register_memory(self._active_user, user_prompt)                 # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
+            await self.mcc.register_memory(role="user", user_id=self._active_user, content=user_prompt)  # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
 
             # 2. Assemble memory context
-            memory_context: list[dict] = await self.mcc.assemble_memory_context(self._active_user, user_prompt)  # assemble full memory context — EMC episodes + WMC PMTs
+            memory_context: list[dict] = await self.mcc.assemble_memory_context(user_id=self._active_user, user_prompt=user_prompt)  # assemble full memory context — EMC episodes + WMC PMTs
 
             # 3. Separate system and conversation parts
             long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]    # extract system blocks

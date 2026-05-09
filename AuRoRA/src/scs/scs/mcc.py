@@ -119,7 +119,7 @@ class MemoryCoordinationCore:
 
         self.logger.info("✅ Memory Coordination Core Activated")                           # log entry on successful MCC activation
 
-    async def register_memory(self, user_id: str, content: str) -> None:
+    async def register_memory(self, user_id: str | None, role: str, content: str) -> None:
         """
         Receive a new conversation turn and commit it to working memory.
         Any PMTs evicted by WMC are handed off to the episodic buffer — non-blocking.
@@ -129,11 +129,12 @@ class MemoryCoordinationCore:
         2. Bind any evicted PMT to episodic buffer (non-blocking)
 
         Args:
-            user_id (str) : User ID of the speaker interacting with GRACE
-            content (str) : Content of the conversation turn
+            user_id (str | None) : User ID of the speaker interacting with AI; None if the speaker is AI
+            role (str)           : Role of the speaker - "user" or "assistant"
+            content (str)        : Content of the conversation turn
         """
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(speaker=user_id, content=content)  # induce turn into WMC — returns any PMTs displaced by the new arrival
+        evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)  # induce turn into WMC — returns any PMTs displaced by the new arrival
 
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
