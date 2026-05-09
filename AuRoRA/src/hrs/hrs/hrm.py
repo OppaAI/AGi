@@ -98,6 +98,7 @@ class AGi:                                                              # Amazin
         # Config file registry — single source of truth for all YAML filenames
         AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
         USER_PROFILES    : str = "users.yaml"                           # [STATIC] all user profiles + per-user extrinsic settings
+        PERSONA_PROFILES : str = "personas"                             # [STATIC] directory containing persona YAML files
 
         TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
