@@ -45,8 +45,8 @@ from pathlib import Path
 
 # Absolute path to your engram complex SQLite file.
 # Matches the path constructed in MCC.__init__() via AGi.ENTITY_GATEWAY.
-# Example: /home/oppaai/.agi/scs/memory/engram.db
-ENGRAM_GATEWAY: str = "/home/oppaai/.agi/scs/memory/engram.db"
+# Example: ~/.agi/scs/mcc/engram_complex.db
+ENGRAM_GATEWAY: str = "/home/oppa-ai/.agi/scs/mcc/engram_complex.db"
 
 # The user_id to backfill into all existing rows.
 # All engrams written before this migration had no user_id — they belong
@@ -60,7 +60,7 @@ TO_VERSION:   int = 3
 
 # Set to False when ready to commit changes to disk.
 # While True, all SQL is printed but nothing is executed.
-DRY_RUN: bool = True
+DRY_RUN: bool = False
 
 # ─── Migration ────────────────────────────────────────────────────────────────
 

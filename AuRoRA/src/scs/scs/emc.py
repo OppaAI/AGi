@@ -143,6 +143,7 @@ from scs.msb import (                       # shared memory storage bank substra
 EMC_SCHEMA = EngramSchema(                  # define the engram schema for episodic memory
     storage=[
         EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
+        EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
@@ -161,13 +162,14 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     ],
     staging=[
         EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
+        EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw content pending encoding
     ],
     semantic_traces="encoding",                                                                     # column linked to vec0 virtual table for KNN search
     lexical_traces=["content"],                                                                     # column fed into FTS5 virtual table for keyword search
-    index_traces=["timestamp"],                                                                     # B-tree index — speeds up temporal-filtered recall
+    index_traces=["user_id", "timestamp"],                                                          # B-tree index — speeds up temporal-filtered recall
     temporal_trace="timestamp",                                                                     # temporal filter column — represents when the memory occurred
 )
         
@@ -510,7 +512,7 @@ class EpisodicMemoryCortex:
 
         self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # log successful init with engram path
    
-    def bind_pmt(self, timestamp: str, content: str) -> bool:
+    def bind_pmt(self, user_id: str, timestamp: str, content: str) -> bool:
         """
         Receive an evicted PMT from MCC and bind it into the episodic buffer for encoding.
         Called at the WMC → EMC boundary — non-blocking, crash-safe via staging table.
@@ -522,10 +524,11 @@ class EpisodicMemoryCortex:
         Returns:
             bool: True on success, False on failure
         """
-        episode: dict = {                                                           # package the evicted PMT data into episode
-            "timestamp": timestamp,                                                 # timestamp of PMT induced into WMC
-            "date":      timestamp[:10],                                            # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content":   content[:self._episode_content_limit]                      # truncate to engram limit before binding
+        episode: dict = {             
+            "user_id"   : user_id,                                                  # user ID — should be retrieved from MCC
+            "timestamp" : timestamp,                                                # timestamp of PMT induced into WMC
+            "date"      : timestamp[:10],                                           # YYYY-MM-DD slice — B-tree indexed for date recall
+            "content"   : content[:self._episode_content_limit]                     # truncate to engram limit before binding
         }
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
@@ -546,7 +549,7 @@ class EpisodicMemoryCortex:
             self.logger.warning(f"EMC binding PMT failed: {e}")                     # log failure with reason
             return False                                                            # indicate failure during binding
 
-    def recall_episodes(self, cue: str) -> list[dict]:
+    def recall_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
         Recall relevant episodes from episodic memory.
         Dual-path retrieval fused via RRF — handled internally by MSB.
@@ -562,9 +565,9 @@ class EpisodicMemoryCortex:
             return []                                                                            # return empty list if no cue
     
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                            # encode cue into vector + raw text for dual-path recall
-        return self._ecx.recall_engram(recall_cue, self._recall_surface_limit, self._recall_depth) # semantic + lexical RRF fusion — handled by MSB
+        return self._ecx.recall_engram(user_id, recall_cue, self._recall_surface_limit, self._recall_depth) # semantic + lexical RRF fusion — handled by MSB
 
-    def reinstate_episodes(self, cue: str) -> list[dict]:
+    def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
         Recall, filter, format, and reinstate relevant episodes into context stream.
         Full episodic reinstatement pipeline — MCC calls this once per turn.
@@ -576,7 +579,7 @@ class EpisodicMemoryCortex:
             list[dict]: Reinstated episodes — informational only, primary output is context stream injection
         """
         # Recall candidates
-        raw_episodes = self.recall_episodes(cue)                                    # recall episodes from episodic memory
+        raw_episodes = self.recall_episodes(user_id, cue)                           # recall episodes from episodic memory
 
         # Relevancy gate — EMC owns this threshold
         filtered_episodes = [                                                       # filter out irrelevant episodes

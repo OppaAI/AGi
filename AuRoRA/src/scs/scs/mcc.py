@@ -164,6 +164,7 @@ class MemoryCoordinationCore:
                     )
                     continue                                         # skip — not worth encoding into episodic memory
                 self.emc.bind_pmt(                                   # bind evicted pmt into episodic buffer
+                    user_id=evicted_pmt["user_id"],                  # user ID of the original PMT
                     timestamp=evicted_pmt["timestamp"],              # timestamp of the original PMT
                     content=evicted_pmt["content"],                  # raw content of the evicted PMT
                 )
@@ -172,7 +173,7 @@ class MemoryCoordinationCore:
                 f"MCC binding lapse — {len(evicted_pmts)} PMT(s) unbound: {e}",
             )
             
-    async def assemble_memory_context(self, user_prompt: str) -> list[dict]:
+    async def assemble_memory_context(self, user_id: str, user_prompt: str) -> list[dict]:
         """
         Assemble the full memory context for the cognitive engine.
         EMC reinstatement runs on a dormant thread — awaited before returning.
@@ -196,7 +197,7 @@ class MemoryCoordinationCore:
         reinstated_episodes: list[dict] = []                                 # holds reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
             future = asyncio.get_running_loop().run_in_executor(             # recruit a dormant thread — EMC recall blocks on encoding engine
-                self._executor, self.emc.reinstate_episodes, user_prompt     # reinstate relevant episodes using current prompt as cue
+                self._executor, self.emc.reinstate_episodes, user_id, user_prompt     # reinstate relevant episodes using current prompt as cue
             )
             reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall must not stall inference
                 future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces

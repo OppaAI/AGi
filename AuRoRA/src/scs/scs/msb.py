@@ -52,6 +52,7 @@ TODO: migrate pack_vector, normalize_vector to hrs.py if
 """
 
 # System libraries
+from transformers.models.sam3_tracker_video import configuration_sam3_tracker_video
 from dataclasses import dataclass           # dataclass for EngramTrace/EngramSchema
 from enum import Enum                       # enum base for EngramModality type definitions
 import hashlib                              # for prime key generation
@@ -375,7 +376,7 @@ class EngramComplex:
 
     # Schema version — increment when storage schema changes
     # On mismatch, MSB raises clearly rather than silently operating on wrong schema
-    SCHEMA_VERSION: int = 2                                     # set schema version for migration purposes if needed 
+    SCHEMA_VERSION: int = 3                                     # set schema version for migration purposes if needed 
 
     def _build_schema(self) -> None:
         """
@@ -613,12 +614,13 @@ class EngramComplex:
         )
         ecx_conn.commit()                                                   # commit before returning
 
-    def recall_engram(self, cue: RecallCue, surface_limit: int, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def recall_engram(self, user_id: str, cue: RecallCue, surface_limit: int, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams by fusing semantic and lexical matches.
         Cortex encodes the cue before calling — MSB owns retrieval only.
 
         Args:
+            user_id (str)                       : User ID to filter by
             cue (RecallCue)                     : Encoded recall cue as float vector and raw cue text.
             surface_limit (int)                 : Maximum episodes returned after RRF fusion.
             recall_depth (int)                  : Candidate pool per recall path — KNN and FTS5 each score this many episodes before RRF fusion.
@@ -644,6 +646,10 @@ class EngramComplex:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
         try:                                                                    # attempt semantic recall with given cue
+            # Filter by user ID
+            user_filter: str = f"AND store.user_id = ?" if user_id else ""
+            user_params: list = [user_id] if user_id else []
+
             date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
             temporal_filter: str = f"""
                 AND (store.{self._blueprint.temporal_trace} >= ? OR ? IS NULL)
@@ -681,7 +687,7 @@ class EngramComplex:
             self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
             return []                                                           # empty list — caller handles no results
 
-    def _lexical_recall(self, cue: str, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _lexical_recall(self, user_id: str, cue: str, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the lexical index by keyword matching.
 
@@ -693,6 +699,9 @@ class EngramComplex:
         Returns:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
+        user_filter: str = f"AND store.user_id = ?" if user_id else ""
+        user_params: list = [user_id] if user_id else []
+
         clean_cue: str = self._clean_cue(cue)                               # strip punctuation, filter stop words, join with OR
         if not clean_cue:                                                   # if clean_cue is empty or pure whitespace — nothing to recall
             return []                                                       # return empty list

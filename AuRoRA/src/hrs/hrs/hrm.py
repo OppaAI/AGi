@@ -107,7 +107,7 @@ class AGi:                                                              # Amazin
 
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
-            COGNITIVE_ENGINE      : str   = "gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] Ollama model tag
+            COGNITIVE_ENGINE      : str   = "hf.co/mradermacher/Ministral-3-14B-abliterated-GGUF:q8_0" # [STATIC] Ollama model tag
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
