@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-EMC Schema Migration — v1 → v2
-================================
+Engram Complex Migration — v1 → v2
+==================================
 Adds M2a/M2b prep columns to emc_storage:
 
   Importance  : memory_strength, last_recalled_at, recall_count, novelty_score
