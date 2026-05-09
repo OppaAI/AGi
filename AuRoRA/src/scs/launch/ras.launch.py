@@ -136,5 +136,5 @@ def generate_launch_description() -> LaunchDescription:
         # _start_hrs,
         # _start_cnc,
 
-        LogInfo(msg="✅ RAC — nodes launched"),
+        LogInfo(msg="✅ RAS — nodes launched"),
     ])
