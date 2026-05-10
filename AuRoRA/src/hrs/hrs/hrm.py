@@ -58,6 +58,7 @@ class RRR:
     # Semantic Cognitive System
     SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
     CENTRAL_NEURAL_CORE             : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Neural Core
+    PERSONAL_PROVISIONING_UNIT      : str = "ppu"        # [STATIC] ROS namespace + YAML key for the Personal Provisioning Unit
     GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
     MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
     WORKING_MEMORY_CORTEX           : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex
@@ -88,7 +89,6 @@ class AGi:                                                              # Amazin
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
 
-
     class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
         CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
@@ -100,7 +100,7 @@ class AGi:                                                              # Amazin
         # Config file registry — single source of truth for all YAML filenames
         AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
         USER_PROFILES    : str = "users.yaml"                           # [STATIC] all user profiles + per-user extrinsic settings
-        PERSONA_PROFILES : str = "personas"                             # [STATIC] directory containing persona YAML files
+        PERSONA_PROFILES : str = "persona.yaml"                         # [STATIC] directory containing persona YAML files
 
         TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response

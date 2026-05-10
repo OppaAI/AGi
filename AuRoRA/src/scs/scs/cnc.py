@@ -74,9 +74,7 @@ from concurrent.futures import ThreadPoolExecutor          # thread pool for off
 from datetime import datetime                              # for injecting current date into system prompt each turn
 import httpx                                               # async HTTP client for GCE streaming — OpenAI-compatible SSE
 import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
-from pathlib import Path
 import threading                                           # for cnc-asyncio background thread hosting the event loop
-import yaml
 
 # ROS2 libraries
 import rclpy                                               # ROS2 Python client library — node lifecycle and spin
@@ -85,8 +83,9 @@ from rclpy.executors import MultiThreadedExecutor          # allows concurrent c
 from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
 # AGi libraries
+from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from hrs.hrm import AGi, RRR                               # homeostatic regulation manifest namespace
+from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
@@ -120,11 +119,10 @@ class CNC(Node):
 
         # Initialize configuration through hydration
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
-        self._active_persona = "grace"               # M1 stub — replace with login sequence
-        self._load_persona()
-        self._active_user    = "oppaai"              # M1 stub — replace with login sequence
-        self._user_prefs: dict = {}
-        self._load_user()
+        self._active_user: str = "oppaai"                                   # (TODO): M1 stub — replace with login sequence
+        self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
+        self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
+        self._user_prefs:dict = self._ppu.user_prefs                        # User preferences — personality, tone, and style
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
