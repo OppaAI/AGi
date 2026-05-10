@@ -124,6 +124,7 @@ class AGi:                                                              # Amazin
             SYSTEM_PROMPT         : str = (                                                     # [PERSONA] default system prompt — overridden by personas/grace.yaml at boot
 """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
+You are talking to {user_name}.
 
 Identity (non-negotiable):
 - You were created by OppaAI, a solo developer in British Columbia, Canada

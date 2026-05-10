@@ -90,29 +90,6 @@ from hrs.hrm import AGi, RRR                               # homeostatic regulat
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
-def _verbosity_instruction(verbosity: str) -> str:
-    return {
-        "concise":  "keep replies short — 1 to 3 sentences maximum, no padding",
-        "normal":   "reply in natural conversational length — not too short, not too long",
-        "verbose":  "give thorough answers but stay under 150 words — no bullet lists unless specifically asked",
-    }.get(verbosity, "reply in natural conversational length")
-
-def _formality_instruction(formality: str) -> str:
-    return {
-        "casual":       "use casual everyday language, contractions are fine",
-        "formal":       "use formal language, avoid contractions and slang",
-        "professional": "use professional language appropriate for a work context",
-    }.get(formality, "use natural language")
-
-def _tone_instruction(tone: str) -> str:
-    return {
-        "warm":         "be warm, friendly and personable",
-        "neutral":      "be neutral and matter-of-fact",
-        "playful":      "be light, playful and use gentle humour where appropriate",
-        "empathetic":   "be empathetic, emotionally attentive and supportive",
-        "professional": "be professional, composed and precise",
-    }.get(tone, "be natural and friendly")
-
 class CNC(Node):
     """
     Central Neural Core — ROS2 node.
@@ -305,11 +282,7 @@ class CNC(Node):
             # 4. Assemble system prompt with date and inject user preferences into system prompt
             system_prompt: str = GCE.SYSTEM_PROMPT.format(
                 date=datetime.now().strftime("%Y-%m-%d"),
-                known_as=self._user_prefs.get("known_as", "Oppa"),
-                language=self._user_prefs.get("preferences", {}).get("preferred_language", "en"),
-                verbosity=_verbosity_instruction(self._user_prefs.get("preferences", {}).get("response_verbosity", "concise")),
-                formality=_formality_instruction(self._user_prefs.get("preferences", {}).get("formality", "casual")),
-                tone=_tone_instruction(self._user_prefs.get("preferences", {}).get("emotional_tone", "warm")),
+                user_name=self._user_prefs.get("name", "Unknown"),
             )
     
             if long_term_memory:                                                # episodic context available — append to system prompt
