@@ -94,7 +94,7 @@ def _verbosity_instruction(verbosity: str) -> str:
     return {
         "concise":  "keep replies short — 1 to 3 sentences maximum, no padding",
         "normal":   "reply in natural conversational length — not too short, not too long",
-        "verbose":  "give thorough, detailed replies — explain reasoning and context fully",
+        "verbose":  "give thorough answers but stay under 150 words — no bullet lists unless specifically asked",
     }.get(verbosity, "reply in natural conversational length")
 
 def _formality_instruction(formality: str) -> str:
