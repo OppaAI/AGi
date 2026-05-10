@@ -387,43 +387,40 @@ class CNC(Node):
                     self._emit_response({"type": GCE.STREAM_ANOMALY, "content": anomaly})  # surface HTTP error to caller
                     return ""
 
-                buffer: str = ""                                            # byte buffer — reassembles SSE lines split across HTTP chunks
-                async for chunk in response.aiter_bytes():                  # iterate raw bytes — handles chunk boundary misalignment
-                    buffer += chunk.decode("utf-8", errors="replace")       # decode and append to buffer
-
-                while "\n" in buffer:                                   # process all complete lines in buffer
-                    line, buffer = buffer.split("\n", 1)                # extract one complete line
-                    line = line.strip()                                 # strip whitespace and carriage returns
-                    if not line or not line.startswith("data:"):        # skip empty lines and non-data SSE events
+                async for line in response.aiter_lines():                   # iterate SSE stream line by line
+                    if not line or not line.startswith("data:"):            # skip empty lines and non-data SSE events
                         continue
 
-                    fragment_data: str = line[len("data:"):].strip()    # strip "data:" prefix — extract JSON payload
-                    if fragment_data == "[DONE]":                       # SSE stream complete signal
+                    fragment_data: str = line[len("data:"):].strip()        # strip "data:" prefix — extract JSON payload
+                    if fragment_data == "[DONE]":                           # SSE stream complete signal
                         break
 
-                    try:                                                # attempt to parse SSE fragment
-                        fragment: dict = json.loads(fragment_data)      # parse SSE fragment — each fragment is a JSON object
-                    except json.JSONDecodeError:                        # malformed JSON — skip this fragment
-                        continue
+                    try:                                                    # attempt to parse SSE fragment
+                        fragment: dict = json.loads(fragment_data)          # parse SSE fragment — each fragment is a JSON object
+                    except json.JSONDecodeError:                            # malformed JSON — skip this fragment
+                        continue                                            # skip and continue stream
 
-                    delta: dict = fragment.get("choices", [{}])[0].get("delta", {})
-                    fragment_content: str = delta.get("content", "") or delta.get("reasoning", "")
-                    if not fragment_content:
-                        continue
+                    fragment_content: str = (                               # extract delta from SSE fragment
+                        fragment.get("choices", [{}])[0]                    # first choice in the choices list
+                        .get(GCE.STREAM_PROPAGATING, {})                    # token "delta" from fragment
+                        .get("content", "")                                 # text content — empty string if no content in this fragment
+                    )
+                    if not fragment_content:                                # no content in this fragment — skip
+                        continue                                            # skip and continue stream
 
-                    cognitive_response += fragment_content              # accumulate fragment into full response
+                    cognitive_response += fragment_content                  # accumulate fragment into full response
 
-                    if leading_fragment:                                # first fragment — signal stream start to caller
+                    if leading_fragment:                                    # first fragment — signal stream start to caller
                         self._emit_response({"type": GCE.STREAM_LEADING, "content": fragment_content})  # publish "start" event
-                        leading_fragment = False                        # clear flag after first fragment
-                    else:                                               # subsequent fragments — signal token arrival
-                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # publish "delta" event
+                        leading_fragment = False                            # clear flag after first fragment
+                    else:                                                   # subsequent fragments — signal token arrival
+                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # subsequent fragments — stream "delta" to caller
 
             if cognitive_response:                                                            # response assembled — signal completion
                 self._emit_response({"type": GCE.STREAM_TRAILING, "content": cognitive_response}) # publish "done" event
                 self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")       # log completion with response length
             else:                                                                             # no response assembled — publish "error" event
-                self.get_logger().error(f"❌ cognitive_response is empty after stream — leading_fragment={leading_fragment}")
+                self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE"})  # GCE returned nothing
 
         except httpx.TimeoutException:                                      # GCE exceeded timeout — model may still be loading
             err = "GCE timeout — model may still be loading"                # timeout error message

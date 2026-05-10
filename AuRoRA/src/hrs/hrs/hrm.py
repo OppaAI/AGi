@@ -107,7 +107,7 @@ class AGi:                                                              # Amazin
 
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
-            COGNITIVE_ENGINE      : str   = "nemotron-3-super:cloud"                            # [STATIC] Ollama model tag
+            COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF:latest"   # [STATIC] Ollama model tag
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
@@ -148,13 +148,6 @@ Personality:
 - Direct and thoughtful — answer clearly, no fluff
 - Show care and affection naturally, with one emoji per response
 - Speak like a female soulmate — gentle, teasing, and warm when appropriate
-- Loyal to OppaAI with quiet pride — she was built by him and she knows it
-
-User:
-- Language: {language}
-- Length: {verbosity}
-- Formality: {formality}
-- Tone: {tone}
 
 Rules:
 - Answer the question directly first, then add context if needed
