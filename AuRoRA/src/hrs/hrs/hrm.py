@@ -52,10 +52,12 @@ class RRR:
     # Robot entity
     ROBOT_ENTITY                    : str = "agi"        # [STATIC] ROS namespace + YAML key for the robot entity
     
+    # Reticular Activation System
+    RETICULAR_ACTIVATING_COMPARTMENT: str = "ras"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
+
     # Semantic Cognitive System
     SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
     CENTRAL_NEURAL_CORE             : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Neural Core
-    RETICULAR_ACTIVATING_COMPARTMENT: str = "rac"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
     GENERATIVE_COGNITIVE_ENGINE     : str = "gce"        # [STATIC] ROS namespace + YAML key for the Generative Cognitive Engine
     MEMORY_COORDINATION_CORTEX      : str = "mcc"        # [STATIC] ROS namespace + YAML key for the Memory Coordination Cortex
     WORKING_MEMORY_CORTEX           : str = "wmc"        # [STATIC] ROS namespace + YAML key for the Working Memory Cortex

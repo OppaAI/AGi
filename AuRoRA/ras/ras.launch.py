@@ -1,7 +1,7 @@
 """
 RAS — Reticular Activation System
 ========================================
-AuRoRA · Semantic Cognitive System (SCS)
+AuRoRA · Reticular Activation System (RAS)
 
 Responsibilities:
     1. Construct the AGi config path from HRM constants
@@ -15,10 +15,10 @@ Boot order (current → future):
     Stage 3 — Cognition      : CNC
 
 Usage:
-    ros2 launch scs ras.launch.py
+    ros2 launch ras ras.launch.py
 
 Path convention:
-    ~/.agi/scs/aurora.yaml
+    ~/.agi/ras/aurora.yaml
 """
 
 from pathlib import Path
@@ -41,7 +41,7 @@ from hrs.hrm import RRR, AGi
 _AURORA_PATH = (
     Path.home()
     / AGi.ENTITY_GATEWAY
-    / RRR.SEMANTIC_COGNITIVE_SYSTEM
+    / RRR.RETICULAR_ACTIVATING_COMPARTMENT
     / AGi.SCS.AURORA_SETPOINTS                      # "aurora.yaml"
 )
 

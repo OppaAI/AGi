@@ -181,52 +181,6 @@ class CNC(Node):
         self.get_logger().info("🌸 GRACE is ready")                         # boot complete
         self.get_logger().info("=" * 60)                                    # visual separator
    
-    def _load_persona(self) -> None:
-        path = (
-            Path.home()
-            / AGi.ENTITY_GATEWAY
-            / RRR.SEMANTIC_COGNITIVE_SYSTEM
-            / RRR.GENERATIVE_COGNITIVE_ENGINE
-            / f"{self._active_persona}.yaml"
-        )
-        if not path.exists():
-            self.get_logger().warning(f"⚠️ No persona file at {path} — using HRM default")
-            return
-        try:
-            data = yaml.safe_load(path.read_text())
-            prompt = (data or {}).get("gce", {}).get("system_prompt")
-            if prompt:
-                AGi.SCS.GCE.SYSTEM_PROMPT = prompt
-                self.get_logger().info(f"✅ System prompt loaded — {self._active_persona}")
-            else:
-                self.get_logger().warning("⚠️ Persona missing gce.system_prompt — using HRM default")
-        except Exception as e:
-            self.get_logger().error(f"❌ Failed to load persona: {e}")
-
-    def _load_user(self) -> None:
-        path = (
-            Path.home()
-            / AGi.ENTITY_GATEWAY
-            / RRR.SEMANTIC_COGNITIVE_SYSTEM
-            / AGi.SCS.USER_PROFILES                             # "users.yaml"
-        )
-        if not path.exists():
-            self.get_logger().warning(f"⚠️ No users file at {path} — using HRM defaults")
-            return
-        try:
-            data = yaml.safe_load(path.read_text())
-            user = (data or {}).get("users", {}).get(self._active_user)
-            if user:
-                self.get_logger().info(f"✅ User profile loaded — {self._active_user}")
-                self._user_prefs = user                                         # store full profile
-                if user.get("preferences", {}).get("memory_salience_bias") is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= user["preferences"]["memory_salience_bias"]
-                    self.get_logger().info(f"✅ Memory salience bias applied — {self._active_user}") 
-            else:
-                self.get_logger().warning(f"⚠️ User '{self._active_user}' not found in users.yaml — using HRM defaults")
-        except Exception as e:
-            self.get_logger().error(f"❌ Failed to load user profile: {e}")
-        
     def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
