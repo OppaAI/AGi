@@ -160,6 +160,7 @@
       flex: 1;
       flex-direction: column;
       overflow: hidden;
+      min-height: 0;
       animation: fadeIn 0.25s ease;
     }
 
@@ -168,8 +169,15 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     /* ─── Glass Cards ─── */
@@ -230,9 +238,17 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .stat-value.warning { color: var(--warning); }
-    .stat-value.danger  { color: var(--danger); }
-    .stat-value.success { color: var(--success); }
+    .stat-value.warning {
+      color: var(--warning);
+    }
+
+    .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .stat-value.success {
+      color: var(--success);
+    }
 
     .stat-sub {
       font-size: 0.75rem;
@@ -245,6 +261,7 @@
       flex: 1;
       overflow-y: auto;
       padding: 12px 20px;
+      min-height: 0;
       font-size: 0.88rem;
       line-height: 1.6;
     }
@@ -261,8 +278,15 @@
     }
 
     @keyframes slideIn {
-      from { opacity: 0; transform: translateX(-6px); }
-      to   { opacity: 1; transform: translateX(0); }
+      from {
+        opacity: 0;
+        transform: translateX(-6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
     }
 
     /* ── Block colours ── */
@@ -272,6 +296,7 @@
       background: rgba(34, 211, 238, 0.07);
       border-left-color: #22d3ee;
     }
+
     .badge-user {
       background: rgba(34, 211, 238, 0.18);
       color: #67e8f9;
@@ -282,6 +307,7 @@
       background: rgba(248, 113, 113, 0.08);
       border-left-color: #f87171;
     }
+
     .badge-system-prompt {
       background: rgba(248, 113, 113, 0.20);
       color: #fca5a5;
@@ -292,6 +318,7 @@
       background: rgba(251, 146, 60, 0.08);
       border-left-color: #fb923c;
     }
+
     .badge-emc {
       background: rgba(251, 146, 60, 0.20);
       color: #fdba74;
@@ -302,6 +329,7 @@
       background: rgba(253, 224, 71, 0.07);
       border-left-color: #fde047;
     }
+
     .badge-memory {
       background: rgba(253, 224, 71, 0.18);
       color: #fef08a;
@@ -312,6 +340,7 @@
       background: rgba(251, 191, 36, 0.04);
       border-left-color: var(--warning);
     }
+
     .badge-thinking {
       background: rgba(251, 191, 36, 0.15);
       color: var(--warning);
@@ -323,6 +352,7 @@
       background: rgba(167, 139, 250, 0.08);
       border-left-color: #a78bfa;
     }
+
     .badge-ai {
       background: rgba(167, 139, 250, 0.20);
       color: #c4b5fd;
@@ -333,6 +363,7 @@
       background: rgba(248, 113, 113, 0.08);
       border-left-color: var(--danger);
     }
+
     .badge-error {
       background: rgba(248, 113, 113, 0.15);
       color: var(--danger);
@@ -343,6 +374,7 @@
       background: rgba(148, 163, 184, 0.04);
       border-left-color: var(--text-muted);
     }
+
     .badge-system {
       background: rgba(148, 163, 184, 0.1);
       color: var(--text-muted);
@@ -380,10 +412,10 @@
     }
 
     .stream-content.collapsed {
-      max-height: 60px;
+      max-height: 3.2em;
       overflow: hidden;
-      mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-      -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+      mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
       cursor: pointer;
     }
 
@@ -395,10 +427,22 @@
     }
 
     /* ─── Scrollbar ─── */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.2); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.35); }
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(167, 139, 250, 0.2);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(167, 139, 250, 0.35);
+    }
 
     /* ─── Teleop ─── */
     .teleop-grid {
@@ -432,7 +476,9 @@
       transform: scale(1.05);
     }
 
-    .teleop-btn:active { transform: scale(0.95); }
+    .teleop-btn:active {
+      transform: scale(0.95);
+    }
 
     .teleop-btn.danger {
       background: rgba(248, 113, 113, 0.1);
@@ -492,7 +538,9 @@
       z-index: 100;
     }
 
-    .pause-indicator.active { display: block; }
+    .pause-indicator.active {
+      display: block;
+    }
 
     /* ─── Legend ─── */
     .stream-legend {
@@ -614,7 +662,8 @@
           <div style="font-size:4rem; margin-bottom:16px;">🤖</div>
           <div style="color:var(--lavender-soft); font-size:1.2rem; font-weight:600;">Grace Chat Interface</div>
           <div style="color:var(--text-muted); margin-top:8px;">Embed your existing grace.html here</div>
-          <code style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
+          <code
+            style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
             &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
           </code>
         </div>
@@ -660,7 +709,8 @@
         </div>
         <div class="glass-card">
           <div class="card-title">📈 System Log</div>
-          <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.</div>
+          <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.
+          </div>
         </div>
       </div>
 
@@ -747,38 +797,65 @@
         }
       });
 
-      // Memory Context (WMC)
+      // Memory Context (WMC) — handles full assembled context payload
       const contextTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/memory_context',
         messageType: 'std_msgs/String'
       });
       contextTopic.subscribe((msg) => {
+        let data;
         try {
-          const data = JSON.parse(msg.data);
-          const messages = data.messages;
-          const systemMsg = messages.find(m => m.role === 'system');
-          const chatMsgs  = messages.filter(m => m.role !== 'system');
+          data = JSON.parse(msg.data);
+        } catch (e) {
+          addStreamEntry('error', 'memory_context: JSON parse failed — ' + msg.data.substring(0, 120), { meta: 'Parse error' });
+          return;
+        }
 
-          // System Prompt — red block
-          if (systemMsg) {
-            addStreamEntry('system-prompt', systemMsg.content, {
+        // Support both {messages:[...]} and flat array payloads
+        const messages = Array.isArray(data) ? data
+          : Array.isArray(data.messages) ? data.messages
+            : null;
+
+        if (!messages) {
+          // Unknown shape — dump raw so we can see what's arriving
+          addStreamEntry('system', 'memory_context: unexpected shape — ' + JSON.stringify(data).substring(0, 200), { meta: 'Unknown payload' });
+          return;
+        }
+
+        messages.forEach((m, i) => {
+          const role = (m.role || 'unknown').toLowerCase();
+          const content = Array.isArray(m.content)
+            ? m.content.map(c => (typeof c === 'string' ? c : c.text ?? JSON.stringify(c))).join('\n')
+            : (m.content ?? '');
+          const total = messages.length;
+
+          if (role === 'system') {
+            addStreamEntry('system-prompt', content, {
               turnId: currentTurn?.id,
               collapsed: true,
-              meta: `System prompt · ${systemMsg.content.length} chars`
+              meta: `System prompt · ${content.length} chars`
             });
-          }
-
-          // WMC (conversation window) — yellow block
-          if (chatMsgs.length > 0) {
-            const wmcContent = chatMsgs.map(m => `[${m.role.toUpperCase()}] ${m.content}`).join('\n\n');
-            addStreamEntry('memory-context', wmcContent, {
+          } else if (role === 'user') {
+            addStreamEntry('user-prompt', content, {
               turnId: currentTurn?.id,
               collapsed: true,
-              meta: `WMC · ${chatMsgs.length} turns in window`
+              meta: `WMC USER · ${i + 1}/${total}`
+            });
+          } else if (role === 'assistant') {
+            addStreamEntry('ai-done', content, {
+              turnId: currentTurn?.id,
+              collapsed: true,
+              meta: `WMC ASSISTANT · ${i + 1}/${total}`
+            });
+          } else {
+            addStreamEntry('memory-context', content, {
+              turnId: currentTurn?.id,
+              collapsed: true,
+              meta: `WMC [${role.toUpperCase()}] · ${i + 1}/${total}`
             });
           }
-        } catch (e) { }
+        });
       });
 
       // EMC Context — orange block
@@ -788,22 +865,19 @@
         messageType: 'std_msgs/String'
       });
       emcTopic.subscribe((msg) => {
-        try {
-          const data = JSON.parse(msg.data);
-          const content = data.episodes
-            ? data.episodes.map((ep, i) => `[${i+1}] ${ep}`).join('\n')
-            : (data.content || msg.data);
-          addStreamEntry('emc-context', content, {
-            turnId: currentTurn?.id,
-            collapsed: true,
-            meta: `EMC · ${data.count || '?'} episodes recalled · score ${data.score || '—'}`
-          });
-        } catch (e) {
-          addStreamEntry('emc-context', msg.data, {
-            collapsed: true,
-            meta: 'EMC recall'
-          });
+        let data;
+        try { data = JSON.parse(msg.data); } catch (e) {
+          addStreamEntry('emc-context', msg.data, { collapsed: true, meta: 'EMC recall (raw)' });
+          return;
         }
+        const content = data.episodes
+          ? data.episodes.map((ep, i) => `[${i + 1}] ${ep}`).join('\n')
+          : (data.content || JSON.stringify(data).substring(0, 300));
+        addStreamEntry('emc-context', content, {
+          turnId: currentTurn?.id,
+          collapsed: true,
+          meta: `EMC · ${data.count ?? data.episodes?.length ?? '?'} episodes · score ${data.score ?? '—'}`
+        });
       });
 
       // Memory Stats
@@ -846,7 +920,7 @@
     function handleResponseChunk(data) {
       if (!currentTurn) return;
 
-      const now     = Date.now();
+      const now = Date.now();
       const elapsed = (now - currentTurn.startTime) / 1000;
 
       if (data.type === 'start' || data.type === 'delta') {
@@ -877,15 +951,15 @@
         }
       }
       else if (data.type === 'done') {
-        const latency    = ((now - currentTurn.startTime) / 1000).toFixed(2);
+        const latency = ((now - currentTurn.startTime) / 1000).toFixed(2);
         latencies.push(parseFloat(latency));
         const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
 
-        document.getElementById('statLatency').textContent    = `${latency}s`;
+        document.getElementById('statLatency').textContent = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
 
         const allResponses = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
-        const lastEntry    = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
+        const lastEntry = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
         if (lastEntry) {
           lastEntry.classList.remove('ai-response');
           lastEntry.classList.add('ai-done');
@@ -908,7 +982,7 @@
     }
 
     function estimateTokens(text) {
-      const cjkCount   = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const cjkCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
       const otherCount = text.length - cjkCount;
       return Math.ceil(cjkCount / 2 + otherCount / 4) || 1;
     }
@@ -921,11 +995,11 @@
         stream.innerHTML = '';
       }
 
-      const entry       = document.createElement('div');
-      entry.className   = `stream-entry ${type}`;
+      const entry = document.createElement('div');
+      entry.className = `stream-entry ${type}`;
       if (options.turnId) entry.dataset.turnId = options.turnId;
 
-      const contentEl   = document.createElement('div');
+      const contentEl = document.createElement('div');
       contentEl.className = 'stream-content' + (options.collapsed ? ' collapsed' : '');
       contentEl.textContent = content;
 
@@ -934,15 +1008,15 @@
       });
 
       const badgeMap = {
-        'user-prompt':    { cls: 'badge-user',          icon: '👤', label: 'USER'   },
-        'system-prompt':  { cls: 'badge-system-prompt', icon: '🔴', label: 'SYSTEM' },
-        'emc-context':    { cls: 'badge-emc',           icon: '🟠', label: 'EMC'    },
-        'memory-context': { cls: 'badge-memory',        icon: '🟡', label: 'WMC'    },
-        'ai-thinking':    { cls: 'badge-thinking',      icon: '⚡', label: 'THINK'  },
-        'ai-response':    { cls: 'badge-ai',            icon: '🤖', label: 'GRACE'  },
-        'ai-done':        { cls: 'badge-ai',            icon: '✓',  label: 'DONE'   },
-        'error':          { cls: 'badge-error',         icon: '✗',  label: 'ERROR'  },
-        'system':         { cls: 'badge-system',        icon: '◆',  label: 'SYS'    }
+        'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
+        'system-prompt': { cls: 'badge-system-prompt', icon: '🔴', label: 'SYSTEM' },
+        'emc-context': { cls: 'badge-emc', icon: '🟠', label: 'EMC' },
+        'memory-context': { cls: 'badge-memory', icon: '🟡', label: 'WMC' },
+        'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
+        'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'GRACE' },
+        'ai-done': { cls: 'badge-ai', icon: '✓', label: 'DONE' },
+        'error': { cls: 'badge-error', icon: '✗', label: 'ERROR' },
+        'system': { cls: 'badge-system', icon: '◆', label: 'SYS' }
       };
       const badge = badgeMap[type] || badgeMap['system'];
 
@@ -982,10 +1056,10 @@
       if (stats.wmc) {
         const wmc = stats.wmc;
         document.getElementById('statWmcSize').textContent = wmc.pmt_count;
-        document.getElementById('statWmcPct').textContent  = `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
+        document.getElementById('statWmcPct').textContent = `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
         const wmcEl = document.getElementById('statWmcSize');
         wmcEl.className = 'stat-value';
-        if (wmc.chunk_occupancy > 90)      wmcEl.classList.add('danger');
+        if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
         else if (wmc.chunk_occupancy > 70) wmcEl.classList.add('warning');
       }
       if (stats.emc) {
@@ -1015,12 +1089,12 @@
     document.addEventListener('keydown', (e) => {
       if (document.getElementById('tab-teleop').classList.contains('active')) {
         switch (e.key.toLowerCase()) {
-          case 'w': teleop('forward');  break;
-          case 'a': teleop('left');     break;
+          case 'w': teleop('forward'); break;
+          case 'a': teleop('left'); break;
           case 's': teleop('backward'); break;
-          case 'd': teleop('right');    break;
+          case 'd': teleop('right'); break;
           case ' ': teleop('stop'); e.preventDefault(); break;
-          case 'e': emergencyStop();    break;
+          case 'e': emergencyStop(); break;
         }
       }
     });
@@ -1045,4 +1119,5 @@
   </script>
 
 </body>
+
 </html>
