@@ -126,7 +126,7 @@ from collections import deque               # for O(1) append/popleft in binding
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi libraries
-from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
+from hrs.hrm import AGi, ChunkSampler       # homeostatic regulation manifest namespace
 SCS = AGi.SCS                               # SCS-level constants — e.g. UNITS_PER_CHUNK
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 
@@ -462,7 +462,7 @@ class EpisodicMemoryCortex:
         SQLite WAL mode allows concurrent reads during async writes
     """
 
-    def __init__(self, logger, engram_gateway: Path) -> None:
+    def __init__(self, logger, engram_gateway: Path, chunk_sampler: ChunkSampler) -> None:
         """
         Initialize the Episodic Memory Cortex, engram complex, encoding engine,
         and start the background encoding cycle.
@@ -477,6 +477,7 @@ class EpisodicMemoryCortex:
         self.logger                = logger                                 # logger from MCC — used throughout EMC
         self.episodic_buffer       = EpisodicBuffer()                       # two-stream buffer — binding and recall streams
         self._episodic_buffer_lock = threading.Lock()                       # serializes binding stream access
+        self._chunk_sampler        = chunk_sampler                          # for token-aware truncation and reinstatement budgeting
 
         # Retrieve the paramaters from HRS 
         self._episode_content_limit  = EMC.EPISODE_CONTENT_LIMIT            # maximum number of episodes to encode in a single theta cycle
