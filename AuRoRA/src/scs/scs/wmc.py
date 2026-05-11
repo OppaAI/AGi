@@ -178,8 +178,10 @@ class WorkingMemoryCortex:
             }
             self._induced_pmt = None                                # clear induced PMT — exchange complete
 
-            induced_pmt_chunks: int = self.chunk_sampler.probe_pmt(induced_pmt)                          # estimate chunk cost of incoming PMT
-
+            induced_pmt_chunks: int = self.chunk_sampler.probe(     # estimate chunk cost of incoming PMT
+                content=induced_pmt["content"],
+                overhead=WMC.PMT_OVERHEAD
+            )
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
             # And then fill the induced PMT, to keep working memory always within the capacities
@@ -190,7 +192,10 @@ class WorkingMemoryCortex:
             ):
                 evicted_pmt: dict           = self._pmt_slot.popleft()                                   # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
-                evicted_chunks: int         = self.chunk_sampler.probe_pmt(evicted_pmt)                  # calculate chunk cost of evicted PMT
+                evicted_chunks: int         = self.chunk_sampler.probe(                                  # calculate chunk cost of evicted PMT
+                    content=evicted_pmt["content"],
+                    overhead=WMC.PMT_OVERHEAD
+                )
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)            # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                       # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"
