@@ -118,7 +118,7 @@ class CNC(Node):
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
         # Initialize configuration through hydration
-        AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
+        AGi.hydrate_manifest(self, system="scs")                            # hydrate manifest from AuRoRA parameters under the SCS system
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
         self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
         self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
