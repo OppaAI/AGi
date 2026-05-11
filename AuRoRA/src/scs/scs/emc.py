@@ -477,9 +477,10 @@ class EpisodicMemoryCortex:
         self.logger                = logger                                 # logger from MCC — used throughout EMC
         self.episodic_buffer       = EpisodicBuffer()                       # two-stream buffer — binding and recall streams
         self._episodic_buffer_lock = threading.Lock()                       # serializes binding stream access
-        self._chunk_sampler        = chunk_sampler                          # for token-aware truncation and reinstatement budgeting
+        self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
+        self._units_per_chunk      = SCS.UNITS_PER_CHUNK                    # chars-per-token constant — for truncate estimation
 
-        # Retrieve the paramaters from HRS 
+        # Retrieve the paramaters from HRS
         self._episode_content_limit  = EMC.EPISODE_CONTENT_LIMIT            # maximum number of episodes to encode in a single theta cycle
         self._encoding_engine      = EncodingEngine(                        # sentence-transformers wrapper with LRU prime
             logger          = logger,                                       # logger instance for logging operations
@@ -492,6 +493,7 @@ class EpisodicMemoryCortex:
 
         self._recall_depth           = EMC.RECALL_DEPTH                     # number of recalled episodes to surface
         self._recall_surface_limit   = EMC.RECALL_SURFACE_LIMIT             # number of candidate episodes to recall
+        self._recall_reserve         = EMC.RECALL_RESERVE                   # max chunk budget allocated to reinstated episodes
         self._relevance_threshold    = EMC.RELEVANCE_THRESHOLD              # semantic relevance threshold for recall
 
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
@@ -529,10 +531,10 @@ class EpisodicMemoryCortex:
             bool: True on success, False on failure
         """
         episode: dict = {             
-            "user_id"   : user_id,                                                  # user ID — should be retrieved from MCC
-            "timestamp" : timestamp,                                                # timestamp of PMT induced into WMC
-            "date"      : timestamp[:10],                                           # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content"   : content[:self._episode_content_limit]                     # truncate to engram limit before binding
+            "user_id"   : user_id,                                                      # user ID — should be retrieved from MCC
+            "timestamp" : timestamp,                                                    # timestamp of PMT induced into WMC
+            "date"      : timestamp[:10],                                               # YYYY-MM-DD slice — B-tree indexed for date recall
+            "content"   : content[:self._episode_content_limit * self._units_per_chunk] # truncate to engram limit before binding
         }
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
@@ -546,7 +548,7 @@ class EpisodicMemoryCortex:
                 _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
             self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
             self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
-                f"EMC buffer ← {len(content) // SCS.UNITS_PER_CHUNK + 1} chunks"
+                f"EMC buffer ← {self._chunk_sampler.probe(content)} chunks"
             )
             return True                                                             # indicate successful binding
         except Exception as e:
@@ -590,11 +592,25 @@ class EpisodicMemoryCortex:
             episode for episode in raw_episodes
             if episode["relevancy"] >= self._relevance_threshold                
         ]
+        
+        # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
+        recall_reserve: int = self._recall_reserve                                          # remaining chunk budget for reinstatement
+        fragmented_episodes: list[dict] = []                                                # budget-trimmed episode list
+        for episode in filtered_episodes:                                                   # iterate through each recalled episodes
+            content     = episode.get("content", "")                                        # retrieve the content of the episode
+            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the epsiode content
+            if chunk_count > recall_reserve:                                                # episode exceeds remaining budget — truncate to fragment
+                episode["content"] = self._chunk_sampler.truncate(content, recall_reserve)  # surface fragment — mirrors human partial recall
+                fragmented_episodes.append(episode)                                         # reinstate memory fragment into memory context
+                break                                                                       # budget exhausted after fragment — stop reinstating
+            recall_reserve -= chunk_count                                                   # deduct the token cost of the episode from the budge
+            fragmented_episodes.append(episode)                                             # reinstate episode into memory context
+        filtered_episodes = fragmented_episodes                                             # replace with budget-trimmed list
 
-        if not filtered_episodes:                                                   # nothing to stage — skip
-            return []                                                               # return if no filtered episodes
+        if not filtered_episodes:                                                           # nothing to stage — skip
+            return []                                                                       # return if no filtered episodes
 
-        lines = [                                                                   # system message header
+        lines = [                                                                           # system message header
             "Past memories (for context only — these are not the current conversation):",
             ""
         ]    
