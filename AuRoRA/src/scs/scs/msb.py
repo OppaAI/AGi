@@ -46,9 +46,6 @@ Public interface:
         recall_engram(cue: RecallCue, depth: int, date_range?) → list[dict]
         assess_engram_complex() → dict
         terminate() → None
-
-TODO: migrate pack_vector, normalize_vector to hrs.py if
-      vector math is needed outside memory cortices
 """
 
 # System libraries
@@ -270,10 +267,6 @@ class EngramComplex:
     Engram Complex (ECX) — memory storage bank abstraction layer.
     Owns all SQL operations for memory cortex — schema creation, staging, consolidation,
     recall, and retrieval. The memory cortex never touches SQL directly.
-
-    TODO: extend engram complex with SMC and PMC tables in M2.
-    TODO: backend swap — Qdrant, pgvector, or other vector DB — swap here only,
-          cortex cognitive logic untouched.
     """
     
     LEXICAL_FILTER_WORDS = {                                        # set literal — O(1) membership test in clean_cue
