@@ -95,6 +95,7 @@ class WorkingMemoryCortex:
         self.global_chunk_limit: int = global_chunk_limit   # maximum chunks WMC can sustain before eviction
         self.pmt_slot_limit: int     = pmt_slot_limit       # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer      # additional PMT buffer beyond Miller's Law limit
+        self._pmt_overhead: int      = WMC.PMT_OVERHEAD     # chunk overhead per PMT — accounts for formatting and role metadata tokens
         self._induced_pmt: dict | None = None               # induced user prompt pending pairing with AI response
         self._pmt_slot: deque[dict]  = deque()              # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                    # running count of sustained chunks across all PMTs
@@ -177,7 +178,7 @@ class WorkingMemoryCortex:
 
             induced_pmt_chunks: int = self.chunk_sampler.probe(     # estimate chunk cost of incoming PMT
                 content=induced_pmt["content"],
-                overhead=WMC.PMT_OVERHEAD
+                overhead=self._pmt_overhead
             )
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
@@ -191,7 +192,7 @@ class WorkingMemoryCortex:
                 evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
                 evicted_chunks: int         = self.chunk_sampler.probe(                                  # calculate chunk cost of evicted PMT
                     content=evicted_pmt["content"],
-                    overhead=WMC.PMT_OVERHEAD
+                    overhead=self._pmt_overhead
                 )
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)            # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                       # log the eviction of the receding PMT
