@@ -111,6 +111,7 @@ class AGi:                                                              # Amazin
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
             COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] Ollama model tag
+            BASE_CONGITIVE_ENGINE : str   = "google/gemma-4-26B-A4B-it"                         # [STATIC]  for token estimation by tokenizer
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
@@ -194,32 +195,39 @@ Rules:
             PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
 
     @classmethod
-    def hydrate_from_ros(cls, node, prefix: str = 'scs') -> None:
-        """
-        Declare and read all intrinsic AGi parameters from the ROS2 param server.
-        Called once per node at init — walks the class tree from the given prefix.
-        
+    def hydrate_manifest(cls, core, system: str) -> None:
+        """Hydrate the single source of truth manifest from parameters declared by AuRoRA or admin under the given system.
+    
         Args:
-            node: ROS2 Node instance — provides declare_parameter / get_parameter
-            prefix: YAML hierarchy root to walk (default 'scs')
+            core    : Core node instance receiving the hydrated parameters
+            system  : System name identifying the manifest to hydrate (e.g. "scs")
         """
-        target = cls._find_subclass(cls, prefix)
-        if target is None:
-            raise RuntimeError(f"❌ AGi has no subclass matching prefix '{prefix}'")
-        cls._declare_and_read(node, target, prefix)
+        manifest = cls._find_manifest(cls, system)                                    # recurse class tree — match nested subclass by system name
+        if manifest is None:                                                          # if no match subclass is found,
+            raise RuntimeError(f"❌ No manifest matching system name '{system}'")     # hard fail — system name must map to a known subclass
+        cls._declare_and_read(core, manifest, system)                                 # walk manifest tree — declare and bind all parameters to core
 
     @classmethod
-    def _find_subclass(cls, root, prefix: str):
-        """Recursively search the AGi tree for a class matching the prefix."""
-        for name in vars(root):
-            val = getattr(root, name)
-            if not isinstance(val, type) or name.startswith('_'):
-                continue
-            if name.lower() == prefix:
-                return val
-            found = cls._find_subclass(val, prefix)
-            if found:
-                return found
+    def _find_manifest(cls, tree, system: str) -> type | None
+        """
+        Recursively search the AuRoRA class tree to locate the manifest subclass matching the given system name.
+    
+        Args:
+            tree    : AuRoRA class tree to search through
+            system  : system name to match against nested subclass names
+    
+        Returns:
+            type | None : matched manifest subclass, or None if not found
+        """
+        for system_name in vars(tree):                                                # iterate attribute names of the current class level
+            subsystem = getattr(tree, system_name)                                    # retrieve the attribute value for inspection
+            if not isinstance(subsystem, type) or system_name.startswith("_"):        # if non-class attributes and private members,
+                continue                                                              # skip — only walk public nested classes
+            if system_name.lower() == system:                                         # case-insensitive match,
+                return subsystem                                                      # return manifest subclass if system name matches
+            matched_manifest = cls._find_manifest(subsystem, system)                  # recurse into nested subclass — depth-first search
+            if matched_manifest:                                                      # if manifest match the subclass
+                return matched_manifest                                               # propagate match up the call stack
         return None
         
     @classmethod
@@ -245,13 +253,13 @@ class ChunkEstimator:
     Chunk estimation for context budget management.
     Tries real tokenizer first — falls back to char-division approximation.
     """
-    def __init__(self, logger, tokenizer_model: str):
+    def __init__(self, logger):
         self.logger = logger
         self._tokenizer = None
         try:
             from transformers import AutoTokenizer
-            self.logger.info(f"⏳ Loading tokenizer ({tokenizer_model})…")
-            self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_model)
+            self.logger.info(f"⏳ Loading chunk estimator ({AGi.SCS.GCE.BASE_COGNITIVE_ENGINE})…")
+            self._tokenizer = AutoTokenizer.from_pretrained(AGi.SCS.GCE.BASE_COGNITIVE_ENGINE)
             self.logger.info("✅ Tokenizer loaded")
         except Exception as e:
             self.logger.debug(f"Tokenizer unavailable, falling back to char-division: {e}")
@@ -259,7 +267,7 @@ class ChunkEstimator:
     def count(self, text: str) -> int:
         """Count tokens in text."""
         if not text:
-            return none
+            return 0
             
         if self._tokenizer:
             return len(self._tokenizer.encode(text, add_special_tokens=False))
