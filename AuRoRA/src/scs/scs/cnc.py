@@ -200,10 +200,6 @@ class CNC(Node):
             return                                                                  # abort early
 
         self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
-        
-        user_prompt_chunk: int = len(user_prompt) // SCS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
-        self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt        
-
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
             self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
         )
