@@ -199,33 +199,33 @@ Rules:
         """Hydrate the single source of truth manifest from parameters declared by AuRoRA or admin under the given system.
     
         Args:
-            core    : Core node instance receiving the hydrated parameters
-            system  : System name identifying the manifest to hydrate (e.g. "scs")
+            core        : Core node instance receiving the hydrated parameters
+            system (str): System name identifying the manifest to hydrate (e.g. "scs")
         """
-        manifest = cls._find_manifest(cls, system)                                    # recurse class tree — match nested subclass by system name
+        manifest: type | None = cls._find_manifest(cls, system)                       # recurse class tree — match nested subclass by system name
         if manifest is None:                                                          # if no match subclass is found,
             raise RuntimeError(f"❌ No manifest matching system name '{system}'")     # hard fail — system name must map to a known subclass
         cls._declare_and_read(core, manifest, system)                                 # walk manifest tree — declare and bind all parameters to core
 
     @classmethod
-    def _find_manifest(cls, tree, system: str) -> type | None
+    def _find_manifest(cls, tree: type, system: str) -> type | None:
         """
         Recursively search the AuRoRA class tree to locate the manifest subclass matching the given system name.
     
         Args:
-            tree    : AuRoRA class tree to search through
-            system  : System name to match against nested subsystem names
+            tree (type) : AuRoRA class tree to search through
+            system (str): System name to match against nested subsystem names
     
         Returns:
             type | None : matched manifest subclass, or None if not found
         """
         for system_name in vars(tree):                                                # iterate attribute names of the current class level
-            subsystem = getattr(tree, system_name)                                    # retrieve the attribute value for inspection
+            subsystem: object = getattr(tree, system_name)                            # retrieve the attribute value for inspection
             if not isinstance(subsystem, type) or system_name.startswith("_"):        # if non-class attributes and private members,
                 continue                                                              # skip — only walk public nested classes
             if system_name.lower() == system:                                         # case-insensitive match,
                 return subsystem                                                      # return manifest subclass if system name matches
-            matched_manifest = cls._find_manifest(subsystem, system)                  # recurse into nested subclass — depth-first search
+            matched_manifest: type | None = cls._find_manifest(subsystem, system)     # recurse into nested subclass — depth-first search
             if matched_manifest:                                                      # if manifest match the subclass
                 return matched_manifest                                               # propagate match up the call stack
         return None
@@ -236,15 +236,15 @@ Rules:
         Recursively search the AuRoRA class tree and hydrate parameters declared by AuRoRA — skips static manifest parameters.
 
         Args:
-            core        : Core node instance receiving the hydrated parameters
-            manifest    : Manifest subclass to search through and hydrate
-            system      : System name identifying the manifest to hydrate
+            core            : Core node instance receiving the hydrated parameters
+            manifest (type) : Manifest subclass to search through and hydrate
+            system (str)    : System name identifying the manifest to hydrate
         """
-        for param_name in vars(manifest):                                            # iterate attribute names of the manifest subclass
-            if param_name.startswith('_'):                                           # if private members,
-                continue                                                             # skip — internal constants not exposed to parameter server
-            param_value = getattr(manifest, param_name)                              # retrieve the attribute value for inspection
-            param_key = f"{system}.{param_name.lower()}"                             # build fully qualified parameter key — dot-separated namespace path
+        for param_name in vars(manifest):                                                # iterate attribute names of the manifest subclass
+            if param_name.startswith('_'):                                               # if private members,
+                continue                                                                 # skip — internal constants not exposed to parameter server
+            param_value: type | int | float | bool | str = getattr(manifest, param_name) # retrieve the attribute value for inspection
+            param_key: str = f"{system}.{param_name.lower()}"                            # build fully qualified parameter key — dot-separated namespace path
 
             if isinstance(param_value, type):                                        # if nested subclass is found,
                 cls._hydrate_system(core, param_value, param_key)                    # recurse into nested subclass — depth-first walk
@@ -277,34 +277,22 @@ class ChunkSampler:
         except Exception as e:                                                                        # if the tokenizer fails to load,
             self.logger.debug(f"Chunk sampler unavailable, falling back to chunk-division: {e}")      # soft fail — chunk-division approximation takes over
     
-    def probe_context(self, content: str) -> int:
+    def probe(self, content: str, overhead: int = 0) -> int:
         """
         Probe the content and return the estimated chunk count.
     
         Args:
-            content : content of the context to probe for chunk estimation
+            content (str) : content of the context to probe for chunk estimation
+            overhead (int): structural token overhead to add —
+                            e.g. WMC.PMT_OVERHEAD for WMC PMTs; Default 0 for pre-formatted content.
     
         Returns:
             int : estimated number of chunks in the content
         """
-        if not content:                                                                        # guard — empty content yields zero tokens
-            return 0                                                                           # return zero tokens
+        if not content:                                                                                # guard — empty content yields zero tokens
+            return 0                                                                                   # return zero tokens
             
-        if self._chunk_slicer:                                                                 # if tokenizer loaded successfully,
-            return len(self._chunk_slicer.encode(content, add_special_tokens=False))           # encode content into tokens — return count excluding structural special tokens
+        if self._chunk_slicer:                                                                         # if tokenizer loaded successfully,
+            return len(self._chunk_slicer.encode(content, add_special_tokens=False)) + overhead        # encode content into tokens — return count excluding structural special tokens
         # Fallback: character-division approximation
-        return max(1, (len(content) + self._unit_per_chunk - 1) // self._unit_per_chunk)       # fallback — ceiling divide by chars-per-token constant, minimum 1
-
-
-    def probe_pmt(self, pmt: dict) -> int:
-                """
-        Probe the content of PMT and return the estimated chunk count that includes the PMT overhead.
-        Use for WMC PMTs only — PMT overhead covers the role name and structural text.
-    
-        Args:
-            pmt: pmt to probe the content for chunk estimation
-    
-        Returns:
-            int : estimated number of chunks in the content include the PMT overhead
-        """
-        return self.probe(pmt["content"]) + AGi.SCS.WMC.PMT_OVERHEAD                            # return the total of token count of the PMT content with PMT overhead
+        return max(1, (len(content) + self._unit_per_chunk - 1) // self._unit_per_chunk) + overhead    # fallback — ceiling divide by chars-per-token constant, minimum 1
