@@ -50,19 +50,16 @@ Public interface:
     wmc.forget_pmt_schema() -> list[dict]
     wmc.assess_pmt_schema() -> dict
     wmc.is_empty -> bool
-
-TODO:
-    M2 — integrate HRS.BLC for biological clock timestamps
-    M3 — add salience weighting to eviction policy
 """
 
 # System libraries
-from datetime import datetime            # for PMT timestamps — (TODO) replaced by hrs.blc when BioLogic Clock is built
+from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi libraries
-from hrs.hrm import AGi, ChunkEstimator  # homeostatic regulation manifest namespace — system-wide constants
+from hrs.hru import ChunkSampler         # probes and truncates cognitive context for budget management
+from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
 
@@ -136,7 +133,7 @@ class WorkingMemoryCortex:
             # Induce unpaired user prompt — pending for AI response
             self._induced_pmt = {                               # stage induced PMT — pending AI response
                 "user_id": user_id,                             # user ID of the speaker
-                "timestamp": datetime.now().isoformat(),        # wall-clock induction time (TODO M2: use ROS2 time)
+                "timestamp": datetime.now().isoformat(),        # wall-clock induction time (TODO M1.6: use ROS2 time)
                 "content": {                                    # embed both user prompt and AI response in the same PMT
                     "prompt": content,                          # user prompt — paired with AI response on next turn
                     "response": ""                              # empty until AI responds
