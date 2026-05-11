@@ -82,3 +82,69 @@ def _hydrate_system(core, manifest: type, system: str) -> None:
         elif isinstance(param_value, (int, float, bool, str)):                   # if parameter value is integer, float, boolean, string,
             core.declare_parameter(param_key, param_value)                       # declare parameter with default value on the core node
             setattr(manifest, param_name, core.get_parameter(param_key).value)   # write AuRoRA-declared value back to manifest — overrides default
+
+class ChunkSampler:
+    """
+    Sample the context and estimate chunk count for cognitive context management.
+    Attempts probing with base cognitive engine first — falls back to chunk-division approximation.
+    """
+    def __init__(self, logger) -> None:
+        """
+        Initialize the ChunkSampler with a logger and attempt to load the base cognitive engine chunk sampler.
+    
+        Args:
+            logger : logger instance for runtime diagnostics passed from the caller
+        """        
+        self.logger           = logger                                    # runtime diagnostics interface
+        self._chunk_slicer    = None                                      # tokenizer — loaded from base model on init
+        self._gce_base        = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE         # base model name — used to load tokenizer
+        self._units_per_chunk = AGi.SCS.UNITS_PER_CHUNK                   # chars-per-token constant — used in fallback approximation
+        
+        try:                                                                                          # attempt to load the tokenizer
+            from transformers import AutoTokenizer                                                    # lazy import — only load HuggingFace tokenizer if available
+            self.logger.info(f"⏳ Activating chunk sampler ({self._gce_base})…")                      # log the activating of the tokenizer
+            self._chunk_slicer = AutoTokenizer.from_pretrained(self._gce_base)                        # load base model tokenizer — slices context into model-accurate chunks
+            self.logger.info("✅ Chunk sampler activated")                                            # log the activation successful
+        except Exception as e:                                                                        # if the tokenizer fails to load,
+            self.logger.debug(f"Chunk sampler unavailable, falling back to chunk-division: {e}")      # soft fail — chunk-division approximation takes over
+    
+    def probe(self, content: str, overhead: int = 0) -> int:
+        """
+        Probe the content and return the estimated chunk count.
+    
+        Args:
+            content (str) : content of the context to probe for chunk estimation
+            overhead (int): structural token overhead to add —
+                            e.g. WMC.PMT_OVERHEAD for WMC PMTs; Default 0 for pre-formatted content.
+    
+        Returns:
+            int : estimated number of chunks in the content
+        """
+        if not content:                                                                                # guard — empty content yields zero tokens
+            return 0                                                                                   # return zero tokens
+            
+        if self._chunk_slicer:                                                                         # if tokenizer loaded successfully,
+            return len(self._chunk_slicer.encode(content, add_special_tokens=False)) + overhead        # encode content into tokens — return count excluding structural special tokens
+        # Fallback: character-division approximation
+        return max(1, (len(content) + self._units_per_chunk - 1) // self._units_per_chunk) + overhead  # fallback — ceiling divide by chars-per-token constant, minimum 1
+
+    def truncate(self, content: str, limit: int) -> str:
+        """Truncate content to fit within the given chunk limit.
+    
+        Args:
+            content : text content to truncate
+            limit   : maximum number of chunks to retain
+    
+        Returns:
+            str : truncated content fitting within the chunk limit
+        """
+        if not content or limit <= 0:                                                       # guard — empty content or zero limit yields empty string
+            return ""                                                                       # return empty string
+    
+        if self._chunk_slicer:                                                              # if chunk slicer loaded successfully,
+            chunks = self._chunk_slicer.encode(content, add_special_tokens=False)           # encode content into chunk IDs — exclude structural special tokens
+            if len(chunks) <= limit:                                                        # content already fits — no truncation needed
+                return content                                                              # content fits within limit — no truncation needed
+            return self._chunk_slicer.decode(chunks[:limit])                                # decode truncated tokens back to text — exact chunk boundary
+    
+        return content[:limit * self._units_per_chunk]                                      # fallback — ceiling char-division approximation
