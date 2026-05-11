@@ -645,25 +645,25 @@ class EpisodicMemoryCortex:
             self.logger.error(f"EMC assessment failed: {e}")                    # log failure with reason
             return {}                                                           # empty dict — caller handles no results
 
-def drain_encoding_cycle(self, timeout: float = 10.0) -> None:
-    """
-    Wait for the binding stream to empty before shutdown.
-    Gives the encoding cycle time to consolidate flushed PMTs.
-    Called by MCC after flushing remaining WMC PMTs on close.
-
-    Args:
-        timeout (float): Max seconds to wait — prevents hanging on shutdown
-    """
-    expiry_time = time.time() + timeout                                 # calculate expiry time from now
-    while time.time() < expiry_time:                                    # keep checking until expiry time
-        with self._episodic_buffer_lock:                                # hold lock for accurate count
-            if not self.episodic_buffer._binding_stream:                # binding stream empty — safe to terminate
-                self.logger.info("✅ EMC binding stream drained")       # log successful drain
-                return
-        time.sleep(0.1)                                                 # yield — encoding cycle runs on its own thread
-    self.logger.warning(                                                # expiry time reached — some PMTs may be lost
-        "⚠️  EMC drain timeout — some PMTs may not have been consolidated"
-    )
+    def drain_encoding_cycle(self, timeout: float = 10.0) -> None:
+        """
+        Wait for the binding stream to empty before shutdown.
+        Gives the encoding cycle time to consolidate flushed PMTs.
+        Called by MCC after flushing remaining WMC PMTs on close.
+    
+        Args:
+            timeout (float): Max seconds to wait — prevents hanging on shutdown
+        """
+        expiry_time = time.time() + timeout                                 # calculate expiry time from now
+        while time.time() < expiry_time:                                    # keep checking until expiry time
+            with self._episodic_buffer_lock:                                # hold lock for accurate count
+                if not self.episodic_buffer._binding_stream:                # binding stream empty — safe to terminate
+                    self.logger.info("✅ EMC binding stream drained")       # log successful drain
+                    return
+            time.sleep(0.1)                                                 # yield — encoding cycle runs on its own thread
+        self.logger.warning(                                                # expiry time reached — some PMTs may be lost
+            "⚠️  EMC drain timeout — some PMTs may not have been consolidated"
+        )
 
     def terminate(self) -> None:
         """
