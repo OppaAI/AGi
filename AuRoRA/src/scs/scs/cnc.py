@@ -49,6 +49,7 @@ Terminology:
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
 
 TODO:
+SCS:
     M1.x — WebUI operator dashboard: rosbridge_server WebSocket bridge for
             browser-based debug stream, memory stats, and teleop interface
     M1.x — MEMORY_CONTEXT_GATEWAY: WebUI memory context debug stream
@@ -57,6 +58,7 @@ TODO:
            evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
     M1.x — multi-user identity: replace hardcoded "user" speaker literal with
            user_id from NeuralTextInput schema — required for ASR multi-speaker routing
+    M2? — remove M1 stub — replace with login sequence
     M2 — standardize logger format across all EMC classes (EpisodicMemoryCortex, EncodingCycle, EpisodicBuffer)
          establish consistent prefix convention — e.g. [EMC], [EncodingCycle], [EpisodicBuffer]
     M2 — _strip_model_artifacts(): strip think blocks and roleplay artifacts
@@ -64,6 +66,11 @@ TODO:
     M2 — salience gate: score assistant response before registering in MCC —
          discard low-salience turns at the CNC boundary
     M2 — busy queue: buffer incoming inputs during processing rather than dropping
+    
+HRS/HRC:
+    M2 — HRC takes ownership of manifest hydration lifecycle
+    M2 — add manifest diff and rollback for safe runtime parameter updates
+    
     M3 — emotional state initialization
     M3 — multi-modal input: image and audio signal routing through CNC
     M? — perception subsystems (visual, auditory)
@@ -87,6 +94,7 @@ from std_msgs.msg import String                            # ROS2 string message
 # AGi libraries
 from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
+from hrs.hrc import hydrate_manifest                       # manifest hydration — binds AuRoRA parameter server values into AGi constants at node init
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
@@ -120,7 +128,7 @@ class CNC(Node):
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
         # Initialize configuration through hydration
-        AGi.hydrate_manifest(self, system="scs")                            # hydrate manifest from AuRoRA parameters under the SCS system
+        hydrate_manifest(self, system="scs")                                # hydrate manifest from AuRoRA parameters under the SCS system
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
         self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
         self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
