@@ -113,7 +113,6 @@ from dataclasses import dataclass, field    # for EpisodicBuffer and episode dat
 # AGi libraries
 from hrs.hru import ChunkSampler            # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
-SCS = AGi.SCS                               # SCS-level constants — e.g. UNITS_PER_CHUNK
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 
 from scs.msb import (                       # shared memory storage bank substrate
@@ -464,8 +463,9 @@ class EpisodicMemoryCortex:
         self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
 
         # Retrieve the paramaters from HRS
-        self._episode_content_limit  = EMC.EPISODE_CONTENT_LIMIT            # maximum number of episodes to encode in a single theta cycle
-        self._encoding_engine      = EncodingEngine(                        # sentence-transformers wrapper with LRU prime
+        self._binding_stream_limit  = EMC.BINDING_STREAM_LIMIT              # max unencoded PMTs queued before OOM guard triggers
+        self._episode_content_limit = EMC.EPISODE_CONTENT_LIMIT             # max number of episodes to encode in a single theta cycle
+        self._encoding_engine       = EncodingEngine(                       # sentence-transformers wrapper with LRU prime
             logger          = logger,                                       # logger instance for logging operations
             encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
             cue_prefix      = EMC.ENCODING_CUE_PREFIX,                      # query prefix for recall cues
@@ -523,9 +523,9 @@ class EpisodicMemoryCortex:
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
                 _binding_stream = self.episodic_buffer._binding_stream              # reference for capacity check
-                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                # at capacity — oldest will be silently dropped by deque maxlen
+                if len(_binding_stream) >= self._binding_stream_limit:                # at capacity — oldest will be silently dropped by deque maxlen
                     self.logger.warning(                                            # warn — encoding engine may be offline or falling behind
-                        f"⚠️  EMC binding stream at capacity ({EMC.BINDING_STREAM_LIMIT}) — "
+                        f"⚠️  EMC binding stream at capacity ({self._binding_stream_limit}) — "
                         f"oldest episode dropped. Encoding engine may be offline."
                     )
                 _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
