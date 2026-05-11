@@ -478,7 +478,6 @@ class EpisodicMemoryCortex:
         self.episodic_buffer       = EpisodicBuffer()                       # two-stream buffer — binding and recall streams
         self._episodic_buffer_lock = threading.Lock()                       # serializes binding stream access
         self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
-        self._units_per_chunk      = SCS.UNITS_PER_CHUNK                    # chars-per-token constant — for truncate estimation
 
         # Retrieve the paramaters from HRS
         self._episode_content_limit  = EMC.EPISODE_CONTENT_LIMIT            # maximum number of episodes to encode in a single theta cycle
@@ -531,10 +530,10 @@ class EpisodicMemoryCortex:
             bool: True on success, False on failure
         """
         episode: dict = {             
-            "user_id"   : user_id,                                                      # user ID — should be retrieved from MCC
-            "timestamp" : timestamp,                                                    # timestamp of PMT induced into WMC
-            "date"      : timestamp[:10],                                               # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content"   : content[:self._episode_content_limit * self._units_per_chunk] # truncate to engram limit before binding
+            "user_id"   : user_id,                                                              # user ID — should be retrieved from MCC
+            "timestamp" : timestamp,                                                            # timestamp of PMT induced into WMC
+            "date"      : timestamp[:10],                                                       # YYYY-MM-DD slice — B-tree indexed for date recall
+            "content"   : self._chunk_sampler.truncate(content, self._episode_content_limit)    # truncate to engram limit before binding
         }
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
@@ -598,7 +597,7 @@ class EpisodicMemoryCortex:
         fragmented_episodes: list[dict] = []                                                # budget-trimmed episode list
         for episode in filtered_episodes:                                                   # iterate through each recalled episodes
             content     = episode.get("content", "")                                        # retrieve the content of the episode
-            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the epsiode content
+            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
             if chunk_count > recall_reserve:                                                # episode exceeds remaining budget — truncate to fragment
                 episode["content"] = self._chunk_sampler.truncate(content, recall_reserve)  # surface fragment — mirrors human partial recall
                 fragmented_episodes.append(episode)                                         # reinstate memory fragment into memory context
