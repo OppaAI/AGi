@@ -66,6 +66,40 @@ SCS:
     M2 — salience gate: score assistant response before registering in MCC —
          discard low-salience turns at the CNC boundary
     M2 — busy queue: buffer incoming inputs during processing rather than dropping
+
+MCC:
+    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown,
+         gated on novelty/importance scoring — low-salience turns should be
+         truly forgotten, not blindly bound
+    M2 — salience gate at eviction boundary in _bind_to_episodic_buffer():
+         score evicted PMTs for novelty and importance before binding;
+         discard low-salience turns, bind high-salience turns to EMC.
+         WMC and EMC remain salience-agnostic — MCC owns this gate.
+    M2 — dynamic EMC capacity adjustment: if recalled engrams exceed
+         EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
+         WMC's chunk limit
+    M2 — WMC/EMC health check with capacity breach warnings
+    M2 — add SMC, 11pm reflection trigger
+    M3 — add PMC, procedural skill retrieval
+    
+WMC:
+    M1.6 — integrate HRS.BLC for biological clock timestamps
+    M3 — add salience weighting to eviction policy
+    
+EMC:
+    M1.5 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
+         engram anchoring at bind time, RECALL_RESERVE trimming, and chronological
+         sequencing before reinstatement. Extend EMC_SCHEMA with scaffold metadata
+         fields: sequence_index (INTEGER), session_id (TEXT), salience (REAL),
+         consolidation_state (TEXT DEFAULT 'raw') — required for Dream Cycle
+         distillation tracking and scaffold-aware recall ordering.
+    M2 — date-range filtering on recall interface and buffer entries
+    M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
+    M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
+    N2 — add watchdog for theta rhythm (interval of one encoding cycle) during dreaming cycle
+    M2 — heartbeat logging during long idle periods
+    M2 — staging_id integrity check after Dream Cycle consolidation
+    M2 — graceful drain + optional timeout fallback for SWR trigger during close
     
 HRS/HRC:
     M2 — HRC takes ownership of manifest hydration lifecycle
@@ -75,6 +109,13 @@ HRS/HRC:
     M3 — multi-modal input: image and audio signal routing through CNC
     M? — perception subsystems (visual, auditory)
     M? — motor control interface
+
+MSB:
+    M1.5 — migrate pack_vector, normalize_vector to hrs.py if
+           vector math is needed outside memory cortices
+    M2 — extend engram complex with SMC and PMC tables in M2.
+    M3 — backend swap — Qdrant, pgvector, or other vector DB — swap here only,
+          cortex cognitive logic untouched.
 """
 
 # System libraries
