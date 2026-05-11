@@ -52,7 +52,6 @@ TODO: migrate pack_vector, normalize_vector to hrs.py if
 """
 
 # System libraries
-from transformers.models.sam3_tracker_video import configuration_sam3_tracker_video
 from dataclasses import dataclass           # dataclass for EngramTrace/EngramSchema
 from enum import Enum                       # enum base for EngramModality type definitions
 import hashlib                              # for prime key generation
@@ -159,8 +158,8 @@ class EncodingEngine:
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
         self._cue_prefix: str               = cue_prefix            # prompt prefix for encoding cues
         self._engram_prefix: str            = engram_prefix         # prompt prefix for engrams
-        self.prime_capacity: int            = prime_capacity        # max prime entries before LRU eviction
-        self.prime_key_len: int             = prime_key_len         # max chars hashed for prime key
+        self._prime_capacity: int           = prime_capacity        # max prime entries before LRU eviction
+        self._prime_key_len: int            = prime_key_len         # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until background load succeeds
         self._prime: dict[str, list[float]] = {}                    # encoding prime — maps prime key → float vector
         
@@ -221,7 +220,7 @@ class EncodingEngine:
             )
             return []                                                                       # empty list signals fallback to lexical recall
 
-        prime_key: str = f"engram:{hashlib.md5((prefix + trace)[:self.prime_key_len].encode()).hexdigest()}"  # prefix included — cue and engram encode separately
+        prime_key: str = f"engram:{hashlib.md5((prefix + trace)[:self._prime_key_len].encode()).hexdigest()}"  # prefix included — cue and engram encode separately
         if prime_key in self._prime:                                                        # O(1) dict lookup
             return self._prime[prime_key]                                                   # prime hit — skips model inference
 
@@ -230,7 +229,7 @@ class EncodingEngine:
             encoded_trace = normalize_vector(encoded_trace)                                 # normalize to unit length — required so L2 == cosine sim in sqlite-vec
             
             # Keep prime small — evict oldest if over the encoding prime limit
-            if len(self._prime) >= self.prime_capacity:                                     # prime full — must evict before inserting
+            if len(self._prime) >= self._prime_capacity:                                    # prime full — must evict before inserting
                 decayed_prime_key: str = next(iter(self._prime))                            # first key = oldest — dicts preserve insertion order
                 del self._prime[decayed_prime_key]                                          # evict oldest entry
             self._prime[prime_key] = encoded_trace                                          # store new vector under prime key
