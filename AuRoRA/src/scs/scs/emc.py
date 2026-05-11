@@ -98,21 +98,6 @@ Public interface:
     emc.recall_episodes(cue) → list[dict]
     emc.assess_emc() → dict
     emc.terminate() → None
-
-TODO:
-    M1.5 — EpisodicScaffold: implement scaffold as an explicit object in EMC owning
-         engram anchoring at bind time, RECALL_RESERVE trimming, and chronological
-         sequencing before reinstatement. Extend EMC_SCHEMA with scaffold metadata
-         fields: sequence_index (INTEGER), session_id (TEXT), salience (REAL),
-         consolidation_state (TEXT DEFAULT 'raw') — required for Dream Cycle
-         distillation tracking and scaffold-aware recall ordering.
-    M2 — date-range filtering on recall interface and buffer entries
-    M2 — DiskANN ANN index when episodes exceed ~50k (currently exact KNN)
-    M2 — SMC distillation trigger at 11pm reflection (Dream Cycle)
-    N2 — add watchdog for theta rhythm (interval of one encoding cycle) during dreaming cycle
-    M2 — heartbeat logging during long idle periods
-    M2 — staging_id integrity check after Dream Cycle consolidation
-    M2 — graceful drain + optional timeout fallback for SWR trigger during close
 """
 
 # System libraries
@@ -126,7 +111,8 @@ from collections import deque               # for O(1) append/popleft in binding
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi libraries
-from hrs.hrm import AGi, ChunkSampler       # homeostatic regulation manifest namespace
+from hrs.hru import ChunkSampler            # probes and truncates cognitive context for budget management
+from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
 SCS = AGi.SCS                               # SCS-level constants — e.g. UNITS_PER_CHUNK
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 
@@ -149,12 +135,12 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
-        # M2a — importance scoring
+        # (TODO) M2a — importance scoring
         EngramTrace(label="memory_strength",  modality=EngramModality.REAL),                        # how strongly the memory is consolidated -
         EngramTrace(label="last_recalled_at", modality=EngramModality.TEXT),                        # when the memory was last recalled
         EngramTrace(label="recall_count",     modality=EngramModality.INTEGER, baseline="0"),       # how many times the memory has been recalled
         EngramTrace(label="novelty_score",    modality=EngramModality.REAL),                        # how novel the memory is
-        # M2b — versioning
+        # (TODO) M2b — versioning
         EngramTrace(label="conflict",         modality=EngramModality.INTEGER, baseline="0"),       # if the memory is in conflict with another memory
         EngramTrace(label="superseded_by",    modality=EngramModality.INTEGER),                     # the ID of the memory that superseded this memory
         EngramTrace(label="valid_from",       modality=EngramModality.TEXT),                        # when the memory is valid from
