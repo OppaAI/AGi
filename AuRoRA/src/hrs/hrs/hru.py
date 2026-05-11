@@ -21,6 +21,13 @@ Terminology:
     Hydration   — binding ROS2 parameter server values into AGi manifest constants
     Chunk       — unit of cognitive engine context window size
 
+Public interface:
+    hydrate_manifest(core, system) → None
+    
+    ChunkSampler:
+        probe(content, overhead?) → int
+        truncate(content, limit)  → str
+
 TODO:
     M2 — HRC takes ownership of manifest hydration lifecycle
     M2 — add manifest diff and rollback for safe runtime parameter updates
