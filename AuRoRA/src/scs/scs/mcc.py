@@ -74,6 +74,7 @@ from concurrent.futures import ThreadPoolExecutor   # for type hint on executor 
 from pathlib import Path                            # for constructing and creating the engram gateway on disk
 
 # AGi libraries
+from hrs.hrm import ChunkEstimator                  # ChunkEstimator for consistent token counting
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
@@ -99,6 +100,12 @@ class MemoryCoordinationCore:
         self.logger = logger            # logger forwarded from CNC — all MCC methods emit through this handle
         self._executor = executor       # thread pool for blocking operations
 
+        # Initialize ChunkEstimator for consistent token counting
+        self.chunk_estimator = ChunkEstimator(                                  # chunk estimator for consistent token counting
+            logger=logger,                                                      # logger instance
+            tokenizer_model=SCS.GCE.COGNITIVE_ENGINE                            # model used for token estimation
+        )
+
         # Ensure engram gateway exists
         # TODO: HRS milestone — move path construction to hrs.py entity gateway
         self.engram_gateway = (         # construct absolute path to the engram complex on disk
@@ -112,7 +119,7 @@ class MemoryCoordinationCore:
 
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                         # log entry on MCC activation
-        self.wmc = WorkingMemoryCortex(logger=logger)                                       # boot WMC — owns the active PMT slot
+        self.wmc = WorkingMemoryCortex(logger=logger, chunk_estimator=self.chunk_estimator) # boot WMC — owns the active PMT slot
         self.emc = EpisodicMemoryCortex(logger=logger, engram_gateway=self.engram_gateway)  # boot EMC — owns the engram complex on disk
 
         self._recall_timeout = SCS.EMC.RECALL_TIMEOUT                                        # cache recall timeout — EMC runs on a thread and must not stall inference

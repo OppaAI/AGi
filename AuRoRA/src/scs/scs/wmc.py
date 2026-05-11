@@ -62,24 +62,9 @@ from collections import deque            # for PMT slot — O(1) append and popl
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi libraries
-from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
+from hrs.hrm import AGi, ChunkEstimator  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
-
-def _estimate_chunk_count(pmt: dict) -> int:
-    """
-    Estimate the number of chunks in a given PMT.
-    Each PMT is one complete interaction — user prompt + AI response paired.
-
-    Args:
-        pmt (dict) : A complete interaction with 'timestamp' and 'content'
-
-    Returns:
-        int : Number of chunks, including overhead for formatting
-    """
-    content: str = pmt.get("content", "")                                                                   # extract raw content string from PMT
-    content_chunk_count: int = max(1, (len(content) + SCS.UNITS_PER_CHUNK - 1 ) // SCS.UNITS_PER_CHUNK)     # ceiling division — minimum 1 chunk even for empty content
-    return content_chunk_count + WMC.PMT_OVERHEAD                                                           # add fixed overhead for PMT formatting
 
 class WorkingMemoryCortex:
     """
@@ -93,7 +78,7 @@ class WorkingMemoryCortex:
     Only one PMT is processed at a time, ensuring WMC is always accessed from the main neural thread.
     """
 
-    def __init__(self, logger, 
+    def __init__(self, logger, chunk_estimator: ChunkEstimator, 
                 global_chunk_limit: int = SCS.GLOBAL_CHUNK_LIMIT, 
                 pmt_slot_limit: int = WMC.PMT_SLOT_LIMIT,
                 pmt_slot_buffer: int = WMC.PMT_SLOT_BUFFER
@@ -114,6 +99,7 @@ class WorkingMemoryCortex:
         self._induced_pmt: dict | None = None               # induced user prompt pending pairing with AI response
         self._pmt_slot: deque[dict]  = deque()              # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                    # running count of sustained chunks across all PMTs
+
 
         self.logger.info(                                   # log entry on WMC initialization with configured capacity
             f"   [Working Memory Cortex]  ONLINE ✅ — "
@@ -190,7 +176,7 @@ class WorkingMemoryCortex:
             }
             self._induced_pmt = None                            # clear induced PMT — exchange complete
 
-            induced_pmt_chunks: int = _estimate_chunk_count(induced_pmt)    # estimate chunk cost of incoming PMT
+            induced_pmt_chunks: int = self.chunk_estimator.estimate_chunks(induced_pmt)    # estimate chunk cost of incoming PMT
 
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
@@ -202,7 +188,7 @@ class WorkingMemoryCortex:
             ):
                 evicted_pmt: dict           = self._pmt_slot.popleft()                          # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                            # stage for return to MCC
-                evicted_chunks: int         = _estimate_chunk_count(evicted_pmt)                # calculate chunk cost of evicted PMT
+                evicted_chunks: int         = self.chunk_estimator.estimate_chunks(evicted_pmt)                # calculate chunk cost of evicted PMT
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)   # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                              # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"

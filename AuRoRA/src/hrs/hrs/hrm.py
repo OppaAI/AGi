@@ -88,7 +88,7 @@ class _EMCType(type):
 class AGi:                                                              # Amazing Grace infrastructure
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
-    ACTIVE_USER: str      = "siri"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
+    ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
 
     class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
         CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
@@ -239,3 +239,26 @@ Rules:
             elif isinstance(val, (int, float, bool, str)):
                 node.declare_parameter(key, val)
                 setattr(target, name, node.get_parameter(key).value)
+
+class ChunkEstimator:
+    """
+    Chunk estimation for context budget management.
+    Tries real tokenizer first — falls back to char-division approximation.
+    """
+    def __init__(self, logger, tokenizer_model: str):
+        self.logger = logger
+        self._tokenizer = None
+        try:
+            from transformers import AutoTokenizer
+            self.logger.info(f"⏳ Loading tokenizer ({tokenizer_model})…")
+            self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_model)
+            self.logger.info("✅ Tokenizer loaded")
+        except Exception as e:
+            self.logger.debug(f"Tokenizer unavailable, falling back to char-division: {e}")
+    
+    def count(self, text: str) -> int:
+        """Count tokens in text."""
+        if self._tokenizer:
+            return len(self._tokenizer.encode(text, add_special_tokens=False))
+        # Fallback: character-division approximation
+        return max(1, (len(text) + AGi.SCS.UNITS_PER_CHUNK - 1) // AGi.SCS.UNITS_PER_CHUNK)     # ceiling division — minimum 1 chunk even for empty content
