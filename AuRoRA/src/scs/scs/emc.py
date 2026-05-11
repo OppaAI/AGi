@@ -366,8 +366,7 @@ class EncodingCycle:
                 if not encoded_episode:                                             # if the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # log the warning message of unavailability of the encoding engine
-                        f"EMC encode skipped (encoding engine unavailable): "
-                        f"{len(episode['content']) // SCS.UNITS_PER_CHUNK + 1} chunks"
+                        f"EMC encode skipped — encoding engine unavailable (date={episode['date']})"
                     )
                     with self._episodic_buffer_lock:                                # hold lock for appendleft
                         self._episodic_buffer._binding_stream.appendleft(episode)   # requeue for next theta cycle
@@ -378,9 +377,8 @@ class EncodingCycle:
             
                 self._synaptic_consolidate(encoder_conn, episode, encoding_blob)    # consolidate the episode from episodic buffer into engram
     
-                self.logger.debug(
-                    f"EMC coded and stored → episodes: {len(episode['content']) // SCS.UNITS_PER_CHUNK + 1} chunks" # log the number of chunks in the episode
-                    f" (date={episode['date']})",                                   # log the date of the episode
+                self.logger.debug(                                                  # log successful synaptic consolidation of the episode
+                    f"EMC encoded → consolidated to engram (date={episode['date']})"
                 )
     
         encoder_conn.close()                                                        # close the encoder connection
