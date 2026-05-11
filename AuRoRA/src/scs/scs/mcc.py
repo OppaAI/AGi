@@ -140,6 +140,13 @@ class MemoryCoordinationCore:
             role (str)           : Role of the speaker - "user" or "assistant"
             content (str)        : Content of the conversation turn
         """
+
+        chunks = self._chunk_sampler.probe(content)                                   # estimate token cost of the content
+        if role == "user":                                                            # if user prompt,
+            self.logger.info(f"📝 stimulus: {chunks} tokens")                         # log token cost of user prompt
+        elif role == "assistant":                                                     # if AI response,
+            self.logger.info(f"🧠 response: {chunks} tokens")                         # log token cost of AI response
+        
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)  # induce turn into WMC — returns any PMTs displaced by the new arrival
 
