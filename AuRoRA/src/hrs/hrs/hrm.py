@@ -111,7 +111,7 @@ class AGi:                                                              # Amazin
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
             COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] Ollama model tag
-            BASE_CONGITIVE_ENGINE : str   = "google/gemma-4-26B-A4B-it"                         # [STATIC]  for token estimation by tokenizer
+            BASE_COGNITIVE_ENGINE : str   = "google/gemma-4-26B-A4B-it"                         # [STATIC]  for token estimation by tokenizer
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
@@ -252,28 +252,59 @@ Rules:
                 core.declare_parameter(param_key, param_value)                       # declare parameter with default value on the core node
                 setattr(manifest, param_name, core.get_parameter(param_key).value)   # write AuRoRA-declared value back to manifest — overrides default
 
-class ChunkEstimator:
+class ChunkSampler:
     """
-    Chunk estimation for context budget management.
-    Tries real tokenizer first — falls back to char-division approximation.
+    Sample the context and estimate chunk count for cognitive context management.
+    Attempts probing with base cognitive engine first — falls back to chunk-division approximation.
     """
-    def __init__(self, logger):
-        self.logger = logger
-        self._tokenizer = None
-        try:
-            from transformers import AutoTokenizer
-            self.logger.info(f"⏳ Loading chunk estimator ({AGi.SCS.GCE.BASE_COGNITIVE_ENGINE})…")
-            self._tokenizer = AutoTokenizer.from_pretrained(AGi.SCS.GCE.BASE_COGNITIVE_ENGINE)
-            self.logger.info("✅ Tokenizer loaded")
-        except Exception as e:
-            self.logger.debug(f"Tokenizer unavailable, falling back to char-division: {e}")
+    def __init__(self, logger) -> None:
+        """
+        Initialize the ChunkSampler with a logger and attempt to load the base cognitive engine chunk sampler.
     
-    def count(self, text: str) -> int:
-        """Count tokens in text."""
-        if not text:
-            return 0
+        Args:
+            logger : logger instance for runtime diagnostics passed from the caller
+        """        
+        self.logger          = logger                                   # runtime diagnostics interface
+        self._chunk_slicer   = None                                     # tokenizer — loaded from base model on init
+        self._gce_base       = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE        # base model name — used to load tokenizer
+        self._unit_per_chunk = AGi.SCS.UNITS_PER_CHUNK                  # chars-per-token constant — used in fallback approximation
+        
+        try:                                                                                          # attempt to load the tokenizer
+            from transformers import AutoTokenizer                                                    # lazy import — only load HuggingFace tokenizer if available
+            self.logger.info(f"⏳ Activating chunk sampler ({self._gce_base})…")                      # log the activating of the tokenizer
+            self._chunk_slicer = AutoTokenizer.from_pretrained(self._gce_base)                        # load base model tokenizer — slices context into model-accurate chunks
+            self.logger.info("✅ Chunk sampler activated")                                            # log the activation successful
+        except Exception as e:                                                                        # if the tokenizer fails to load,
+            self.logger.debug(f"Chunk sampler unavailable, falling back to chunk-division: {e}")      # soft fail — chunk-division approximation takes over
+    
+    def probe_context(self, content: str) -> int:
+        """
+        Probe the content and return the estimated chunk count.
+    
+        Args:
+            content : content of the context to probe for chunk estimation
+    
+        Returns:
+            int : estimated number of chunks in the content
+        """
+        if not content:                                                                        # guard — empty content yields zero tokens
+            return 0                                                                           # return zero tokens
             
-        if self._tokenizer:
-            return len(self._tokenizer.encode(text, add_special_tokens=False))
+        if self._chunk_slicer:                                                                 # if tokenizer loaded successfully,
+            return len(self._chunk_slicer.encode(content, add_special_tokens=False))           # encode content into tokens — return count excluding structural special tokens
         # Fallback: character-division approximation
-        return max(1, (len(text) + AGi.SCS.UNITS_PER_CHUNK - 1) // AGi.SCS.UNITS_PER_CHUNK)     # ceiling division — minimum 1 chunk even for empty content
+        return max(1, (len(content) + self._unit_per_chunk - 1) // self._unit_per_chunk)       # fallback — ceiling divide by chars-per-token constant, minimum 1
+
+
+    def probe_pmt(self, pmt: dict) -> int:
+                """
+        Probe the content of PMT and return the estimated chunk count that includes the PMT overhead.
+        Use for WMC PMTs only — PMT overhead covers the role name and structural text.
+    
+        Args:
+            pmt: pmt to probe the content for chunk estimation
+    
+        Returns:
+            int : estimated number of chunks in the content include the PMT overhead
+        """
+        return self.probe(pmt["content"]) + AGi.SCS.WMC.PMT_OVERHEAD                            # return the total of token count of the PMT content with PMT overhead
