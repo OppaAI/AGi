@@ -264,10 +264,10 @@ class ChunkSampler:
         Args:
             logger : logger instance for runtime diagnostics passed from the caller
         """        
-        self.logger          = logger                                   # runtime diagnostics interface
-        self._chunk_slicer   = None                                     # tokenizer — loaded from base model on init
-        self._gce_base       = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE        # base model name — used to load tokenizer
-        self._unit_per_chunk = AGi.SCS.UNITS_PER_CHUNK                  # chars-per-token constant — used in fallback approximation
+        self.logger           = logger                                    # runtime diagnostics interface
+        self._chunk_slicer    = None                                      # tokenizer — loaded from base model on init
+        self._gce_base        = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE         # base model name — used to load tokenizer
+        self._units_per_chunk = AGi.SCS.UNITS_PER_CHUNK                   # chars-per-token constant — used in fallback approximation
         
         try:                                                                                          # attempt to load the tokenizer
             from transformers import AutoTokenizer                                                    # lazy import — only load HuggingFace tokenizer if available
