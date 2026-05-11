@@ -8,7 +8,7 @@ Orchestrates the full perception-cognition-response cycle each conversational tu
 Milestone 1: Chatbot with Working Memory (WMC) + Episodic Memory (EMC)
 
 Inference routed through Generative Cognitive Engine (GCE).
-Model and endpoint configured via HRM.
+Model and endpoint configured via HRS.
 
 Architecture:
     CNC mirrors the human thalamus — the central relay that routes signals
@@ -278,7 +278,7 @@ class CNC(Node):
             str: Full cognitive response for memory registration.
         """
         inference_packet: dict = {
-            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRM 
+            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS 
             "messages"           : messages,                                # full memory context + current user prompt
             "num_ctx"            : GCE.CONTEXT_WINDOW,                      # override Ollama default 2048 — allocate full model context
             "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
