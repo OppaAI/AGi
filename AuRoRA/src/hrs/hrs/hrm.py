@@ -258,6 +258,9 @@ class ChunkEstimator:
     
     def count(self, text: str) -> int:
         """Count tokens in text."""
+        if not text:
+            return none
+            
         if self._tokenizer:
             return len(self._tokenizer.encode(text, add_special_tokens=False))
         # Fallback: character-division approximation
