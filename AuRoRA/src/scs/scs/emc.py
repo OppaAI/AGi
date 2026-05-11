@@ -486,7 +486,7 @@ class EpisodicMemoryCortex:
             cue_prefix      = EMC.ENCODING_CUE_PREFIX,                      # query prefix for recall cues
             engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX,                   # document prefix for engrams
             prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,                  # max LRU prime entries before eviction
-            prime_key_limit = EMC.ENCODING_PRIME_KEY_LIMIT,                 # max chars hashed per prime key
+            prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,                   # max chars hashed per prime key
         )
 
         self._recall_depth           = EMC.RECALL_DEPTH                     # number of recalled episodes to surface
