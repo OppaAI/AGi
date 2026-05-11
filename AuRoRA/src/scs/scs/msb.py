@@ -140,7 +140,7 @@ class EncodingEngine:
     and to speed up subsequent recall.
     """
 
-    def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_capacity: int, prime_key_limit: int) -> None:
+    def __init__(self, logger, encoding_engine: str, cue_prefix: str, engram_prefix: str, prime_capacity: int, prime_key_len: int) -> None:
         """
         Initializes the encoding engine and encoding prime for recent memory traces.
         Model load is deferred to a background thread — init returns immediately.
@@ -153,14 +153,14 @@ class EncodingEngine:
             cue_prefix (str)        : Prompt prefix for encoding cues
             engram_prefix (str)     : Prompt prefix for engrams
             prime_capacity (int)    : Maximum number of entries in the encoding prime
-            prime_key_limit (int)   : Maximum characters hashed for the prime key
+            prime_key_len (int)     : Maximum characters hashed for the prime key
         """
         self.logger                         = logger                # logger from cortex — used throughout this class
         self.encoding_engine: str           = encoding_engine       # model name string — passed to SentenceTransformer()
         self._cue_prefix: str               = cue_prefix            # prompt prefix for encoding cues
         self._engram_prefix: str            = engram_prefix         # prompt prefix for engrams
         self.prime_capacity: int            = prime_capacity        # max prime entries before LRU eviction
-        self.prime_key_limit: int           = prime_key_limit       # max chars hashed for prime key
+        self.prime_key_len: int             = prime_key_len         # max chars hashed for prime key
         self._core                          = None                  # live SentenceTransformer model — None until background load succeeds
         self._prime: dict[str, list[float]] = {}                    # encoding prime — maps prime key → float vector
         
@@ -221,7 +221,7 @@ class EncodingEngine:
             )
             return []                                                                       # empty list signals fallback to lexical recall
 
-        prime_key: str = f"engram:{hashlib.md5((prefix + trace)[:self.prime_key_limit].encode()).hexdigest()}"  # prefix included — cue and engram encode separately
+        prime_key: str = f"engram:{hashlib.md5((prefix + trace)[:self.prime_key_len].encode()).hexdigest()}"  # prefix included — cue and engram encode separately
         if prime_key in self._prime:                                                        # O(1) dict lookup
             return self._prime[prime_key]                                                   # prime hit — skips model inference
 
