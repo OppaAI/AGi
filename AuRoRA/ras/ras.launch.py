@@ -15,7 +15,7 @@ Boot order (current → future):
     Stage 3 — Cognition      : CNC
 
 Usage:
-    ros2 launch ras ras.launch.py
+    ros2 launch ras/ras.launch.py
 
 Path convention:
     ~/.agi/ras/aurora.yaml

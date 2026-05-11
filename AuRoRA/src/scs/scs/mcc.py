@@ -273,8 +273,16 @@ class MemoryCoordinationCore:
     def close(self) -> None:
         """
         Gracefully close MCC and its memory cortex layers.
-        WMC has no persistent resources to close — EMC releases its
-        open handles to the engram gateway on termination.
+        Flushes remaining WMC PMTs to EMC before shutdown,
+        then waits for encoding cycle to drain before terminating.
         """
-        self.emc.terminate()                                        # release EMC engram gateway file handles
-        self.logger.info("🗄️  MCC shutdown sequence complete")      # log entry on successful MCC closure
+        # Flush remaining WMC PMTs to EMC before shutdown
+        # M1.5 — full induction scoring replaces unconditional flush
+        remaining = self.wmc.forget_pmt_schema()
+        if remaining:
+            self._bind_to_episodic_buffer(remaining)
+            self.logger.info(f"🧠 MCC flushed {len(remaining)} WMC PMT(s) → EMC on shutdown")
+            self.emc.drain_encoding_cycle()         # wait for binding stream to encode before terminating
+
+        self.emc.terminate()                        # release EMC engram gateway file handles
+        self.logger.info("🗄️  MCC shutdown sequence complete")

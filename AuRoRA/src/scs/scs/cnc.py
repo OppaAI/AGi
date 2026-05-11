@@ -119,10 +119,9 @@ class CNC(Node):
 
         # Initialize configuration through hydration
         AGi.hydrate_from_ros(self, prefix="scs")    # covers aurora.yaml intrinsics
-        self._active_user: str = "oppaai"                                   # (TODO): M1 stub — replace with login sequence
+        self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
         self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
         self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
-        self._user_prefs:dict = self._ppu.user_prefs                        # User preferences — personality, tone, and style
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -203,7 +202,7 @@ class CNC(Node):
         self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
         
         user_prompt_chunk: int = len(user_prompt) // SCS.UNITS_PER_CHUNK + 1        # estimate chunk cost of incoming stimulus
-        self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt
+        self.get_logger().info(f"📝 stimulus: {user_prompt_chunk} chunks")          # log chunk cost of user prompt        
 
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
             self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
@@ -232,11 +231,10 @@ class CNC(Node):
             short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"]  # extract conversation turns
 
             # 4. Assemble system prompt with date and inject user preferences into system prompt
-            system_prompt: str = GCE.SYSTEM_PROMPT.format(
-                date=datetime.now().strftime("%Y-%m-%d"),
-                user_name=self._user_prefs.get("name", "Unknown"),
+            system_prompt: str = self._ppu.system_prompt.format(                # loads system prompt from PPU - which loads it from the persona YAML
+                date=datetime.now().strftime("%Y-%m-%d")                        # inject current date in ISO-8601 format
             )
-    
+
             if long_term_memory:                                                # episodic context available — append to system prompt
                 system_content: str = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
             else:

@@ -283,6 +283,7 @@ class EncodingCycle:
                 for row in unencoded:                               # iterate through each unencoded episode
                     self._episodic_buffer._binding_stream.append({  # add the unencoded episode to the binding stream
                         "staging_id" : row["id"],                   # staging_id for decay after consolidation
+                        "user_id"    : row["user_id"],              # user id of episode
                         "timestamp": row["timestamp"],              # preserved timestamp from original PMT
                         "date":      row["date"],                   # preserved date from original PMT
                         "content":   row["content"],                # raw content pending encoding
@@ -352,6 +353,7 @@ class EncodingCycle:
                     with self._inscription_lock:                            # hold inscription lock for staging write
                         episode["staging_id"] = self._ecx.stage_engram(     # insert the episode into the episodic buffer
                             engram = {                                      # create engram with timestamp, date, and content
+                                "user_id":   episode["user_id"],            # user id of episode
                                 "timestamp": episode["timestamp"],          # timestamp of episode
                                 "date":      episode["date"],               # date of episode
                                 "content":   episode["content"],            # content of episode
@@ -405,6 +407,7 @@ class EncodingCycle:
             # Primary episodic record
             episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
                 engram={                                                        # episode dictionary with timestamp, date, and content
+                    "user_id":   episode["user_id"],                            # user id of episode
                     "timestamp": episode["timestamp"],                          # episode timestamp
                     "date":      episode["date"],                               # episode date
                     "content":   episode["content"],                            # episode content
@@ -641,6 +644,26 @@ class EpisodicMemoryCortex:
         except Exception as e:                                                  # if assessment fails
             self.logger.error(f"EMC assessment failed: {e}")                    # log failure with reason
             return {}                                                           # empty dict — caller handles no results
+
+def drain_encoding_cycle(self, timeout: float = 10.0) -> None:
+    """
+    Wait for the binding stream to empty before shutdown.
+    Gives the encoding cycle time to consolidate flushed PMTs.
+    Called by MCC after flushing remaining WMC PMTs on close.
+
+    Args:
+        timeout (float): Max seconds to wait — prevents hanging on shutdown
+    """
+    expiry_time = time.time() + timeout                                 # calculate expiry time from now
+    while time.time() < expiry_time:                                    # keep checking until expiry time
+        with self._episodic_buffer_lock:                                # hold lock for accurate count
+            if not self.episodic_buffer._binding_stream:                # binding stream empty — safe to terminate
+                self.logger.info("✅ EMC binding stream drained")       # log successful drain
+                return
+        time.sleep(0.1)                                                 # yield — encoding cycle runs on its own thread
+    self.logger.warning(                                                # expiry time reached — some PMTs may be lost
+        "⚠️  EMC drain timeout — some PMTs may not have been consolidated"
+    )
 
     def terminate(self) -> None:
         """
