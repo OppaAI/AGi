@@ -51,21 +51,6 @@ Public interface:
         report_memory_stats() -> None
         forget_memory() -> None
         close() -> None
-
-TODO:
-    M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown,
-         gated on novelty/importance scoring — low-salience turns should be
-         truly forgotten, not blindly bound
-    M2 — salience gate at eviction boundary in _bind_to_episodic_buffer():
-         score evicted PMTs for novelty and importance before binding;
-         discard low-salience turns, bind high-salience turns to EMC.
-         WMC and EMC remain salience-agnostic — MCC owns this gate.
-    M2 — dynamic EMC capacity adjustment: if recalled engrams exceed
-         EMC_RECALL_RESERVE, trim to fit rather than silently overrunning
-         WMC's chunk limit
-    M2 — WMC/EMC health check with capacity breach warnings
-    M2 — add SMC, 11pm reflection trigger
-    M3 — add PMC, procedural skill retrieval
 """
 
 # System libraries
@@ -74,7 +59,7 @@ from concurrent.futures import ThreadPoolExecutor   # for type hint on executor 
 from pathlib import Path                            # for constructing and creating the engram gateway on disk
 
 # AGi libraries
-from hrs.hrm import ChunkSampler                    # ChunkSampler for consistent token counting
+from hrs.hru import ChunkSampler                    # probes and truncates cognitive context for budget management
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
