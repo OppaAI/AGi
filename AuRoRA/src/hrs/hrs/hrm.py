@@ -214,7 +214,7 @@ Rules:
     
         Args:
             tree    : AuRoRA class tree to search through
-            system  : system name to match against nested subclass names
+            system  : System name to match against nested subsystem names
     
         Returns:
             type | None : matched manifest subclass, or None if not found
@@ -231,22 +231,26 @@ Rules:
         return None
         
     @classmethod
-    def _declare_and_read(cls, node, target, prefix: str) -> None:
+    def _hydrate_system(cls, core, manifest: type, system: str) -> None:
         """
-        Recursively walk a class tree, declare ROS2 parameters, write values back.
-        Skips STATIC constants (str, None). Only touches int, float, bool.
-        """
-        for name in vars(target):
-            if name.startswith('_'):
-                continue
-            val = getattr(target, name)
-            key = f"{prefix}.{name.lower()}"
+        Recursively search the AuRoRA class tree and hydrate parameters declared by AuRoRA — skips static manifest parameters.
 
-            if isinstance(val, type):
-                cls._declare_and_read(node, val, key)
-            elif isinstance(val, (int, float, bool, str)):
-                node.declare_parameter(key, val)
-                setattr(target, name, node.get_parameter(key).value)
+        Args:
+            core        : Core node instance receiving the hydrated parameters
+            manifest    : Manifest subclass to search through and hydrate
+            system      : System name identifying the manifest to hydrate
+        """
+        for param_name in vars(manifest):                                            # iterate attribute names of the manifest subclass
+            if param_name.startswith('_'):                                           # if private members,
+                continue                                                             # skip — internal constants not exposed to parameter server
+            param_value = getattr(manifest, param_name)                              # retrieve the attribute value for inspection
+            param_key = f"{system}.{param_name.lower()}"                             # build fully qualified parameter key — dot-separated namespace path
+
+            if isinstance(param_value, type):                                        # if nested subclass is found,
+                cls._hydrate_system(core, param_value, param_key)                    # recurse into nested subclass — depth-first walk
+            elif isinstance(param_value, (int, float, bool, str)):                   # if parameter value is integer, float, boolean, string,
+                core.declare_parameter(param_key, param_value)                       # declare parameter with default value on the core node
+                setattr(manifest, param_name, core.get_parameter(param_key).value)   # write AuRoRA-declared value back to manifest — overrides default
 
 class ChunkEstimator:
     """
