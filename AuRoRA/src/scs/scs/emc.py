@@ -463,8 +463,8 @@ class EpisodicMemoryCortex:
         self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
 
         # Retrieve the paramaters from HRS
-        self._binding_stream_limit  = EMC.BINDING_STREAM_LIMIT              # max unencoded PMTs queued before OOM guard triggers
-        self._episode_content_limit = EMC.EPISODE_CONTENT_LIMIT             # max number of episodes to encode in a single theta cycle
+        self._binding_stream_limit : int = EMC.BINDING_STREAM_LIMIT         # max unencoded PMTs queued before OOM guard triggers
+        self._episode_content_limit: int = EMC.EPISODE_CONTENT_LIMIT        # max number of episodes to encode in a single theta cycle
         self._encoding_engine       = EncodingEngine(                       # sentence-transformers wrapper with LRU prime
             logger          = logger,                                       # logger instance for logging operations
             encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
@@ -474,10 +474,10 @@ class EpisodicMemoryCortex:
             prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,                   # max chars hashed per prime key
         )
 
-        self._recall_depth           = EMC.RECALL_DEPTH                     # number of recalled episodes to surface
-        self._recall_surface_limit   = EMC.RECALL_SURFACE_LIMIT             # number of candidate episodes to recall
-        self._recall_reserve         = EMC.RECALL_RESERVE                   # max chunk budget allocated to reinstated episodes
-        self._relevance_threshold    = EMC.RELEVANCE_THRESHOLD              # semantic relevance threshold for recall
+        self._recall_depth        : int  = EMC.RECALL_DEPTH                 # number of recalled episodes to surface
+        self._recall_surface_limit: int  = EMC.RECALL_SURFACE_LIMIT         # number of candidate episodes to recall
+        self._recall_reserve      : int  = EMC.RECALL_RESERVE               # max chunk budget allocated to reinstated episodes
+        self._relevance_threshold : int  = EMC.RELEVANCE_THRESHOLD          # semantic relevance threshold for recall
 
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
             logger  = self.logger,                                          # logger instance for logging operations
