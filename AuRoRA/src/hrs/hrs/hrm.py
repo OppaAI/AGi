@@ -296,3 +296,24 @@ class ChunkSampler:
             return len(self._chunk_slicer.encode(content, add_special_tokens=False)) + overhead        # encode content into tokens — return count excluding structural special tokens
         # Fallback: character-division approximation
         return max(1, (len(content) + self._unit_per_chunk - 1) // self._unit_per_chunk) + overhead    # fallback — ceiling divide by chars-per-token constant, minimum 1
+
+    def truncate(self, content: str, limit: int) -> str:
+        """Truncate content to fit within the given chunk limit.
+    
+        Args:
+            content : text content to truncate
+            limit   : maximum number of chunks to retain
+    
+        Returns:
+            str : truncated content fitting within the chunk limit
+        """
+        if not content or limit <= 0:                                                       # guard — empty content or zero limit yields empty string
+            return ""                                                                       # return empty string
+    
+        if self._chunk_slicer:                                                              # if chunk slicer loaded successfully,
+            chunks = self._chunk_slicer.encode(content, add_special_tokens=False)           # encode content into chunk IDs — exclude structural special tokens
+            if len(chunks) <= limit:                                                        # content already fits — no truncation needed
+                return content                                                              # content fits within limit — no truncation needed
+            return self._chunk_slicer.decode(chunks[:limit])                                # decode truncated tokens back to text — exact chunk boundary
+    
+        return content[:limit * self._unit_per_chunk]                                       # fallback — ceiling char-division approximation
