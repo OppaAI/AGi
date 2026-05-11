@@ -78,7 +78,7 @@ class WorkingMemoryCortex:
     Only one PMT is processed at a time, ensuring WMC is always accessed from the main neural thread.
     """
 
-    def __init__(self, logger, chunk_estimator: ChunkEstimator, 
+    def __init__(self, logger, chunk_sampler: ChunkSampler, 
                 global_chunk_limit: int = SCS.GLOBAL_CHUNK_LIMIT, 
                 pmt_slot_limit: int = WMC.PMT_SLOT_LIMIT,
                 pmt_slot_buffer: int = WMC.PMT_SLOT_BUFFER
@@ -88,13 +88,13 @@ class WorkingMemoryCortex:
 
         Args:
             logger                   : Logger instance forwarded from MCC
-            chunk_estimator          : ChunkEstimator for accurate token counting
+            chunk_sampler            : Chunk sampler for accurate chunk counting of the context
             global_chunk_limit (int) : Maximum chunks WMC can sustain — tuned to cognitive engine context window
             pmt_slot_limit (int)     : Maximum PMTs WMC can hold — based on Miller's Law (7±2)
             pmt_slot_buffer (int)    : Additional PMT buffer beyond Miller's Law limit for flexibility
         """
         self.logger                  = logger               # logger forwarded from MCC — all WMC methods emit through this handle
-        self.chunk_estimator         = chunk_estimator      # chunk estimated forwarded from HRM for more accurate chunk count
+        self.chunk_sampler           = chunk_sampler        # token estimated forwarded from HRM for more accurate token count
         self.global_chunk_limit: int = global_chunk_limit   # maximum chunks WMC can sustain before eviction
         self.pmt_slot_limit: int     = pmt_slot_limit       # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer      # additional PMT buffer beyond Miller's Law limit
@@ -178,19 +178,19 @@ class WorkingMemoryCortex:
             }
             self._induced_pmt = None                            # clear induced PMT — exchange complete
 
-            induced_pmt_chunks: int = self.chunk_estimator.count(induced_pmt["content"]) + WMC.PMT_OVERHEAD  # estimate chunk cost of incoming PMT
+            induced_pmt_chunks: int = self.chunk_sampler.probe(induced_pmt["content"]) + WMC.PMT_OVERHEAD           # estimate chunk cost of incoming PMT
 
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
             # And then fill the induced PMT, to keep working memory always within the capacities
-            evicted_pmt_slot: list[dict] = []                                         # buffer for evicted PMTs returned to MCC
-            while self._pmt_slot and (                                                # evict until incoming PMT fits within both limits
-                self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit # global chunk limit would be exceeded, or
-                or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer  # PMT slot limit reached
+            evicted_pmt_slot: list[dict] = []                                                                       # buffer for evicted PMTs returned to MCC
+            while self._pmt_slot and (                                                                              # evict until incoming PMT fits within both limits
+                self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit                               # global chunk limit would be exceeded, or
+                or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer                                # PMT slot limit reached
             ):
                 evicted_pmt: dict           = self._pmt_slot.popleft()                                              # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                                                # stage for return to MCC
-                evicted_chunks: int         = self.chunk_estimator.count(evicted_pmt["content"]) + WMC.PMT_OVERHEAD # calculate chunk cost of evicted PMT
+                evicted_chunks: int         = self.chunk_sampler.probe(evicted_pmt["content"]) + WMC.PMT_OVERHEAD # calculate chunk cost of evicted PMT
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)                       # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                                  # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"
