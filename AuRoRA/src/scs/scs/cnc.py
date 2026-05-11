@@ -135,7 +135,7 @@ from std_msgs.msg import String                            # ROS2 string message
 # AGi libraries
 from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from hrs.hrc import hydrate_manifest                       # manifest hydration — binds AuRoRA parameter server values into AGi constants at node init
+from hrs.hru import hydrate_manifest                       # manifest hydration — binds AuRoRA parameter server values into AGi constants at node init
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
