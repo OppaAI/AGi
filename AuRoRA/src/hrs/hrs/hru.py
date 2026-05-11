@@ -27,10 +27,6 @@ Public interface:
     ChunkSampler:
         probe(content, overhead?) → int
         truncate(content, limit)  → str
-
-TODO:
-    M2 — HRC takes ownership of manifest hydration lifecycle
-    M2 — add manifest diff and rollback for safe runtime parameter updates
 """
 # AGi libraries
 from hrs.hrm import AGi                # manifest constants — operated on by hydration functions
