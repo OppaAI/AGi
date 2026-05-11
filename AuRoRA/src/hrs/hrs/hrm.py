@@ -91,7 +91,7 @@ class AGi:                                                              # Amazin
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
 
     class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
-        CORTICAL_CAPACITY: int  = 16384                                 # [INTRINSIC] total token budget for the active LLM context window
+        CORTICAL_CAPACITY: int  = 24576                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
         NEURAL_GATEWAY: str     = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}"    # [STATIC] ROS namespace prefix for SCS topics
         MEMORY_GATEWAY: str     = f"{RRR.MEMORY_COORDINATION_CORTEX}"   # [STATIC] ROS namespace prefix for MCC topics
@@ -175,9 +175,9 @@ Rules:
             ENCODING_CYCLE_TIMEOUT: float     = 30.0        # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
             ENCODING_DIM: int                 = 768         # [STATIC]    embedding vector dimensionality
             ENCODING_PRIME_CAPACITY: int      = 256         # [INTRINSIC] max entries in embedding LRU cache
-            ENCODING_PRIME_KEY_LIMIT: int     = 256         # [INTRINSIC] max characters hashed per cache key
+            ENCODING_PRIME_KEY_LEN: int       = 256         # [INTRINSIC] max characters hashed per cache key
 
-            EPISODE_CONTENT_LIMIT: int        = 3000        # [INTRINSIC] max characters per PMT written to episodic buffer
+            EPISODE_CONTENT_LIMIT: int        = 512         # [INTRINSIC] max tokens per PMT written to episodic buffer
 
             THETA_INTERVAL: float             = 2.0         # [INTRINSIC] seconds between periodic batch encoding ticks
             THETA_BATCH_LIMIT: int            = 32          # [INTRINSIC] max PMTs encoded per tick — caps spike on crash recovery
