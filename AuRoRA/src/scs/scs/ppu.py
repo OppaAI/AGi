@@ -14,7 +14,7 @@ Responsibilities:
 Architecture:
     Stateless loader — reads YAML, mutates AGi constants, returns user prefs.
     No ROS2 node — plain Python class, instantiated by CNC at init.
-    All paths resolved from HRM constants — no magic strings.
+    All paths resolved from HRS constants — no magic strings.
 
 Lifecycle:
     CNC.__init__() → PPU(logger) → ppu.provision(user_id)
@@ -85,7 +85,7 @@ class PersonalProvisioningUnit:
             / AGi.SCS.USER_PROFILES
         )
         if not path.exists():
-            self._logger.warning(f"⚠️  No users file at {path} — using HRM defaults")
+            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
             return
         try:
             data = yaml.safe_load(path.read_text())
@@ -98,7 +98,7 @@ class PersonalProvisioningUnit:
                     AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
                     self._logger.info(f"✅ Memory salience bias applied — {user_id}")
             else:
-                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRM defaults")
+                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
         except Exception as e:
             self._logger.error(f"❌ Failed to load user profile: {e}")
 
@@ -115,7 +115,7 @@ class PersonalProvisioningUnit:
             / AGi.SCS.PERSONA_PROFILES
         )
         if not path.exists():
-            self._logger.warning(f"⚠️  No persona file at {path} — using HRM default")
+            self._logger.warning(f"⚠️  No persona file at {path} — using HRS default")
             return
         try:
             data   = yaml.safe_load(path.read_text())
@@ -124,7 +124,7 @@ class PersonalProvisioningUnit:
                 AGi.SCS.GCE.SYSTEM_PROMPT = prompt
                 self._logger.info(f"✅ GCE Persona loaded")
             else:
-                self._logger.warning("⚠️  GCE Persona missing gce.system_prompt — using HRM default")
+                self._logger.warning("⚠️  GCE Persona missing gce.system_prompt — using HRS default")
         except Exception as e:
             self._logger.error(f"❌ Failed to load persona: {e}")
 
