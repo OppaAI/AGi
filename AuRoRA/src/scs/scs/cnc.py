@@ -168,6 +168,20 @@ class CNC(Node):
         self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
         self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
 
+        self._gce_inference_packet: dict = {                                # setup inference parameters of GCE
+            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS 
+            "messages"           : "",                                      # placeholder for input prompt
+            "num_ctx"            : GCE.CONTEXT_WINDOW,                      # override Ollama default 2048 — allocate full model context
+            "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
+            "temperature"        : GCE.TEMPERATURE,                         # response creativity
+            "top_p"              : GCE.PROBABILITY_THRESHOLD,               # cumulative probability cutoff
+            "top_k"              : GCE.CANDIDATE_THRESHOLD,                 # maximum candidate tokens per step
+            "repetition_penalty" : GCE.PERSEVERATION_DAMPING,               # suppresses repetition
+            "frequency_penalty"  : GCE.HABITUATION_DAMPING,                 # suppresses frequent tokens
+            "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
+            "stream"             : True,                                    # enable SSE streaming — fragments published as they arrive
+        }
+
         # Initialize configuration through hydration
         hydrate_manifest(self, system="scs")                                # hydrate manifest from AuRoRA parameters under the SCS system
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
@@ -221,13 +235,13 @@ class CNC(Node):
             self._prime_gce(), self._cognitive_cycle                        # schedules across thread boundary — safe from ROS2 main thread
         )
 
-        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")   # confirm GCE endpoint
-        self.get_logger().info(f"✅ Model       : {GCE.COGNITIVE_ENGINE}")  # confirm GCE model
-        self.get_logger().info(f"✅ Subscribed  : {SCS.TEXT_INPUT_GATEWAY}")# confirm input topic
-        self.get_logger().info(f"✅ Publishing  : {SCS.RESPONSE_GATEWAY}")  # confirm output topic
-        self.get_logger().info("=" * 60)                                    # visual separator
-        self.get_logger().info("🌸 GRACE is ready")                         # boot complete
-        self.get_logger().info("=" * 60)                                    # visual separator
+        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")                   # confirm GCE endpoint
+        self.get_logger().info(f"✅ Model       : {self._gce_inference_packet['model']}")   # confirm GCE model
+        self.get_logger().info(f"✅ Subscribed  : {SCS.TEXT_INPUT_GATEWAY}")                # confirm input topic
+        self.get_logger().info(f"✅ Publishing  : {SCS.RESPONSE_GATEWAY}")                  # confirm output topic
+        self.get_logger().info("=" * 60)                                                     # visual separator
+        self.get_logger().info("🌸 GRACE is ready")                                         # boot complete
+        self.get_logger().info("=" * 60)                                                     # visual separator
    
     def _receive_text_input(self, msg: String) -> None:
         """
@@ -328,27 +342,15 @@ class CNC(Node):
         Returns:
             str: Full cognitive response for memory registration.
         """
-        inference_packet: dict = {
-            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS 
-            "messages"           : messages,                                # full memory context + current user prompt
-            "num_ctx"            : GCE.CONTEXT_WINDOW,                      # override Ollama default 2048 — allocate full model context
-            "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
-            "temperature"        : GCE.TEMPERATURE,                         # response creativity
-            "top_p"              : GCE.PROBABILITY_THRESHOLD,               # cumulative probability cutoff
-            "top_k"              : GCE.CANDIDATE_THRESHOLD,                 # maximum candidate tokens per step
-            "repetition_penalty" : GCE.PERSEVERATION_DAMPING,               # suppresses repetition
-            "frequency_penalty"  : GCE.HABITUATION_DAMPING,                 # suppresses frequent tokens
-            "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
-            "stream"             : True,                                    # enable SSE streaming — fragments published as they arrive
-        }
+
         cognitive_response: str = ""                                        # accumulates response fragments into full response
         leading_fragment: bool = True                                       # tracks first fragment — triggers start event type
-
+        self._gce_inference_packet["messages"] = messages                   # full memory context + current user prompt
         try:                                                                # attempt to forward request to GCE and stream response fragments
             async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
                 "POST",                                                     # POST request method for SSE streaming
                 "/v1/chat/completions",                                     # SSE endpoint — matches OpenAI-compatible API
-                json=inference_packet,                                      # JSON body with inference parameters
+                json=self._gce_inference_packet,                            # JSON body with inference parameters
             ) as response:                                                  # asynchronous response stream
 
                 if response.status_code != 200:                             # non-200 — GCE rejected the request
