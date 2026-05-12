@@ -559,7 +559,7 @@ class EpisodicMemoryCortex:
         # Relevancy gate — EMC owns this threshold
         filtered_episodes = [                                                       # filter out irrelevant episodes
             episode for episode in raw_episodes
-            if episode["relevancy"] >= self._relevance_threshold                
+            if episode["relevancy"] >= EMC.RELEVANCE_THRESHOLD               
         ]
         
         # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
