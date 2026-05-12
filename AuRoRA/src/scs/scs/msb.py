@@ -49,15 +49,16 @@ Public interface:
 """
 
 # System libraries
-from dataclasses import dataclass           # dataclass for EngramTrace/EngramSchema
-from enum import Enum                       # enum base for EngramModality type definitions
-import hashlib                              # for prime key generation
-import numpy as np                          # for fast vector math — normalization
-from pathlib import Path                    # for calculating database size — owned here, never passed back up
-import re                                   # for lexical cue sanitization
-import sqlite3                              # for engram connection factory
-import struct                               # for packing semantic vectors (fp32)
-import threading                            # for background thread hosting the encoding engine
+from dataclasses import dataclass                       # dataclass for EngramTrace/EngramSchema
+from enum import Enum                                   # enum base for EngramModality type definitions
+import hashlib                                          # for prime key generation
+from pathlib import Path                                # for calculating database size — owned here, never passed back up
+import re                                               # for lexical cue sanitization
+import sqlite3                                          # for engram connection factory
+import threading                                        # for background thread hosting the encoding engine
+
+# AGi libraries
+from hrs.hru import normalize_vector, pack_vector       # vector math utilities — normalize to unit length, pack to fp32 blob
 
 class EngramModality(Enum):
     """
@@ -98,35 +99,6 @@ class RecallCue:
     """
     vector: list[float]     # encoded semantic vector — passed to semantic recall
     text: str               # raw cue text — passed to lexical recall
-
-def normalize_vector(vector: list[float]) -> list[float]:
-    """
-    Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
-    Already-normalized vectors and empty vectors are returned unchanged.
-
-    Args:
-        vector (list[float]): Vector to normalize
-
-    Returns:
-        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or empty
-    """
-    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
-    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
-    if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
-    return vector                                                                  # already unit length — skip normalization
-    
-def pack_vector(vector: list[float]) -> bytes:
-    """
-    Packs an encoding vector into binary blob for engram storage.
-
-    Args:
-        vector (list[float]): Semantic encoding vector.
-
-    Returns:
-        bytes: Binary blob of fp32 values.
-    """
-    return struct.pack(f"{len(vector)}f", *vector)              # pack float list into fp32 binary blob — e.g. "384f" for 384 floats
 
 class EncodingEngine:
     """
