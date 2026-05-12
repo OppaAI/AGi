@@ -34,7 +34,7 @@ import yaml                             # YAML parsing for persona and user prof
 # AGi libraries
 from hrs.hrm import AGi, RRR            # Homeostatic Regulation Manifest constants and RRR constants
 from hrs.hru import GatewayMap
-_gm = GatewayMap()
+_gateway = GatewayMap()
 
 class PersonalProvisioningUnit:
     """
@@ -78,7 +78,7 @@ class PersonalProvisioningUnit:
         Args:
             user_id: User identifier matching a key in users.yaml
         """
-        path = self._gm.user_profiles
+        path = self._gateway.user_profiles
 
         if not path.exists():
             self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
@@ -120,7 +120,7 @@ class PersonalProvisioningUnit:
         Load active persona system prompt from persona YAML.
         Mutates AGi.SCS.GCE.SYSTEM_PROMPT in place.
         """
-        path = _gm.active_persona
+        path = _gateway.active_persona
 
         if not path.exists():
             self._logger.warning(f"⚠️  No persona file at {path} — using HRS default")
