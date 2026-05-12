@@ -86,6 +86,83 @@ def _hydrate_system(core, manifest: type, system: str) -> None:
             core.declare_parameter(param_key, param_value)                       # declare parameter with default value on the core node
             setattr(manifest, param_name, core.get_parameter(param_key).value)   # write AuRoRA-declared value back to manifest — overrides default
 
+@dataclass(frozen=True)
+class GatewayMap:
+    """
+    Declarative registry of all AuRoRA gateway paths to access filesystem.
+    Constructs absolute gateways from HRS manifest.
+
+    Usage:
+        gm = GatewayMap()                    # initialize gateway map
+        db = gm.engram_db                    # gateway to engram complex
+        gm.inspect_gateway(gm.engram_db)     # ensure gateway properly connected
+    """
+    home: Path = field(default_factory=Path.home)                                # [STATIC] OS home — injectable for testing
+
+    @property
+    def entity_root(self) -> Path:
+        """Root for all AGi core system state."""
+        return self.home / AGi.ENTITY_GATEWAY                                    # root directory of the filesystem (ie. ~/agi)
+
+    # RAW Gateway
+    @property
+    def ras_gateway(self) -> Path:
+        """Gateway to access the components of Reticular Activating System (RAS)."""
+        return self.entity_root / RRR.RETICULAR_ACTIVATING_COMPARTMENT           # path to access files related to RAS (ie. ~/.agi/ras)
+
+    @property
+    def aurora_setpoints(self) -> Path:
+        """AuRoRA setpoints — robot-wide AuRoRA self-regulated intrinsic parameters by RAS during ignition."""
+        return self.ras_gateway / AGi.SCS.AURORA_SETPOINTS                       # path to access the self-adjusted parameters (ie. ~/.agi/ras/aurora.yaml)
+
+    # SCS Gateway
+    @property
+    def scs_gateway(self) -> Path:
+        """Gateway to access the components of Semantic Cognitive System (SCS)."""
+        return self.entity_root / RRR.SEMANTIC_COGNITIVE_SYSTEM                  # path to access files related to SCS (ie. ~/.agi/scs)
+
+    @property
+    def user_profiles(self) -> Path:
+        """User profiles — per-user extrinsic settings retrieved by CNC after login. (TODO: may change to database instead of yaml)"""
+        return self.scs_gateway / AGi.SCS.USER_PROFILES                          # path to access user profile (ie. ~/.agi/scs/users.yaml)
+
+    # GCE Gateway
+    @property
+    def gce_gateway(self) -> Path:
+        """Gateway to access the components of Generative Cognitive Engine (GCE)."""
+        return self.scs_gateway / RRR.GENERATIVE_COGNITIVE_ENGINE                # path to access files related to GCE (ie. ~/.agi/scs/gce)
+
+    @property
+    def active_persona(self) -> Path:
+        """Active Persona — active persona retrieved by CNC at initialization."""
+        return self.gce_gateway / AGi.SCS.PERSONA_PROFILES                       # path to access LLM persona (ie. ~/.agi/scs/gce/persona.yaml)
+
+    # MCC Gateway
+    @property
+    def mcc_gateway(self) -> Path:
+        """Gateway to access the components of Memory Coordination Cortex (MCC)."""
+        return self.scs_gateway / AGi.SCS.MEMORY_GATEWAY                         # path to access files related to MCC (ie. ~/.agi/scs/mcc)
+
+    @property
+    def engram_complex(self) -> Path:
+        """Engram complex — Storage of episodic memory, semantic memory and procedural memory across users. (TODO: may upgrade to Qdrant later on)"""
+        return self.mcc_gateway / AGi.SCS.ENGRAM_COMPLEX                         # path to access the memory database (ie. ~/.agi/scs/mcc/engram_complex.db)
+
+    # Helpers
+    def inspect_gateway(self, gateway: Path) -> Path:
+        """
+        Inspect the gateway to determine if connections to parent connector are properly established.
+        Generate the gateway chain if not established.
+
+        Args:
+            gateway (Path): target gateway to inspected
+
+        Returns:
+            Path: the gateway itself — for inline chaining
+        """
+        gateway.parent.mkdir(parents=True, exist_ok=True)                         # create parent dirs — idempotent, safe to call repeatedly
+        return gateway                                                            # return gateway for inline chaining: f.open(gm.inspectgateway(gm.engram_db))
+
 class ChunkSampler:
     """
     Sample the context and estimate chunk count for cognitive context management.
