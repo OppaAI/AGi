@@ -578,13 +578,13 @@ class EngramComplex:
         )
         ecx_conn.commit()                                                   # commit before returning
 
-    def recall_engram(self, user_id: str, cue: RecallCue, surface_limit: int, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def recall_engram(self, user_id: str | None, cue: RecallCue, surface_limit: int, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams by fusing semantic and lexical matches.
         Cortex encodes the cue before calling — MSB owns retrieval only.
 
         Args:
-            user_id (str)                       : User ID to filter by
+            user_id (str | None)                : User ID to filter recall by — None bypasses filter for admin access
             cue (RecallCue)                     : Encoded recall cue as float vector and raw cue text.
             surface_limit (int)                 : Maximum episodes returned after RRF fusion.
             recall_depth (int)                  : Candidate pool per recall path — KNN and FTS5 each score this many episodes before RRF fusion.
@@ -597,11 +597,12 @@ class EngramComplex:
         lexical_matches  = self._lexical_recall(user_id, cue.text, recall_depth, date_range)       # recall by keyword
         return self._converge_memories(semantic_matches, lexical_matches, surface_limit)  # fuse into unified ranking
 
-    def _semantic_recall(self, user_id: str, cue: list[float], recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _semantic_recall(self, user_id: str | None, cue: list[float], recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the vector index by semantic similarity to the cue.
 
         Args:
+            user_id (str | None)                : User ID to filter recall by — None bypasses filter for admin access
             cue (list[float])                   : Encoded recall cue as float vector.
             recall_depth (int)                  : Candidate pool per search path — passed directly to KNN k parameter.
             date_range (tuple[str, str] | None) : Optional, ISO date range (start, end) inclusive — filters recall to that period.
@@ -652,11 +653,12 @@ class EngramComplex:
             self.logger.debug(f"MSB semantic recall failed: {e}")               # log failure with reason
             return []                                                           # empty list — caller handles no results
 
-    def _lexical_recall(self, user_id: str, cue: str, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
+    def _lexical_recall(self, user_id: str | None, cue: str, recall_depth: int, date_range: tuple[str, str] | None = None) -> list[dict]:
         """
         Recall engrams from the lexical index by keyword matching.
 
         Args:
+            user_id (str | None)                : User ID to filter recall by — None bypasses filter for admin access
             cue (str)                           : Raw recall cue string — sanitized internally.
             recall_depth (int)                  : Candidate pool per search path — passed to lexical FTS5.
             date_range (tuple[str, str] | None) : Optional ISO date range (start, end) inclusive — filters recall to that period.
