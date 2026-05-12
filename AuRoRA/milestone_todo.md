@@ -35,10 +35,12 @@
 - [ ] **M2** `emc.py` — staging_id integrity check after Dream Cycle consolidation
 - [ ] **M2** `emc.py` — graceful drain + optional timeout fallback for SWR trigger during close
 
-### HRS / HRC
+### HRS / HRU / HRC
 - [ ] **M2** `hrs.py` — build hrs.py to allow GRACE to update [INTRINSIC] constants at runtime and persist changes back to aurora.yaml
 - [ ] **M2** `hrs.py` — add HRS startup/shutdown lifecycle management
 - [ ] **M2** `hrs.py` — add recency parameter for identification of the most recent event segments in EMC
+- [ ] **M2?** `hru.py` — decide whether to use database to store user profile instead of yaml
+- [ ] **M2/3** `hru.py` — decide whether to upgrade to Qdrant from SQLite-vec
 - [ ] **M2** `hrc.py` — HRC takes ownership of manifest hydration lifecycle
 - [ ] **M2** `hrc.py` — add manifest diff and rollback for safe runtime parameter updates
 - [ ] **M3** `hrc.py` — emotional state initialization
