@@ -179,7 +179,11 @@ class CNC(Node):
     def _receive_text_input(self, msg: String) -> None:
         """
         Receive an incoming text input signal and schedule cognitive processing.
-        Drops the signal if CNC is already processing a turn.
+        Queues the input signal if cognitive engine is already processing a previous user input — single-slot, latest wins.
+        Overwrites any previously queued input signal — most recent intent takes priority.
+
+        Args:
+            msg (String): ROS2 string message carrying the incoming text input signal
         """
         try:                                                                        # attempt to parse JSON payload — CLI sends {"text": "..."}
             ui_input: dict = json.loads(msg.data.strip())                           # converts the ROS2 String message to a Python dictionary
@@ -192,17 +196,14 @@ class CNC(Node):
         if not user_prompt:                                                         # empty input after stripping — discard
             return                                                                  # abort early
 
-            self.get_logger().warning("⚠️  Cognitive Engine is busy — dropping input") # log the cognitive cycle congestion
-            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is still thinking…"}) # publish error notification
-            return                                                                  # abort early
-        if self._attention_gate:                                                    # cognitive cycle busy — hold or drop incoming stimulus
-            if self._pending_stimulus is None:                                      # queue slot open — hold stimulus for next cycle
-                self._pending_stimulus = user_prompt                                # hold the pending user prompt into the queue
-                self.get_logger().info("⏳ Cognitive Engine is busy — stimulus queued") # log the cognitive cycle congestion
-            else:                                                                   # queue slot occupied — second concurrent arrival, drop
-                self.get_logger().warning("⚠️  Cognitive Engine queue full — dropping stimulus") # log the queue is full and dropping subsequent user input
-                self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is Still thinking — please wait"})   # publish error notification
-            return
+        if self._attention_gate:                                                                                # cognitive cycle busy — queue or overwrite pending stimulus
+            if self._pending_stimulus is not None:                                                              # slot occupied — latest stimulus wins, previous discarded
+                self.get_logger().warning("⚠️  Cognitive Engine queue overwritten — previous stimulus dropped") # log the queue is full and dropping preceding user input
+            self._pending_stimulus = user_prompt                                                                # overwrite with latest — most recent intent takes priority
+            self.get_logger().info("⏳ Cognitive Engine is busy — stimulus queued")                             # log the cognitive cycle congestion
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is Still thinking…"}) # publish error notification
+            return                                                                                              # stimulus queued — cognitive cycle will drain on turn completion
+            
         self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
             self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
