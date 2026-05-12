@@ -78,7 +78,7 @@ class PersonalProvisioningUnit:
         Args:
             user_id: User identifier matching a key in users.yaml
         """
-        path = self._gateway.user_profiles
+        path = _gateway.user_profiles
 
         if not path.exists():
             self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
@@ -115,26 +115,34 @@ class PersonalProvisioningUnit:
         except Exception as e:
             self._logger.error(f"❌ Failed to load user profile: {e}")
 
-    def _load_persona(self) -> None:
+    def _load_user(self, user_id: str) -> None:
         """
-        Load active persona system prompt from persona YAML.
-        Mutates AGi.SCS.GCE.SYSTEM_PROMPT in place.
+        Load active user profile and apply extrinsic preferences.
+        Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
+    
+        Args:
+            user_id: User identifier matching a key in users.yaml
         """
-        path = _gateway.active_persona
-
+        path = _gateway.user_profiles
+    
         if not path.exists():
-            self._logger.warning(f"⚠️  No persona file at {path} — using HRS default")
+            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
             return
         try:
-            data   = yaml.safe_load(path.read_text())
-            prompt = (data or {}).get("gce", {}).get("system_prompt")
-            if prompt:
-                AGi.SCS.GCE.SYSTEM_PROMPT = prompt
-                self._logger.info(f"✅ GCE Persona loaded")
+            data = yaml.safe_load(path.read_text())
+            user = (data or {}).get("users", {}).get(user_id)
+            if user:
+                self._user_prefs = user
+                self._user_type  = UserType(user.get("type", "guest"))          # load user type — defaults to guest if not set
+                self._logger.info(f"✅ User profile loaded — {user_id} ({self._user_type.value})")
+                bias = user.get("memory_salience_bias")
+                if bias is not None:
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
+                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
             else:
-                self._logger.warning("⚠️  GCE Persona missing gce.system_prompt — using HRS default")
+                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
         except Exception as e:
-            self._logger.error(f"❌ Failed to load persona: {e}")
+            self._logger.error(f"❌ Failed to load user profile: {e}")
 
     def _assemble_system_prompt(self) -> None:
         """
