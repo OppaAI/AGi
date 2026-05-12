@@ -109,11 +109,11 @@ class AGi:                                                              # Amazin
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
         class GCE:                                                                              # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]  Ollama server base URL
-            COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] Ollama model tag
+            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]    LLM inferencer server base URL
+            COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] LLM model tag
             BASE_COGNITIVE_ENGINE : str   = "google/gemma-4-26B-A4B-it"                         # [STATIC]  for token estimation by tokenizer
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
-            CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] Ollama num_ctx — total token slots allocated to model
+            CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
             PROBABILITY_THRESHOLD : float = 0.9                                                 # [INTRINSIC] top-p nucleus sampling cutoff
             CANDIDATE_THRESHOLD   : int   = 40                                                  # [INTRINSIC] top-k token candidate limit per sampling step
