@@ -163,6 +163,7 @@ class CNC(Node):
 
         # Initialize attentional gate — True while processing a turn, drops incoming stimuli
         self._attention_gate: bool = False                                  # attentional gate — True while processing a turn, drops incoming stimuli
+        self._pending_stimulus: str | None = None                           # single-slot busy queue — holds one stimulus while CNC is processing
         asyncio.run_coroutine_threadsafe(                                   # submit GCE priming to cognitive cycle — fire and forget, doesn't block init
             self._prime_gce(), self._cognitive_cycle                        # schedules across thread boundary — safe from ROS2 main thread
         )
@@ -191,11 +192,17 @@ class CNC(Node):
         if not user_prompt:                                                         # empty input after stripping — discard
             return                                                                  # abort early
 
-        if self._attention_gate:                                                    # cognitive cycle busy — drop incoming stimulus
             self.get_logger().warning("⚠️  Cognitive Engine is busy — dropping input") # log the cognitive cycle congestion
             self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is still thinking…"}) # publish error notification
             return                                                                  # abort early
-
+        if self._attention_gate:                                                    # cognitive cycle busy — hold or drop incoming stimulus
+            if self._pending_stimulus is None:                                      # queue slot open — hold stimulus for next cycle
+                self._pending_stimulus = user_prompt                                # hold the pending user prompt into the queue
+                self.get_logger().info("⏳ Cognitive Engine is busy — stimulus queued") # log the cognitive cycle congestion
+            else:                                                                   # queue slot occupied — second concurrent arrival, drop
+                self.get_logger().warning("⚠️  Cognitive Engine queue full — dropping stimulus") # log the queue is full and dropping subsequent user input
+                self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Cognitive Engine is Still thinking — please wait"})   # publish error notification
+            return
         self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
         asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
             self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
@@ -269,7 +276,12 @@ class CNC(Node):
 
         finally:                                                                                  # always runs — resets attention gate regardless of success or failure
             self._attention_gate = False                                                          # reopen attentional gate — ready for next stimulus
-
+            if self._pending_stimulus:                                                            # queued stimulus present — drain immediately
+                pending = self._pending_stimulus                                                  # snapshot before clearing — prevents TOCTOU
+                self._pending_stimulus = None                                                     # clear slot before scheduling — gate reopens clean
+                self._attention_gate = True                                                       # close gate before scheduling — queued stimulus now owns the cycle
+                asyncio.ensure_future(self._process_stimulus(pending))                            # schedule queued stimulus on the running cognitive cycle — already on the loop, no thread crossing needed
+    
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
         Generate and emit a cognitive response through the Generative Cognitive Engine.
