@@ -111,17 +111,18 @@ from collections import deque               # for O(1) append/popleft in binding
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi libraries
-from hrs.hru import ChunkSampler            # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
-
+from hrs.hru import(                        # homeostatic regulation helper functions
+    pack_vector,                            # for packing float list into fp32 binary blob   
+    ChunkSampler,                           # probes and truncates cognitive context for budget management
+)
 from scs.msb import (                       # shared memory storage bank substrate
     EngramSchema,                           # blueprint for engram table structure
     EngramTrace,                            # single column definition within a blueprint
     EngramModality,                         # TEXT / INTEGER / REAL / BLOB type enum
     RecallCue,                              # encoded vector + raw text for dual-path recall
     EncodingEngine,                         # sentence-transformers wrapper with LRU prime
-    pack_vector,                            # for packing float list into fp32 binary blob
     EngramComplex,                          # all SQL ops for a memory cortex
 )
 
