@@ -3,12 +3,12 @@ NIU — Neural Input Unit
 ========================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Typed input contract layer for all incoming stimuli at the CNC boundary.
-All input sources (CLI, web, voice, messaging bridges) conform to these contracts.
+Typed input contract layer for all incoming neural stimuli at the CNC boundary.
+All input sources (CLI, webUI, voice, messaging bridges, etc) conform to these contracts.
 CNC parses against these types — no ad-hoc dict access at the boundary.
 
 Responsibilities:
-    - Define typed input schema for all incoming text stimuli
+    - Define typed input schema for all incoming neural stimuli
     - Enumerate all valid input modalities
     - Enforce contract at parse time — malformed payloads rejected before reaching CNC
 
@@ -18,39 +18,46 @@ Architecture:
     New input modalities declared here — routing logic keys off InputChannel enum.
 
 Terminology:
-    NeuralTextInput — typed contract for all incoming text stimuli
-    InputChannel    — enum of all valid input modalities
+    NeuralInputChannel  — enum of all valid neural input modalities
+    NeuralStimulus      — typed input schema for all incoming neural stimuli
 
 Public interface:
-    InputChannel    — CLI | WEB | VOICE | TELEGRAM
-    NeuralTextInput — text, user_id, source
+    NeuralInputChannel  — CLI | WEBUI | VOICE | TELEGRAM | DISCORD | GMAIL
+    NeuralStimulus      — source, user_id, text, audio, image
 """
 
 # System libraries
-from dataclasses import dataclass, field    # for typed input schema
-from enum import Enum                       # for input channel enumeration
+from dataclasses import dataclass, field    # for NeuralTextInput typed schema
+from enum import Enum                       # for InputChannel modality enumeration
 
-class InputChannel(Enum):
+class NeuralInputChannel(Enum):
     """
-    Valid input modalities for incoming text stimuli.
+    Input modality enumeration for all incoming neural stimuli.
     New modalities declared here — CNC routing logic keys off this enum.
+    All input adapters must supply one of these values — no plain strings at the boundary.
     """
-    CLI      = "cli"        # keyboard-driven terminal input
-    WEB      = "web"        # web interface input
-    VOICE    = "voice"      # voice pipeline input — M1.X-b
-    TELEGRAM = "telegram"   # Telegram messaging bridge — M1.X-c
+    CLI      = "cli"                        # keyboard-driven terminal input
+    WEBUI    = "webui"                      # web interface input
+    VOICE    = "voice"                      # voice pipeline — (TODO: M1.X-b)
+    TELEGRAM = "telegram"                   # Telegram messaging bridge — (TODO: M1.X-c)
+    DISCORD  = "discord"                    # Dicord messaging bridge — (TODO: M1.X-c)
+    GMAIL    = "gmail"                      # Gmail email bridge — (TODO: M1.X-c)
 
 @dataclass
-class NeuralTextInput:
+class NeuralStimulus:
     """
-    Typed contract for all incoming text stimuli at the CNC boundary.
-    All input sources must conform — malformed payloads rejected at parse time.
+    Typed input schema for all incoming neural stimuli at the CNC boundary.
+    All input sources must conform — malformed payloads rejected at the CNC boundary.
 
     Fields:
-        source   (InputChannel) : Input modality — routes correctly through voice and messaging bridges
-        text     (str)          : User message content
-        user_id  (str)          : Speaker identity — defaults to 'demo' if omitted
+        source   (NeuralInputChannel) : Input modality — required, every adapter must supply
+        user_id  (str)                : Speaker identity — defaults to 'demo' if omitted
+        text     (str)                : Text content — CLI, webUI, messaging bridges
+        audio    (bytes)              : Raw audio payload — voice pipeline (TODO: M1.X-b)
+        image    (bytes)              : Raw image payload — vision pipeline (TODO: M2+)
     """
-    source  : InputChannel                                      # input modality
-    text    : str
-    user_id : str          = field(default="demo")              # speaker identity — defaults to demo for minimum functionality
+    source  : NeuralInputChannel                        # input modality — required, every adapter must supply
+    user_id : str   = field(default="demo")             # speaker identity — defaults to demo for minimum functionality
+    text    : str   = field(default="")                 # text content — empty if modality is not text
+    audio   : bytes = field(default=b"")                # audio payload — empty until voice pipeline lands
+    image   : bytes = field(default=b"")                # image payload — empty until vision pipeline lands
