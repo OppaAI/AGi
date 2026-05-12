@@ -68,6 +68,8 @@ SCS:
     M2 — busy queue: buffer incoming inputs during processing rather than dropping
 
 MCC:
+    M3 — expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
+    M3 — GUI — expose via ROS2 topic for real-time memory visualisation
     M2 — implement session-end consolidation: flush WMC PMTs to EMC on shutdown,
          gated on novelty/importance scoring — low-salience turns should be
          truly forgotten, not blindly bound
@@ -116,6 +118,12 @@ MSB:
     M2 — extend engram complex with SMC and PMC tables in M2.
     M3 — backend swap — Qdrant, pgvector, or other vector DB — swap here only,
           cortex cognitive logic untouched.
+
+HRS:
+    M2 — build hrs.py to allow GRACE to update [INTRINSIC] constants
+        at runtime and persist changes back to aurora.yaml.
+    M2 — add HRS startup/shutdown lifecycle management
+    M2 — add recency parameter for identification of the most recent event segments in EMC
 """
 
 # System libraries

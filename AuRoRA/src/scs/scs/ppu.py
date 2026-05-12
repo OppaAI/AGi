@@ -29,7 +29,6 @@ Terminology:
 """
 
 # System libraries
-from pathlib import Path                # path manipulation and resolution
 import yaml                             # YAML parsing for persona and user profiles
 
 # AGi libraries
@@ -78,12 +77,8 @@ class PersonalProvisioningUnit:
         Args:
             user_id: User identifier matching a key in users.yaml
         """
-        path = (
-            Path.home()
-            / AGi.ENTITY_GATEWAY
-            / RRR.RETICULAR_ACTIVATING_COMPARTMENT
-            / AGi.SCS.USER_PROFILES
-        )
+        path = RRR.USER_PROFILES_GATEWAY
+
         if not path.exists():
             self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
             return
@@ -107,13 +102,8 @@ class PersonalProvisioningUnit:
         Load active persona system prompt from persona YAML.
         Mutates AGi.SCS.GCE.SYSTEM_PROMPT in place.
         """
-        path = (
-            Path.home()
-            / AGi.ENTITY_GATEWAY
-            / RRR.SEMANTIC_COGNITIVE_SYSTEM
-            / RRR.GENERATIVE_COGNITIVE_ENGINE
-            / AGi.SCS.PERSONA_PROFILES
-        )
+        path = RRR.PERSONA_PROFILES_GATEWAY
+
         if not path.exists():
             self._logger.warning(f"⚠️  No persona file at {path} — using HRS default")
             return

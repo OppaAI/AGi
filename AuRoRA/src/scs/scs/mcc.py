@@ -56,7 +56,6 @@ Public interface:
 # System libraries
 import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
-from pathlib import Path                            # for constructing and creating the engram gateway on disk
 
 # AGi libraries
 from hrs.hru import ChunkSampler                    # probes and truncates cognitive context for budget management
@@ -89,15 +88,8 @@ class MemoryCoordinationCore:
         self._chunk_sampler = ChunkSampler(logger)                        # use chunk sampler for consistent token counting
 
         # Ensure engram gateway exists
-        # TODO: HRS milestone — move path construction to hrs.py entity gateway
-        self.engram_gateway = (         # construct absolute path to the engram complex on disk
-            Path.home() /               # anchor at OS home (~)
-            AGi.ENTITY_GATEWAY /        # descend into the entity gateway directory
-            SCS.NEURAL_GATEWAY /        # descend into the neural gateway subdirectory
-            SCS.MEMORY_GATEWAY /        # descend into the memory gateway subdirectory
-            SCS.ENGRAM_COMPLEX          # land at the engram complex — where encoded episodes live
-        )
-        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)      # create all missing parent dirs — no-op if already exists
+        self.engram_gateway = AGi.ENGRAM_GATEWAY                         # absolute path to the engram complex — constructed by HRS
+        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)    # create all missing parent dirs — no-op if already exists
 
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # log entry on MCC activation
@@ -238,10 +230,6 @@ class MemoryCoordinationCore:
 
         Returns:
             dict : Combined memory stats from WMC and EMC cortex layers
-
-        TODO:
-        - expand into detailed health check with warnings on capacity breaches, anomalous eviction rates, etc.
-        - GUI — expose via ROS2 topic for real-time memory visualisation
         """
         stats: dict = self.assess_memory_schema()           # assess current state of all memory cortex layers
         wmc_stats: dict = stats["wmc"]                      # extract working memory stats
