@@ -34,12 +34,26 @@ Public interface:
 """
 # System libraries
 from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
+from enum import Enum                       # enum base for UserType identity classification
 import numpy as np                          # for vector normalization — normalize_vector
 from pathlib import Path                    # for gateway path construction
 import struct                               # for vector packing — pack_vector
 
 # AGi libraries
 from hrs.hrm import AGi                     # manifest constants — operated on by hydration functions
+
+class UserType(Enum):
+    """
+    Defines the access type for the active user through the whole system
+    Loaded from users.yaml by PPU — governs access control:
+    
+    admin  — full recall scope:
+             - sees all users' memories
+    guest  — restricted recall scope:
+             - sees only their own memories
+    """
+    ADMIN = "admin"                         # unrestricted admin  access
+    GUEST = "guest"                         # restricted guest access
 
 def hydrate_manifest(core, system: str) -> None:
     """Hydrate the single source of truth manifest from parameters declared by AuRoRA or admin under the given system.
