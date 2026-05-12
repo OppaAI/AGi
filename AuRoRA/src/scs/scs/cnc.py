@@ -64,10 +64,12 @@ from rclpy.executors import MultiThreadedExecutor          # allows concurrent c
 from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
 # AGi libraries
-from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
-from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
+from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
+from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
+from scs.niu import NeuralTextInput, InputChannel          # add to imports at top of cnc.py
+from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
+
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
 
@@ -185,27 +187,28 @@ class CNC(Node):
         Args:
             msg (String): ROS2 string message carrying the incoming text input signal
         """
-        try:                                                                        # attempt to parse JSON payload — CLI sends {"text": "..."}
-            ui_input: dict = json.loads(msg.data.strip())                           # converts the ROS2 String message to a Python dictionary
-            if not isinstance(ui_input, dict) or not ui_input.get("text"):          # malformed or empty payload — discard
-                return                                                              # abort early
-            user_prompt: str = ui_input.get("text", "").strip()                     # extract text field — strip whitespace
-        except json.JSONDecodeError:                                                # plain string — not JSON, use as-is
-            user_prompt = msg.data.strip()                                          # strip whitespace
-        
-        if not user_prompt:                                                         # empty input after stripping — discard
-            return                                                                  # abort early
+        try:                                                                                                    # attempt to parse against NeuralTextInput contract
+            raw_input: dict = json.loads(msg.data.strip())                                                      # deserialize JSON payload — all input sources send JSON
+            if not isinstance(raw_input, dict) or not raw_input.get("text"):                                    # malformed or missing text field — reject at boundary
+                return                                                                                          # abort early
+            ui_input = NeuralTextInput(                                                                         # parse against typed contract — enforces field presence
+                text    = raw_input["text"].strip(),                                                            # user message content
+                user_id = raw_input.get("user_id", "demo"),                                                     # speaker identity — defaults to demo if omitted
+                source  = InputChannel(raw_payload .get("source", InputChannel.CLI.value)),                     # input modality — defaults to CLI if omitted
+            )
+        except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid InputChannel value — reject at boundary
+            return                                                                                              # abort early — no plain string fallback, contract enforced
 
         if self._attention_gate:                                                                                # cognitive cycle busy — queue or overwrite pending stimulus
             if self._pending_stimulus is not None:                                                              # slot occupied — latest stimulus wins, previous discarded
                 self.get_logger().warning("⚠️  Cognitive Engine queue overwritten — previous stimulus dropped") # log the queue is full and dropping preceding user input
-            self._pending_stimulus = user_prompt                                                                # overwrite with latest — most recent intent takes priority
+            self._pending_stimulus = ui_input.text                                                              # overwrite with latest — most recent intent takes priority
             self.get_logger().info("⏳ Cognitive Engine is busy — stimulus queued")                             # log the cognitive cycle congestion
             return                                                                                              # stimulus queued — cognitive cycle will drain on turn completion
             
-        self._attention_gate = True                                                  # close gate before scheduling — prevents TOCTOU
-        asyncio.run_coroutine_threadsafe(                                           # schedule cognitive pipeline — crosses thread boundary safely
-            self._process_stimulus(user_prompt), self._cognitive_cycle              # submit to gamma rhythm — never blocks ROS2 spin
+        self._attention_gate = True                                                                             # close gate before scheduling — prevents TOCTOU
+        asyncio.run_coroutine_threadsafe(                                                                       # schedule cognitive pipeline — crosses thread boundary safely
+            self._process_stimulus(ui_input.text), self._cognitive_cycle                                        # submit to gamma rhythm — never blocks ROS2 spin
         )
 
     async def _process_stimulus(self, user_prompt: str) -> None:
