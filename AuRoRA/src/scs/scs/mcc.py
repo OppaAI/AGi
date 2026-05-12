@@ -111,8 +111,6 @@ class MemoryCoordinationCore:
             chunk_sampler=self._chunk_sampler,
         )
 
-        self._recall_timeout = SCS.EMC.RECALL_TIMEOUT                                       # cache recall timeout — EMC runs on a thread and must not stall inference
-
         self.logger.info("✅ Memory Coordination Core Activated")                          # log entry on successful MCC activation
 
     async def register_memory(self, user_id: str | None, role: str, content: str) -> None:
@@ -204,7 +202,7 @@ class MemoryCoordinationCore:
                 self._executor, self.emc.reinstate_episodes, user_id, user_prompt     # reinstate relevant episodes using current prompt as cue
             )
             reinstated_episodes = await asyncio.wait_for(                    # await with timeout — recall must not stall inference
-                future, timeout=self._recall_timeout                         # set a time limit for recall of episodic memory traces
+                future, timeout=SCS.EMC.RECALL_TIMEOUT                       # set a time limit for recall of episodic memory traces
             )
         except asyncio.TimeoutError:                                         # recall exceeded time limit — cancel dormant thread
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
