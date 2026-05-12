@@ -74,48 +74,6 @@ class _SCSType(type):
         """[DERIVED] Total usable token budget — CORTICAL_CAPACITY minus all reserves."""
         return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE        # [DERIVED] total usable token budget
 
-    @ property
-    def ENGRAM_GATEWAY(cls) -> Path:
-        """[DERIVED] Absolute path to the engram complex — constructed from AGi gateway constants."""
-        return(
-            Path.home()                         # anchor at OS home (~)
-            / AGi.ENTITY_GATEWAY                # descend into the entity gateway directory
-            / cls.NEURAL_GATEWAY                # descend into the neural gateway subdirectory
-            / cls.MEMORY_GATEWAY                # descend into the memory gateway subdirectory
-            / cls.ENGRAM_COMPLEX                # land at the engram complex — where encoded episodes live
-        )
-
-    @property
-    def AURORA_SETPOINTS_GATEWAY(cls) -> Path:
-        """[DERIVED] Absolute path to the aurora setpoints file — constructed from AGi gateway constants."""
-        return (
-            Path.home()                         # anchor at OS home (~)
-            / AGi.ENTITY_GATEWAY                # descend into the entity gateway directory
-            / RRR.RETICULAR_ACTIVATING_COMPARTMENT  # descend into the reticular activating compartment subdirectory
-            / cls.AURORA_SETPOINTS              # land at the aurora setpoints file
-        )
-
-    @property
-    def USER_PROFILES_GATEWAY(cls) -> Path:
-        """[DERIVED] Path to the user profiles file — constructed from AGi gateway constants."""
-        return (
-            Path.home()                         # anchor at OS home (~)
-            / AGi.ENTITY_GATEWAY                # descend into the entity gateway directory
-            / RRR.SEMANTIC_COGNITIVE_SYSTEM     # descend into the semantic cognitive system subdirectory
-            / cls.USER_PROFILES                 # land at the user profiles file
-        )
-
-    @property
-    def PERSONA_PROFILES_GATEWAY(cls) -> Path:
-        """[DERIVED] Path to the user profiles file — constructed from AGi gateway constants."""
-        return (
-            Path.home()                         # anchor at OS home (~)
-            / AGi.ENTITY_GATEWAY                # descend into the entity gateway directory
-            / RRR.SEMANTIC_COGNITIVE_SYSTEM     # descend into the semantic cognitive system subdirectory
-            / RRR.GENERATIVE_COGNITIVE_ENGINE   # descend into the generative cognitive engine subdirectory
-            / AGi.SCS.PERSONA_PROFILES          # land at the persona profiles file
-        )
-
 class _EMCType(type):
     @property
     def RECALL_DEPTH(cls) -> int:
