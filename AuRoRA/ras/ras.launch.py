@@ -30,7 +30,8 @@ from launch_ros.parameter_descriptions import ParameterFile
 # from launch.actions        import RegisterEventHandler, TimerAction
 # from launch.event_handlers import OnProcessStart
 
-from hrs.hrm import RRR, AGi
+from hrs.hrm import RRR
+from hrs.hru import GatewayMap
 
 # ─── Parameter Files ──────────────────────────────────────────────────────────
 #
@@ -40,7 +41,7 @@ from hrs.hrm import RRR, AGi
 #   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
 
 _aurora_params = ParameterFile(
-    param_file=str(AGi.SCS.AURORA_SETPOINTS_GATEWAY),
+    param_file=str(GatewayMap().aurora_setpoints),
     allow_substs=True,
 )
 
@@ -111,7 +112,7 @@ def generate_launch_description() -> LaunchDescription:
 
         LogInfo(msg="=" * 60),
         LogInfo(msg="⚡ RAS — Reticular Activation System igniting…"),
-        LogInfo(msg=f"   Aurora  : {AGi.SCS.AURORA_SETPOINTS_GATEWAY}"),
+        LogInfo(msg=f"   Aurora  : {GatewayMap().aurora_setpoints}"),
         LogInfo(msg="=" * 60),
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
