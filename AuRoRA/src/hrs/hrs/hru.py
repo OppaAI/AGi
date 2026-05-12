@@ -33,7 +33,9 @@ Public interface:
         truncate(content, limit)  → str
 """
 # System libraries
+from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
 import numpy as np                          # for vector normalization — normalize_vector
+from pathlib import Path                    # for gateway path construction
 import struct                               # for vector packing — pack_vector
 
 # AGi libraries
