@@ -206,24 +206,26 @@ class MemoryCoordinationCore:
             f"MCC context assembled: "
             f"{len(wmc_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
         )
-        
-        total_chunks = sum(                                                              # probe each message — combined cost of WMC + EMC streams
+
+        # Cortical capacity assessment  — aggregate WMC + EMC chunks vs total cortical capacity
+        assembled_memory_context = self.emc.episodic_buffer.assess_recall_stream()       # retrieve fully assembled memory context for token budget audit
+        memory_chunks = sum(                                                             # probe each message — combined cost of WMC + EMC streams
             self._chunk_sampler.probe(m["content"])
-            for m in assembled_context
+            for m in assembled_memory_context
         )
-        if total_chunks > SCS.CORTICAL_CAPACITY:                                         # aggregate exceeds cortical budget — individual reserves are bounded but can stack
+        if memory_chunks > SCS.CORTICAL_CAPACITY:                                        # aggregate exceeds cortical budget — individual reserves are bounded but can stack
             self.logger.warning(                                                         # log warning message of chunk counts of memory context over cortical capacity
                 f"⚠️  MCC cortical overflow — "
-                f"{total_chunks} chunks assembled vs {SCS.CORTICAL_CAPACITY} capacity "
+                f"{memory_chunks} chunks memory context vs {SCS.CORTICAL_CAPACITY} capacity "
                 f"(WMC: {len(wmc_pmts)} PMTs | EMC: {len(reinstated_episodes)} episodes)"
             )
-        else:
-            self.logger.debug(                                                           # within budget — log load for tuning visibility
-                f"MCC cortical budget: {total_chunks}/{SCS.CORTICAL_CAPACITY} chunks "
-                f"({round(total_chunks / SCS.CORTICAL_CAPACITY * 100, 1)}% load)"
+        else:                                                                            # if token cost within budget
+            self.logger.debug(                                                           # log load for tuning visibility
+                f"MCC cortical capacity: {memory_chunks}/{SCS.CORTICAL_CAPACITY} chunks "
+                f"({round(memory_chunks / SCS.CORTICAL_CAPACITY * 100, 1)}% load)"
             )
         
-        return assembled_context 
+        return assembled_memory_context                                                  # return fully assembled memory context
 
     def assess_memory_schema(self) -> dict:
         """
