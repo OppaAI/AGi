@@ -66,7 +66,7 @@ from std_msgs.msg import String                            # ROS2 string message
 # AGi libraries
 from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from hrs.hru import hydrate_manifest                       # manifest hydration — binds AuRoRA parameter server values into AGi constants at node init
+from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
@@ -118,6 +118,7 @@ class CNC(Node):
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
         self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
         self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
+        self._user_type: UserType = self._ppu.user_type                     # admin sees all memories, guest sees only their own
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -209,58 +210,65 @@ class CNC(Node):
         context injected, streams inference through GCE, registers the assistant
         response in memory, then reports memory stats.
         """
-        cognitive_response: str = ""                                            # accumulates GCE response chunks — empty until inference completes
+        cognitive_response: str = ""                                                              # accumulates GCE response chunks — empty until inference completes
 
-        try:                                                                    # wrap full pipeline — any failure publishes error and resets attention gate
+        try:                                                                                      # wrap full pipeline — any failure publishes error and resets attention gate
             # 1. Register user turn in memory
-            await self.mcc.register_memory(role="user", user_id=self._active_user, content=user_prompt)  # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
-
-            # 2. Assemble memory context
-            memory_context: list[dict] = await self.mcc.assemble_memory_context(user_id=self._active_user, user_prompt=user_prompt)  # assemble full memory context — EMC episodes + WMC PMTs
-
-            # 3. Separate system and conversation parts
-            long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]    # extract system blocks
-            short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"]  # extract conversation turns
-
-            # 4. Assemble system prompt with date and inject user preferences into system prompt
-            system_prompt: str = self._ppu.system_prompt.format(                # loads system prompt from PPU - which loads it from the persona YAML
-                date=datetime.now().strftime("%Y-%m-%d")                        # inject current date in ISO-8601 format
+            await self.mcc.register_memory(                                                       # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
+                role="user",
+                user_id=self._active_user,
+                content=user_prompt
             )
 
-            if long_term_memory:                                                # episodic context available — append to system prompt
+            # 2. Assemble memory context
+            memory_context: list[dict] = await self.mcc.assemble_memory_context(                  # assemble full memory context — EMC episodes + WMC PMTs
+                user_id=self._active_user if self._user_type == UserType.GUEST else None,
+                user_prompt=user_prompt,
+            )
+
+            # 3. Separate system and conversation parts
+            long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]   # extract system blocks
+            short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"] # extract conversation turns
+
+            # 4. Assemble system prompt with date and inject user preferences into system prompt
+            system_prompt: str = self._ppu.system_prompt.format(                                  # loads system prompt from PPU - which loads it from the persona YAML
+                date=datetime.now().strftime("%Y-%m-%d")                                          # inject current date in ISO-8601 format
+            )
+
+            if long_term_memory:                                                                  # episodic context available — append to system prompt
                 system_content: str = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
             else:
-                system_content: str = system_prompt                             # no episodic context — personality prompt only
+                system_content: str = system_prompt                                               # no episodic context — personality prompt only
 
             # 5. Build final message list
-            messages: list[dict] = [{"role": "system", "content": system_content}]  # system prompt — always first
-            messages.extend(short_term_memory)                                  # inject WMC PMTs — chronological conversation history
-            messages.append({"role": "user", "content": user_prompt})           # append current user prompt — last message before inference
+            messages: list[dict] = [{"role": "system", "content": system_content}]                # system prompt — always first
+            messages.extend(short_term_memory)                                                    # inject WMC PMTs — chronological conversation history
+            messages.append({"role": "user", "content": user_prompt})                             # append current user prompt — last message before inference
             
-            context_signal = String()                                           # create ROS2 String message
-            context_signal.data = json.dumps({"messages": messages})            # serialize payload to JSON string
-            self._memory_context_feedback.publish(context_signal)               # publish to memory context reporting topic
+            context_signal = String()                                                             # create ROS2 String message
+            context_signal.data = json.dumps({"messages": messages})                              # serialize payload to JSON string
+            self._memory_context_feedback.publish(context_signal)                                 # publish to memory context reporting topic
 
             # 6. Stream from GCE
-            self.get_logger().debug(f"📤 GCE messages: {messages}")             # debug — full message context before inference
-            cognitive_response = await self._stream_gce(messages)               # stream GCE response — publishes chunks as they arrive
+            self.get_logger().debug(f"📤 GCE messages: {messages}")                               # debug — full message context before inference
+            cognitive_response = await self._stream_gce(messages)                                 # stream GCE response — publishes chunks as they arrive
 
             # 7. Register assistant turn in memory
-            if cognitive_response:                                              # only register non-empty responses — empty means GCE failed
+            if cognitive_response:                                                                # only register non-empty responses — empty means GCE failed
                 await self.mcc.register_memory(role="assistant", user_id=None, content=cognitive_response) # bind assistant response into WMC — completes the PMT pair
 
             # 8. Report memory stats
-            stats = self.mcc.report_memory_stats()                              # log WMC and EMC health after every turn
-            stats_signal = String()                                             # create ROS2 String message
-            stats_signal.data = json.dumps(stats)                               # serialize payload to JSON string
-            self._memory_stats_feedback.publish(stats_signal)                   # publish to memory stats reporting topic
+            stats = self.mcc.report_memory_stats()                                                # log WMC and EMC health after every turn
+            stats_signal = String()                                                               # create ROS2 String message
+            stats_signal.data = json.dumps(stats)                                                 # serialize payload to JSON string
+            self._memory_stats_feedback.publish(stats_signal)                                     # publish to memory stats reporting topic
             
-        except Exception as e:                                                  # unhandled failure in cognitive pipeline
-            self.get_logger().error(f"❌ CNC handle error: {e}")                # log failure with reason
-            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)}) # surface error to caller
+        except Exception as e:                                                                    # unhandled failure in cognitive pipeline
+            self.get_logger().error(f"❌ CNC handle error: {e}")                                  # log failure with reason
+            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)})                  # surface error to caller
 
-        finally:                                                                # always runs — resets attention gate regardless of success or failure
-            self._attention_gate = False                                        # reopen attentional gate — ready for next stimulus
+        finally:                                                                                  # always runs — resets attention gate regardless of success or failure
+            self._attention_gate = False                                                          # reopen attentional gate — ready for next stimulus
 
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
