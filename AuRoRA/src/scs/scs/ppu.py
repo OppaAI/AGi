@@ -95,7 +95,7 @@ class PersonalProvisioningUnit:
             else:
                 self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
         except Exception as e:
-            self._logger.error(f"❌ Failed to load user profile: {e}"
+            self._logger.error(f"❌ Failed to load user profile: {e}")
         if not path.exists():
             self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
             return

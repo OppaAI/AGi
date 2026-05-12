@@ -88,7 +88,7 @@ class MemoryCoordinationCore:
         self._chunk_sampler = ChunkSampler(logger)                        # use chunk sampler for consistent token counting
 
         # Ensure engram gateway exists
-        self.engram_gateway = AGi.ENGRAM_GATEWAY                         # absolute path to the engram complex — constructed by HRS
+        self.engram_gateway = SCS.ENGRAM_GATEWAY                         # absolute path to the engram complex — constructed by HRS
         self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)    # create all missing parent dirs — no-op if already exists
 
         # Initialize memory cortex layers

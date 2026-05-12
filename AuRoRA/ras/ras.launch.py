@@ -111,7 +111,7 @@ def generate_launch_description() -> LaunchDescription:
 
         LogInfo(msg="=" * 60),
         LogInfo(msg="⚡ RAS — Reticular Activation System igniting…"),
-        LogInfo(msg=f"   Aurora  : {_AURORA_PATH}"),
+        LogInfo(msg=f"   Aurora  : {AGi.SCS.AURORA_SETPOINTS_GATEWAY}"),
         LogInfo(msg="=" * 60),
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
