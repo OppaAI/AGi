@@ -194,7 +194,7 @@ class CNC(Node):
             ui_input = NeuralTextInput(                                                                         # parse against typed contract — enforces field presence
                 text    = raw_input["text"].strip(),                                                            # user message content
                 user_id = raw_input.get("user_id", "demo"),                                                     # speaker identity — defaults to demo if omitted
-                source  = InputChannel(raw_payload .get("source", InputChannel.CLI.value)),                     # input modality — defaults to CLI if omitted
+                source  = InputChannel(raw_input .get("source", InputChannel.CLI.value)),                       # input modality — defaults to CLI if omitted
             )
         except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid InputChannel value — reject at boundary
             return                                                                                              # abort early — no plain string fallback, contract enforced
