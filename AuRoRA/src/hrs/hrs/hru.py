@@ -95,7 +95,7 @@ class GatewayMap:
     Usage:
         gm = GatewayMap()                    # initialize gateway map
         db = gm.engram_db                    # gateway to engram complex
-        gm.inspect_gateway(gm.engram_db)     # ensure gateway properly connected
+        gm.connect_gateway(gm.engram_db)     # ensure gateway properly connected
     """
     home: Path = field(default_factory=Path.home)                                # [STATIC] OS home — injectable for testing
 
@@ -149,19 +149,19 @@ class GatewayMap:
         return self.mcc_gateway / AGi.SCS.ENGRAM_COMPLEX                         # path to access the memory database (ie. ~/.agi/scs/mcc/engram_complex.db)
 
     # Helpers
-    def inspect_gateway(self, gateway: Path) -> Path:
+    def connect_gateway(self, gateway: Path) -> Path:
         """
-        Inspect the gateway to determine if connections to parent connector are properly established.
+        Connect to the gateway by establishing all parent connector links.
         Generate the gateway chain if not established.
-
+        
         Args:
-            gateway (Path): target gateway to inspected
+            gateway (Path): target gateway to connect to
 
         Returns:
             Path: the gateway itself — for inline chaining
         """
         gateway.parent.mkdir(parents=True, exist_ok=True)                         # create parent dirs — idempotent, safe to call repeatedly
-        return gateway                                                            # return gateway for inline chaining: f.open(gm.inspectgateway(gm.engram_db))
+        return gateway                                                            # return gateway for inline chaining: f.open(gm.connect_gateway(gm.engram_db))
 
 class ChunkSampler:
     """
