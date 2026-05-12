@@ -235,13 +235,6 @@ class EncodingCycle:
         self._encoder_running: bool         = False                       # encoding cycle not yet started
         self._theta_rhythm                  = threading.Event()           # gates encoding cycle — set by trigger_theta_rhythm() or WMC
         self._encoder_thread                = None                        # assigned in _ignite_cycle()
-
-        # Retrieve the paramaters from HRS 
-        self._recovery_batch_size: int      = EMC.RECOVERY_BATCH_SIZE     # number of episodes to recover from staging table at once
-        self._theta_interval: float         = EMC.THETA_INTERVAL          # time interval for theta rhythm
-        self._theta_batch_limit: int        = EMC.THETA_BATCH_LIMIT       # maximum number of episodes to encode in a single theta cycle
-        self._encoding_cycle_timeout: float = EMC.ENCODING_CYCLE_TIMEOUT  # timeout for encoding cycle
-
         self._ignite_cycle()                                              # kick start the encoding cycle
 
     def _ignite_cycle(self) -> None:
@@ -257,7 +250,7 @@ class EncodingCycle:
 
         while True:                                                 # keep recovering unencoded episodes in batches
             unencoded = self._ecx.retrieve_staged_batch(            # query staging table for unencoded episodes
-                batch_size = self._recovery_batch_size,             # number of unencoded episodes to recover at once
+                batch_size = EMC.RECOVERY_BATCH_SIZE,               # number of unencoded episodes to recover at once
                 offset     = recovery_offset,                       # offset for pagination — skips already-recovered episodes
             )
 
@@ -275,7 +268,7 @@ class EncodingCycle:
                     })
 
             recovery_count  += len(unencoded)                       # accumulate total recovered count
-            recovery_offset += self._recovery_batch_size            # advance pagination offset
+            recovery_offset += EMC.RECOVERY_BATCH_SIZE              # advance pagination offset
 
         if recovery_count:                                          # if any episodes were recovered,
             self.logger.info(                                       # Log the recovery of unencoded episodes
@@ -306,7 +299,7 @@ class EncodingCycle:
     
         while self._encoder_running:                              # loop until stop signal
             # Rest state — wait for theta rhythm activation
-            self._theta_rhythm.wait(timeout=self._theta_interval) # wake on PMT arrival or theta interval
+            self._theta_rhythm.wait(timeout=EMC.THETA_INTERVAL)   # wake on PMT arrival or theta interval
             self._theta_rhythm.clear()                            # reset event for next cycle
     
             if not self._encoder_running:                         # if the encoder is not running,
@@ -317,7 +310,7 @@ class EncodingCycle:
                 if not self._episodic_buffer._binding_stream:     # binding stream empty — nothing to encode
                     continue                                      # skip this encoding cycle
                 rhythm: list[dict] = list(itertools.islice(       # snapshot up to batch limit — remaining stays for next cycle
-                    self._episodic_buffer._binding_stream, self._theta_batch_limit
+                    self._episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
                 ))
 
                 # Drain the snapshotted episodes from the binding stream
@@ -425,7 +418,7 @@ class EncodingCycle:
         self._encoder_running = False                                       # signal encoding thread to stop
         self._theta_rhythm.set()                                            # wake thread so it can exit cleanly
         if self._encoder_thread:                                            # if encoder cycle is still running,
-            self._encoder_thread.join(timeout=self._encoding_cycle_timeout) # wait for clean exit — up to 3 seconds
+            self._encoder_thread.join(timeout=EMC.ENCODING_CYCLE_TIMEOUT)   # wait for clean exit — up to 3 seconds
             
 class EpisodicMemoryCortex:
     """
@@ -463,8 +456,6 @@ class EpisodicMemoryCortex:
         self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
 
         # Retrieve the paramaters from HRS
-        self._binding_stream_limit : int = EMC.BINDING_STREAM_LIMIT         # max unencoded PMTs queued before OOM guard triggers
-        self._episode_content_limit: int = EMC.EPISODE_CONTENT_LIMIT        # max number of episodes to encode in a single theta cycle
         self._encoding_engine       = EncodingEngine(                       # sentence-transformers wrapper with LRU prime
             logger          = logger,                                       # logger instance for logging operations
             encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
@@ -473,11 +464,6 @@ class EpisodicMemoryCortex:
             prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,                  # max LRU prime entries before eviction
             prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,                   # max chars hashed per prime key
         )
-
-        self._recall_depth        : int  = EMC.RECALL_DEPTH                 # number of recalled episodes to surface
-        self._recall_surface_limit: int  = EMC.RECALL_SURFACE_LIMIT         # number of candidate episodes to recall
-        self._recall_reserve      : int  = EMC.RECALL_RESERVE               # max chunk budget allocated to reinstated episodes
-        self._relevance_threshold : int  = EMC.RELEVANCE_THRESHOLD          # semantic relevance threshold for recall
 
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
             logger  = self.logger,                                          # logger instance for logging operations
@@ -517,15 +503,15 @@ class EpisodicMemoryCortex:
             "user_id"   : user_id,                                                              # user ID — should be retrieved from MCC
             "timestamp" : timestamp,                                                            # timestamp of PMT induced into WMC
             "date"      : timestamp[:10],                                                       # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content"   : self._chunk_sampler.truncate(content, self._episode_content_limit)    # truncate to engram limit before binding
+            "content"   : self._chunk_sampler.truncate(content, EMC.EPISODE_CONTENT_LIMIT)      # truncate to engram limit before binding
         }
 
         try:                                                                        # attempt to bind the evicted PMT into episodic buffer
             with self._episodic_buffer_lock:                                        # hold lock for binding stream append
                 _binding_stream = self.episodic_buffer._binding_stream              # reference for capacity check
-                if len(_binding_stream) >= self._binding_stream_limit:                # at capacity — oldest will be silently dropped by deque maxlen
+                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                # at capacity — oldest will be silently dropped by deque maxlen
                     self.logger.warning(                                            # warn — encoding engine may be offline or falling behind
-                        f"⚠️  EMC binding stream at capacity ({self._binding_stream_limit}) — "
+                        f"⚠️  EMC binding stream at capacity ({EMC.BINDING_STREAM_LIMIT}) — "
                         f"oldest episode dropped. Encoding engine may be offline."
                     )
                 _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
@@ -554,7 +540,7 @@ class EpisodicMemoryCortex:
             return []                                                                            # return empty list if no cue
     
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                            # encode cue into vector + raw text for dual-path recall
-        return self._ecx.recall_engram(user_id, recall_cue, self._recall_surface_limit, self._recall_depth) # semantic + lexical RRF fusion — handled by MSB
+        return self._ecx.recall_engram(user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH) # semantic + lexical RRF fusion — handled by MSB
 
     def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
@@ -577,7 +563,7 @@ class EpisodicMemoryCortex:
         ]
         
         # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
-        recall_reserve: int = self._recall_reserve                                          # remaining chunk budget for reinstatement
+        recall_reserve: int = EMC.RECALL_RESERVE                                            # remaining chunk budget for reinstatement
         fragmented_episodes: list[dict] = []                                                # budget-trimmed episode list
         for episode in filtered_episodes:                                                   # iterate through each recalled episodes
             content     = episode.get("content", "")                                        # retrieve the content of the episode
