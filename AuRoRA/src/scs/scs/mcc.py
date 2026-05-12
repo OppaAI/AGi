@@ -58,7 +58,7 @@ import asyncio                                      # for fire-and-forget episod
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
 
 # AGi libraries
-from hrs.hru import ChunkSampler                    # probes and truncates cognitive context for budget management
+from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, and probe and truncate cognitive context for budget management
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
@@ -88,8 +88,8 @@ class MemoryCoordinationCore:
         self._chunk_sampler = ChunkSampler(logger)                        # use chunk sampler for consistent token counting
 
         # Ensure engram gateway exists
-        self.engram_gateway = SCS.ENGRAM_GATEWAY                         # absolute path to the engram complex — constructed by HRS
-        self.engram_gateway.parent.mkdir(parents=True, exist_ok=True)    # create all missing parent dirs — no-op if already exists
+        _gm = GatewayMap()                                               # absolute path to the engram complex — constructed by HRS
+        self.engram_gateway = _gm.connect_gateway(_gm.engram_complex)    # create all missing parent dirs — no-op if already exists
 
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # log entry on MCC activation
