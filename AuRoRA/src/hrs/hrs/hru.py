@@ -9,12 +9,13 @@ regulation manifest within and across AuRoRA systems.
 Responsibilities:
     - Hydrate AGi manifest constants from AuRoRA parameter server at node init
     - Estimate and truncate cognitive context chunks for budget management
+    - Normalize and pack encoding vectors for semantic memory storage
 
 Architecture:
     Stateless utilities — no ROS2 node, no persistent state.
     Imported by any AuRoRA node that needs manifest hydration or chunk sampling.
     HRM supplies the constants — HRU supplies the runtime tools that operate on them.
-    HRC (M2) will orchestrate HRU at the system level for adaptive self-regulation.
+    HRC (TODO: M2) will orchestrate HRU at the system level for adaptive self-regulation.
 
 Terminology:
     Manifest    — the AGi class tree of cognitive architecture constants
@@ -24,12 +25,19 @@ Terminology:
 Public interface:
     hydrate_manifest(core, system) → None
     
+    normalize_vector(vector) → list[float]
+    pack_vector(vector) → bytes
+    
     ChunkSampler:
         probe(content, overhead?) → int
         truncate(content, limit)  → str
 """
+# System libraries
+import numpy as np                          # for vector normalization — normalize_vector
+import struct                               # for vector packing — pack_vector
+
 # AGi libraries
-from hrs.hrm import AGi                # manifest constants — operated on by hydration functions
+from hrs.hrm import AGi                     # manifest constants — operated on by hydration functions
 
 def hydrate_manifest(core, system: str) -> None:
     """Hydrate the single source of truth manifest from parameters declared by AuRoRA or admin under the given system.
@@ -80,12 +88,41 @@ def _hydrate_system(core, manifest: type, system: str) -> None:
         param_value: type | int | float | bool | str = getattr(manifest, param_name) # retrieve the attribute value for inspection
         param_key: str = f"{system}.{param_name.lower()}"                            # build fully qualified parameter key — dot-separated namespace path
 
-        if isinstance(param_value, type):                                        # if nested subclass is found,
-            _hydrate_system(core, param_value, param_key)                        # recurse into nested subclass — depth-first walk
-        elif isinstance(param_value, (int, float, bool, str)):                   # if parameter value is integer, float, boolean, string,
-            core.declare_parameter(param_key, param_value)                       # declare parameter with default value on the core node
-            setattr(manifest, param_name, core.get_parameter(param_key).value)   # write AuRoRA-declared value back to manifest — overrides default
+        if isinstance(param_value, type):                                            # if nested subclass is found,
+            _hydrate_system(core, param_value, param_key)                            # recurse into nested subclass — depth-first walk
+        elif isinstance(param_value, (int, float, bool, str)):                       # if parameter value is integer, float, boolean, string,
+            core.declare_parameter(param_key, param_value)                           # declare parameter with default value on the core node
+            setattr(manifest, param_name, core.get_parameter(param_key).value)       # write AuRoRA-declared value back to manifest — overrides default
 
+def normalize_vector(vector: list[float]) -> list[float]:
+    """
+    Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
+    Already-normalized vectors and empty vectors are returned unchanged.
+
+    Args:
+        vector (list[float]): Vector to normalize
+
+    Returns:
+        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or empty
+    """
+    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
+    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
+    if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
+        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
+    return vector                                                                  # already unit length — skip normalization
+    
+def pack_vector(vector: list[float]) -> bytes:
+    """
+    Packs an encoding vector into binary blob for engram storage.
+
+    Args:
+        vector (list[float]): Semantic encoding vector.
+
+    Returns:
+        bytes: Binary blob of fp32 values.
+    """
+    return struct.pack(f"{len(vector)}f", *vector)                                  # pack float list into fp32 binary blob — e.g. "768f" for 768 floats
+    
 @dataclass(frozen=True)
 class GatewayMap:
     """
