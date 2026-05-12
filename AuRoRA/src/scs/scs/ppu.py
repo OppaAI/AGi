@@ -72,13 +72,30 @@ class PersonalProvisioningUnit:
     def _load_user(self, user_id: str) -> None:
         """
         Load active user profile and apply extrinsic preferences.
-        Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
+        Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.A.A
 
         Args:
             user_id: User identifier matching a key in users.yaml
         """
-        path = RRR.USER_PROFILES_GATEWAY
+        path = AGi.SCS.USER_PROFILES_GATEWAY
 
+        if not path.exists():
+            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
+            return
+        try:
+            data = yaml.safe_load(path.read_text())
+            user = (data or {}).get("users", {}).get(user_id)
+            if user:
+                self._user_prefs = user
+                self._logger.info(f"✅ User profile loaded — {user_id}")
+                bias = user.get("memory_salience_bias")
+                if bias is not None:
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
+                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
+            else:
+                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
+        except Exception as e:
+            self._logger.error(f"❌ Failed to load user profile: {e}"
         if not path.exists():
             self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
             return
@@ -102,7 +119,7 @@ class PersonalProvisioningUnit:
         Load active persona system prompt from persona YAML.
         Mutates AGi.SCS.GCE.SYSTEM_PROMPT in place.
         """
-        path = RRR.PERSONA_PROFILES_GATEWAY
+        path = AGi.SCS.PERSONA_PROFILES_GATEWAY
 
         if not path.exists():
             self._logger.warning(f"⚠️  No persona file at {path} — using HRS default")

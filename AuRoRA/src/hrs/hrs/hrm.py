@@ -86,6 +86,16 @@ class _SCSType(type):
         )
 
     @property
+    def AURORA_SETPOINTS_GATEWAY(cls) -> Path:
+        """[DERIVED] Absolute path to the aurora setpoints file — constructed from AGi gateway constants."""
+        return (
+            Path.home()                         # anchor at OS home (~)
+            / AGi.ENTITY_GATEWAY                # descend into the entity gateway directory
+            / RRR.RETICULAR_ACTIVATING_COMPARTMENT  # descend into the reticular activating compartment subdirectory
+            / cls.AURORA_SETPOINTS              # land at the aurora setpoints file
+        )
+
+    @property
     def USER_PROFILES_GATEWAY(cls) -> Path:
         """[DERIVED] Path to the user profiles file — constructed from AGi gateway constants."""
         return (

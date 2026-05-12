@@ -21,8 +21,6 @@ Path convention:
     ~/.agi/ras/aurora.yaml
 """
 
-from pathlib import Path
-
 from launch                            import LaunchDescription
 from launch.actions                    import LogInfo
 from launch_ros.actions                import Node
@@ -34,17 +32,6 @@ from launch_ros.parameter_descriptions import ParameterFile
 
 from hrs.hrm import RRR, AGi
 
-# ─── Config Paths ─────────────────────────────────────────────────────────────
-#
-#   Constructed from HRM constants — single source of truth, no magic strings.
-
-_AURORA_PATH = (
-    Path.home()
-    / AGi.ENTITY_GATEWAY
-    / RRR.RETICULAR_ACTIVATING_COMPARTMENT
-    / AGi.SCS.AURORA_SETPOINTS                      # "aurora.yaml"
-)
-
 # ─── Parameter Files ──────────────────────────────────────────────────────────
 #
 #   aurora.yaml  — robot-wide intrinsic params (scs.emc.*, scs.wmc.*, etc.)
@@ -53,7 +40,7 @@ _AURORA_PATH = (
 #   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
 
 _aurora_params = ParameterFile(
-    param_file=str(_AURORA_PATH),
+    param_file=str(AGi.SCS.AURORA_SETPOINTS_GATEWAY),
     allow_substs=True,
 )
 
