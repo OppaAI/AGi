@@ -350,13 +350,13 @@ class EngramComplex:
         try:
 
             # 0. Schema Version Check - create schema and verify version on startup
-            self._ecx_conn.execute(f"""
+            self._ecx_conn.execute(f"""                                                      # schema_meta holds db-level metadata — currently only schema_version
                 CREATE TABLE IF NOT EXISTS schema_meta (
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 )
             """)
-            self._ecx_conn.commit()
+            self._ecx_conn.commit()                                                          # commit before version check — table must exist before SELECT
 
             schema_version: sqlite3.Row | None = self._ecx_conn.execute(                     # get current schema version
                 "SELECT value FROM schema_meta WHERE key = 'schema_version'"
@@ -423,7 +423,7 @@ class EngramComplex:
                         {self._blueprint.semantic_traces} FLOAT[{self._vector_dim}]
                     )
                 """)                                                                           # create vec0 virtual table for KNN search
-                self._ecx_conn.commit()                                                            # commit the virtual table to the memory bank
+                self._ecx_conn.commit()                                                        # commit the virtual table to the memory bank
                 self.logger.debug(f"Engram vector index initialized for {self._vector_schema}")# log the successful initialization of engram vector index
 
             # 5. Build Lexical Search Virtual Table (FTS5)
@@ -435,7 +435,7 @@ class EngramComplex:
                        tokenize='porter unicode61'
                     )
                 """)                                                                           # create FTS5 virtual table for keyword search
-                self._ecx_conn.commit()                                                            # commit the virtual table to the memory bank
+                self._ecx_conn.commit()                                                        # commit the virtual table to the memory bank
                 
         except sqlite3.Error as e:                                                             # if error occurs during building schema
             self.logger.error(f"Engram schema initialization failed: {e}")                     # log the failed initialization with reason
@@ -503,12 +503,12 @@ class EngramComplex:
         ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         labels: str               = ", ".join(engram.keys())                # transcript label list from engram
         slots: str                = ", ".join([ "?"] * len(engram))         # one ? per trace
-        inscription: sqlite3.Cursor = ecx_conn.execute(                       # INSERT dynamically built from transcript labels
+        inscription: sqlite3.Cursor = ecx_conn.execute(                     # INSERT dynamically built from transcript labels
             f"INSERT INTO {schema} ({labels}) VALUES ({slots})",            # trace content in same order as labels
             list(engram.values()),
         )
         ecx_conn.commit()                                                   # commit before returning — permanent
-        return inscription.lastrowid                                          # return engram_id for vector and lexical indexing
+        return inscription.lastrowid                                        # return engram_id for vector and lexical indexing
 
     def retrieve_staged_batch(self, batch_size: int, offset: int) -> list:
         """
@@ -612,8 +612,8 @@ class EngramComplex:
         """
         try:                                                                    # attempt semantic recall with given cue
             # Filter by user ID
-            user_filter: str = f"AND store.user_id = ?" if user_id else ""
-            user_params: list = [user_id] if user_id else []
+            user_filter: str = f"AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
+            user_params: list = [user_id] if user_id else []                    # guest: bind user_id to placeholder — admin: empty, no binding needed
 
             date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
             temporal_filter: str = f"""
@@ -666,8 +666,8 @@ class EngramComplex:
         Returns:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
-        user_filter: str = f"AND store.user_id = ?" if user_id else ""
-        user_params: list = [user_id] if user_id else []
+        user_filter: str = f"AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
+        user_params: list = [user_id] if user_id else []                    # guest: bind user_id to placeholder — admin: empty, no binding needed
 
         clean_cue: str = self._clean_cue(cue)                               # strip punctuation, filter stop words, join with OR
         if not clean_cue:                                                   # if clean_cue is empty or pure whitespace — nothing to recall
@@ -792,8 +792,8 @@ class EngramComplex:
             lexical_rank[engram["id"]] = rank                                   # stores rank by id — looked up during RRF scoring
             engram_pool.setdefault(engram["id"], engram)                        # setdefault — only add engram if id not already, semantic path takes precedence
 
-        semantic_miss: int = len(semantic_matches)                              # penalty rank for engrams absent from semantic results
-        lexical_miss:  int = len(lexical_matches)                               # penalty rank for engrams absent from lexical results
+        semantic_miss: int = len(semantic_matches)                              # one beyond last semantic rank — softer penalty than full exclusion for engrams absent from semantic path
+        lexical_miss:  int = len(lexical_matches)                               # one beyond last lexical rank — softer penalty than full exclusion for engrams absent from lexical path
         
         # Compute RRF score for each candidate
         for engram in list(engram_pool.values()):                               # list() snapshots pool — prevents mutation during iteration
@@ -830,7 +830,7 @@ class EngramComplex:
                 f"MIN({self._blueprint.temporal_trace}) as earliest, "
                 f"MAX({self._blueprint.temporal_trace}) as latest "
                 f"FROM {self._storage_schema}"
-                if self._blueprint.temporal_trace else
+                if self._blueprint.temporal_trace else                          # include temporal range only if schema defines a temporal trace column
                 f"SELECT COUNT(*) as total FROM {self._storage_schema}"
             ).fetchone()                                                        # fetch engram count and temporal range
 
