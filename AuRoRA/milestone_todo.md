@@ -5,6 +5,7 @@
 - [ ] **M1.x** `cnc.py` — MEMORY_CONTEXT_GATEWAY: WebUI memory context debug stream
 - [ ] **M1.x** `scs/types.py` — define and lock NeuralTextInput schema; standardize JSON contract across all input sources (CLI, web, voice); evaluate custom ROS2 msg type vs JSON bridge for non-ROS interfaces
 - [ ] **M1.x** `cnc.py` `mcc.py` — multi-user identity: replace hardcoded "user" speaker literal with user_id from NeuralTextInput schema — required for ASR multi-speaker routing
+- [ ] **M1.6** `cnc.py` — Add login/logout Service (UI/UX, Voice, both?) (see below)
 - [ ] **M2?** `cnc.py` — remove M1 stub — replace with login sequence
 - [ ] **M2** `emc.py` — standardize logger format across all EMC classes (EpisodicMemoryCortex, EncodingCycle, EpisodicBuffer); establish consistent prefix convention — e.g. [EMC], [EncodingCycle], [EpisodicBuffer]
 - [ ] **M2** `cnc.py` — `_strip_model_artifacts()`: strip think blocks and roleplay artifacts from assistant response before handing to MCC for memory storage
@@ -52,3 +53,42 @@
 - [ ] **M2** `msb.py` — extend engram complex with SMC and PMC tables
 - [ ] **M3** `msb.py` — backend swap: Qdrant, pgvector, or other vector DB — swap here only, cortex cognitive logic untouched
 - [ ] **M2/3** `msb.py` — evaluate Qdrant migration (SMC/PMC scale) vs SQLite-vec; expand schema_meta (encoding_engine, vector_dim, robot_id, created_at) once storage backend is finalized
+
+### Login
+# TODO M1.6 — Login/Logout Service (after TSR/ASR UX decisions)
+Current state: Single active user per session, set at startup via AGi.ACTIVE_USER
+Architecture ready: user_id threading complete (CNC → MCC → WMC → EMC → MSB)
+ 
+Deferred decision: How should users authenticate?
+   - Voice command? ("Grace, login as Alice")
+   - GUI button/form?
+   - ROS2 service call from external UI?
+   - Face recognition integration?
+
+Implementation plan (once UX decided):
+   1. Add ROS2 service: /scs/session/login (user_id) → (success, message)
+   2. Add ROS2 service: /scs/session/logout () → (success, message)
+   3. Service handler reloads PPU with new user_id:
+      ```
+      def _handle_login(self, request, response):
+          user_id = request.user_id
+          try:
+              self._ppu.provision(user_id=user_id)
+              self._active_user = user_id
+              self._user_type = self._ppu.user_type
+              response.success = True
+              response.message = f"Logged in as {user_id}"
+          except Exception as e:
+              response.success = False
+              response.message = f"Login failed: {e}"
+          return response
+      ```
+   4. Optional: Add session timeout/auto-logout
+   5. Optional: Multi-factor auth for admin users
+
+ Dependencies:
+   - M1.X TSR/ASR voice pipeline (voice command login)
+   - UI/UX design decisions (GUI vs voice vs both)
+   - Security policy (face recognition? PIN? passphrase?)
+
+Current workaround: Edit AGi.ACTIVE_USER in HRM or restart with different user
