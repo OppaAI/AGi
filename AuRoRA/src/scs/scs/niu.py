@@ -3,14 +3,14 @@ NIU — Neural Input Unit
 ========================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Typed input contract layer for all incoming neural stimuli at the CNC boundary.
-All input sources (CLI, webUI, voice, messaging bridges, etc) conform to these contracts.
+Typed input schema layer for all incoming neural stimuli at the CNC boundary.
+All input sources (CLI, webUI, voice, messaging bridges, etc) conform to these schemas.
 CNC parses against these types — no ad-hoc dict access at the boundary.
 
 Responsibilities:
     - Define typed input schema for all incoming neural stimuli
     - Enumerate all valid input modalities
-    - Enforce contract at parse time — malformed payloads rejected before reaching CNC
+    - Enforce schema at the CNC boundary — malformed stimuli rejected before reaching the cognitive cycle
 
 Architecture:
     Stateless type definitions — no ROS2 node, no persistent state.
@@ -27,8 +27,8 @@ Public interface:
 """
 
 # System libraries
-from dataclasses import dataclass, field    # for NeuralTextInput typed schema
-from enum import Enum                       # for InputChannel modality enumeration
+from dataclasses import dataclass, field    # for NeuralStimulus typed schema
+from enum import Enum                       # for NeuralInputChannel modality enumeration
 
 class NeuralInputChannel(Enum):
     """
@@ -40,14 +40,14 @@ class NeuralInputChannel(Enum):
     WEBUI    = "webui"                      # web interface input
     VOICE    = "voice"                      # voice pipeline — (TODO: M1.X-b)
     TELEGRAM = "telegram"                   # Telegram messaging bridge — (TODO: M1.X-c)
-    DISCORD  = "discord"                    # Dicord messaging bridge — (TODO: M1.X-c)
+    DISCORD  = "discord"                    # Discord messaging bridge — (TODO: M1.X-c)
     GMAIL    = "gmail"                      # Gmail email bridge — (TODO: M1.X-c)
 
 @dataclass
 class NeuralStimulus:
     """
     Typed input schema for all incoming neural stimuli at the CNC boundary.
-    All input sources must conform — malformed payloads rejected at the CNC boundary.
+    All input sources must conform — malformed stimuli rejected at the CNC boundary.
 
     Fields:
         source   (NeuralInputChannel) : Input modality — required, every adapter must supply
