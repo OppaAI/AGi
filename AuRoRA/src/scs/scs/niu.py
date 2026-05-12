@@ -47,10 +47,10 @@ class NeuralTextInput:
     All input sources must conform — malformed payloads rejected at parse time.
 
     Fields:
+        source   (InputChannel) : Input modality — routes correctly through voice and messaging bridges
         text     (str)          : User message content
         user_id  (str)          : Speaker identity — defaults to 'demo' if omitted
-        source   (InputChannel) : Input modality — routes correctly through voice and messaging bridges
     """
+    source  : InputChannel                                      # input modality
     text    : str
-    user_id : str          = field(default="demo")              # speaker identity — defaults to demo if omitted
-    source  : InputChannel = field(default=InputChannel.CLI)    # input modality — defaults to CLI if omitted
+    user_id : str          = field(default="demo")              # speaker identity — defaults to demo for minimum functionality
