@@ -40,7 +40,6 @@
 - [ ] **M2** `hrs.py` — add HRS startup/shutdown lifecycle management
 - [ ] **M2** `hrs.py` — add recency parameter for identification of the most recent event segments in EMC
 - [ ] **M2?** `hru.py` — decide whether to use database to store user profile instead of yaml
-- [ ] **M2/3** `hru.py` — decide whether to upgrade to Qdrant from SQLite-vec
 - [ ] **M2** `hrc.py` — HRC takes ownership of manifest hydration lifecycle
 - [ ] **M2** `hrc.py` — add manifest diff and rollback for safe runtime parameter updates
 - [ ] **M3** `hrc.py` — emotional state initialization
@@ -52,3 +51,4 @@
 - [ ] **M1.5** `msb.py` `hrs/hrp.py` — migrate pack_vector, normalize_vector to hrs.py if vector math is needed outside memory cortices
 - [ ] **M2** `msb.py` — extend engram complex with SMC and PMC tables
 - [ ] **M3** `msb.py` — backend swap: Qdrant, pgvector, or other vector DB — swap here only, cortex cognitive logic untouched
+- [ ] **M2/3** `msb.py` — evaluate Qdrant migration (SMC/PMC scale) vs SQLite-vec; expand schema_meta (encoding_engine, vector_dim, robot_id, created_at) once storage backend is finalized
