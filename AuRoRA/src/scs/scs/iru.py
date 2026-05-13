@@ -39,8 +39,6 @@ from hrs.hrm import AGi                             # manifest constants — REL
 from hrs.hru import GatewayMap                      # gateway paths — resolves users.yaml location
 from hrs.hru import UserProfile, UserAccessLevel    # user identity types — shared across whole system
 
-_gateway = GatewayMap()                             # module-level gateway — resolves all IRU filesystem paths
-
 class IdentityRecognitionUnit:
     """
     Identity Recognition Unit — user identity and relational context loader.
@@ -84,27 +82,31 @@ class IdentityRecognitionUnit:
         Args:
             user_id (str): User identifier matching a key in users.yaml
         """
-        if not _gateway.user_profiles.exists():                                          # no users file — fall back to HRS defaults
-            self._logger.warning(f"⚠️  No users file at {_gateway.user_profiles} — using HRS defaults")
+        gateway = GatewayMap().user_profiles                                                     # retrieve the path to users.yaml file
+        
+        if not gateway.exists():                                                                 # no users profile — fall back to HRS defaults
+            self._logger.warning(f"⚠️ User profile missing at {gateway} — loading hardcoded demo")  # log the missing of user profile
+            self._user_profile = DEMO_USER                                                       # no yaml file — last resort fallback
             return
     
         try:
-            data = yaml.safe_load(_gateway.user_profiles.read_text())                    # load users.yaml — full user registry
-            user = (data or {}).get("users", {}).get(user_id)                           # extract profile for active user
+            user_profiles: dict = yaml.safe_load(gateway.read_text())                            # load users.yaml — full user registry
+            active_user: dict | None = (user_profiles or {}).get("users", {}).get(user_id)       # extract profile for active user
     
-            if user:
-                self._user_profile = UserProfile(
-                    user_id = user_id,                                                  # inject key as user_id — not stored inside the YAML block
-                    **{k: v for k, v in user.items()
-                       if k in UserProfile.__dataclass_fields__}                        # filter unknown YAML keys — future fields won't break construction
+            if active_user:                                                                      # if active user exists in the users.yaml
+                self._user_profile = UserProfile(                                                # retrieve user profile of the active user
+                    user_id = user_id,                                                           # inject key as user_id — not stored inside the YAML block
+                    **{key: value for key, value in active_user.items()
+                       if key in UserProfile.__dataclass_fields__}                               # filter unknown YAML keys — future fields won't break construction
                 )
-                self._logger.info(f"✅ User recognized — {user_id} ({self._user_profile.access_level.value})")
+                self._logger.info(f"✅ User recognized — {user_id} ({self._user_profile.access_level.value})")    # log the successful retrieval of the active user profile
     
-                if self._user_profile.memory_salience_bias:                             # salience bias present — adjust recall threshold
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= self._user_profile.memory_salience_bias  # lower threshold — surfaces more memories for this user
-                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
-            else:
-                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
-    
-        except Exception as e:
-            self._logger.error(f"❌ Failed to recognize user: {e}")
+                if self._user_profile.memory_salience_bias:                                      # salience bias present — adjust recall threshold
+                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= self._user_profile.memory_salience_bias   # lower threshold — surfaces more memories for this user
+                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")            # log the succesful adjustment of memory saliecne for this user
+            else:                                                                                # if active user not found,
+                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")  # log the warning that active user not found in users.yaml
+                self._user_profile = DEMO_USER                                                   # user not in yaml — load hardcoded demo directly
+                
+        except Exception as e:                                                                   # if error occurs duirng loading of users.yaml
+            self._logger.error(f"❌ Failed to recognize user: {e}")                              # log the error that user not recognized
