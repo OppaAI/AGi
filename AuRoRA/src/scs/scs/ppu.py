@@ -19,7 +19,7 @@ Architecture:
     Depends on IRU for user context — IRU must be recognized before PPU provisions.
 
 Lifecycle:
-    CNC.__init__() → PPU(logger) → ppu.provision(user_profile)
+    CNC.__init__() → PPU(logger) → ppu.provision_cognition(user_profile)
                    → AGi.SCS.GCE.ACTIVE_COGNITION hydrated
                    → ppu.active_cognition available to CNC
 
@@ -29,8 +29,8 @@ Terminology:
     System Prompt — assembled prompt injecting Grace's persona and user context into the cognitive cycle
 
 Public interface:
-    ppu.provision(user_profile) → None
-    ppu.active_cognition        → str
+    ppu.provision_cognition(user_profile) → None
+    ppu.active_cognition                  → str
 """
 
 # System libraries
@@ -53,9 +53,9 @@ class PersonalProgressionUnit:
             logger: Logger instance forwarded from caller
         """
         self._logger                    = logger            # logger forwarded from caller — all PPU methods emit through this handle
-        self._active_cognition : str    = ""                # assembled active cognition — populated by provision()
+        self._active_cognition : str    = ""                # assembled active cognition — populated by provision_cognition()
 
-    def provision(self, user_profile: dict) -> None:
+    def provision_cognition(self, user_profile: dict) -> None:
         """
         Load AuRoRA's active persona and assemble the session system prompt.
         Called once by CNC at init — after IRU recognition, before cognitive cycle begins.
@@ -72,7 +72,7 @@ class PersonalProgressionUnit:
 
     @property
     def active_cognition(self) -> str:
-        """Expose the assembled active cognition — available to CNC after provision()."""
+        """Expose the assembled active cognition — available to CNC after provision_cognition()."""
         return self._active_cognition                                          # make active cognition public to whole system
 
     def _retrieve_active_persona(self) -> None:
@@ -83,7 +83,7 @@ class PersonalProgressionUnit:
         gateway = GatewayMap().user_profiles                                                            # retrieve the path to users.yaml file
 
         if not gateway.exists():                                                                        # no persona file — fall back to HRS default
-            self._logger.warning(f"⚠️  No persona file at {gateway} — using HRM default")               # log missing user profile at gateway path
+            self._logger.warning(f"⚠️ No persona file at {gateway} — using HRM default")                # log missing user profile at gateway path
             return                                                                                      # user not in yaml — load hardcoded demo directly
 
         try:                                                                                            # attempt to load persona
@@ -92,7 +92,7 @@ class PersonalProgressionUnit:
                 AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["active_cognition"]                       # hydrate manifest — overrides HRM default
                 self._logger.info("✅ Persona retrieved")                                               # log succesful retrieval of persona
             else:                                                                                       # if active persona not found,
-                self._logger.warning("⚠️  Persona file missing system prompt — using HRM default")      # log the warning that active user not found in persona.yaml
+                self._logger.warning("⚠️ Persona file missing system prompt — using HRM default")       # log the warning that active user not found in persona.yaml
         except Exception as e:                                                                          # if error occurs during loading of persona.yaml
             self._logger.error(f"❌ Failed to load persona: {e}")                                       # log the error that persona failed to load
 
