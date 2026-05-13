@@ -20,7 +20,8 @@ Lifecycle:
     CNC.__init__() → IRU(logger) → iru.recognize_user(user_id)
                    → AGi.SCS.EMC.RELEVANCE_THRESHOLD adjusted
                    → iru.user_profile available to CNC and PPU
-
+                   → iru.user_profile.access_level (UserAccessLevel) governs memory scope and permissions
+                   
 Terminology:
     Recognition         — identifying the active user and retrieving their relational context
     User Profile        — extrinsic per-user preferences shaping AuRoRA's behaviour
@@ -32,12 +33,12 @@ Public interface:
 """
 
 # System libraries
-import yaml                                         # YAML parsing — loads user profiles from users.yaml
+import yaml                                                     # YAML parsing — loads user profiles from users.yaml
 
 # AGi libraries
-from hrs.hrm import AGi                             # manifest constants — RELEVANCE_THRESHOLD mutated on salience bias
-from hrs.hru import GatewayMap                      # gateway paths — resolves users.yaml location
-from hrs.hru import UserProfile, UserAccessLevel    # user identity types — shared across whole system
+from hrs.hrm import AGi                                         # manifest constants — RELEVANCE_THRESHOLD mutated on salience bias
+from hrs.hru import GatewayMap                                  # gateway paths — resolves users.yaml location
+from hrs.hru import UserProfile, UserAccessLevel, DEMO_USER     # user identity types — shared across whole system
 
 class IdentityRecognitionUnit:
     """
@@ -71,7 +72,7 @@ class IdentityRecognitionUnit:
 
     @property
     def user_profile(self) -> UserProfile | None:
-        """Recognized user profile — available to CNC and PPU after recognize()."""
+        """Recognized user profile — available to CNC and PPU after recognize_user()."""
         return self._user_profile                                              # make recognized user profile public to whole system
 
     def _retrieve_user_profile(self, user_id: str) -> None:
@@ -86,7 +87,7 @@ class IdentityRecognitionUnit:
         
         if not gateway.exists():                                                                 # no users profile — fall back to HRS defaults
             self._logger.warning(f"⚠️ User profile missing at {gateway} — loading hardcoded demo")  # log the missing of user profile
-            self._user_profile = DEMO_USER                                                       # no yaml file — last resort fallback
+            self._user_profile = DEMO_USER                                                       # user not in yaml — load hardcoded demo directly
             return
     
         try:
