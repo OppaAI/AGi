@@ -78,20 +78,18 @@ class IdentityRecognitionUnit:
 
     def _retrieve_user_profile(self, user_id: str) -> None:
         """
-        Load active user profile and apply extrinsic preferences.
+        Retrieves the profile of active user and apply extrinsic preferences to the HRS manifest.
         Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
     
         Args:
             user_id (str): User identifier matching a key in users.yaml
         """
-        path = _gateway.user_profiles
-    
-        if not path.exists():                                                           # no users file — fall back to HRS defaults
-            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
+        if not _gateway.user_profiles.exists():                                          # no users file — fall back to HRS defaults
+            self._logger.warning(f"⚠️  No users file at {_gateway.user_profiles} — using HRS defaults")
             return
     
         try:
-            data = yaml.safe_load(path.read_text())                                     # load users.yaml — full user registry
+            data = yaml.safe_load(_gateway.user_profiles.read_text())                    # load users.yaml — full user registry
             user = (data or {}).get("users", {}).get(user_id)                           # extract profile for active user
     
             if user:
