@@ -61,12 +61,12 @@ class PersonalProgressionUnit:
         Called once by CNC at init — after IRU recognition, before cognitive cycle begins.
 
         Args:
-            user_profiles (dict): User profiles from IRU — injected into active cognition
+            user_profile (dict): User profiles from IRU — injected into active cognition
         """
         self._logger.info("─" * 60)                                            # visual separator
         self._logger.info("🧬 PPU — Personal Progression Unit activating…")    # log the activation of PPU 
         self._retrieve_active_persona()                                        # retrieve the active persona
-        self._assemble_active_cognition(user_profiles)                         # assemble active cognition from the active persona and active user profile
+        self._assemble_active_cognition(user_profile)                          # assemble active cognition from the active persona and active user profile
         self._logger.info("✅ PPU — Progression complete")                     # log the completion of activation
         self._logger.info("─" * 60)                                            # visual separator
 
@@ -88,7 +88,7 @@ class PersonalProgressionUnit:
 
         try:                                                                                            # attempt to load persona
             active_persona = yaml.safe_load(gateway.read_text())                                        # parse persona.yaml — AuRoRA's active identity
-            if active_persona and gateway.get("active_cognition"):                                      # if perosna exists,
+            if active_persona and active_persona.get("active_cognition"):                               # if perosna exists,
                 AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["active_cognition"]                       # hydrate manifest — overrides HRM default
                 self._logger.info("✅ Persona retrieved")                                               # log succesful retrieval of persona
             else:                                                                                       # if active persona not found,
