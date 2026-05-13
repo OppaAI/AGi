@@ -68,7 +68,8 @@ from hrs.hrm import AGi                                    # homeostatic regulat
 from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from scs.niu import NeuralTextInput, InputChannel          # add to imports at top of cnc.py
-from scs.ppu import PersonalProvisioningUnit               # Personal Provisioning Unit — session identity and user context loader
+from scs.iru import IdentityRecognitionUnit
+from scs.ppu import PersonalProgressionUnit                # Personal Provisioning Unit — session identity and user context loader
 
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
@@ -118,9 +119,12 @@ class CNC(Node):
         # Initialize configuration through hydration
         hydrate_manifest(self, system="scs")                                # hydrate manifest from AuRoRA parameters under the SCS system
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
-        self._ppu = PersonalProvisioningUnit(logger=self.get_logger())      # Personal Provisioning Unit — session identity and user context loader
-        self._ppu.provision(user_id=self._active_user)                      # Initialize identity and user context
-        self._user_type: UserType = self._ppu.user_type                     # admin sees all memories, guest sees only their own
+        self._iru = IdentityRecognitionUnit(logger=self.get_logger())       # boot identity recognition — loads user profile
+        self._iru.recognize(user_id=self._active_user)                      # recognize active user — loads relational context
+        self._user_type: UserType = self._iru.user_type                     # access classification — governs recall scope
+        
+        self._ppu = PersonalProgressionUnit(logger=self.get_logger())       # boot personal progression — loads Grace's persona
+        self._ppu.provision(user_prefs=self._iru.user_prefs)                # assemble system prompt — persona + user context
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
