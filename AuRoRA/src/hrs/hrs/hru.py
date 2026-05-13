@@ -64,9 +64,19 @@ class UserProfile:
     memory_salience_bias: float = 0.0        # recall sensitivity — lowers threshold to surface more memories
 
     def __post_init__(self):
-        if isinstance(self.access_level, str):                      # # YAML delivers raw strings — coerce to enum if needed
-            self.access_level = UserAccessLevel(self.access_level)  # coerce string → enum — YAML always delivers raw strings
-    
+        if isinstance(self.access_level, str):                      # YAML delivers raw strings — coerce to enum if needed
+            self.access_level = UserAccessLevel(self.access_level)  # coerce string → enum — stored profile always delivers raw strings
+
+DEMO_USER = UserProfile(                                            # fallback to demo user profile in case user profiles missing
+    user_id              = "demo",
+    name                 = "Demo User",
+    known_as             = "there",
+    location             = "Unknown",
+    access_level         = UserAccessLevel.GUEST,
+    seed                 = "This is a demo session. No user has been identified.",
+    memory_salience_bias = 0.0
+)
+
 def hydrate_manifest(core: Node, system: str) -> None:
     """
     Hydrate the system manifest with parameters declared by AuRoRA or admin under the given system.
