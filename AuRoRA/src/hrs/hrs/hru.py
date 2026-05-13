@@ -70,7 +70,7 @@ class UserProfile:
 DEMO_USER = UserProfile(                                            # user profile missing — last resort fallback
     user_id              = "demo",
     name                 = "Demo User",
-    known_as             = "there",
+    known_as             = "user",
     location             = "Unknown",
     access_level         = UserAccessLevel.GUEST,
     seed                 = "This is a demo session. No user has been identified.",
