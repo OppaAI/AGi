@@ -64,11 +64,11 @@ class IdentityRecognitionUnit:
         Args:
             user_id (str): Active user identifier matching a key in users.yaml
         """
-        self._logger.info("─" * 60)                                            # visual separator — stdout and /rosout
+        self._logger.info("─" * 60)                                            # visual separator
         self._logger.info("🪪  IRU — Identity Recognition Unit activating…")   # log the activation of IRU  
         self._retrieve_user_profile(user_id)                                   # retrieve user profile of the given user_id
         self._logger.info("✅ IRU — recognition complete")                     # log the completion of activation
-        self._logger.info("─" * 60)                                            # visual separator — stdout and /rosout
+        self._logger.info("─" * 60)                                            # visual separator
 
     @property
     def user_profile(self) -> UserProfile | None:
