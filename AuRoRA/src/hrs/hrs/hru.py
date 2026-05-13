@@ -67,7 +67,7 @@ class UserProfile:
         if isinstance(self.access_level, str):                      # YAML delivers raw strings — coerce to enum if needed
             self.access_level = UserAccessLevel(self.access_level)  # coerce string → enum — stored profile always delivers raw strings
 
-DEMO_USER = UserProfile(                                            # fallback to demo user profile in case user profiles missing
+DEMO_USER = UserProfile(                                            # user profile missing — last resort fallback
     user_id              = "demo",
     name                 = "Demo User",
     known_as             = "there",
