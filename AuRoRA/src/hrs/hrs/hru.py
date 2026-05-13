@@ -20,7 +20,8 @@ Architecture:
 Terminology:
     Manifest    — the AGi class tree of cognitive architecture constants
     Hydration   — binding ROS2 parameter server values into AGi manifest constants
-    Chunk       — unit of cognitive engine context window size
+    Chunk       — model-agnostic unit of context length; maps to a token when 
+                  the tokenizer is available, or a character-division approximation otherwise
 
 Public interface:
     hydrate_manifest(core, system) → None
@@ -36,27 +37,25 @@ Public interface:
 from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
 from enum import Enum                       # enum base for UserType identity classification
 import numpy as np                          # for vector normalization — normalize_vector
-from pathlib import Path                    # for gateway path construction
+from pathlib import Path                    # filesystem path abstraction — GatewayMap builds all AuRoRA paths from this
 import struct                               # for vector packing — pack_vector
 
+# ROS2 libraries
+from rclpy.node import Node                 # for node type hinting (Node) and core node
+
 # AGi libraries
-from hrs.hrm import AGi                     # manifest constants — operated on by hydration functions
+from hrs.hrm import AGi, RRR                # manifest constants; RRR — filesystem path segments
 
-class UserType(Enum):
+class UserAccessLevel(Enum):
     """
-    Defines the access type for the active user through the whole system
-    Loaded from users.yaml by PPU — governs access control:
-    
-    admin  — full recall scope:
-             - sees all users' memories
-    guest  — restricted recall scope:
-             - sees only their own memories
+    Classify the active user's access scope for recall and permission gating.
     """
-    ADMIN = "admin"                         # unrestricted admin  access
-    GUEST = "guest"                         # restricted guest access
+    ADMIN = "admin"                         # full system access — unrestricted recall, admin actions
+    GUEST = "guest"                         # restricted system access — limited recall, user-scoped actions only
 
-def hydrate_manifest(core, system: str) -> None:
-    """Hydrate the single source of truth manifest from parameters declared by AuRoRA or admin under the given system.
+def hydrate_manifest(core: Node, system: str) -> None:
+    """
+    Hydrate the system manifest with parameters declared by AuRoRA or admin under the given system.
 
     Args:
         core        : Core node instance receiving the hydrated parameters
@@ -64,12 +63,12 @@ def hydrate_manifest(core, system: str) -> None:
     """
     manifest: type | None = _find_manifest(AGi, system)                        # recurse class tree — match nested subclass by system name
     if manifest is None:                                                       # if no match subclass is found,
-        raise RuntimeError(f"❌ No manifest matching system name '{system}'")  # hard fail — system name must map to a known subclass
+        raise RuntimeError(f"❌ No manifest matching system name '{system}'")  # abort — unrecognized system name cannot be safely hydrated
     _hydrate_system(core, manifest, system)                                    # walk manifest tree — declare and bind all parameters to core
 
 def _find_manifest(tree: type, system: str) -> type | None:
     """
-    Recursively search the AuRoRA class tree to locate the manifest subclass matching the given system name.
+    Recursively locate the manifest subclass matching the given system name in the given class tree.
 
     Args:
         tree (type) : AuRoRA class tree to search through
@@ -84,19 +83,19 @@ def _find_manifest(tree: type, system: str) -> type | None:
             continue                                                              # skip — only walk public nested classes
         if system_name.lower() == system:                                         # case-insensitive match,
             return subsystem                                                      # return manifest subclass if system name matches
-        matched_manifest: type | None = _find_manifest(subsystem, system)         # recurse into nested subclass — depth-first search
+        matched_manifest: type | None = _find_manifest(subsystem, system)         # recurse into nested subclass — walk deeper into the system tree
         if matched_manifest:                                                      # if manifest match the subclass
             return matched_manifest                                               # propagate match up the call stack
     return None
     
-def _hydrate_system(core, manifest: type, system: str) -> None:
+def _hydrate_system(core: Node, manifest: type, system: str) -> None:
     """
-    Recursively search the AuRoRA class tree and hydrate parameters declared by AuRoRA — skips static manifest parameters.
+    Recursively walk the manifest subclass and bind each parameter to the AuRoRA parameter server.
 
     Args:
-        core            : Core node instance receiving the hydrated parameters
-        manifest (type) : Manifest subclass to search through and hydrate
-        system (str)    : System name identifying the manifest to hydrate
+        core (Node)         : Core node instance receiving the hydrated parameters
+        manifest (type)     : Manifest subclass to walk through and hydrate
+        system (str)        : System name identifying the manifest to hydrate
     """
     for param_name in vars(manifest):                                                # iterate attribute names of the manifest subclass
         if param_name.startswith('_'):                                               # if private members,
@@ -104,22 +103,21 @@ def _hydrate_system(core, manifest: type, system: str) -> None:
         param_value: type | int | float | bool | str = getattr(manifest, param_name) # retrieve the attribute value for inspection
         param_key: str = f"{system}.{param_name.lower()}"                            # build fully qualified parameter key — dot-separated namespace path
 
-        if isinstance(param_value, type):                                            # if nested subclass is found,
+        if isinstance(param_value, type):                                            # nested class — recurse deeper into the manifest tree
             _hydrate_system(core, param_value, param_key)                            # recurse into nested subclass — depth-first walk
         elif isinstance(param_value, (int, float, bool, str)):                       # if parameter value is integer, float, boolean, string,
             core.declare_parameter(param_key, param_value)                           # declare parameter with default value on the core node
-            setattr(manifest, param_name, core.get_parameter(param_key).value)       # write AuRoRA-declared value back to manifest — overrides default
+            setattr(manifest, param_name, core.get_parameter(param_key).value)       # write server value back into manifest — AuRoRA overrides the default
 
 def normalize_vector(vector: list[float]) -> list[float]:
     """
-    Normalizes an encoding vector to unit length for cosine-equivalent L2 distance search.
-    Already-normalized vectors and empty vectors are returned unchanged.
+    Normalize an encoding vector to unit length for cosine-equivalent L2 distance search.".
 
     Args:
         vector (list[float]): Vector to normalize
 
     Returns:
-        list[float]: A unit-normalized copy of vector, or vector itself if already normalized or empty
+        list[float]: unit-normalized vector, or the original if already normalized or empty
     """
     vector_array = np.array(vector)                                                # list → ndarray for vectorized math
     vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
@@ -129,83 +127,81 @@ def normalize_vector(vector: list[float]) -> list[float]:
     
 def pack_vector(vector: list[float]) -> bytes:
     """
-    Packs an encoding vector into binary blob for engram storage.
+    Pack an encoding vector into a binary blob for engram storage.
 
     Args:
-        vector (list[float]): Semantic encoding vector.
+        vector (list[float]): encoding vector to pack
 
     Returns:
-        bytes: Binary blob of fp32 values.
+        bytes: fp32 binary blob — e.g. 768 floats → 3072 bytes
     """
     return struct.pack(f"{len(vector)}f", *vector)                                  # pack float list into fp32 binary blob — e.g. "768f" for 768 floats
     
 @dataclass(frozen=True)
 class GatewayMap:
     """
-    Declarative registry of all AuRoRA gateway paths to access filesystem.
-    Constructs absolute gateways from HRS manifest.
+    Declarative registry of all AuRoRA filesystem gateway paths.
 
     Usage:
-        gm = GatewayMap()                    # initialize gateway map
-        db = gm.engram_db                    # gateway to engram complex
-        gm.connect_gateway(gm.engram_db)     # ensure gateway properly connected
+        gm = GatewayMap()                        # initialize gateway map
+        db = gm.engram_complex                   # gateway to engram complex
+        gm.connect_gateway(gm.engram_complex)    # ensure gateway properly connected
     """
-    home: Path = field(default_factory=Path.home)                                # [STATIC] OS home — injectable for testing
+    home: Path = field(default_factory=Path.home)                                # OS home directory — default injectable for testing
 
     @property
     def entity_root(self) -> Path:
         """Root for all AGi core system state."""
         return self.home / AGi.ENTITY_GATEWAY                                    # root directory of the filesystem (ie. ~/agi)
 
-    # RAW Gateway
+    # RAS Gateway
     @property
     def ras_gateway(self) -> Path:
-        """Gateway to access the components of Reticular Activating System (RAS)."""
+        """Open the gateway to the components of Reticular Activating System (RAS)."""
         return self.entity_root / RRR.RETICULAR_ACTIVATING_COMPARTMENT           # path to access files related to RAS (ie. ~/.agi/ras)
 
     @property
     def aurora_setpoints(self) -> Path:
-        """AuRoRA setpoints — robot-wide AuRoRA self-regulated intrinsic parameters by RAS during ignition."""
+        """Locate the AuRoRA setpoints — intrinsic parameters self-regulated by RAS at ignition."""
         return self.ras_gateway / AGi.SCS.AURORA_SETPOINTS                       # path to access the self-adjusted parameters (ie. ~/.agi/ras/aurora.yaml)
 
     # SCS Gateway
     @property
     def scs_gateway(self) -> Path:
-        """Gateway to access the components of Semantic Cognitive System (SCS)."""
+        """Open the gateway to the components of Semantic Cognitive System (SCS)."""
         return self.entity_root / RRR.SEMANTIC_COGNITIVE_SYSTEM                  # path to access files related to SCS (ie. ~/.agi/scs)
 
     @property
     def user_profiles(self) -> Path:
-        """User profiles — per-user extrinsic settings retrieved by CNC after login. (TODO: may change to database instead of yaml)"""
+        """Locate the user profiles — per-user extrinsic settings retrieved by CNC after login. (TODO: may change to database instead of yaml)"""
         return self.scs_gateway / AGi.SCS.USER_PROFILES                          # path to access user profile (ie. ~/.agi/scs/users.yaml)
 
     # GCE Gateway
     @property
     def gce_gateway(self) -> Path:
-        """Gateway to access the components of Generative Cognitive Engine (GCE)."""
+        """Open the gateway to the components of Generative Cognitive Engine (GCE)."""
         return self.scs_gateway / RRR.GENERATIVE_COGNITIVE_ENGINE                # path to access files related to GCE (ie. ~/.agi/scs/gce)
 
     @property
     def active_persona(self) -> Path:
-        """Active Persona — active persona retrieved by CNC at initialization."""
+        """Locate the active persona — retrieved by CNC at initialization."""
         return self.gce_gateway / AGi.SCS.PERSONA_PROFILES                       # path to access LLM persona (ie. ~/.agi/scs/gce/persona.yaml)
 
     # MCC Gateway
     @property
     def mcc_gateway(self) -> Path:
-        """Gateway to access the components of Memory Coordination Cortex (MCC)."""
+        """Open the gateway to the components of Memory Coordination Cortex (MCC)."""
         return self.scs_gateway / AGi.SCS.MEMORY_GATEWAY                         # path to access files related to MCC (ie. ~/.agi/scs/mcc)
 
     @property
     def engram_complex(self) -> Path:
-        """Engram complex — Storage of episodic memory, semantic memory and procedural memory across users. (TODO: may upgrade to Qdrant later on)"""
+        """Locate the engram complex — Storage of episodic memory, semantic memory and procedural memory across users. (TODO: may upgrade to Qdrant later on)"""
         return self.mcc_gateway / AGi.SCS.ENGRAM_COMPLEX                         # path to access the memory database (ie. ~/.agi/scs/mcc/engram_complex.db)
 
     # Helpers
     def connect_gateway(self, gateway: Path) -> Path:
         """
-        Connect to the gateway by establishing all parent connector links.
-        Generate the gateway chain if not established.
+        Ensure the gateway's parent directory chain exists, creating it if absent.
         
         Args:
             gateway (Path): target gateway to connect to
@@ -214,22 +210,21 @@ class GatewayMap:
             Path: the gateway itself — for inline chaining
         """
         gateway.parent.mkdir(parents=True, exist_ok=True)                         # create parent dirs — idempotent, safe to call repeatedly
-        return gateway                                                            # return gateway for inline chaining: f.open(gm.connect_gateway(gm.engram_db))
+        return gateway                                                            # return gateway for inline chaining: f.open(gm.connect_gateway(gm.engram_complex))
 
 class ChunkSampler:
     """
-    Sample the context and estimate chunk count for cognitive context management.
-    Attempts probing with base cognitive engine first — falls back to chunk-division approximation.
+    Estimate and truncate cognitive context chunks for cognitive context management.
     """
     def __init__(self, logger) -> None:
         """
-        Initialize the ChunkSampler with a logger and attempt to load the base cognitive engine chunk sampler.
+        Initialize the chunk sampler and attempt to load the base model chunk sampler.
     
         Args:
             logger : logger instance for runtime diagnostics passed from the caller
         """        
         self.logger           = logger                                    # runtime diagnostics interface
-        self._chunk_slicer    = None                                      # tokenizer — loaded from base model on init
+        self._chunk_slicer    = None                                      # tokenizer — loaded lazily from base model, None until successful load
         self._gce_base        = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE         # base model name — used to load tokenizer
         self._units_per_chunk = AGi.SCS.UNITS_PER_CHUNK                   # chars-per-token constant — used in fallback approximation
         
@@ -238,20 +233,19 @@ class ChunkSampler:
             self.logger.info(f"⏳ Activating chunk sampler ({self._gce_base})…")                      # log the activating of the tokenizer
             self._chunk_slicer = AutoTokenizer.from_pretrained(self._gce_base)                        # load base model tokenizer — slices context into model-accurate chunks
             self.logger.info("✅ Chunk sampler activated")                                            # log the activation successful
-        except Exception as e:                                                                        # if the tokenizer fails to load,
-            self.logger.debug(f"Chunk sampler unavailable, falling back to chunk-division: {e}")      # soft fail — chunk-division approximation takes over
+        except Exception as e:                                                                        # broad catch — any load failure is non-fatal, chunk-division takes over
+            self.logger.debug(f"⚠️ Chunk sampler unavailable, falling back to chunk-division: {e}")   # soft fail — chunk-division approximation takes over
     
     def probe(self, content: str, overhead: int = 0) -> int:
         """
-        Probe the content and return the estimated chunk count.
+        Probe content and return the estimated chunk count.
     
         Args:
-            content (str) : content of the context to probe for chunk estimation
-            overhead (int): structural token overhead to add —
-                            e.g. WMC.PMT_OVERHEAD for WMC PMTs; Default 0 for pre-formatted content.
+            content (str) : content to probe for chunk estimation
+            overhead (int): structural chunk overhead to add — e.g. WMC.PMT_OVERHEAD; default 0
     
         Returns:
-            int : estimated number of chunks in the content
+            int: estimated chunk count including overhead
         """
         if not content:                                                                                # guard — empty content yields zero tokens
             return 0                                                                                   # return zero tokens

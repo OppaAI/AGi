@@ -585,23 +585,23 @@ class EpisodicMemoryCortex:
             ""
         ]    
         
-        for episode in filtered_episodes:                                           # format each episode as a single line
-            try:                                                                    # attempt to deserialize and format the episode
-                content = json.loads(episode.get("content", ""))                    # deserialize stored JSON pair
-                date    = episode.get("date", "unknown date")                       # retrieve episode date for temporal context
-                lines.append(f"[{date}] User said: \"{content['user']}\"")          # append user's prompt
-                lines.append(f"         You replied: \"{content['assistant']}\"")   # append AI's response
-                lines.append("")                                                    # add a blank line for readability
-            except (json.JSONDecodeError, KeyError):                                # malformed engram — surface raw rather than silent drop
-                lines.append(f"- {episode.get('content', '')}")                     # append raw content
-                lines.append("")                                                    # add a blank line for readability
+        for episode in filtered_episodes:                                                   # format each episode as a single line
+            try:                                                                            # attempt to deserialize and format the episode
+                content = json.loads(episode.get("content", ""))                            # deserialize stored JSON pair
+                date    = episode.get("date", "unknown date")                               # retrieve episode date for temporal context
+                lines.append(f"[{date}] {episode['user_id']} said: \"{content['user']}\"")  # append user's prompt
+                lines.append(f"         You replied: \"{content['assistant']}\"")           # append AI's response
+                lines.append("")                                                            # add a blank line for readability
+            except (json.JSONDecodeError, KeyError):                                        # malformed engram — surface raw rather than silent drop
+                lines.append(f"- {episode.get('content', '')}")                             # append raw content
+                lines.append("")                                                            # add a blank line for readability
     
-        self.episodic_buffer.stage_single_episode({                                 # inject as single system message to the recallstream
-            "role":    "system",                                                    # set role as system
-            "content": "\n".join(lines)                                             # join all lines into a single string
+        self.episodic_buffer.stage_single_episode({                                         # inject as single system message to the recallstream
+            "role":    "system",                                                            # set role as system
+            "content": "\n".join(lines)                                                     # join all lines into a single string
         })
 
-        return filtered_episodes                                                    # return filtered episodes
+        return filtered_episodes                                                            # return filtered episodes
     
     def assess_emc(self) -> dict:
         """

@@ -350,12 +350,12 @@ class EngramComplex:
         try:
 
             # 0. Schema Version Check - create schema and verify version on startup
-            self._ecx_conn.execute(f"""                                                      # schema_meta holds db-level metadata — currently only schema_version
+            self._ecx_conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS schema_meta (
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 )
-            """)
+            """)                                                                             # schema_meta holds db-level metadata — currently only schema_version
             self._ecx_conn.commit()                                                          # commit before version check — table must exist before SELECT
 
             schema_version: sqlite3.Row | None = self._ecx_conn.execute(                     # get current schema version

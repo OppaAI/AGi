@@ -67,8 +67,8 @@ from std_msgs.msg import String                            # ROS2 string message
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from scs.niu import NeuralTextInput, InputChannel          # add to imports at top of cnc.py
-from scs.iru import IdentityRecognitionUnit
+from scs.niu import NeuralStimulus, NeuralInputChannel     # neural input channel— input gateway for all neural stimuli (text, speech, etc.)
+from scs.iru import IdentityRecognitionUnit                # identity recognition unit — identify user and establish session identity and user context
 from scs.ppu import PersonalProgressionUnit                # Personal Provisioning Unit — session identity and user context loader
 
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
@@ -191,16 +191,16 @@ class CNC(Node):
         Args:
             msg (String): ROS2 string message carrying the incoming text input signal
         """
-        try:                                                                                                    # attempt to parse against NeuralTextInput contract
+        try:                                                                                                    # attempt to parse against NeuralStimulus contract
             raw_input: dict = json.loads(msg.data.strip())                                                      # deserialize JSON payload — all input sources send JSON
             if not isinstance(raw_input, dict) or not raw_input.get("text"):                                    # malformed or missing text field — reject at boundary
                 return                                                                                          # abort early
-            ui_input = NeuralTextInput(                                                                         # parse against typed contract — enforces field presence
+            ui_input = NeuralStimulus(                                                                          # parse against typed contract — enforces field presence
                 text    = raw_input["text"].strip(),                                                            # user message content
                 user_id = raw_input.get("user_id", "demo"),                                                     # speaker identity — defaults to demo if omitted
-                source  = InputChannel(raw_input .get("source", InputChannel.CLI.value)),                       # input modality — defaults to CLI if omitted
+                source  = NeuralInputChannel(raw_input .get("source", NeuralInputChannel.CLI.value)),           # input modality — defaults to CLI if omitted
             )
-        except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid InputChannel value — reject at boundary
+        except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid NeuralInputChannel value — reject at boundary
             return                                                                                              # abort early — no plain string fallback, contract enforced
 
         if self._attention_gate:                                                                                # cognitive cycle busy — queue or overwrite pending stimulus

@@ -39,7 +39,7 @@ import yaml                             # YAML parsing for user profiles
 # AGi libraries
 from hrs.hrm import AGi                 # manifest constants — RELEVANCE_THRESHOLD mutated on salience bias
 from hrs.hru import GatewayMap          # gateway paths — resolves users.yaml location
-from hrs.hru import UserType            # access classification — admin sees all memories, guest sees own only
+from hrs.hru import UserAccessLevel     # access classification — admin sees all memories, guest sees own only
 _gateway = GatewayMap()
 
 class IdentityRecognitionUnit:
@@ -56,9 +56,9 @@ class IdentityRecognitionUnit:
         Args:
             logger: Logger instance forwarded from CNC
         """
-        self._logger     = logger                       # logger forwarded from caller — all IRU methods emit through this handle
-        self._user_prefs : dict     = {}                # user profile — populated by recognize()
-        self._user_type  : UserType = UserType.GUEST    # access type — defaults to guest until recognized
+        self._logger     = logger                                   # logger forwarded from caller — all IRU methods emit through this handle
+        self._user_prefs : dict     = {}                            # user profile — populated by recognize()
+        self._user_type  : UserAccessLevel = UserAccessLevel.GUEST  # access type — defaults to guest until recognized
 
     # ── Public Interface ──────────────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ class IdentityRecognitionUnit:
         return self._user_prefs
 
     @property
-    def user_type(self) -> UserType:
+    def user_type(self) -> UserAccessLevel:
         """Access classification — available to CNC after recognize()."""
         return self._user_type
 
@@ -107,7 +107,7 @@ class IdentityRecognitionUnit:
             user = (data or {}).get("users", {}).get(user_id)                               # extract profile for active user
             if user:
                 self._user_prefs = user                                                     # store user profile for PPU
-                self._user_type  = UserType(user.get("type", "guest"))                      # load access type — defaults to guest if not set
+                self._user_type  = UserAccessLevel(user.get("access_level", "guest"))       # load access type — defaults to guest if not set
                 self._logger.info(f"✅ User recognized — {user_id} ({self._user_type.value})")
                 bias = user.get("memory_salience_bias")
                 if bias is not None:                                                        # salience bias present — adjust recall threshold
