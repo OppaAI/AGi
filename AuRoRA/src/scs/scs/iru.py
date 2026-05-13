@@ -77,7 +77,7 @@ class IdentityRecognitionUnit:
 
     def _retrieve_user_profile(self, user_id: str) -> None:
         """
-        Retrieves the profile of active user and apply extrinsic preferences to the HRS manifest.
+        Retrieves the profile of active user and applies extrinsic preferences to the HRS manifest.
         Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
     
         Args:
@@ -86,7 +86,7 @@ class IdentityRecognitionUnit:
         gateway = GatewayMap().user_profiles                                                     # retrieve the path to users.yaml file
         
         if not gateway.exists():                                                                 # no users profile — fall back to HRS defaults
-            self._logger.warning(f"⚠️ User profile missing at {gateway} — loading hardcoded demo")  # log the missing of user profile
+            self._logger.warning(f"⚠️ User profile missing at {gateway} — loading hardcoded demo")  # log missing user profile at gateway path
             self._user_profile = DEMO_USER                                                       # user not in yaml — load hardcoded demo directly
             return
     
@@ -104,10 +104,10 @@ class IdentityRecognitionUnit:
     
                 if self._user_profile.memory_salience_bias:                                      # salience bias present — adjust recall threshold
                     AGi.SCS.EMC.RELEVANCE_THRESHOLD -= self._user_profile.memory_salience_bias   # lower threshold — surfaces more memories for this user
-                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")            # log the succesful adjustment of memory saliecne for this user
+                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")            # log the succesful adjustment of memory salience for this user
             else:                                                                                # if active user not found,
                 self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")  # log the warning that active user not found in users.yaml
                 self._user_profile = DEMO_USER                                                   # user not in yaml — load hardcoded demo directly
                 
-        except Exception as e:                                                                   # if error occurs duirng loading of users.yaml
+        except Exception as e:                                                                   # if error occurs during loading of users.yaml
             self._logger.error(f"❌ Failed to recognize user: {e}")                              # log the error that user not recognized
