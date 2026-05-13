@@ -61,7 +61,7 @@ class PersonalProgressionUnit:
         Called once by CNC at init — after IRU recognition, before cognitive cycle begins.
 
         Args:
-            user_profile (dict): User profiles from IRU — injected into active cognition
+            user_profile (dict): User profile from IRU — injected into active cognition
         """
         self._logger.info("─" * 60)                                            # visual separator
         self._logger.info("🧬 PPU — Personal Progression Unit activating…")    # log the activation of PPU 
@@ -77,7 +77,7 @@ class PersonalProgressionUnit:
 
     def _retrieve_active_persona(self) -> None:
         """
-        Retrieves AuRoRA's active persona and applies to the HRS manifest..
+        Retrieves AuRoRA's active persona and applies to the HRS manifest.
         Falls back to HRS default active cognition if persona is missing or malformed.
         """
         gateway = GatewayMap().user_profiles                                                            # retrieve the path to users.yaml file
@@ -88,11 +88,11 @@ class PersonalProgressionUnit:
 
         try:                                                                                            # attempt to load persona
             active_persona = yaml.safe_load(gateway.read_text())                                        # parse persona.yaml — AuRoRA's active identity
-            if active_persona and active_persona.get("active_cognition"):                               # if perosna exists,
+            if active_persona and active_persona.get("active_cognition"):                               # if persona exists,
                 AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["active_cognition"]                       # hydrate manifest — overrides HRM default
                 self._logger.info("✅ Persona retrieved")                                               # log succesful retrieval of persona
             else:                                                                                       # if active persona not found,
-                self._logger.warning("⚠️ Persona file missing system prompt — using HRM default")       # log the warning that active user not found in persona.yaml
+                self._logger.warning("⚠️ Persona file missing active cognition — using HRM default")    # log the warning that active user not found in persona.yaml
         except Exception as e:                                                                          # if error occurs during loading of persona.yaml
             self._logger.error(f"❌ Failed to load persona: {e}")                                       # log the error that persona failed to load
 
