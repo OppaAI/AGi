@@ -3,11 +3,11 @@ IRU — Identity Recognition Unit
 =================================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Recognizes the active user and loads their relational context for the interaction.
+Recognizes the active user and retrieves their relational context for the interaction.
 Called once by CNC during ignition — before the cognitive cycle begins.
 
 Responsibilities:
-    - Load active user profile from users.yaml
+    - Retrieve active user profile from users.yaml
     - Apply extrinsic user preferences to HRS manifest
     - Expose user identity and relational context to CNC and PPU
 
@@ -22,7 +22,7 @@ Lifecycle:
                    → iru.user_profile available to CNC and PPU
 
 Terminology:
-    Recognition         — identifying the active user and loading their relational context
+    Recognition         — identifying the active user and retrieving their relational context
     User Profile        — extrinsic per-user preferences shaping AuRoRA's behaviour
     User Access Level   — access classification governing memory recall scope and permissions
 
@@ -44,8 +44,7 @@ _gateway = GatewayMap()                             # module-level gateway — r
 class IdentityRecognitionUnit:
     """
     Identity Recognition Unit — user identity and relational context loader.
-    Instantiated by CNC at init. Not a ROS2 node.
-    Recognizes the active user and exposes their profile and access type to the session.
+    Recognizes the active user and exposes their profile and access type to whole system.
     """
 
     def __init__(self, logger) -> None:
@@ -53,33 +52,31 @@ class IdentityRecognitionUnit:
         Initialize the Identity Recognition Unit.
 
         Args:
-            logger: Logger instance forwarded from CNC
+            logger: Logger instance forwarded from caller
         """
-        self._logger     = logger                                   # logger forwarded from caller — all IRU methods emit through this handle
+        self._logger                           = logger             # logger forwarded from caller — all IRU methods emit through this handle
         self._user_profile: UserProfile | None = None               # populated by recognize_user() — None until user is loaded
-
-    # ── Public Interface ──────────────────────────────────────────────────────
 
     def recognize_user(self, user_id: str) -> None:
         """
-        Recognize the active user and load their relational context.
+        Recognize the active user and retrieve their relational context.
         Called once by CNC at init — before cognitive cycle begins.
 
         Args:
             user_id (str): Active user identifier matching a key in users.yaml
         """
-        self._logger.info("─" * 60)
-        self._logger.info("🪪  IRU — Identity Recognition Unit activating…")
-        self._load_user(user_id)
-        self._logger.info("✅ IRU — recognition complete")
-        self._logger.info("─" * 60)
+        self._logger.info("─" * 60)                                            # visual separator — stdout and /rosout
+        self._logger.info("🪪  IRU — Identity Recognition Unit activating…")   # log the activation of IRU  
+        self._retrieve_user_profile(user_id)                                   # retrieve user profile of the given user_id
+        self._logger.info("✅ IRU — recognition complete")                     # log the completion of activation
+        self._logger.info("─" * 60)                                            # visual separator — stdout and /rosout
 
     @property
     def user_profile(self) -> UserProfile | None:
         """Recognized user profile — available to CNC and PPU after recognize()."""
-        return self._user_profile                                    # make recognized user profile public to whole system
+        return self._user_profile                                              # make recognized user profile public to whole system
 
-    def _load_user(self, user_id: str) -> None:
+    def _retrieve_user_profile(self, user_id: str) -> None:
         """
         Load active user profile and apply extrinsic preferences.
         Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
