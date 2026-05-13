@@ -90,7 +90,7 @@ class IdentityRecognitionUnit:
             self._user_profile = DEMO_USER                                                       # user not in yaml — load hardcoded demo directly
             return
     
-        try:
+        try:                                                                                     # attempt to load user profiles
             user_profiles: dict = yaml.safe_load(gateway.read_text())                            # load users.yaml — full user registry
             active_user: dict | None = (user_profiles or {}).get("users", {}).get(user_id)       # extract profile for active user
     
