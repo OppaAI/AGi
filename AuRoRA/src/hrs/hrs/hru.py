@@ -46,13 +46,27 @@ from rclpy.node import Node                 # for node type hinting (Node) and c
 # AGi libraries
 from hrs.hrm import AGi, RRR                # manifest constants; RRR — filesystem path segments
 
-class UserAccessLevel(Enum):
+class User AccessLevel(Enum):
     """
     Classify the active user's access scope for recall and permission gating.
     """
     ADMIN = "admin"                         # full system access — unrestricted recall, admin actions
     GUEST = "guest"                         # restricted system access — limited recall, user-scoped actions only
+    
+@dataclass
+class UserProfile:
+    user_id:              str                # unique identifier — matches the key in users.yaml
+    name:                 str                # full legal name — used in formal contexts
+    known_as:             str                # preferred address — how Grace speaks to the user
+    location:             str                # physical location — timezone and locale context
+    access_level:         UserAccessLevel    # permission scope — admin unrestricted, guest user-scoped only
+    seed:                 str   = ""         # relational seed — injected into system prompt for context
+    memory_salience_bias: float = 0.0        # recall sensitivity — lowers threshold to surface more memories
 
+    def __post_init__(self):
+        if isinstance(self.access_level, str):                      # # YAML delivers raw strings — coerce to enum if needed
+            self.access_level = UserAccessLevel(self.access_level)  # coerce string → enum — YAML always delivers raw strings
+    
 def hydrate_manifest(core: Node, system: str) -> None:
     """
     Hydrate the system manifest with parameters declared by AuRoRA or admin under the given system.
