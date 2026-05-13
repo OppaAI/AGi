@@ -73,23 +73,23 @@ class PersonalProgressionUnit:
     @property
     def assemble_active_cognition(self) -> str:
         """Expose the assembled active cognition — available to CNC after provision()."""
-        return self._active_cognition
+        return self._active_cognition                                                                  # make active cognition public to whole system
 
     def _load_persona(self) -> None:
         """
-        Load Grace's active persona from persona.yaml into AGi manifest.
-        Falls back to HRM default system prompt if persona file is missing or malformed.
+        Retrieves AuRoRA's active persona and applies to the HRS manifest..
+        Falls back to HRS default active cognition if persona is missing or malformed.
         """
-        path = GatewayMap().active_persona
+        gateway = GatewayMap().user_profiles                                                            # retrieve the path to users.yaml file
 
-        if not path.exists():                                                           # no persona file — fall back to HRM default
-            self._logger.warning(f"⚠️  No persona file at {path} — using HRM default")
-            return
+        if not gateway.exists():                                                                        # no persona file — fall back to HRS default
+            self._logger.warning(f"⚠️  No persona file at {path} — using HRM default")                  # log missing user profile at gateway path
+            return                                                                                      # user not in yaml — load hardcoded demo directly
 
-        try:
-            data = yaml.safe_load(path.read_text())                                     # load persona.yaml — Grace's active identity
-            if data and data.get("system_prompt"):
-                AGi.SCS.GCE.SYSTEM_PROMPT = data["system_prompt"]                       # hydrate manifest — overrides HRM default
+        try:                                                                                            # attempt to load persona
+            data = yaml.safe_load(path.read_text())                                                     # parse persona.yaml — AuRoRA's active identity
+            if data and data.get("system_prompt"):                                                      # 
+                AGi.SCS.GCE.SYSTEM_PROMPT = data["system_prompt"]                                       # hydrate manifest — overrides HRM default
                 self._logger.info("✅ Persona loaded")
             else:
                 self._logger.warning("⚠️  Persona file missing system_prompt — using HRM default")
