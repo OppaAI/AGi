@@ -18,8 +18,8 @@ Architecture:
     New input modalities declared here — routing logic keys off InputChannel enum.
 
 Terminology:
-    Neural Input Channel — enum of all valid neural input modalities
-    Neural Stimulus      — typed input schema for all incoming neural stimuli
+    Neural Input Channel  — the modality through which a stimulus enters the cognitive boundary
+    Neural Stimulus       — a single discrete input event carrying identity, content, and source
 
 Public interface:
     NeuralInputChannel  — CLI | WEBUI | VOICE | TELEGRAM | DISCORD | GMAIL
