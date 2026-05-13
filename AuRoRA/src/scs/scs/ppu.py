@@ -19,9 +19,9 @@ Architecture:
     Depends on IRU for user context — IRU must be recognized before PPU provisions.
 
 Lifecycle:
-    CNC.__init__() → PPU(logger) → ppu.provision(user_prefs)
-                   → AGi.SCS.GCE.SYSTEM_PROMPT hydrated
-                   → ppu.system_prompt available to CNC
+    CNC.__init__() → PPU(logger) → ppu.provision(user_profile)
+                   → AGi.SCS.GCE.ACTIVE_COGNITION hydrated
+                   → ppu.active_cognition available to CNC
 
 Terminology:
     Persona       — Grace's active identity, personality, and system prompt template
@@ -29,15 +29,15 @@ Terminology:
     System Prompt — assembled prompt injecting Grace's persona and user context into the cognitive cycle
 
 Public interface:
-    ppu.provision(user_prefs) → None
-    ppu.system_prompt         → str
+    ppu.provision(user_profile) → None
+    ppu.active_cognition        → str
 """
 
 # System libraries
 import yaml                             # YAML parsing — loads persona profile from persona.yaml
 
 # AGi libraries
-from hrs.hrm import AGi                 # manifest constants — SYSTEM_PROMPT hydrated from persona.yaml
+from hrs.hrm import AGi                 # manifest constants — ACTIVE_COGNITION hydrated from persona.yaml
 from hrs.hru import GatewayMap          # gateway paths — resolves persona.yaml location
 
 class PersonalProgressionUnit:
@@ -52,10 +52,10 @@ class PersonalProgressionUnit:
         Args:
             logger: Logger instance forwarded from caller
         """
-        self._logger        = logger        # logger forwarded from caller — all PPU methods emit through this handle
-        self._system_prompt : str = ""      # assembled active cognition — populated by provision()
+        self._logger                    = logger            # logger forwarded from caller — all PPU methods emit through this handle
+        self._active_cognition : str    = ""                # assembled active cognition — populated by provision()
 
-    def provision(self, user_prefs: dict) -> None:
+    def provision(self, user_profile: dict) -> None:
         """
         Load AuRoRA's active persona and assemble the session system prompt.
         Called once by CNC at init — after IRU recognition, before cognitive cycle begins.
@@ -64,18 +64,18 @@ class PersonalProgressionUnit:
             user_profiles (dict): User profiles from IRU — injected into active cognition
         """
         self._logger.info("─" * 60)                                            # visual separator
-        self._logger.info("🧬 PPU — Personal Progression Unit activating…")    # log the activation of IRU 
+        self._logger.info("🧬 PPU — Personal Progression Unit activating…")    # log the activation of PPU 
         self._retrieve_active_persona()                                        # retrieve the active persona
-        self._assemble_active_cognition(user_profiles)                         # assmble active cognition from the active persona and active user profile
+        self._assemble_active_cognition(user_profiles)                         # assemble active cognition from the active persona and active user profile
         self._logger.info("✅ PPU — Progression complete")                     # log the completion of activation
         self._logger.info("─" * 60)                                            # visual separator
 
     @property
-    def assemble_active_cognition(self) -> str:
+    def active_cognition(self) -> str:
         """Expose the assembled active cognition — available to CNC after provision()."""
-        return self._active_cognition                                                                  # make active cognition public to whole system
+        return self._active_cognition                                          # make active cognition public to whole system
 
-    def _load_persona(self) -> None:
+    def _retrieve_active_persona(self) -> None:
         """
         Retrieves AuRoRA's active persona and applies to the HRS manifest..
         Falls back to HRS default active cognition if persona is missing or malformed.
@@ -83,34 +83,34 @@ class PersonalProgressionUnit:
         gateway = GatewayMap().user_profiles                                                            # retrieve the path to users.yaml file
 
         if not gateway.exists():                                                                        # no persona file — fall back to HRS default
-            self._logger.warning(f"⚠️  No persona file at {path} — using HRM default")                  # log missing user profile at gateway path
+            self._logger.warning(f"⚠️  No persona file at {gateway} — using HRM default")               # log missing user profile at gateway path
             return                                                                                      # user not in yaml — load hardcoded demo directly
 
         try:                                                                                            # attempt to load persona
-            data = yaml.safe_load(path.read_text())                                                     # parse persona.yaml — AuRoRA's active identity
-            if data and data.get("system_prompt"):                                                      # 
-                AGi.SCS.GCE.SYSTEM_PROMPT = data["system_prompt"]                                       # hydrate manifest — overrides HRM default
-                self._logger.info("✅ Persona loaded")
-            else:
-                self._logger.warning("⚠️  Persona file missing system_prompt — using HRM default")
-        except Exception as e:
-            self._logger.error(f"❌ Failed to load persona: {e}")
+            active_persona = yaml.safe_load(gateway.read_text())                                        # parse persona.yaml — AuRoRA's active identity
+            if active_persona and gateway.get("active_cognition"):                                      # if perosna exists,
+                AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["active_cognition"]                       # hydrate manifest — overrides HRM default
+                self._logger.info("✅ Persona retrieved")                                               # log succesful retrieval of persona
+            else:                                                                                       # if active persona not found,
+                self._logger.warning("⚠️  Persona file missing system prompt — using HRM default")      # log the warning that active user not found in persona.yaml
+        except Exception as e:                                                                          # if error occurs during loading of persona.yaml
+            self._logger.error(f"❌ Failed to load persona: {e}")                                       # log the error that persona failed to load
 
-    def _assemble_active_cognition(self, user_prefs: dict) -> None:
+    def _assemble_active_cognition(self, user_profile: dict) -> None:
         """
         Assemble the active cognition from AuRoRA's persona and user context.
         Date excluded — injected per-turn by CNC.
 
         Args:
-            user_prefs (dict): User preferences from IRU — name, location, seed injected here
+            user_profile (dict): User preferences from IRU — name, location, seed injected here
         """
-        user_name = user_prefs.get("known_as") or user_prefs.get("name", "unknown")    # preferred name — falls back to full name
-        location  = user_prefs.get("location", "unknown")                              # user location — injected into persona template
-        seed      = user_prefs.get("seed", "")                                         # personal context notes — injected into persona template
+        user_name = user_profile.get("known_as") or user_profile.get("name", "unknown")# preferred name — falls back to full name
+        location  = user_profile.get("location", "unknown")                            # user location — for context-aware responses
+        seed      = user_profile.get("seed", "")                                       # relational seed — cold-start context, fades as EMC accumulates
 
-        self._system_prompt = AGi.SCS.GCE.SYSTEM_PROMPT.format(
-            user_name    = user_name,
-            user_location= location,
-            user_context = seed,                                                        # seed only — location already in template
-            date         = "{date}",                                                    # leave intact — CNC fills per-turn
+        self._active_cognition = AGi.SCS.GCE.ACTIVE_COGNITION.format(                  # assemble active cognition from persona template
+            user_name     = user_name,                                                 # bind user identity
+            user_location = location,                                                  # bind resolved location
+            user_context  = seed,                                                      # seed only — location already in template
+            date          = "{date}",                                                  # deferred — CNC fills per-turn
         )
