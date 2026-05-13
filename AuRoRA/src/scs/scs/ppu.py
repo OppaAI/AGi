@@ -1,163 +1,123 @@
 """
-PPU — Personal Provisioning Unit
+PPU — Personal Progression Unit
 =================================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Provisions AuRoRA's active identity and user context at session init.
+Loads and maintains Grace's active persona and assembles the session system prompt.
 Called once by CNC during boot — before the cognitive cycle begins.
 
 Responsibilities:
-    - Load active persona system prompt from persona YAML
-    - Load active user profile and apply extrinsic preferences
-    - Expose provisioned state to CNC for injection into cognitive cycle
+    - Load Grace's active persona from persona.yaml
+    - Assemble the session system prompt from persona and user context
+    - Expose the assembled system prompt to CNC for injection into the cognitive cycle
+    - Future: self-learning, persona evolution, knowledge acquisition
 
 Architecture:
-    Stateless loader — reads YAML, mutates AGi constants, returns user prefs.
+    Stateless loader — reads YAML, assembles system prompt, exposes to CNC.
     No ROS2 node — plain Python class, instantiated by CNC at init.
     All paths resolved from HRS constants — no magic strings.
+    Depends on IRU for user context — IRU must be recognized before PPU provisions.
 
 Lifecycle:
-    CNC.__init__() → PPU(logger) → ppu.provision(user_id)
+    CNC.__init__() → PPU(logger) → ppu.provision(user_prefs)
                    → AGi.SCS.GCE.SYSTEM_PROMPT hydrated
-                   → AGi.SCS.EMC.RELEVANCE_THRESHOLD adjusted
                    → ppu.system_prompt available to CNC
 
 Terminology:
-    Persona     — AuRoRA's active identity and system prompt
-    User Prefs  — extrinsic per-user preferences shaping AuRoRA's behaviour
-    Provision   — the act of loading and applying identity and user context
+    Persona         — Grace's active identity, personality, and system prompt template
+    Provision       — the act of loading Grace's persona and assembling the session system prompt
+    System Prompt   — assembled prompt injecting Grace's persona and user context into the cognitive cycle
+
+Public interface:
+    ppu.provision(user_prefs) → None
+    ppu.system_prompt         → str
 """
 
 # System libraries
-import yaml                             # YAML parsing for persona and user profiles
+import yaml                             # YAML parsing for persona profile
 
 # AGi libraries
-from hrs.hrm import AGi, RRR            # Homeostatic Regulation Manifest constants and RRR constants
-from hrs.hru import GatewayMap
+from hrs.hrm import AGi                 # manifest constants — SYSTEM_PROMPT hydrated from persona.yaml
+from hrs.hru import GatewayMap          # gateway paths — resolves persona.yaml location
 _gateway = GatewayMap()
 
-class PersonalProvisioningUnit:
+class PersonalProgressionUnit:
     """
-    Personal Provisioning Unit — session identity and user context loader.
+    Personal Progression Unit — Grace's persona loader and system prompt assembler.
     Instantiated by CNC at init. Not a ROS2 node.
+    Loads Grace's active persona and assembles the session system prompt from persona and user context.
     """
 
     def __init__(self, logger) -> None:
-        self._logger     = logger                   # logger forwarded from caller — all PPU methods emit through this handle
-        self._user_prefs : dict = {}                # internal user profile — populated by _load_user()
-        self._system_prompt: str = ""               # Assembled system prompt — populated by _assemble_system_prompt()
+        """
+        Initialize the Personal Progression Unit.
+
+        Args:
+            logger: Logger instance forwarded from CNC
+        """
+        self._logger        = logger        # logger forwarded from caller — all PPU methods emit through this handle
+        self._system_prompt : str = ""      # assembled system prompt — populated by provision()
 
     # ── Public Interface ──────────────────────────────────────────────────────
 
-    def provision(self, user_id: str) -> None:
+    def provision(self, user_prefs: dict) -> None:
         """
-        Provision AuRoRA's active identity and user context.
-        Called once by caller at init — before cognitive cycle begins.
+        Load Grace's active persona and assemble the session system prompt.
+        Called once by CNC at init — after IRU recognition, before cognitive cycle begins.
 
         Args:
-            user_id:    Active user identifier
+            user_prefs (dict): User preferences from IRU — injected into system prompt
         """
         self._logger.info("─" * 60)
-        self._logger.info("🪪  PPU — Personal Provisioning Unit activating…")
-        self._load_user(user_id)
+        self._logger.info("🧬 PPU — Personal Progression Unit activating…")
         self._load_persona()
-        self._assemble_system_prompt()
+        self._assemble_system_prompt(user_prefs)
         self._logger.info("✅ PPU — provisioning complete")
         self._logger.info("─" * 60)
 
     @property
     def system_prompt(self) -> str:
-        """Assembled system prompt — available to caller after provision()."""
+        """Assembled system prompt — available to CNC after provision()."""
         return self._system_prompt
 
-    def _load_user(self, user_id: str) -> None:
+    # ── Private Methods ───────────────────────────────────────────────────────
+
+    def _load_persona(self) -> None:
         """
-        Load active user profile and apply extrinsic preferences.
-        Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.A.A
+        Load Grace's active persona from persona.yaml into AGi manifest.
+        Falls back to HRM default system prompt if persona file is missing or malformed.
+        """
+        path = _gateway.active_persona
+
+        if not path.exists():                                                           # no persona file — fall back to HRM default
+            self._logger.warning(f"⚠️  No persona file at {path} — using HRM default")
+            return
+
+        try:
+            data = yaml.safe_load(path.read_text())                                     # load persona.yaml — Grace's active identity
+            if data and data.get("system_prompt"):
+                AGi.SCS.GCE.SYSTEM_PROMPT = data["system_prompt"]                       # hydrate manifest — overrides HRM default
+                self._logger.info("✅ Persona loaded")
+            else:
+                self._logger.warning("⚠️  Persona file missing system_prompt — using HRM default")
+        except Exception as e:
+            self._logger.error(f"❌ Failed to load persona: {e}")
+
+    def _assemble_system_prompt(self, user_prefs: dict) -> None:
+        """
+        Assemble the session system prompt from Grace's persona and user context.
+        Date excluded — injected per-turn by CNC.
 
         Args:
-            user_id: User identifier matching a key in users.yaml
+            user_prefs (dict): User preferences from IRU — name, location, seed injected here
         """
-        path = _gateway.user_profiles
-
-        if not path.exists():
-            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
-            return
-        try:
-            data = yaml.safe_load(path.read_text())
-            user = (data or {}).get("users", {}).get(user_id)
-            if user:
-                self._user_prefs = user
-                self._logger.info(f"✅ User profile loaded — {user_id}")
-                bias = user.get("memory_salience_bias")
-                if bias is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
-                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
-            else:
-                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
-        except Exception as e:
-            self._logger.error(f"❌ Failed to load user profile: {e}")
-        if not path.exists():
-            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
-            return
-        try:
-            data = yaml.safe_load(path.read_text())
-            user = (data or {}).get("users", {}).get(user_id)
-            if user:
-                self._user_prefs = user
-                self._logger.info(f"✅ User profile loaded — {user_id}")
-                bias = user.get("memory_salience_bias")
-                if bias is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
-                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
-            else:
-                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
-        except Exception as e:
-            self._logger.error(f"❌ Failed to load user profile: {e}")
-
-    def _load_user(self, user_id: str) -> None:
-        """
-        Load active user profile and apply extrinsic preferences.
-        Mutates AGi.SCS.EMC.RELEVANCE_THRESHOLD if salience bias is set.
-    
-        Args:
-            user_id: User identifier matching a key in users.yaml
-        """
-        path = _gateway.user_profiles
-    
-        if not path.exists():
-            self._logger.warning(f"⚠️  No users file at {path} — using HRS defaults")
-            return
-        try:
-            data = yaml.safe_load(path.read_text())
-            user = (data or {}).get("users", {}).get(user_id)
-            if user:
-                self._user_prefs = user
-                self._user_type  = UserType(user.get("type", "guest"))          # load user type — defaults to guest if not set
-                self._logger.info(f"✅ User profile loaded — {user_id} ({self._user_type.value})")
-                bias = user.get("memory_salience_bias")
-                if bias is not None:
-                    AGi.SCS.EMC.RELEVANCE_THRESHOLD -= bias
-                    self._logger.info(f"✅ Memory salience bias applied — {user_id}")
-            else:
-                self._logger.warning(f"⚠️  User '{user_id}' not found in users.yaml — using HRS defaults")
-        except Exception as e:
-            self._logger.error(f"❌ Failed to load user profile: {e}")
-
-    def _assemble_system_prompt(self) -> None:
-        """
-        Inject static user context into the system prompt after both
-        persona and user profile are loaded.
-        Date is excluded — injected per-turn by caller.
-        """
-
-        user_name     = self._user_prefs.get("known_as") or self._user_prefs.get("name", "unknown")
-        location      = self._user_prefs.get("location", "unknown")
-        seed          = self._user_prefs.get("seed", "")
+        user_name = user_prefs.get("known_as") or user_prefs.get("name", "unknown")    # preferred name — falls back to full name
+        location  = user_prefs.get("location", "unknown")                              # user location — injected into persona template
+        seed      = user_prefs.get("seed", "")                                         # personal context notes — injected into persona template
 
         self._system_prompt = AGi.SCS.GCE.SYSTEM_PROMPT.format(
-            user_name=user_name,
-            user_location=location,
-            user_context=seed,              # seed only — location already in template
-            date="{date}",                  # leave {date} intact — caller fills this per-turn
+            user_name    = user_name,
+            user_location= location,
+            user_context = seed,                                                        # seed only — location already in template
+            date         = "{date}",                                                    # leave intact — CNC fills per-turn
         )
