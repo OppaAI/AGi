@@ -111,8 +111,8 @@ from collections import deque               # for O(1) append/popleft in binding
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi components
-from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
-EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
+from hrs.hrm import AGi                     # homeostatic regulation manifest namespace — system-wide constants
+EMC = AGi.SCS.EMC                           # EMC parameter namespace alias — keeps WMC constant references concise
 from hrs.hru import(                        # homeostatic regulation helper functions
     pack_vector,                            # for packing float list into fp32 binary blob   
     ChunkSampler,                           # probes and truncates cognitive context for budget management
@@ -162,7 +162,7 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
 @dataclass
 class EpisodicBuffer:
     """
-    Episodic Buffer — shared workspace between WMC and EMC.
+    Episodic Buffer — shared workspace between WMC and 
     Modelled on Baddeley's episodic buffer — one buffer, two streams.
 
     _binding_stream — evicted PMTs pending encoding into episodic memory
