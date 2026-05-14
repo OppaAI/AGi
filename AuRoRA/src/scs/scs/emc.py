@@ -538,18 +538,7 @@ class EpisodicMemoryCortex:
         self._episodic_scaffold    = EpisodicScaffold(                      # temporal-semantic reinstatement coordinator
             chunk_sampler=chunk_sampler
         )
-
-        # Retrieve the paramaters from HRS
-        self._encoding_engine       = EncodingEngine(                       # sentence-transformers wrapper with LRU prime
-            logger          = logger,                                       # logger instance for logging operations
-            encoding_engine = EMC.ENCODING_ENGINE,                          # model name — e.g. BAAI/bge-small-en-v1.5
-            cue_prefix      = EMC.ENCODING_CUE_PREFIX,                      # query prefix for recall cues
-            engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX,                   # document prefix for engrams
-            prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,                  # max LRU prime entries before eviction
-            prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,                   # max chars hashed per prime key
-        )
         self._encoding_engine = encoding_engine                             # shared encoding engine — owned by MCC
-
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
             logger  = self.logger,                                          # logger instance for logging operations
             cortex  = "EMC",                                                # drives table name prefix — emc_storage, emc_vector etc.
