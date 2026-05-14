@@ -121,7 +121,7 @@ class WorkingMemoryCortex:
         self.pmt_slot_limit: int     = pmt_slot_limit       # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer      # additional PMT buffer beyond Miller's Law limit
         self._induced_pmt: PMT | None = None                # induced user prompt pending pairing with AI response
-        self._pmt_slot: deque[PMT]  = deque()               # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
+        self._pmt_slot: deque[PMT]   = deque()              # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                    # running count of sustained chunks across all PMTs
 
 
