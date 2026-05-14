@@ -543,41 +543,99 @@ class EpisodicMemoryCortex:
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                            # encode cue into vector + raw text for dual-path recall
         return self._ecx.recall_engram(user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH) # semantic + lexical RRF fusion — handled by MSB
 
-    def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
+    def _fragment_episodes(self, episodes: list[dict]) -> list[dict]:
         """
-        Recall, filter, format, and reinstate relevant episodes into context stream.
-        Full episodic reinstatement pipeline — MCC calls this once per turn.
-        Primary output is injection into context stream.
+        Fragment recalled episodes to the RECALL_RESERVE chunk limit before reinstatement.
+        Consumes episodes in RRF-ranked order — highest relevance preserved first.
+        Last episode exceeding limit is truncated to a fragment rather than dropped —
+        mirrors human partial recall under working memory capacity pressure.
+
+        Biological analogue: CA1 output gating — limits the volume of reinstated
+        traces before prefrontal delivery to avoid overwriting active cognition.
 
         Args:
-            cue (str): Current user prompt used as recall cue
-        Returns:
-            list[dict]: Reinstated episodes — informational only, primary output is context stream injection
-        """
-        # Recall candidates
-        raw_episodes = self.recall_episodes(user_id, cue)                           # recall episodes from episodic memory
+            episodes (list[dict]): Relevancy-filtered episodes, RRF-ranked descending.
 
-        # Relevancy gate — EMC owns this threshold
-        filtered_episodes = [                                                       # filter out irrelevant episodes
-            episode for episode in raw_episodes
-            if episode["relevancy"] >= EMC.RELEVANCE_THRESHOLD               
-        ]
-        
-        # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
-        recall_reserve: int = EMC.RECALL_RESERVE                                            # remaining chunk budget for reinstatement
+        Returns:
+            list[dict]: Budget-clipped episode list. Final entry may carry a
+                        truncated content field if it exceeded the remaining reserve.
+        """
+        chunk_limit: int = EMC.RECALL_RESERVE                                               # remaining chunk budget for reinstatement
         fragmented_episodes: list[dict] = []                                                # budget-trimmed episode list
-        for episode in filtered_episodes:                                                   # iterate through each recalled episodes
+
+        for episode in episodes:                                                            # consume in RRF rank order — highest relevance first
             content     = episode.get("content", "")                                        # retrieve the content of the episode
             chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
-            if chunk_count > recall_reserve:                                                # episode exceeds remaining budget — truncate to fragment
-                episode["content"] = self._chunk_sampler.truncate(content, recall_reserve)  # surface fragment — mirrors human partial recall
-                fragmented_episodes.append(episode)                                         # reinstate memory fragment into memory context
-                break                                                                       # budget exhausted after fragment — stop reinstating
-            recall_reserve -= chunk_count                                                   # deduct the token cost of the episode from the budge
-            fragmented_episodes.append(episode)                                             # reinstate episode into memory context
-        filtered_episodes = fragmented_episodes                                             # replace with budget-trimmed list
 
-        if not filtered_episodes:                                                           # nothing to stage — skip
+            if chunk_count > chunk_limit:                                                   # episode exceeds remaining budget — truncate to fragment
+                if chunk_limit > 0:                                                         # remaining budget can still surface a fragment
+                    episode            = dict(episode)                                      # shallow copy — never mutate source list
+                    episode["content"] = self._chunk_sampler.truncate(content, chunk_limit) # truncate content to remaining budget
+                    fragmented_episodes.append(episode)                                     # reinstate memory fragment into memory context
+                    break                                                                   # budget exhausted after fragment — stop regardless
+            
+            chunk_limit -= chunk_count                                                      # deduct the token cost from remaining budget
+            fragmented_episodes.append(episode)                                             # episode fits — reinstate in full
+        return fragmented_episodes                                                          # return budget-trimmed episode list
+
+    
+def _sequence_episodes(self, episodes: list[dict]) -> list[dict]:
+    """
+    Re-sort trimmed episodes into ascending chronological order before reinstatement.
+    RRF returns episodes ranked by relevancy — sequencing restores the temporal
+    narrative so the cognitive engine reads reinstated engrams in the order
+    they were originally consolidated into the engram complex.
+
+    Biological analogue: hippocampal temporal context signal — reinstated traces
+    are ordered by their original encoding time before surfacing to prefrontal cortex.
+
+    Args:
+        episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
+
+    Returns:
+        list[dict]: Same episodes sorted ascending by timestamp.
+    """
+    return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
+        episodes,                                                           # episode fragmented to fit the chunk reserve in any order
+        key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
+    )
+
+    def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
+        """
+        Recall, trim, sequence, format, and reinstate relevant episodes into the recall stream.
+        Full episodic reinstatement pipeline — MCC calls this once per turn.
+        Primary output is injection into the recall stream for MCC context assembly.
+
+        Pipeline:
+            recall_episodes() → relevancy gate → _trim_episodes() → _sequence_episodes() → format → recall stream
+
+        Lifecycle stage: Recall → Reinstatement
+            Recall         — dual-path RRF retrieval from the engram complex (semantic + lexical)
+            Reinstatement  — trimmed, sequenced episodes injected into recall stream as a system message
+
+        Args:
+            user_id (str): ID of the user whose engrams to recall.
+            cue (str)    : Current user prompt used as recall cue.
+
+        Returns:
+            list[dict]: Reinstated episodes — informational only, primary output is recall stream injection.
+        """
+        # Recall candidates
+        raw_episodes: list[dict] = self.recall_episodes(user_id, cue)                       # recall candidates via RRF dual-path retrieval
+
+        # Relevancy gate — EMC owns this threshold
+        episode_scaffold: list[dict] = [                                                    # filter out irrelevant episodes
+            episode for episode in raw_episodes                                             # iterate over raw episodes 
+            if episode["relevancy"] >= EMC.RELEVANCE_THRESHOLD                              # episode must meet relevance threshold
+        ]
+
+        # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
+        episode_scaffold: list[dict] = self._trim_episodes(episode_scaffold)                # trim the recalled episodes to chunk reserve
+
+        # Reorder episodes chronologically (oldest → newest)
+        episode_scaffold: list[dict] = self._sequence_episodes(episode_scaffold)            # sequence episodes in chronological order
+        
+        if not episode_scaffold:                                                            # nothing to stage — skip
             return []                                                                       # return if no filtered episodes
 
         lines = [                                                                           # system message header
@@ -585,7 +643,7 @@ class EpisodicMemoryCortex:
             ""
         ]    
         
-        for episode in filtered_episodes:                                                   # format each episode as a single line
+        for episode in episode_scaffold:                                                    # format each episode as a single line
             try:                                                                            # attempt to deserialize and format the episode
                 content = json.loads(episode.get("content", ""))                            # deserialize stored JSON pair
                 date    = episode.get("date", "unknown date")                               # retrieve episode date for temporal context
@@ -601,7 +659,7 @@ class EpisodicMemoryCortex:
             "content": "\n".join(lines)                                                     # join all lines into a single string
         })
 
-        return filtered_episodes                                                            # return filtered episodes
+        return episode_scaffold                                                            # return filtered episodes
     
     def assess_emc(self) -> dict:
         """
