@@ -157,7 +157,7 @@ class WorkingMemoryCortex:
                 user_id    = user_id,                       # speaker identity
                 timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
                 content    = "",                            # filled on assistant turn — JSON pair
-                raw_text   = "",                            # filled on assistant turn — plain concat for EMC
+                raw_text   = content,                       # filled on assistant turn — plain concat for EMC
                 chunk_count = 0,                            # filled on assistant turn — cached chunk count
                 vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
                 anchored   = False,                         # hard-gate flag
@@ -214,7 +214,7 @@ class WorkingMemoryCortex:
                 evicted_pmt: PMT                = self._pmt_slot.popleft()                               # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
                 evicted_chunks: int = evicted_pmt.chunk_count                                            # cached at induction — no reprobe on eviction
-                self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)            # decrement sustained chunks — floor at 0
+                self._sustained_chunks = max(0, self._sustained_chunks - evicted_chunks)                 # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                       # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"
                 )
@@ -271,7 +271,7 @@ class WorkingMemoryCortex:
         forgotten_pmt_schema: list[PMT] = list(self._pmt_slot)      # snapshot before wipe — safe under CNC._busy
         self._pmt_slot.clear()                                      # evict all sustaining PMTs
         self._induced_pmt = None                                    # discard any incomplete induced PMT
-        self._sustained_chunks: int = 0                             # reset sustained chunk count
+        self._sustained_chunks = 0                                  # reset sustained chunk count
         self.logger.info(                                           # log the forgetting of the PMT schema from working memory
             f"🧹 WMC forgotten ({len(forgotten_pmt_schema)} PMTs)"
         )
