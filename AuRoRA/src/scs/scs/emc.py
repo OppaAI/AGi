@@ -100,7 +100,7 @@ Public interface:
     emc.terminate() → None
 """
 
-# System libraries
+# System components
 import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import json                                 # for deserializing episode content in memory context assembly
 import os                                   # for encoding thread priority via os.nice()
@@ -110,7 +110,7 @@ import time                                 # for CPU yield during theta rhythm 
 from collections import deque               # for O(1) append/popleft in binding stream
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
-# AGi libraries
+# AGi components
 from hrs.hrm import AGi                     # homeostatic regulation manifest namespace
 EMC = AGi.SCS.EMC                           # EMC constants — encoding engine, limits, dims
 from hrs.hru import(                        # homeostatic regulation helper functions

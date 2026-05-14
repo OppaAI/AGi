@@ -52,12 +52,12 @@ Public interface:
     wmc.is_empty -> bool
 """
 
-# System libraries
+# System components
 from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
 import json                              # for structured PMT storage — serialization and recall
 
-# AGi libraries
+# AGi components
 from hrs.hru import ChunkSampler         # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise

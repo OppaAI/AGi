@@ -32,10 +32,10 @@ Public interface:
     iru.user_profile            → UserProfile
 """
 
-# System libraries
+# System components
 import yaml                                                     # YAML parsing — loads user profiles from users.yaml
 
-# AGi libraries
+# AGi components
 from hrs.hrm import AGi                                         # manifest constants — RELEVANCE_THRESHOLD mutated on salience bias
 from hrs.hru import GatewayMap                                  # gateway paths — resolves users.yaml location
 from hrs.hru import UserProfile, DEMO_USER                      # user identity types — shared across whole system

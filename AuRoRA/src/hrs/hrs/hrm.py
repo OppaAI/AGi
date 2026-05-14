@@ -39,6 +39,7 @@ Parameters:
     To add a constant:   add it here with a default + add to AuRoRA Setpoints. Done.
     To add a subsystem:  add a class to AGi here + add a ROS node. Done.
 """
+# System components
 from pathlib import Path                                # for constructing and creating the engram gateway on disk
 
 class RRR:

@@ -49,7 +49,7 @@ Terminology:
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
 """
 
-# System libraries
+# System components
 import asyncio                                             # dedicated event loop for async memory and inference operations — runs on cnc-asyncio thread
 from concurrent.futures import ThreadPoolExecutor          # thread pool for offloading blocking operations from the ROS2 spin thread
 from datetime import datetime                              # for injecting current date into system prompt each turn
@@ -57,13 +57,13 @@ import httpx                                               # async HTTP client f
 import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
 import threading                                           # for cnc-asyncio background thread hosting the event loop
 
-# ROS2 libraries
+# ROS2 components
 import rclpy                                               # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                # base class for all ROS2 nodes
 from rclpy.executors import MultiThreadedExecutor          # allows concurrent callback execution — required for async scheduling
 from std_msgs.msg import String                            # ROS2 string message type for text I/O
 
-# AGi libraries
+# AGi components
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly

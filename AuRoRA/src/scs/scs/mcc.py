@@ -53,11 +53,11 @@ Public interface:
         close() -> None
 """
 
-# System libraries
+# System components
 import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
 
-# AGi libraries
+# AGi components
 from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, and probe and truncate cognitive context for budget management
 from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes

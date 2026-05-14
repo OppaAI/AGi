@@ -33,10 +33,10 @@ Public interface:
     ppu.active_cognition                  → str
 """
 
-# System libraries
+# System components
 import yaml                             # YAML parsing — loads persona profile from persona.yaml
 
-# AGi libraries
+# AGi components
 from hrs.hrm import AGi                 # manifest constants — ACTIVE_COGNITION hydrated from persona.yaml
 from hrs.hru import GatewayMap          # gateway paths — resolves persona.yaml location
 

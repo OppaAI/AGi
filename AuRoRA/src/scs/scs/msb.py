@@ -48,7 +48,7 @@ Public interface:
         terminate() → None
 """
 
-# System libraries
+# System components
 from dataclasses import dataclass                       # dataclass for EngramTrace/EngramSchema
 from enum import Enum                                   # enum base for EngramModality type definitions
 import hashlib                                          # for prime key generation
@@ -57,7 +57,7 @@ import re                                               # for lexical cue saniti
 import sqlite3                                          # for engram connection factory
 import threading                                        # for background thread hosting the encoding engine
 
-# AGi libraries
+# AGi components
 from hrs.hru import normalize_vector, pack_vector       # vector math utilities — normalize to unit length, pack to fp32 blob
 
 class EngramModality(Enum):

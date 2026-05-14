@@ -33,17 +33,17 @@ Public interface:
         probe(content, overhead?) → int
         truncate(content, limit)  → str
 """
-# System libraries
+# System components
 from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
 from enum import Enum                       # enum base for UserType identity classification
 import numpy as np                          # for vector normalization — normalize_vector
 from pathlib import Path                    # filesystem path abstraction — GatewayMap builds all AuRoRA paths from this
 import struct                               # for vector packing — pack_vector
 
-# ROS2 libraries
+# ROS2 components
 from rclpy.node import Node                 # for node type hinting (Node) and core node
 
-# AGi libraries
+# AGi components
 from hrs.hrm import AGi, RRR                # manifest constants; RRR — filesystem path segments
 
 class UserAccessLevel(Enum):

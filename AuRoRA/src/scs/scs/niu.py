@@ -26,7 +26,7 @@ Public interface:
     NeuralStimulus      — source, user_id, text, audio, image
 """
 
-# System libraries
+# System components
 from dataclasses import dataclass, field    # for NeuralStimulus typed schema
 from enum import Enum                       # for NeuralInputChannel modality enumeration
 
