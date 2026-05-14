@@ -200,6 +200,7 @@ class EpisodicBuffer:
         """
         with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
             return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
+
 class EpisodicScaffold:
     """
     Episodic Scaffold — temporal-semantic coordinate space governing reinstatement.
@@ -516,7 +517,7 @@ class EpisodicMemoryCortex:
         SQLite WAL mode allows concurrent reads during async writes
     """
 
-    def __init__(self, logger, engram_gateway: Path, chunk_sampler: ChunkSampler) -> None:
+    def __init__(self, logger, engram_gateway: Path, chunk_sampler: ChunkSampler, encoding_engine: EncodingEngine) -> None:
         """
         Initialize the Episodic Memory Cortex, engram complex, encoding engine,
         and start the background encoding cycle.
@@ -525,8 +526,10 @@ class EpisodicMemoryCortex:
         the binding stream before the encoding cycle starts.
         
         Args:
-            logger                : Logger instance for logging operations
-            engram_gateway (Path) : Path to access the engram for storing episodic memories
+            logger                           : Logger instance for logging operations
+            engram_gateway (Path)            : Path to access the engram for storing episodic memories
+            chunk_sampler (ChunkSampler)     : Shared chunk sampler for reinstatement budgeting
+            encoding_engine (EncodingEngine) : Shared encoding engine — owned by MCC, passed in at init
         """
         self.logger                = logger                                 # logger from MCC — used throughout EMC
         self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
@@ -545,6 +548,7 @@ class EpisodicMemoryCortex:
             prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,                  # max LRU prime entries before eviction
             prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,                   # max chars hashed per prime key
         )
+        self._encoding_engine = encoding_engine                             # shared encoding engine — owned by MCC
 
         self._ecx = EngramComplex(                                          # owns all SQL ops for EMC
             logger  = self.logger,                                          # logger instance for logging operations
