@@ -59,10 +59,12 @@ from concurrent.futures import ThreadPoolExecutor   # for type hint on executor 
 
 # AGi components
 from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, and probe and truncate cognitive context for budget management
-from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
-from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
+
+from scs.niu import PMT                             # Phonological Memory Trace — typed PMT contract for working memory
+from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
+from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
 class MemoryCoordinationCore:
     """
@@ -127,8 +129,21 @@ class MemoryCoordinationCore:
             self.logger.info(f"🧠 response: {chunks} tokens")                         # log token cost of AI response
         
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)  # induce turn into WMC — returns any PMTs displaced by the new arrival
+        filled_pmt, evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)   # induce turn into WMC — returns filled PMT and any displaced PMTs
 
+        # Score filled PMT at induction — only fires on assistant turn (filled_pmt is None on user turn)
+        if filled_pmt is not None:
+            prev_pmt = self.wmc._pmt_slot[-2] if len(self.wmc._pmt_slot) >= 2 else None             # second-to-last — filled_pmt already appended to slot
+            should_encode, score = self._score_pmt_at_induction(filled_pmt, prev_pmt)               # 5+1-factor induction gate — biological analogue: hippocampal tagging during experience
+            filled_pmt.retention_score = score                                                      # cache composite score — WMC eviction priority key
+            if should_encode:
+                filled_pmt.anchored = True                                                          # protect from eviction — hard-gated or high composite
+                _ = asyncio.get_running_loop().run_in_executor(
+                    self._executor, self.emc.bind_pmt,
+                    filled_pmt.user_id, filled_pmt.timestamp, filled_pmt.raw_text                   # raw_text — no JSON parsing needed in EMC
+                )
+                self.logger.debug("MCC induction encode → EMC (high salience)")                     # 
+        
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                    # evicted PMTs present — hand off to episodic buffer
@@ -139,28 +154,31 @@ class MemoryCoordinationCore:
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
-    def _bind_to_episodic_buffer(self, evicted_pmts: list[dict]) -> None:
+    def _bind_to_episodic_buffer(self, evicted_pmts: list[PMT]) -> None:
         """
         Bind evicted PMTs from WMC into the episodic buffer for encoding and consolidation.
         Runs on a dormant thread — never blocks active cognition.
-        Trivial PMT filter (M1): discards turns under 20 chars — filler turns not worth encoding.
-        Anchor vector filter (M1.5): semantic filtering via embeddinggemma replaces this.
-
+        Anchor vector safety net (M1.5): single depth check at eviction boundary — last-chance gate.
+        PMTs that scored below INDUCTION_THRESHOLD at induction get one more chance on depth alone.
+    
         Args:
-            evicted_pmts (list[dict]) : List of evicted PMTs [{content, timestamp}]
+            evicted_pmts (list[PMT]) : List of evicted PMTs from WMC
         """
         try:                                                         # attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                         # iterate through each evicted PMT
-                # M1 trivial filter — discard filler turns under 20 chars
-                if len(evicted_pmt.get("content", ""))- len('{"user": "", "assistant": ""}') < 20:  # trivial filter — discard filler turns under 20 chars
-                    self.logger.debug(                               # log the discarded trivial PMT
-                        "MCC discarded trivial PMT — below length threshold"
+                # Anchor vector safety net — depth check only, no full composite re-run
+                depth_score = self._cosine_sim(                      # single cosine sim — last-chance gate at eviction boundary
+                    evicted_pmt.vector, self._meaningful_anchor
+                )
+                if depth_score < SCS.MCC.EVICTION_THRESHOLD:         # below safety net threshold — truly forgotten
+                    self.logger.debug(                               # log the discarded PMT at eviction boundary
+                        "MCC eviction safety net — PMT discarded"
                     )
                     continue                                         # skip — not worth encoding into episodic memory
-                self.emc.bind_pmt(                                   # bind evicted pmt into episodic buffer
-                    user_id=evicted_pmt["user_id"],                  # user ID of the original PMT
-                    timestamp=evicted_pmt["timestamp"],              # timestamp of the original PMT
-                    content=evicted_pmt["content"],                  # raw content of the evicted PMT
+                self.emc.bind_pmt(                                   # bind evicted PMT into episodic buffer
+                    user_id=evicted_pmt.user_id,                     # speaker identity of the original PMT
+                    timestamp=evicted_pmt.timestamp,                 # induction timestamp of the original PMT
+                    content=evicted_pmt.raw_text,                    # raw_text — no JSON parsing needed in EMC
                 )
         except Exception as e:                                       # if binding lapse occurs, log and continue
             self.logger.error(                                       # Log the binding lapse
@@ -285,11 +303,47 @@ class MemoryCoordinationCore:
         """
         # Flush remaining WMC PMTs to EMC before shutdown
         # M1.5 — full induction scoring replaces unconditional flush
-        remaining = self.wmc.forget_pmt_schema()
-        if remaining:
-            self._bind_to_episodic_buffer(remaining)
-            self.logger.info(f"🧠 MCC flushed {len(remaining)} WMC PMT(s) → EMC on shutdown")
-            self.emc.drain_encoding_cycle()         # wait for binding stream to encode before terminating
+        memory_residue = self.wmc.forget_pmt_schema()                        # retrieve the remaining PMTs in the slots
+        if memory_residue:                                                   # if there is remaning PMT,
+            for i, pmt in enumerate(memory_residue):                         # flush remaining PMTs through full induction gate — session end is deliberate shutdown
+                prev = memory_residue[i - 1] if i > 0 else None              # previous PMT for event boundary scoring — None for first
+                should_encode, score = self._score_pmt_at_induction(pmt, prev) # same gate as induction — consistent forgetting model
+                if should_encode:
+                    self.emc.bind_pmt(                                        # bind high-salience PMT to episodic buffer before shutdown
+                        user_id=pmt.user_id,
+                        timestamp=pmt.timestamp,
+                        content=pmt.raw_text,                                 # raw_text — no JSON parsing needed in EMC
+                    )
+            self.logger.info(f"🧠 MCC flushed {len(memory_residue)} WMC PMT(s) → EMC on shutdown")  # log flush count before drain
+            self.emc.drain_encoding_cycle()                                   # wait for binding stream to encode before terminating
 
-        self.emc.terminate()                        # release EMC engram gateway file handles
-        self.logger.info("🗄️  MCC shutdown sequence complete")
+        self.emc.terminate()                                                  # release EMC engram gateway file handles
+        self.logger.info("🗄️  MCC shutdown sequence complete")                # log completion of MCC shutdown
+        
+    def _score_pmt_at_induction(self, pmt: PMT, prev_pmt: PMT | None) -> tuple[bool, float]:
+        """
+        5+1-factor WMC→EMC encoding gate — stub pending anchor init.
+        Biological analogue: hippocampal tagging during experience, in parallel with PFC maintenance.
+    
+        Args:
+            pmt (PMT)                : PMT being scored at induction
+            prev_pmt (PMT | None)    : Previous PMT in slot — None if first turn
+    
+        Returns:
+            tuple[bool, float] : (should_encode, composite_score)
+        """
+        return False, 0.0                                                 # stub — replaced when anchor vectors are initialized
+    
+    def _cosine_sim(self, a: list[float], b: list[float]) -> float:
+        """
+        Cosine similarity between two unit-normalized vectors.
+        Vectors are pre-normalized at encoding — dot product equals cosine sim.
+    
+        Args:
+            a (list[float]) : First unit-normalized vector
+            b (list[float]) : Second unit-normalized vector
+    
+        Returns:
+            float : Cosine similarity in range [0.0, 1.0]
+        """
+        return 0.0                                                        # stub — replaced when anchor vectors are initialized
