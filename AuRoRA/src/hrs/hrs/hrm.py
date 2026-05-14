@@ -103,15 +103,7 @@ class AGi:                                                              # Amazin
         RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
         MEMORY_CONTEXT_GATEWAY: str = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_context"        # [STATIC] ROS topic — reinstated memory context injected into prompt
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
-
-        ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"      # [STATIC]    sentence-transformers model for episodic embeddings
-        ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
-        ENCODING_ENGRAM_PREFIX: str       = ""                           # [STATIC]    document-side prompt prefix — empty for storage embeddings
-        ENCODING_CYCLE_TIMEOUT: float     = 30.0                         # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
-        ENCODING_DIM: int                 = 768                          # [STATIC]    embedding vector dimensionality
-        ENCODING_PRIME_CAPACITY: int      = 256                          # [INTRINSIC] max entries in embedding LRU cache
-        ENCODING_PRIME_KEY_LEN: int       = 256                          # [INTRINSIC] max characters hashed per cache key
-        
+       
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]    LLM inferencer server base URL
             COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] LLM model tag
@@ -178,6 +170,14 @@ Rules:
 
             THETA_INTERVAL: float             = 2.0         # [INTRINSIC] seconds between periodic batch encoding ticks
             THETA_BATCH_LIMIT: int            = 32          # [INTRINSIC] max PMTs encoded per tick — caps spike on crash recovery
+            
+            ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"      # [STATIC]    sentence-transformers model for episodic embeddings
+            ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
+            ENCODING_ENGRAM_PREFIX: str       = ""          # [STATIC]    document-side prompt prefix — empty for storage embeddings
+            ENCODING_CYCLE_TIMEOUT: float     = 30.0        # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
+            ENCODING_DIM: int                 = 768         # [STATIC]    embedding vector dimensionality
+            ENCODING_PRIME_CAPACITY: int      = 256         # [INTRINSIC] max entries in embedding LRU cache
+            ENCODING_PRIME_KEY_LEN: int       = 256         # [INTRINSIC] max characters hashed per cache key
 
             RECALL_RESERVE: int               = 2048        # [INTRINSIC] tokens reserved in context window for recalled episodes
             RECALL_SURFACE_LIMIT: int         = 3           # [INTRINSIC] max episodes returned per recall query (post-RRF)
