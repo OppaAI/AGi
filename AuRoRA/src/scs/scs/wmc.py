@@ -121,14 +121,11 @@ class WorkingMemoryCortex:
         """
         if role == "user":                                      # user turn — stage as induced PMT pending AI response
             if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
-                unpaired_user_prompt: str = self._induced_pmt["content"]["prompt"]   # retrieve existing unpaired prompt
-                self._induced_pmt["content"]["prompt"] = (      # append new message — preserve both
-                    unpaired_user_prompt + "\n" + content
-                )
+                self._induced_pmt.raw_text = self._induced_pmt.raw_text + "\n" + content  # append new message — preserve both user turns
                 self.logger.warn(                               # log the double message append
                     "WMC: second user message before AI response — appended to induced PMT"
                 )
-                return []                                       # still incomplete — wait for AI response
+                return [], None                                 # still incomplete — wait for AI response
 
             # Induce unpaired user prompt — pending for AI response
             self._induced_pmt = PMT(
@@ -164,23 +161,20 @@ class WorkingMemoryCortex:
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
                 self._induced_pmt["content"]["response"] = content  # pair AI response into induced PMT — exchange complete
+                user_prompt = self._induced_pmt.raw_text                                                    # user prompt stored at induction
+                ai_response = content                                                                       # current AI response completes the pair
+                self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})    # serialize pair — WMC chat history format
+                self._induced_pmt.raw_text = f"{user_prompt} {ai_response}"                                 # plain concat — EMC encoding and storage
 
             # Decay induced PMT into evictable PMT
-            content: dict = self._induced_pmt["content"]            # extract complete interaction
-            induced_pmt: dict = {                                   # assemble evictable PMT
-                "user_id": self._induced_pmt["user_id"],            # store user ID for isolation
-                "timestamp": self._induced_pmt["timestamp"],        # preserve original induction timestamp
-                "content":   json.dumps({                           # serialize user/assistant pair into single content string
-                                 "user": content["prompt"],
-                                 "assistant": content["response"],
-                             }),
-            }
-            self._induced_pmt = None                                # clear induced PMT — exchange complete
-
-            induced_pmt_chunks: int = self.chunk_sampler.probe(     # estimate chunk cost of incoming PMT
-                content=induced_pmt["content"],
+            induced_pmt: PMT = self._induced_pmt                        # promote staged PMT to evictable
+            induced_pmt.chunk_count = self.chunk_sampler.probe(         # cache chunk count — avoid reprobe on eviction
+                content=induced_pmt.content,
                 overhead=WMC.PMT_OVERHEAD
             )
+            self._induced_pmt = None                                    # clear induced PMT — exchange complete
+            induced_pmt_chunks: int = induced_pmt.chunk_cost            # read cached value — no reprobe
+
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
             # And then fill the induced PMT, to keep working memory always within the capacities
@@ -191,10 +185,7 @@ class WorkingMemoryCortex:
             ):
                 evicted_pmt: dict           = self._pmt_slot.popleft()                                   # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
-                evicted_chunks: int         = self.chunk_sampler.probe(                                  # calculate chunk cost of evicted PMT
-                    content=evicted_pmt["content"],
-                    overhead=WMC.PMT_OVERHEAD
-                )
+                evicted_chunks: int = evicted_pmt.chunk_cost                                             # cached at induction — no reprobe on eviction
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)            # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                       # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"
@@ -211,9 +202,9 @@ class WorkingMemoryCortex:
                 f"evicted={len(evicted_pmt_slot)}"
             )
 
-            return evicted_pmt_slot                            # return evicted PMTs to MCC for async forwarding to EMC
+            return induced_pmt, evicted_pmt_slot              # filled PMT + any evicted PMTs returned to MCC
 
-        return []                                              # unknown speaker — nothing to fill or evict
+        return []                                             # unknown speaker — nothing to fill or evict
 
     def recall_pmt_schema(self) -> list[dict]:
         """
