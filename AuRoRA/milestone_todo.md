@@ -15,7 +15,7 @@
 ### MCC
 - [ ] **M2** `mcc.py` — implement session-end consolidation: flush WMC PMTs to EMC on shutdown, gated on novelty/importance scoring — low-salience turns should be truly forgotten, not blindly bound
 - [ ] **M2** `mcc.py` — salience gate at eviction boundary in `_bind_to_episodic_buffer()`: score evicted PMTs for novelty and importance before binding; discard low-salience turns, bind high-salience turns to EMC — WMC and EMC remain salience-agnostic, MCC owns this gate
-- [ ] **M2** `mcc.py` — cleanup: move EncodingEngine to scs/eee.py — dedicated encoding layer between MCC and MSB.
+- [ ] **M2** `mcc.py` — cleanup: move EncodingEngine to scs/ece.py — dedicated encoding layer between MCC and MSB.
 - [ ] **M2** `mcc.py` — dynamic EMC capacity adjustment: if recalled engrams exceed EMC_RECALL_RESERVE, trim to fit rather than silently overrunning WMC's chunk limit
 - [ ] **M2** `mcc.py` — WMC/EMC health check with capacity breach warnings
 - [ ] **M2** `mcc.py` — add SMC, 11pm reflection trigger
