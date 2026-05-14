@@ -630,7 +630,7 @@ class EpisodicMemoryCortex:
         ]
 
         # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
-        episode_scaffold: list[dict] = self._trim_episodes(episode_scaffold)                # trim the recalled episodes to chunk reserve
+        episode_scaffold: list[dict] = self._fragment_episodes(episode_scaffold)            # trim the recalled episodes to chunk reserve
 
         # Reorder episodes chronologically (oldest → newest)
         episode_scaffold: list[dict] = self._sequence_episodes(episode_scaffold)            # sequence episodes in chronological order
