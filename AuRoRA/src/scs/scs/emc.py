@@ -200,7 +200,84 @@ class EpisodicBuffer:
         """
         with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
             return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
+class EpisodicScaffold:
+    """
+    Episodic Scaffold — temporal-semantic coordinate space governing reinstatement.
+    Anchors recalled episodes within the chunk budget and restores chronological order
+    before injection into the cognitive context window.
 
+    M1.5: Operates purely on list[dict] — no SQL, no encoding.
+    M2:   Extend with sequence_index, session_id, salience, consolidation_state
+          for Dream Cycle tracking and importance-weighted reinstatement.
+
+    Owned by EpisodicMemoryCortex. Called once per turn in reinstate_episodes().
+    """
+
+    def __init__(self, chunk_sampler: ChunkSampler) -> None:
+        """
+        Args:
+            chunk_sampler (ChunkSampler) : Probes and truncates episode content for budget management
+        """
+        self._chunk_sampler  = chunk_sampler           # for probing and truncating episode content
+        self._chunk_limit    = EMC.RECALL_RESERVE      # chunk budget ceiling for reinstatement
+
+    def fragment(self, episodes: list[dict]) -> list[dict]:
+        """
+        Fragment recalled episodes to the RECALL_RESERVE chunk limit before reinstatement.
+        Consumes episodes in RRF-ranked order — highest relevance preserved first.
+        Last episode exceeding limit is truncated to a fragment rather than dropped —
+        mirrors human partial recall under working memory capacity pressure.
+
+        Biological analogue: CA1 output gating — limits the volume of reinstated
+        traces before prefrontal delivery to avoid overwriting active cognition.
+
+        Args:
+            episodes (list[dict]): Relevancy-filtered episodes, RRF-ranked descending.
+
+        Returns:
+            list[dict]: Budget-clipped episode list. Final entry may carry a
+                        truncated content field if it exceeded the remaining reserve.
+        """
+        chunk_limit: int = self._chunk_limit                                                # remaining chunk budget for reinstatement
+        fragment: list[dict] = []                                                           # budget-trimmed episode list
+
+        for episode in episodes:                                                            # consume in RRF rank order — highest relevance first
+            content     = episode.get("content", "")                                        # retrieve the content of the episode
+            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
+
+            if chunk_count > chunk_limit:                                                   # episode exceeds remaining budget — truncate to fragment
+                if chunk_limit > 0:                                                         # remaining budget can still surface a fragment
+                    episode            = dict(episode)                                      # shallow copy — never mutate source list
+                    episode["content"] = self._chunk_sampler.truncate(content, chunk_limit) # truncate content to remaining budget
+                    fragment.append(episode)                                                # reinstate memory fragment into memory context
+                    break                                                                   # budget exhausted after fragment — stop regardless
+            
+            chunk_limit -= chunk_count                                                      # deduct the token cost from remaining budget
+            fragment.append(episode)                                                        # episode fits — reinstate in full
+        return fragment                                                                     # return budget-trimmed episode list
+
+    
+    def sequence(self, episodes: list[dict]) -> list[dict]:
+        """
+        Re-organize fragmented episodes into ascending chronological order before reinstatement.
+        RRF returns episodes ranked by relevancy — sequencing restores the temporal
+        narrative so the cognitive engine reads reinstated engrams in the order
+        they were originally consolidated into the engram complex.
+
+        Biological analogue: hippocampal temporal context signal — reinstated traces
+        are ordered by their original encoding time before surfacing to prefrontal cortex.
+
+        Args:
+            episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
+
+        Returns:
+            list[dict]: Same episodes sorted ascending by timestamp.
+        """
+        return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
+            episodes,                                                           # episode fragmented to fit the chunk reserve in any order
+            key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
+        )
+        
 class EncodingCycle:
     """
     Encoding Cycle — theta-rhythm driven online encoding of episodic memories.
@@ -452,9 +529,12 @@ class EpisodicMemoryCortex:
             engram_gateway (Path) : Path to access the engram for storing episodic memories
         """
         self.logger                = logger                                 # logger from MCC — used throughout EMC
+        self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
         self.episodic_buffer       = EpisodicBuffer()                       # two-stream buffer — binding and recall streams
         self._episodic_buffer_lock = threading.Lock()                       # serializes binding stream access
-        self._chunk_sampler        = chunk_sampler                          # for reinstatement budgeting
+        self._episodic_scaffold    = EpisodicScaffold(                      # temporal-semantic reinstatement coordinator
+            chunk_sampler=chunk_sampler
+        )
 
         # Retrieve the paramaters from HRS
         self._encoding_engine       = EncodingEngine(                       # sentence-transformers wrapper with LRU prime
@@ -543,63 +623,6 @@ class EpisodicMemoryCortex:
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                            # encode cue into vector + raw text for dual-path recall
         return self._ecx.recall_engram(user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH) # semantic + lexical RRF fusion — handled by MSB
 
-    def _fragment_episodes(self, episodes: list[dict]) -> list[dict]:
-        """
-        Fragment recalled episodes to the RECALL_RESERVE chunk limit before reinstatement.
-        Consumes episodes in RRF-ranked order — highest relevance preserved first.
-        Last episode exceeding limit is truncated to a fragment rather than dropped —
-        mirrors human partial recall under working memory capacity pressure.
-
-        Biological analogue: CA1 output gating — limits the volume of reinstated
-        traces before prefrontal delivery to avoid overwriting active cognition.
-
-        Args:
-            episodes (list[dict]): Relevancy-filtered episodes, RRF-ranked descending.
-
-        Returns:
-            list[dict]: Budget-clipped episode list. Final entry may carry a
-                        truncated content field if it exceeded the remaining reserve.
-        """
-        chunk_limit: int = EMC.RECALL_RESERVE                                               # remaining chunk budget for reinstatement
-        fragmented_episodes: list[dict] = []                                                # budget-trimmed episode list
-
-        for episode in episodes:                                                            # consume in RRF rank order — highest relevance first
-            content     = episode.get("content", "")                                        # retrieve the content of the episode
-            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
-
-            if chunk_count > chunk_limit:                                                   # episode exceeds remaining budget — truncate to fragment
-                if chunk_limit > 0:                                                         # remaining budget can still surface a fragment
-                    episode            = dict(episode)                                      # shallow copy — never mutate source list
-                    episode["content"] = self._chunk_sampler.truncate(content, chunk_limit) # truncate content to remaining budget
-                    fragmented_episodes.append(episode)                                     # reinstate memory fragment into memory context
-                    break                                                                   # budget exhausted after fragment — stop regardless
-            
-            chunk_limit -= chunk_count                                                      # deduct the token cost from remaining budget
-            fragmented_episodes.append(episode)                                             # episode fits — reinstate in full
-        return fragmented_episodes                                                          # return budget-trimmed episode list
-
-    
-    def _sequence_episodes(self, episodes: list[dict]) -> list[dict]:
-        """
-        Re-sort trimmed episodes into ascending chronological order before reinstatement.
-        RRF returns episodes ranked by relevancy — sequencing restores the temporal
-        narrative so the cognitive engine reads reinstated engrams in the order
-        they were originally consolidated into the engram complex.
-
-        Biological analogue: hippocampal temporal context signal — reinstated traces
-        are ordered by their original encoding time before surfacing to prefrontal cortex.
-
-        Args:
-            episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
-
-        Returns:
-            list[dict]: Same episodes sorted ascending by timestamp.
-        """
-        return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
-            episodes,                                                           # episode fragmented to fit the chunk reserve in any order
-            key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
-        )
-
     def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
         Recall, trim, sequence, format, and reinstate relevant episodes into the recall stream.
@@ -630,11 +653,11 @@ class EpisodicMemoryCortex:
         ]
 
         # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
-        episode_scaffold: list[dict] = self._fragment_episodes(episode_scaffold)            # trim the recalled episodes to chunk reserve
+        episode_scaffold: list[dict] = self._episodic_scaffold.fragment(episode_scaffold)   # trim the recalled episodes to fit chunk reserve
 
         # Reorder episodes chronologically (oldest → newest)
-        episode_scaffold: list[dict] = self._sequence_episodes(episode_scaffold)            # sequence episodes in chronological order
-        
+        episode_scaffold: list[dict] = self._episodic_scaffold.sequence(episode_scaffold)   # sequence episodes in chronological order
+
         if not episode_scaffold:                                                            # nothing to stage — skip
             return []                                                                       # return if no filtered episodes
 
