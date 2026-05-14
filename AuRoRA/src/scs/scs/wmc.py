@@ -62,8 +62,32 @@ from hrs.hru import ChunkSampler         # probes and truncates cognitive contex
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
-from scs.niu import PMT                  # Phonological Memory Trace — typed PMT contract for working memory
 
+@dataclass
+class PMT:
+    """
+    Phonological Memory Trace — one complete interaction in working memory.
+    Pairs a user prompt and AI response into a single evictable unit.
+
+    Lifecycle:
+        Induction → Filling → Sustaining → Receding → Evicting
+
+    Biological analogue: a single episode held in the phonological loop,
+    tagged by the hippocampus during experience for potential consolidation.
+    """
+    user_id         : str | None    # speaker identity — None for assistant-originated
+    timestamp       : str           # ISO wall-clock induction time — M1.6 replaces with ROS2 time
+    content         : str           # JSON {"user": "...", "assistant": "..."} — WMC chat history only
+    raw_text        : str           # plain concat — EMC encoding and engram storage
+    chunk_count      : int          # cached token count — O(1) eviction math, no reprobe on eviction
+    vector          : list[float]   # semantic vector computed at induction — reused at EMC binding, no re-inference
+    retention_score : float = 0.0   # composite induction score — WMC eviction priority key
+    salience_score  : float = 0.0   # Factor 1 score — logged and inspectable at eviction boundary
+    novelty_mult    : float = 1.0   # Factor 2 multiplier — inspectable at eviction boundary
+    depth_score     : float = 0.0   # Factor 3 score — logged and inspectable at eviction boundary
+    anchored        : bool  = False # True if hard-gated (explicit marker or salience override)
+    smc_candidate   : bool  = False # True if regex fact extractor flagged remainder for Dream Cycle
+    
 class WorkingMemoryCortex:
     """
     Working Memory Cortex — the active conversation window of the SCS.
