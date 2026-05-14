@@ -95,8 +95,8 @@ class WorkingMemoryCortex:
         self.global_chunk_limit: int = global_chunk_limit   # maximum chunks WMC can sustain before eviction
         self.pmt_slot_limit: int     = pmt_slot_limit       # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer      # additional PMT buffer beyond Miller's Law limit
-        self._induced_pmt: dict | None = None               # induced user prompt pending pairing with AI response
-        self._pmt_slot: deque[dict]  = deque()              # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
+        self._induced_pmt: PMT | None = None                # induced user prompt pending pairing with AI response
+        self._pmt_slot: deque[PMT]  = deque()               # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                    # running count of sustained chunks across all PMTs
 
 
@@ -132,13 +132,13 @@ class WorkingMemoryCortex:
 
             # Induce unpaired user prompt — pending for AI response
             self._induced_pmt = PMT(
-                user_id         = user_id,                      # user ID of the speaker
-                timestamp       = datetime.now().isoformat(),   # wall-clock induction time (TODO M1.6: use ROS2 time)
-                content         = "",                           # user prompt and AI response turn pair — to be filled with embedded both 
-                raw_text        = "",                           # plain concat of the content — to be filled on assistant turn
-                chunk_count     = 0,                            # token count of the PMT — to be filled on assistant turn
-                vector          = [],                           # vector blob of the content — to be filled by MCC at induction scoring
-                anchored        = False,
+                user_id    = user_id,                       # speaker identity
+                timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
+                content    = "",                            # filled on assistant turn — JSON pair
+                raw_text   = "",                            # filled on assistant turn — plain concat for EMC
+                chunk_cost = 0,                             # filled on assistant turn — cached chunk count
+                vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
+                anchored   = False,                         # hard-gate flag
             )
 
             self.logger.debug(                                  # log the induced unpaired user prompt
