@@ -118,7 +118,7 @@ class WorkingMemoryCortex:
             content (str)        : Content of the conversation turn
 
         Returns:
-            list[dict] : List of evicted PMTs [{timestamp, content}], empty if no eviction occurred
+            tuple[PMT | None, list[PMT]] : (filled_pmt, evicted_pmts) — None for filled_pmt on incomplete user turn
         """
         if role == "user":                                      # user turn — stage as induced PMT pending AI response
             if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
@@ -126,15 +126,15 @@ class WorkingMemoryCortex:
                 self.logger.warn(                               # log the double message append
                     "WMC: second user message before AI response — appended to induced PMT"
                 )
-                return [], None                                 # still incomplete — wait for AI response
+                return None, []                                 # still incomplete — wait for AI response
 
             # Induce unpaired user prompt — pending for AI response
-            self._induced_pmt = PMT(
+            self._induced_pmt = PMT(                        # unpaired user prompt pending for pairing
                 user_id    = user_id,                       # speaker identity
                 timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
                 content    = "",                            # filled on assistant turn — JSON pair
                 raw_text   = "",                            # filled on assistant turn — plain concat for EMC
-                chunk_cost = 0,                             # filled on assistant turn — cached chunk count
+                chunk_count = 0,                            # filled on assistant turn — cached chunk count
                 vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
                 anchored   = False,                         # hard-gate flag
             )
@@ -142,26 +142,29 @@ class WorkingMemoryCortex:
             self.logger.debug(                                  # log the induced unpaired user prompt
                 "WMC induced unpaired user prompt — pending for AI response"
             )
-            return []                                           # exchange incomplete — nothing to fill or evict
+            return None, []                                     # exchange incomplete — nothing to fill or evict
 
         elif role == "assistant":                               # assistant turn — complete the pairing
             if self._induced_pmt is None:                       # no induced PMT — unpaired AI response
                 self.logger.warning(                            # log the warning of unpaired AI response
                     "WMC: AI response induced without user prompt — wrapping with placeholder"
                 )
-                self._induced_pmt = {                           # wrap unpaired AI response with placeholder
-                    "user_id": None,                            # None since no user prompt was provided
-                    "timestamp": datetime.now().isoformat(),    # wall-clock induction time
-                    "content": {                                # embed the unpaired AI response with placeholder
-                        "prompt": "[context missing]",          # placeholder for missing user prompt
-                        "response": content                     # AI response preserved
-                    }
-                }
+                self._induced_pmt = PMT(                        # wrap unpaired AI response with placeholder
+                    user_id    = user_id,                       # speaker identity
+                    timestamp  = datetime.now().isoformat(),    # wall-clock induction time
+                    content    = json.dumps({                   # embed the unpaired AI response with placeholder
+                        "user": "[context missing]",            # placeholder for missing user prompt
+                        "assistant": content                    # AI response preserved
+                    }),
+                    raw_text   = f"[context missing] {content}",# plain concat with placeholder for missing user prompt
+                    chunk_count  = 0,                           # filled on assistant turn — cached chunk count
+                    vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
+                    anchored   = False,                         # hard-gate flag
+                )
                 # Fall through to complete the pairing — unpaired AI response wrapped with placeholder, proceed normally
 
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
-                self._induced_pmt["content"]["response"] = content  # pair AI response into induced PMT — exchange complete
                 user_prompt = self._induced_pmt.raw_text                                                    # user prompt stored at induction
                 ai_response = content                                                                       # current AI response completes the pair
                 self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})    # serialize pair — WMC chat history format
@@ -174,19 +177,19 @@ class WorkingMemoryCortex:
                 overhead=WMC.PMT_OVERHEAD
             )
             self._induced_pmt = None                                    # clear induced PMT — exchange complete
-            induced_pmt_chunks: int = induced_pmt.chunk_cost            # read cached value — no reprobe
+            induced_pmt_chunks: int = induced_pmt.chunk_count           # read cached value — no reprobe
 
 
             # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
             # And then fill the induced PMT, to keep working memory always within the capacities
-            evicted_pmt_slot: list[dict] = []                                                            # buffer for evicted PMTs returned to MCC
+            evicted_pmt_slot: list[PMT] = []                                                             # buffer for evicted PMTs returned to MCC
             while self._pmt_slot and (                                                                   # evict until incoming PMT fits within both limits
                 self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit                    # global chunk limit would be exceeded, or
                 or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer                     # PMT slot limit reached
             ):
-                evicted_pmt: dict           = self._pmt_slot.popleft()                                   # evict oldest PMT from working memory
+                evicted_pmt: PMT                = self._pmt_slot.popleft()                               # evict oldest PMT from working memory
                 evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
-                evicted_chunks: int = evicted_pmt.chunk_cost                                             # cached at induction — no reprobe on eviction
+                evicted_chunks: int = evicted_pmt.chunk_count                                            # cached at induction — no reprobe on eviction
                 self._sustained_chunks: int = max(0, self._sustained_chunks - evicted_chunks)            # decrement sustained chunks — floor at 0
                 self.logger.debug(                                                                       # log the eviction of the receding PMT
                     f"WMC evict → EMC: size={evicted_chunks} chunks"
@@ -205,7 +208,7 @@ class WorkingMemoryCortex:
 
             return induced_pmt, evicted_pmt_slot              # filled PMT + any evicted PMTs returned to MCC
 
-        return []                                             # unknown speaker — nothing to fill or evict
+        return None, []                                       # unknown speaker — nothing to fill or evict
 
     def recall_pmt_schema(self) -> list[dict]:
         """
@@ -227,7 +230,7 @@ class WorkingMemoryCortex:
                 sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user turn from the content
                 sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack assistant turn from the content
             except (json.JSONDecodeError, KeyError):                                               # malformed PMT — surface raw rather than drop
-                sustained_pmts.append({"role": "user", "content": pmt.content")                    # use the PMT content as-is
+                sustained_pmts.append({"role": "user", "content": pmt.content})                    # use the PMT content as-is
 
         # Return the list of sustained PMT schema in ascending chronological order
         return sustained_pmts                                                                      # ascending chronological order
@@ -239,9 +242,9 @@ class WorkingMemoryCortex:
         Forwarding the forgotten schema to EMC is the caller's responsibility.
     
         Returns:
-            list[dict] : Forgotten PMT schema [{timestamp, content}]
+           list[PMT] : Forgotten PMT schema — caller decides whether to forward to EMC
         """
-        forgotten_pmt_schema: list[dict] = list(self._pmt_slot)     # snapshot before wipe — safe under CNC._busy
+        forgotten_pmt_schema: list[PMT] = list(self._pmt_slot)      # snapshot before wipe — safe under CNC._busy
         self._pmt_slot.clear()                                      # evict all sustaining PMTs
         self._induced_pmt = None                                    # discard any incomplete induced PMT
         self._sustained_chunks: int = 0                             # reset sustained chunk count
