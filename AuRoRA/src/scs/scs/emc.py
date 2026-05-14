@@ -625,16 +625,16 @@ class EpisodicMemoryCortex:
 
     def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
-        Recall, trim, sequence, format, and reinstate relevant episodes into the recall stream.
+        Recall, fragment, sequence, format, and reinstate relevant episodes into the recall stream.
         Full episodic reinstatement pipeline — MCC calls this once per turn.
         Primary output is injection into the recall stream for MCC context assembly.
 
         Pipeline:
-            recall_episodes() → relevancy gate → _trim_episodes() → _sequence_episodes() → format → recall stream
+            recall_episodes() → relevancy gate → fragment → sequence → format → recall stream
 
         Lifecycle stage: Recall → Reinstatement
             Recall         — dual-path RRF retrieval from the engram complex (semantic + lexical)
-            Reinstatement  — trimmed, sequenced episodes injected into recall stream as a system message
+            Reinstatement  — fragmented, sequenced episodes injected into recall stream as a system message
 
         Args:
             user_id (str): ID of the user whose engrams to recall.
