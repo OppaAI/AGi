@@ -579,26 +579,26 @@ class EpisodicMemoryCortex:
         return fragmented_episodes                                                          # return budget-trimmed episode list
 
     
-def _sequence_episodes(self, episodes: list[dict]) -> list[dict]:
-    """
-    Re-sort trimmed episodes into ascending chronological order before reinstatement.
-    RRF returns episodes ranked by relevancy — sequencing restores the temporal
-    narrative so the cognitive engine reads reinstated engrams in the order
-    they were originally consolidated into the engram complex.
+    def _sequence_episodes(self, episodes: list[dict]) -> list[dict]:
+        """
+        Re-sort trimmed episodes into ascending chronological order before reinstatement.
+        RRF returns episodes ranked by relevancy — sequencing restores the temporal
+        narrative so the cognitive engine reads reinstated engrams in the order
+        they were originally consolidated into the engram complex.
 
-    Biological analogue: hippocampal temporal context signal — reinstated traces
-    are ordered by their original encoding time before surfacing to prefrontal cortex.
+        Biological analogue: hippocampal temporal context signal — reinstated traces
+        are ordered by their original encoding time before surfacing to prefrontal cortex.
 
-    Args:
-        episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
+        Args:
+            episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
 
-    Returns:
-        list[dict]: Same episodes sorted ascending by timestamp.
-    """
-    return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
-        episodes,                                                           # episode fragmented to fit the chunk reserve in any order
-        key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
-    )
+        Returns:
+            list[dict]: Same episodes sorted ascending by timestamp.
+        """
+        return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
+            episodes,                                                           # episode fragmented to fit the chunk reserve in any order
+            key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
+        )
 
     def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
