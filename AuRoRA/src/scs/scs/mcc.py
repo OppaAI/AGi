@@ -61,6 +61,7 @@ from concurrent.futures import ThreadPoolExecutor   # for type hint on executor 
 from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, and probe and truncate cognitive context for budget management
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
+EMC = AGi.SCS.EMC                                   # EMC parameter namespace alias — keeps WMC constant references concise
 
 from scs.msb import EncodingEngine                  # shared encoding engine — owned by MCC, passed to all cortices
 from scs.wmc import PMT, WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memory
@@ -89,11 +90,11 @@ class MemoryCoordinationCore:
         # Construct shared encoding engine — owned by MCC, passed to all cortices
         self._encoding_engine = EncodingEngine(          # one model load — shared across EMC, SMC, PMC
             logger          = logger,
-            encoding_engine = SCS.ENCODING_ENGINE,        # model name — e.g. BAAI/bge-small-en-v1.5
-            cue_prefix      = SCS.ENCODING_CUE_PREFIX,    # query prefix for recall cues
-            engram_prefix   = SCS.ENCODING_ENGRAM_PREFIX, # document prefix for engrams
-            prime_capacity  = SCS.ENCODING_PRIME_CAPACITY,# max LRU prime entries before eviction
-            prime_key_len   = SCS.ENCODING_PRIME_KEY_LEN, # max chars hashed per prime key
+            encoding_engine = EMC.ENCODING_ENGINE,        # model name — e.g. BAAI/bge-small-en-v1.5
+            cue_prefix      = EMC.ENCODING_CUE_PREFIX,    # query prefix for recall cues
+            engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX, # document prefix for engrams
+            prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,# max LRU prime entries before eviction
+            prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN, # max chars hashed per prime key
         )
 
         # Ensure engram gateway exists
