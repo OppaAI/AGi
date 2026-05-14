@@ -78,7 +78,7 @@ class PMT:
     timestamp       : str           # ISO wall-clock induction time — M1.6 replaces with ROS2 time
     content         : str           # JSON {"user": "...", "assistant": "..."} — WMC chat history only
     raw_text        : str           # plain concat — EMC encoding and engram storage
-    chunk_cost      : int           # cached chunk count — O(1) eviction math, no reprobe on eviction
+    chunk_count      : int          # cached token count — O(1) eviction math, no reprobe on eviction
     vector          : list[float]   # semantic vector computed at induction — reused at EMC binding, no re-inference
     retention_score : float = 0.0   # composite induction score — WMC eviction priority key
     salience_score  : float = 0.0   # Factor 1 score — logged and inspectable at eviction boundary
