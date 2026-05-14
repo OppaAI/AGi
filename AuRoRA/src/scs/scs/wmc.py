@@ -105,7 +105,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
         
-    def fill_pmt(self, user_id: str | None, role: str, content: str) -> list[dict]:
+    def fill_pmt(self, user_id: str | None, role: str, content: str) -> tuple[PMT | None, list[PMT]]:
         """
         Induce a conversation turn and pair it into a complete interaction.
         Fill the complete interaction into working memory.
@@ -131,14 +131,16 @@ class WorkingMemoryCortex:
                 return []                                       # still incomplete — wait for AI response
 
             # Induce unpaired user prompt — pending for AI response
-            self._induced_pmt = {                               # stage induced PMT — pending AI response
-                "user_id": user_id,                             # user ID of the speaker
-                "timestamp": datetime.now().isoformat(),        # wall-clock induction time (TODO M1.6: use ROS2 time)
-                "content": {                                    # embed both user prompt and AI response in the same PMT
-                    "prompt": content,                          # user prompt — paired with AI response on next turn
-                    "response": ""                              # empty until AI responds
-                }
-            }
+            self._induced_pmt = PMT(
+                user_id         = user_id,                      # user ID of the speaker
+                timestamp       = datetime.now().isoformat(),   # wall-clock induction time (TODO M1.6: use ROS2 time)
+                content         = "",                           # user prompt and AI response turn pair — to be filled with embedded both 
+                raw_text        = "",                           # plain concat of the content — to be filled on assistant turn
+                chunk_count     = 0,                            # token count of the PMT — to be filled on assistant turn
+                vector          = [],                           # vector blob of the content — to be filled by MCC at induction scoring
+                anchored        = False,
+            )
+
             self.logger.debug(                                  # log the induced unpaired user prompt
                 "WMC induced unpaired user prompt — pending for AI response"
             )
