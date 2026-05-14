@@ -62,6 +62,7 @@ from hrs.hru import ChunkSampler         # probes and truncates cognitive contex
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
+from scs.niu import PMT                  # Phonological Memory Trace — typed PMT contract for working memory
 
 class WorkingMemoryCortex:
     """
@@ -221,16 +222,17 @@ class WorkingMemoryCortex:
         for pmt in self._pmt_slot:                                                                 # traverse sustaining PMTs oldest-first
             # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response pairs
             try:                                                                                   # attempt to deserialize the PMT content
-                content = json.loads(pmt["content"])                                               # deserialize — each PMT encodes a user/assistant pair
+
+                content = json.loads(pmt.content)                                                  # deserialize — each PMT encodes a user/assistant pair
                 sustained_pmts.append({"role": "user",      "content": content["user"]})           # Unpack user turn from the content
                 sustained_pmts.append({"role": "assistant", "content": content["assistant"]})      # Unpack assistant turn from the content
             except (json.JSONDecodeError, KeyError):                                               # malformed PMT — surface raw rather than drop
-                sustained_pmts.append({"role": "user", "content": pmt["content"]})                 # use the PMT content as-is
+                sustained_pmts.append({"role": "user", "content": pmt.content")                    # use the PMT content as-is
 
         # Return the list of sustained PMT schema in ascending chronological order
         return sustained_pmts                                                                      # ascending chronological order
 
-    def forget_pmt_schema(self) -> list[dict]:
+    def forget_pmt_schema(self) -> list[PMT]:
         """
         Forget all sustaining PMT schema — returns working memory to rest.
         Called at conversation end or on explicit reset.
