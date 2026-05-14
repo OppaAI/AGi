@@ -62,8 +62,7 @@ from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, 
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 
-from scs.niu import PMT                             # Phonological Memory Trace — typed PMT contract for working memory
-from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memory
+from scs.wmc import PMT, WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
 class MemoryCoordinationCore:
