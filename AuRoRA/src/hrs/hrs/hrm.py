@@ -104,6 +104,14 @@ class AGi:                                                              # Amazin
         MEMORY_CONTEXT_GATEWAY: str = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_context"        # [STATIC] ROS topic — reinstated memory context injected into prompt
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
 
+        ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"      # [STATIC]    sentence-transformers model for episodic embeddings
+        ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
+        ENCODING_ENGRAM_PREFIX: str       = ""                           # [STATIC]    document-side prompt prefix — empty for storage embeddings
+        ENCODING_CYCLE_TIMEOUT: float     = 30.0                         # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
+        ENCODING_DIM: int                 = 768                          # [STATIC]    embedding vector dimensionality
+        ENCODING_PRIME_CAPACITY: int      = 256                          # [INTRINSIC] max entries in embedding LRU cache
+        ENCODING_PRIME_KEY_LEN: int       = 256                          # [INTRINSIC] max characters hashed per cache key
+        
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]    LLM inferencer server base URL
             COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] LLM model tag
@@ -165,13 +173,6 @@ Rules:
 
         class EMC(metaclass=_EMCType):                       # Episodic Memory Cortex
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
-            ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC]    sentence-transformers model for episodic embeddings
-            ENCODING_CUE_PREFIX: str          = "Represent this sentence for searching relevant passages  : "  # [STATIC] query-side prompt prefix for asymmetric embedding
-            ENCODING_ENGRAM_PREFIX: str       = ""          # [STATIC]    document-side prompt prefix — empty for storage embeddings
-            ENCODING_CYCLE_TIMEOUT: float     = 30.0        # [INTRINSIC] max seconds to wait for encoding thread clean exit on shutdown
-            ENCODING_DIM: int                 = 768         # [STATIC]    embedding vector dimensionality
-            ENCODING_PRIME_CAPACITY: int      = 256         # [INTRINSIC] max entries in embedding LRU cache
-            ENCODING_PRIME_KEY_LEN: int       = 256         # [INTRINSIC] max characters hashed per cache key
 
             EPISODE_CONTENT_LIMIT: int        = 512         # [INTRINSIC] max tokens per PMT written to episodic buffer
 
