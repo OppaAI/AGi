@@ -45,7 +45,7 @@ Lifecycle:
     Induction → Filling → Sustaining → Receding → Evicting
 
 Public interface:
-    wmc.fill_pmt(user_id, role, content) -> list[evicted_pmt]
+    wmc.fill_pmt(user_id, role, content) -> tuple[PMT | None, list[PMT]]
     wmc.recall_pmt_schema() -> list[dict]
     wmc.forget_pmt_schema() -> list[dict]
     wmc.assess_pmt_schema() -> dict
