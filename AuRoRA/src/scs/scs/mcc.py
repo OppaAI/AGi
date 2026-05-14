@@ -62,6 +62,7 @@ from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, 
 from hrs.hrm import AGi                             # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 
+from scs.msb import EncodingEngine                  # shared encoding engine — owned by MCC, passed to all cortices
 from scs.wmc import PMT, WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memory
 from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
@@ -85,8 +86,15 @@ class MemoryCoordinationCore:
         self.logger = logger            # logger forwarded from CNC — all MCC methods emit through this handle
         self._executor = executor       # thread pool for blocking operations
 
-        # Initialize ChunkSampler for consistent token counting
-        self._chunk_sampler = ChunkSampler(logger)                        # use chunk sampler for consistent token counting
+        # Construct shared encoding engine — owned by MCC, passed to all cortices
+        self._encoding_engine = EncodingEngine(          # one model load — shared across EMC, SMC, PMC
+            logger          = logger,
+            encoding_engine = SCS.ENCODING_ENGINE,        # model name — e.g. BAAI/bge-small-en-v1.5
+            cue_prefix      = SCS.ENCODING_CUE_PREFIX,    # query prefix for recall cues
+            engram_prefix   = SCS.ENCODING_ENGRAM_PREFIX, # document prefix for engrams
+            prime_capacity  = SCS.ENCODING_PRIME_CAPACITY,# max LRU prime entries before eviction
+            prime_key_len   = SCS.ENCODING_PRIME_KEY_LEN, # max chars hashed per prime key
+        )
 
         # Ensure engram gateway exists
         _gateway = GatewayMap()                                                            # absolute path to the engram complex — constructed by HRS
@@ -99,9 +107,10 @@ class MemoryCoordinationCore:
             chunk_sampler=self._chunk_sampler,
         )
         self.emc = EpisodicMemoryCortex(                                                    # boot EMC — owns the engram complex on disk
-            logger=logger,
-            engram_gateway=self.engram_gateway,
-            chunk_sampler=self._chunk_sampler,
+            logger          = logger,
+            engram_gateway  = self.engram_gateway,
+            chunk_sampler   = self._chunk_sampler,
+            encoding_engine = self._encoding_engine,
         )
 
         self.logger.info("✅ Memory Coordination Core Activated")                          # log entry on successful MCC activation
