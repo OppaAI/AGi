@@ -102,15 +102,15 @@ class PersonalProgressionUnit:
         Date excluded — injected per-turn by CNC.
 
         Args:
-            user_profile (dict): User preferences from IRU — name, location, seed injected here
+            user_profile (UserProfile): User preferences from IRU — name, location, seed injected here
         """
-        user_name = user_profile.get("known_as") or user_profile.get("name", "unknown")# preferred name — falls back to full name
-        location  = user_profile.get("location", "unknown")                            # user location — for context-aware responses
-        seed      = user_profile.get("seed", "")                                       # relational seed — cold-start context, fades as EMC accumulates
+        user_name     = getattr(user_profile, "known_as", None) or getattr(user_profile, "name", "unknown") # preferred name — falls back to full name
+        user_location = getattr(user_profile, "location", "unknown")                                     # user location — for context-aware responses
+        user_context  = getattr(user_profile, "seed", "")                                                # relational seed — cold-start context, fades as EMC accumulates
 
-        self._active_cognition = AGi.SCS.GCE.ACTIVE_COGNITION.format(                  # assemble active cognition from persona template
-            user_name     = user_name,                                                 # bind user identity
-            user_location = location,                                                  # bind resolved location
-            user_context  = seed,                                                      # seed only — location already in template
-            date          = "{date}",                                                  # deferred — CNC fills per-turn
+        self._active_cognition = AGi.SCS.GCE.ACTIVE_COGNITION.format(                                    # assemble active cognition from persona template
+            user_name     = user_name,                                                                   # bind user identity
+            user_location = user_location,                                                               # bind resolved location
+            user_context  = user_context,                                                                # seed only — location already in template
+            date          = "{date}",                                                                    # deferred — CNC fills per-turn
         )

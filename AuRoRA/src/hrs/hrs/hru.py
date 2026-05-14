@@ -46,7 +46,7 @@ from rclpy.node import Node                 # for node type hinting (Node) and c
 # AGi libraries
 from hrs.hrm import AGi, RRR                # manifest constants; RRR — filesystem path segments
 
-class User AccessLevel(Enum):
+class UserAccessLevel(Enum):
     """
     Classify the active user's access scope for recall and permission gating.
     """

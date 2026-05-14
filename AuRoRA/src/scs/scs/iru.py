@@ -38,7 +38,7 @@ import yaml                                                     # YAML parsing �
 # AGi libraries
 from hrs.hrm import AGi                                         # manifest constants — RELEVANCE_THRESHOLD mutated on salience bias
 from hrs.hru import GatewayMap                                  # gateway paths — resolves users.yaml location
-from hrs.hru import UserProfile, UserAccessLevel, DEMO_USER     # user identity types — shared across whole system
+from hrs.hru import UserProfile, DEMO_USER                      # user identity types — shared across whole system
 
 class IdentityRecognitionUnit:
     """

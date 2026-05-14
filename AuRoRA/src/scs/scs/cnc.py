@@ -65,7 +65,7 @@ from std_msgs.msg import String                            # ROS2 string message
 
 # AGi libraries
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
-from hrs.hru import hydrate_manifest, UserType             # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
+from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
 from scs.niu import NeuralStimulus, NeuralInputChannel     # neural input channel— input gateway for all neural stimuli (text, speech, etc.)
 from scs.iru import IdentityRecognitionUnit                # identity recognition unit — identify user and establish session identity and user context
@@ -120,11 +120,11 @@ class CNC(Node):
         hydrate_manifest(self, system="scs")                                # hydrate manifest from AuRoRA parameters under the SCS system
         self._active_user: str = AGi.ACTIVE_USER                            # (TODO): M1 stub — replace with login sequence
         self._iru = IdentityRecognitionUnit(logger=self.get_logger())       # boot identity recognition — loads user profile
-        self._iru.recognize(user_id=self._active_user)                      # recognize active user — loads relational context
-        self._user_type: UserType = self._iru.user_type                     # access classification — governs recall scope
+        self._iru.recognize_user(user_id=self._active_user)                 # recognize active user — loads relational context
+        self._access_level: UserAccessLevel = self._iru.user_profile.access_level  # access classification — governs recall scope
         
         self._ppu = PersonalProgressionUnit(logger=self.get_logger())       # boot personal progression — loads Grace's persona
-        self._ppu.provision(user_prefs=self._iru.user_prefs)                # assemble system prompt — persona + user context
+        self._ppu.provision_cognition(user_profile=self._iru.user_profile)  # assemble system prompt — persona + user context
 
         # Initialize separate execution thread for memory and blocking operations
         self._cognitive_executor: ThreadPoolExecutor = ThreadPoolExecutor(  # thread pool for blocking operations — offloads from cognitive cycle
@@ -236,7 +236,7 @@ class CNC(Node):
 
             # 2. Assemble memory context
             memory_context: list[dict] = await self.mcc.assemble_memory_context(                  # assemble full memory context — EMC episodes + WMC PMTs
-                user_id=self._active_user if self._user_type == UserType.GUEST else None,
+                user_id=self._active_user if self._access_level == UserAccessLevel.GUEST else None,
                 user_prompt=user_prompt,
             )
 
@@ -245,14 +245,14 @@ class CNC(Node):
             short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"] # extract conversation turns
 
             # 4. Assemble system prompt with date and inject user preferences into system prompt
-            system_prompt: str = self._ppu.system_prompt.format(                                  # loads system prompt from PPU - which loads it from the persona YAML
+            active_cognition: str = self._ppu.active_cognition.format(                            # loads system prompt from PPU - which loads it from the persona YAML
                 date=datetime.now().strftime("%Y-%m-%d")                                          # inject current date in ISO-8601 format
             )
 
             if long_term_memory:                                                                  # episodic context available — append to system prompt
-                system_content: str = system_prompt + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
+                system_content: str = active_cognition + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
             else:
-                system_content: str = system_prompt                                               # no episodic context — personality prompt only
+                system_content: str = active_cognition                                            # no episodic context — personality prompt only
 
             # 5. Build final message list
             messages: list[dict] = [{"role": "system", "content": system_content}]                # system prompt — always first

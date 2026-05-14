@@ -120,7 +120,7 @@ class AGi:                                                              # Amazin
             STREAM_PROPAGATING    : str = "delta"                                               # [STATIC]  stream event type — intermediate chunk
             STREAM_TRAILING       : str = "done"                                                # [STATIC]  stream event type — final chunk
             STREAM_ANOMALY        : str = "error"                                               # [STATIC]  stream event type — failure signal
-            SYSTEM_PROMPT         : str = (                                                     # [PERSONA] default system prompt — overridden by personas/grace.yaml at boot
+            ACTIVE_COGNITION      : str = (                                                     # [PERSONA] default system prompt — overridden by personas/grace.yaml at boot
 """You are GRACE — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 You are talking to {user_name} from {user_location}.
