@@ -100,13 +100,16 @@ class MemoryCoordinationCore:
         _gateway = GatewayMap()                                                            # absolute path to the engram complex — constructed by HRS
         self.engram_gateway = _gateway.connect_gateway(_gateway.engram_complex)            # create all missing parent dirs — no-op if already exists
 
+        # Initialize ChunkSampler for consistent token counting
+        self._chunk_sampler = ChunkSampler(logger)                                         # use chunk sampler for consistent token counting
+
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # log entry on MCC activation
-        self.wmc = WorkingMemoryCortex(                                                     # boot WMC — owns the active PMT slot
+        self.wmc = WorkingMemoryCortex(                                                    # boot WMC — owns the active PMT slot
             logger=logger,
             chunk_sampler=self._chunk_sampler,
         )
-        self.emc = EpisodicMemoryCortex(                                                    # boot EMC — owns the engram complex on disk
+        self.emc = EpisodicMemoryCortex(                                                   # boot EMC — owns the engram complex on disk
             logger          = logger,
             engram_gateway  = self.engram_gateway,
             chunk_sampler   = self._chunk_sampler,
