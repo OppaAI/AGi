@@ -338,7 +338,33 @@ class MemoryCoordinationCore:
 
         self.emc.terminate()                                                  # release EMC engram gateway file handles
         self.logger.info("🗄️  MCC shutdown sequence complete")                # log completion of MCC shutdown
-               
+        
+    def _build_dynamic_anchor(self, active_pmts: list[PMT], reinstated_episodes: list[Episode]) -> None:
+        """
+        Build dynamic session anchor from current WM and EM vectors.
+        Stores result on self._dynamic_anchor for induction scoring.
+        Biological analogue: hippocampal-prefrontal coherence signal — 
+        mean population vector of all currently active memory traces.
+    
+        Args:
+            active_pmts (list[PMT])              : Sustained PMTs from WMC — live vectors
+            reinstated_episodes (list[Episode])  : Reinstated episodes from EMC — encoding blobs
+        """
+        vectors = []
+    
+        for pmt in active_pmts:                                              # unpack WM vectors
+            if pmt.vector:                                                   # guard — skip empty vectors
+                vectors.append(np.array(pmt.vector, dtype=np.float32))      # PMT.vector is list[float]
+    
+        for episode in reinstated_episodes:                                  # unpack EM blobs
+            if episode.encoding:                                             # guard — skip empty blobs
+                vectors.append(np.frombuffer(episode.encoding, dtype=np.float32))  # Episode.encoding is bytes
+    
+        if not vectors:                                                      # no vectors — anchor undefined
+            return                                                           # leave existing anchor unchanged
+    
+        self._dynamic_anchor = np.mean(vectors, axis=0).tolist()         # mean across all active traces — store as list[float]
+        
     def _score_pmt_at_induction(self, pmt: PMT) -> tuple[bool, float]:
         """
         5+1-factor WMC→EMC encoding gate — stub pending anchor init.
