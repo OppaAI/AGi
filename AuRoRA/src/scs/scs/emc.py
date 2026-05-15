@@ -95,14 +95,13 @@ Lifecycle:
 
 Public interface:
     emc.bind_pmt(timestamp, content) → bool
-    emc.recall_episodes(cue) → list[dict]
+    emc.recall_episodes(cue) → → list[Episode]
     emc.assess_emc() → dict
     emc.terminate() → None
 """
 
 # System components
 import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
-import json                                 # for deserializing episode content in memory context assembly
 import os                                   # for encoding thread priority via os.nice()
 from pathlib import Path                    # for building engram complex storage path
 import threading                            # for background thread, locks, and theta rhythm event
@@ -222,7 +221,7 @@ class EpisodicScaffold:
     Anchors recalled episodes within the chunk budget and restores chronological order
     before injection into the cognitive context window.
 
-    M1.5: Operates purely on list[dict] — no SQL, no encoding.
+    M1.5: Operates purely on list[Episode] — no SQL, no encoding.
     M2:   Extend with sequence_index, session_id, salience, consolidation_state
           for Dream Cycle tracking and importance-weighted reinstatement.
 
@@ -613,7 +612,7 @@ class EpisodicMemoryCortex:
             self.logger.warning(f"EMC binding PMT failed: {e}")                                 # log failure with reason
             return False                                                                        # indicate failure during binding
 
-    def recall_episodes(self, user_id: str, cue: str) -> list[dict]:
+    def recall_episodes(self, user_id: str, cue: str) -> list[Episode]:
         """
         Recall relevant episodes from episodic memory.
         Dual-path retrieval fused via RRF — handled internally by MSB.
@@ -622,14 +621,14 @@ class EpisodicMemoryCortex:
             cue (str)          : Recall cue string
 
         Returns:
-            list[dict]: Recalled episodes sorted by descending relevancy.
+            list[Episode]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
         if not cue or not cue.strip():                                                # empty cue — nothing to recall
             return []                                                                 # return empty list if no cue
     
         recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                 # encode cue into vector + raw text for dual-path recall
-        rows: list[dict] = self._ecx.recall_engram(                                   # semantic + lexical RRF fusion — handled by MSB
+        rows: list[Episode] = self._ecx.recall_engram(                                # semantic + lexical RRF fusion — handled by MSB
             user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH
         )
     
@@ -699,7 +698,7 @@ class EpisodicMemoryCortex:
             "content": "\n".join(lines)                                                     # join all lines into a single string
         })
 
-        return episode_scaffold                                                            # return filtered episodes
+        return episode_scaffold                                                             # return filtered episodes
     
     def assess_emc(self) -> dict:
         """
