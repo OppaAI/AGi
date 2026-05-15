@@ -42,7 +42,7 @@ Public interface:
         retrieve_staged_batch(batch_size: int, offset: int) → list[dict]
         decay_staged_engram(staging_id: int, ecx_conn?) → None
         inscribe_vector_index(engram_id: int, blob: bytes, ecx_conn?) → None
-        inscribe_lexical_index(engram_id: int, content: str, ecx_conn?) → None
+        inscribe_lexical_index(engram_id: int, trace: str, ecx_conn?) → None
         recall_engram(cue: RecallCue, depth: int, date_range?) → list[dict]
         assess_engram_complex() → dict
         terminate() → None
@@ -562,19 +562,19 @@ class EngramComplex:
         )
         ecx_conn.commit()                                                   # commit before returning
 
-    def inscribe_lexical_index(self, engram_id: int, content: str, ecx_conn: sqlite3.Connection | None = None) -> None:
+    def inscribe_lexical_index(self, engram_id: int, trace: str, ecx_conn: sqlite3.Connection | None = None) -> None:
         """
         Inscribe an engram into the lexical index for lexical recall.
 
         Args:
             engram_id (int) : ID of the inscribed engram
-            content (str)   : Trace content to index for lexical recall
+            trace (str)     : Trace content to index for lexical recall
             ecx_conn (sqlite3.Connection | None) : External connection to use for the operation. Defaults to self._ecx_conn if None
         """
         ecx_conn                  = ecx_conn or self._ecx_conn              # default to internal connection if no external connection provided
         ecx_conn.execute(                                                   # insert content into FTS5 index for lexical recall
             f"INSERT INTO {self._lexical_schema} (rowid, {', '.join(self._blueprint.lexical_traces)}) VALUES (?,?)",
-            [engram_id, content],                                           # rowid must match engram_id for JOIN during recall
+            [engram_id, trace],                                             # rowid must match engram_id for JOIN during recall
         )
         ecx_conn.commit()                                                   # commit before returning
 
