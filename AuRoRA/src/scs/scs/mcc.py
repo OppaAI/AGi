@@ -147,20 +147,19 @@ class MemoryCoordinationCore:
         filled_pmt, evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)   # induce turn into WMC — returns filled PMT and any displaced PMTs
 
         # Score filled PMT at induction — only fires on assistant turn (filled_pmt is None on user turn)
-        if filled_pmt is not None:                                                                  # if PMT was filled (i.e. not None), only then proceed with scoring and binding steps
-            filled_pmt.vector = self._encoding_engine.encode_engram(filled_pmt.trace)               # encode trace — clean formatted text, no JSON noise
-            sustained_pmts = self.wmc.recall_pmt_schema()                                           # recall PMT schema for context construction
-            context_pmt  = sustained_pmts[-2] if len(sustained_pmts) >= 2 else None                 # second-to-last — filled_pmt already appended to slot
-            pending_binding, score = self._score_pmt_at_induction(filled_pmt, context_pmt )         # 5+1-factor induction gate — biological analogue: hippocampal tagging during experience
+        if filled_pmt is not None:                                                                  # assistant turn only — user turn returns None
+            filled_pmt.vector      = self._encoding_engine.encode_engram(filled_pmt.trace)          # encode trace — clean formatted text, no JSON noise
+            self._build_session_anchor()                                                            # rebuild session anchor from current WMC slot — includes filled_pmt
+            pending_binding, score = self._score_pmt_at_induction(filled_pmt)                       # 5+1-factor induction gate — biological analogue: hippocampal tagging during experience
             filled_pmt.retention_score = score                                                      # cache composite score — WMC eviction priority key
             if pending_binding:                                                                     # PMT scored above induction threshold — bind to EMC immediately
                 filled_pmt.anchored = True                                                          # mark as hard-gated — protected from WMC eviction
-                _ = asyncio.get_running_loop().run_in_executor(                                     # recruit dormant thread for binding PMT — never blocks active cognition
-                    self._executor, self.emc.bind_pmt,
+                _ = asyncio.get_running_loop().run_in_executor(                                     # recruit dormant thread — binding never blocks active cognition
+                    self._executor, self.emc.bind_pmt,                                              # async bind to EMC via executor
                     filled_pmt.user_id, filled_pmt.timestamp, filled_pmt.trace                      # pass PMT identity, timestamp, and formatted trace
                 )
                 self.logger.debug("MCC induction path → EMC binding (high salience)")               # log immediate binding via induction gate
-        
+
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
         if evicted_pmts:                                                                            # evicted PMTs present — hand off to episodic buffer
@@ -320,11 +319,10 @@ class MemoryCoordinationCore:
         """
         # Flush remaining WMC PMTs to EMC before shutdown
         # M1.5 — full induction scoring replaces unconditional flush
-        memory_residue = self.wmc.forget_pmt_schema()                        # retrieve the remaining PMTs in the slots
-        if memory_residue:                                                   # remaining PMTs in WMC at shutdown
-            for i, pmt in enumerate(memory_residue):                         # score each remaining PMT through full induction gate
-                context_pmt = memory_residue[i - 1] if i > 0 else None       # previous PMT for event boundary analysis — None for first
-                pending_binding, score = self._score_pmt_at_induction(pmt, context_pmt)  # same gate as wake — consistent scoring model
+        memory_residue = self.wmc.forget_pmt_schema()                         # retrieve the remaining PMTs in the slots
+        if memory_residue:                                                    # remaining PMTs in WMC at shutdown
+            for i, pmt in enumerate(memory_residue):                          # score each remaining PMT through full induction gate
+                pending_binding, score = self._score_pmt_at_induction(pmt)    # same gate as wake — consistent scoring model
                 if pending_binding:                                           # PMT scored above induction threshold — bind before shutdown
                     self.emc.bind_pmt(                                        # bind high-salience PMT to episodic buffer
                         user_id=pmt.user_id,                                  # speaker identity — preserved from original PMT
@@ -337,7 +335,7 @@ class MemoryCoordinationCore:
         self.emc.terminate()                                                  # release EMC engram gateway file handles
         self.logger.info("🗄️  MCC shutdown sequence complete")                # log completion of MCC shutdown
         
-    def _score_pmt_at_induction(self, pmt: PMT, prev_pmt: PMT | None) -> tuple[bool, float]:
+    def _score_pmt_at_induction(self, pmt: PMT) -> tuple[bool, float]:
         """
         5+1-factor WMC→EMC encoding gate — stub pending anchor init.
         Biological analogue: hippocampal tagging during experience, in parallel with PFC maintenance.

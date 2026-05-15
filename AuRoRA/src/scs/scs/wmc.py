@@ -50,7 +50,7 @@ Lifecycle:
 Public interface:
     wmc.fill_pmt(user_id, role, content) -> tuple[PMT | None, list[PMT]]
     wmc.recall_pmt_schema() -> list[PMT]
-    wmc.recall_pmt_schema() -> list[dict]
+    wmc.reinstate_pmt_schema() -> list[dict]
     wmc.forget_pmt_schema() -> list[PMT]
     wmc.assess_pmt_schema() -> dict
     wmc.is_empty -> bool
@@ -134,8 +134,114 @@ class WorkingMemoryCortex:
             f"   [Working Memory Cortex]  ONLINE ✅ — "
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
-        
-    
+
+    def _induce_pmt(self, user_id: str | None, content: str) -> None:
+        """
+        Stage an incoming user prompt as an induced PMT pending AI response.
+        If an unpaired prompt is already pending, append rather than overwrite.
+        Biological analogue: phonological loop encoding — holding the prompt
+        in active rehearsal until the AI response completes the episode.
+
+        Args:
+            user_id (str | None) : Speaker identity — None for assistant-originated
+            content (str)        : User prompt content to stage
+        """
+        if self._induced_pmt is not None:                                           # unpaired user prompt already pending — append rather than overwrite
+            self._induced_pmt.trace = self._induced_pmt.trace + "\n" + content      # append raw content — user_id label already prefixed
+            self.logger.warn(                                                       # log the double message append
+                "WMC: second user message before AI response — appended to induced PMT"
+            )
+            return                                                                  # still incomplete — wait for AI response
+
+        self._induced_pmt = PMT(                                                    # unpaired user prompt pending for pairing
+            user_id     = user_id,                                                  # speaker identity
+            timestamp   = datetime.now().isoformat(),                               # wall-clock induction time (TODO M1.6: use ROS2 time)
+            content     = content,                                                  # raw user prompt — overwritten with JSON pair on assistant turn
+            trace       = f'{user_id} said: "{content}"',                           # partial trace — assistant appended on pairing
+            chunk_count = 0,                                                        # filled on assistant turn — cached chunk count
+            vector      = [],                                                       # filled by MCC at induction scoring — reused at EMC binding
+            anchored    = False,                                                    # hard-gate flag
+        )
+        self.logger.debug(                                                          # log the induced unpaired user prompt
+            "WMC induced unpaired user prompt — pending for AI response"
+        )
+
+    def _pair_pmt(self, user_id: str | None, content: str) -> PMT:
+        """
+        Complete the pairing of a staged user prompt with the incoming AI response.
+        If no user prompt is staged, wraps the AI response with a placeholder.
+        Probes and caches the chunk count before promoting to evictable PMT.
+        Biological analogue: episodic binding — pairing the stimulus and response
+        into a single consolidated trace ready for hippocampal tagging.
+
+        Args:
+            user_id (str | None) : Speaker identity — None for assistant-originated
+            content (str)        : AI response content completing the pair
+
+        Returns:
+            PMT : Completed and evictable PMT ready for WMC slot filling
+        """
+        if self._induced_pmt is None:                                               # no induced PMT — unpaired AI response
+            self.logger.warning(                                                    # log the warning of unpaired AI response
+                "WMC: AI response induced without user prompt — wrapping with placeholder"
+            )
+            self._induced_pmt = PMT(                                                # wrap unpaired AI response with placeholder
+                user_id     = user_id,                                              # speaker identity
+                timestamp   = datetime.now().isoformat(),                           # wall-clock induction time
+                content     = json.dumps({                                          # placeholder pair — consistent JSON structure
+                    "user"      : "[context missing]",                              # placeholder for missing user prompt
+                    "assistant" : content                                           # AI response preserved
+                }),
+                trace       = f'[context missing]\nYou replied: "{content}"',       # formatted — consistent with paired trace format
+                chunk_count = 0,                                                    # filled below — cached chunk count
+                vector      = [],                                                   # filled by MCC at induction scoring — reused at EMC binding
+                anchored    = False,                                                # hard-gate flag
+            )
+        else:                                                                       # normal path — complete the pairing
+            user_prompt = self._induced_pmt.content                                 # raw user prompt stored at induction
+            ai_response = content                                                   # current AI response completes the pair
+            self._induced_pmt.content = json.dumps({                                # serialize pair — WMC chat history format
+                "user"      : user_prompt,                                          # user prompt
+                "assistant" : ai_response                                           # AI response
+            })
+            self._induced_pmt.trace = f'{self._induced_pmt.trace}\nYou replied: "{ai_response}"'  # complete trace — append assistant response
+
+        induced_pmt             = self._induced_pmt                                 # promote staged PMT to evictable
+        induced_pmt.chunk_count = self.chunk_sampler.probe(                         # cache chunk count — avoid reprobe on eviction
+            content  = induced_pmt.content,
+            overhead = WMC.PMT_OVERHEAD
+        )
+        self._induced_pmt = None                                                    # clear induced PMT — exchange complete
+        return induced_pmt                                                          # return completed PMT — ready for eviction check and slot filling
+
+    def _evict_pmt(self, induced_pmt_chunks: int) -> list[PMT]:
+        """
+        Evict receding PMTs from the slot until the incoming PMT fits within capacity.
+        Eviction triggers when either the global chunk limit or PMT slot limit is exceeded.
+        Evicted PMTs are returned to MCC for async forwarding to EMC episodic buffer.
+        Biological analogue: displacement from the phonological loop —
+        oldest traces fade when capacity is exceeded by incoming stimuli.
+
+        Args:
+            induced_pmt_chunks (int) : Cached chunk count of the incoming PMT
+
+        Returns:
+            list[PMT] : Evicted PMTs — returned to MCC for episodic binding
+        """
+        evicted_pmt_slot: list[PMT] = []                                                             # buffer for evicted PMTs returned to MCC
+        while self._pmt_slot and (                                                                   # evict until incoming PMT fits within both limits
+            self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit                    # global chunk limit would be exceeded, or
+            or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer                     # PMT slot limit reached
+        ):
+            evicted_pmt: PMT    = self._pmt_slot.popleft()                                           # evict oldest PMT from working memory
+            evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
+            evicted_chunks: int = evicted_pmt.chunk_count                                            # cached at induction — no reprobe on eviction
+            self._sustained_chunks = max(0, self._sustained_chunks - evicted_chunks)                 # decrement sustained chunks — floor at 0
+            self.logger.debug(                                                                       # log the eviction of the receding PMT
+                f"WMC evict → EMC: size={evicted_chunks} chunks"
+            )
+        return evicted_pmt_slot                                                                      # return evicted PMTs to caller for episodic binding
+
     def fill_pmt(self, user_id: str | None, role: str, content: str) -> tuple[PMT | None, list[PMT]]:
         """
         Induce a conversation turn and pair it into a complete interaction.
@@ -150,96 +256,27 @@ class WorkingMemoryCortex:
         Returns:
             tuple[PMT | None, list[PMT]] : (filled_pmt, evicted_pmts) — None for filled_pmt on incomplete user turn
         """
-        if role == "user":                                      # user turn — stage as induced PMT pending AI response
-            if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
-                self._induced_pmt.trace = self._induced_pmt.trace + "\n" + content  # append raw content — user_id label already prefixed
-                self.logger.warn(                               # log the double message append
-                    "WMC: second user message before AI response — appended to induced PMT"
-                )
-                return None, []                                 # still incomplete — wait for AI response
+        if role == "user":                                                          # user turn — stage as induced PMT pending AI response
+            self._induce_pmt(user_id, content)                                      # stage user prompt — pending for AI response
+            return None, []                                                         # exchange incomplete — nothing to fill or evict
 
-            # Induce unpaired user prompt — pending for AI response
-            self._induced_pmt = PMT(                        # unpaired user prompt pending for pairing
-                user_id    = user_id,                       # speaker identity
-                timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
-                content    = content,                        # raw user prompt — overwritten with JSON pair on assistant turn
-                trace      = f'{user_id} said: "{content}"',# partial trace — assistant appended on pairing
-                chunk_count = 0,                            # filled on assistant turn — cached chunk count
-                vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
-                anchored   = False,                         # hard-gate flag
-            )
+        elif role == "assistant":                                                   # assistant turn — complete the pairing
+            induced_pmt: PMT            = self._pair_pmt(user_id, content)          # complete pairing — promote to evictable PMT
+            evicted_pmt_slot: list[PMT] = self._evict_pmt(induced_pmt.chunk_count)  # evict receding PMTs until induced PMT fits
 
-            self.logger.debug(                                  # log the induced unpaired user prompt
-                "WMC induced unpaired user prompt — pending for AI response"
-            )
-            return None, []                                     # exchange incomplete — nothing to fill or evict
+            self._pmt_slot.append(induced_pmt)                                      # fill induced PMT into working memory
+            self._sustained_chunks += induced_pmt.chunk_count                       # increment sustained chunk count
 
-        elif role == "assistant":                               # assistant turn — complete the pairing
-            if self._induced_pmt is None:                       # no induced PMT — unpaired AI response
-                self.logger.warning(                            # log the warning of unpaired AI response
-                    "WMC: AI response induced without user prompt — wrapping with placeholder"
-                )
-                self._induced_pmt = PMT(                        # wrap unpaired AI response with placeholder
-                    user_id    = user_id,                       # speaker identity
-                    timestamp  = datetime.now().isoformat(),    # wall-clock induction time
-                    content    = json.dumps({                   # embed the unpaired AI response with placeholder
-                        "user": "[context missing]",            # placeholder for missing user prompt
-                        "assistant": content                    # AI response preserved
-                    }),
-                    trace = f'[context missing]\nYou replied: "{content}"',  # formatted — consistent with paired trace format
-                    chunk_count  = 0,                           # filled on assistant turn — cached chunk count
-                    vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
-                    anchored   = False,                         # hard-gate flag
-                )
-                # Fall through to complete the pairing — unpaired AI response wrapped with placeholder, proceed normally
-
-            else:
-                # Complete the pairing of user prompt and AI response to form a complete interaction
-                user_prompt = self._induced_pmt.content                                                      # user prompt stored at induction
-                ai_response = content                                                                        # current AI response completes the pair
-                self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})     # serialize pair — WMC chat history format
-                self._induced_pmt.trace = f'{self._induced_pmt.trace}\nYou replied: "{ai_response}"'         # complete trace — append assistant response
-
-            # Decay induced PMT into evictable PMT
-            induced_pmt: PMT = self._induced_pmt                        # promote staged PMT to evictable
-            induced_pmt.chunk_count = self.chunk_sampler.probe(         # cache chunk count — avoid reprobe on eviction
-                content=induced_pmt.content,
-                overhead=WMC.PMT_OVERHEAD
-            )
-            self._induced_pmt = None                                    # clear induced PMT — exchange complete
-            induced_pmt_chunks: int = induced_pmt.chunk_count           # read cached value — no reprobe
-
-
-            # Evict receding PMT schema until induced PMT fits or the limit of PMT slot is reached
-            # And then fill the induced PMT, to keep working memory always within the capacities
-            evicted_pmt_slot: list[PMT] = []                                                             # buffer for evicted PMTs returned to MCC
-            while self._pmt_slot and (                                                                   # evict until incoming PMT fits within both limits
-                self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit                    # global chunk limit would be exceeded, or
-                or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer                     # PMT slot limit reached
-            ):
-                evicted_pmt: PMT                = self._pmt_slot.popleft()                               # evict oldest PMT from working memory
-                evicted_pmt_slot.append(evicted_pmt)                                                     # stage for return to MCC
-                evicted_chunks: int = evicted_pmt.chunk_count                                            # cached at induction — no reprobe on eviction
-                self._sustained_chunks = max(0, self._sustained_chunks - evicted_chunks)                 # decrement sustained chunks — floor at 0
-                self.logger.debug(                                                                       # log the eviction of the receding PMT
-                    f"WMC evict → EMC: size={evicted_chunks} chunks"
-                )
-
-            # Fill the induced PMT into working memory
-            self._pmt_slot.append(induced_pmt)                # fill induced PMT into working memory
-            self._sustained_chunks += induced_pmt_chunks      # increment sustained chunk count
-
-            self.logger.debug(                                # log the filling and eviction for development/troubleshooting
+            self.logger.debug(                                                      # log the filling and eviction for development/troubleshooting
                 f"WMC filled [{user_id}] | "
                 f"sustained={len(self._pmt_slot)} | "
                 f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
                 f"evicted={len(evicted_pmt_slot)}"
             )
+            return induced_pmt, evicted_pmt_slot                                    # filled PMT + any evicted PMTs returned to MCC
 
-            return induced_pmt, evicted_pmt_slot              # filled PMT + any evicted PMTs returned to MCC
-
-        return None, []                                       # unknown speaker — nothing to fill or evict
-
+        return None, []                                                             # unknown speaker — nothing to fill or evict
+    
     def recall_pmt_schema(self) -> list[PMT]:
         """
         Recall sustaining PMT schema for context window construction.
