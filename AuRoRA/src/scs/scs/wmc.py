@@ -42,19 +42,24 @@ Terminology:
     Slot    — the active deque buffer holding all sustained PMTs
 
 Lifecycle:
-    Induction → Filling → Sustaining → Receding → Evicting
+    Induction → Filling → Sustaining → Receding → Evicting ---> EMC
+                              ↓
+                            Recalling → Reinstatement ---> MCC ---> CNC
+                              
 
 Public interface:
     wmc.fill_pmt(user_id, role, content) -> tuple[PMT | None, list[PMT]]
+    wmc.recall_pmt_schema() -> list[PMT]
     wmc.recall_pmt_schema() -> list[dict]
-    wmc.forget_pmt_schema() -> list[dict]
+    wmc.forget_pmt_schema() -> list[PMT]
     wmc.assess_pmt_schema() -> dict
     wmc.is_empty -> bool
 """
 
 # System components
-from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
+from dataclasses import dataclass       # for PMT — phonological memory trace schema
+from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi components
@@ -130,6 +135,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
         
+    
     def fill_pmt(self, user_id: str | None, role: str, content: str) -> tuple[PMT | None, list[PMT]]:
         """
         Induce a conversation turn and pair it into a complete interaction.
@@ -234,9 +240,19 @@ class WorkingMemoryCortex:
 
         return None, []                                       # unknown speaker — nothing to fill or evict
 
-    def recall_pmt_schema(self) -> list[dict]:
+    def recall_pmt_schema(self) -> list[PMT]:
         """
         Recall sustaining PMT schema for context window construction.
+        Return PMT schema in ascending chronological order.
+
+        Returns:
+            list[PMT]: Sustained PMT schema, in ascending chronological order
+        """
+        return list(self._pmt_slot)                           # return PMT schema in ascending chronological order
+
+    def reinstate_pmt_schema(self) -> list[dict]:
+        """
+        Reinstate sustaining PMT schema into the context window for inference.
         Unpacks the PMT schema into interleaved pair of user prompt and AI response.
         Timestamps stripped — only role and content surfaced for inference.
         Return PMT schema in ascending chronological order.
@@ -244,9 +260,9 @@ class WorkingMemoryCortex:
         Returns:
             list[dict]: Sustained PMT schema unpacked as turn pairs [{role, content}], in ascending chronological order
         """
-        sustained_pmts = []                                                                        # accumulate unpacked turn pairs for inference
+        sustained_pmts: list[dict] = []                                                            # accumulate unpacked turn pairs for inference
 
-        for pmt in self._pmt_slot:                                                                 # traverse sustaining PMTs oldest-first
+        for pmt in self.recall_pmt_schema():                                                       # traverse sustaining PMTs oldest-first
             # Each pmt["content"] is a JSON string — deserialize into user prompt/AI response pairs
             try:                                                                                   # attempt to deserialize the PMT content
 

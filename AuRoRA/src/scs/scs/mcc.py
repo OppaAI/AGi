@@ -63,7 +63,7 @@ from hrs.hrm import AGi                             # homeostatic regulation man
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 EMC = AGi.SCS.EMC                                   # EMC parameter namespace alias — keeps WMC constant references concise
 
-# NOTE: MCC imports EncodingEngine directly from msb.py as a temporary layering exception.
+# TODO: MCC imports EncodingEngine directly from msb.py as a temporary layering exception.
 # Encoding engine construction is owned here to avoid multiple model loads across cortices.
 # M2 cleanup: move EncodingEngine to scs/eee.py — dedicated encoding layer between MCC and MSB.
 from scs.msb import EncodingEngine                  # shared encoding engine — owned by MCC, passed to all cortices
@@ -91,13 +91,13 @@ class MemoryCoordinationCore:
         self._executor = executor       # thread pool for blocking operations
 
         # Construct shared encoding engine — owned by MCC, passed to all cortices
-        self._encoding_engine = EncodingEngine(          # one model load — shared across EMC, SMC, PMC
-            logger          = logger,                     # logger instance forwarded from caller
-            encoding_engine = EMC.ENCODING_ENGINE,        # model name — e.g. BAAI/bge-small-en-v1.5
-            cue_prefix      = EMC.ENCODING_CUE_PREFIX,    # query prefix for recall cues
-            engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX, # document prefix for engrams
-            prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,# max LRU prime entries before eviction
-            prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN, # max chars hashed per prime key
+        self._encoding_engine = EncodingEngine(             # one model load — shared across EMC, SMC, PMC
+            logger          = logger,                       # logger instance forwarded from caller
+            encoding_engine = EMC.ENCODING_ENGINE,          # model name — e.g. BAAI/bge-small-en-v1.5
+            cue_prefix      = EMC.ENCODING_CUE_PREFIX,      # query prefix for recall cues
+            engram_prefix   = EMC.ENCODING_ENGRAM_PREFIX,   # document prefix for engrams
+            prime_capacity  = EMC.ENCODING_PRIME_CAPACITY,  # max LRU prime entries before eviction
+            prime_key_len   = EMC.ENCODING_PRIME_KEY_LEN,   # max chars hashed per prime key
         )
 
         # Ensure engram gateway exists
@@ -110,14 +110,14 @@ class MemoryCoordinationCore:
         # Initialize memory cortex layers
         self.logger.info("🔄 Activating Memory Coordination Core…")                        # log entry on MCC activation
         self.wmc = WorkingMemoryCortex(                                                    # boot WMC — owns the active PMT slot
-            logger=logger,                                                                  # logger instance forwarded from caller 
+            logger=logger,                                                                 # logger instance forwarded from caller 
             chunk_sampler=self._chunk_sampler,                                             # pass down tokenizer for accurate token count
         )
         self.emc = EpisodicMemoryCortex(                                                   # boot EMC — owns the engram complex on disk
-            logger          = logger,                                                       # logger instance forwarded from caller
+            logger          = logger,                                                      # logger instance forwarded from caller
             engram_gateway  = self.engram_gateway,                                         # path to the engram complex database
             chunk_sampler   = self._chunk_sampler,                                         # pass down tokenizer for accurate token count
-            encoding_engine = self._encoding_engine,                                        # shared encoding engine for encoding engram
+            encoding_engine = self._encoding_engine,                                       # shared encoding engine — one model load across all cortices
         )
 
         self.logger.info("✅ Memory Coordination Core Activated")                          # log entry on successful MCC activation
@@ -137,19 +137,20 @@ class MemoryCoordinationCore:
             content (str)        : Content of the conversation turn
         """
 
-        chunks = self._chunk_sampler.probe(content)                                   # estimate token cost of the content
-        if role == "user":                                                            # if user prompt,
-            self.logger.info(f"📝 stimulus: {chunks} tokens")                         # log token cost of user prompt
-        elif role == "assistant":                                                     # if AI response,
-            self.logger.info(f"🧠 response: {chunks} tokens")                         # log token cost of AI response
+        chunks = self._chunk_sampler.probe(content)                                                 # estimate token cost of the content
+        if role == "user":                                                                          # if user prompt,
+            self.logger.info(f"📝 stimulus: {chunks} tokens")                                       # log token cost of user prompt
+        elif role == "assistant":                                                                   # if AI response,
+            self.logger.info(f"🧠 response: {chunks} tokens")                                       # log token cost of AI response
         
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         filled_pmt, evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)   # induce turn into WMC — returns filled PMT and any displaced PMTs
 
         # Score filled PMT at induction — only fires on assistant turn (filled_pmt is None on user turn)
-        if filled_pmt is not None:
+        if filled_pmt is not None:                                                                  # if PMT was filled (i.e. not None), only then proceed with scoring and binding steps
             filled_pmt.vector = self._encoding_engine.encode_engram(filled_pmt.trace)               # encode trace — clean formatted text, no JSON noise
-            context_pmt  = self.wmc._pmt_slot[-2] if len(self.wmc._pmt_slot) >= 2 else None         # second-to-last — filled_pmt already appended to slot
+            sustained_pmts = self.wmc.recall_pmt_schema()                                           # recall PMT schema for context construction
+            context_pmt  = sustained_pmts[-2] if len(sustained_pmts) >= 2 else None                 # second-to-last — filled_pmt already appended to slot
             pending_binding, score = self._score_pmt_at_induction(filled_pmt, context_pmt )         # 5+1-factor induction gate — biological analogue: hippocampal tagging during experience
             filled_pmt.retention_score = score                                                      # cache composite score — WMC eviction priority key
             if pending_binding:                                                                     # PMT scored above induction threshold — bind to EMC immediately
@@ -158,15 +159,15 @@ class MemoryCoordinationCore:
                     self._executor, self.emc.bind_pmt,
                     filled_pmt.user_id, filled_pmt.timestamp, filled_pmt.trace                      # pass PMT identity, timestamp, and formatted trace
                 )
-                self.logger.debug("MCC induction path → EMC binding (high salience)")                # log immediate binding via induction gate
+                self.logger.debug("MCC induction path → EMC binding (high salience)")               # log immediate binding via induction gate
         
         # Bind evicted PMTs to episodic buffer
         # Run and forget — never blocks active cognition
-        if evicted_pmts:                                                    # evicted PMTs present — hand off to episodic buffer
-            _ = asyncio.get_running_loop().run_in_executor(                 # recruit a dormant thread — binding never blocks active cognition
-                self._executor, self._bind_to_episodic_buffer, evicted_pmts # bind evicted PMTs to episodic buffer
+        if evicted_pmts:                                                                            # evicted PMTs present — hand off to episodic buffer
+            _ = asyncio.get_running_loop().run_in_executor(                                         # recruit a dormant thread — binding never blocks active cognition
+                self._executor, self._bind_to_episodic_buffer, evicted_pmts                         # bind evicted PMTs to episodic buffer
             )
-            self.logger.debug(                                              # log the binding transition of evicted PMTs to episodic buffer
+            self.logger.debug(                                                                      # log the binding transition of evicted PMTs to episodic buffer
                 f"MCC bound {len(evicted_pmts)} evicted PMT(s) → episodic buffer"
             )
 
@@ -218,7 +219,7 @@ class MemoryCoordinationCore:
             list[dict] : List of message dicts [{role, content}] ready for inference
         """
         # Recall WMC PMTs directly in main neural pathway
-        wmc_pmts: list[dict[str, str]] = self.wmc.recall_pmt_schema()        # recall sustained PMTs from working memory
+        wmc_pmts: list[dict[str, str]] = self.wmc.reinstate_pmt_schema()    # recall sustained PMTs from working memory
         
         # EMC reinstatement on isolated neural pathway — recall, filter, format, inject
         self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating fresh episodes
