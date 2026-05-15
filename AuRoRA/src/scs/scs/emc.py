@@ -127,7 +127,7 @@ from scs.msb import (                       # shared memory storage bank substra
 
 EMC_SCHEMA = EngramSchema(                  # define the engram schema for episodic memory
     storage=[
-        EngramTrace(label="storage_id", modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
+        EngramTrace(label="id", modality=EngramModality.INTEGER),                                   # auto-assigned primary key — rowid alias
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
@@ -144,7 +144,7 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="valid_until",      modality=EngramModality.TEXT),                        # when the memory is valid until
     ],
     staging=[
-        EngramTrace(label="staging_id", modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
+        EngramTrace(label="id", modality=EngramModality.INTEGER),                                   # auto-assigned staging_id — used for decay after consolidation
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
@@ -214,6 +214,22 @@ class EpisodicBuffer:
         """
         with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
             return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
+
+def )translate_engram(episode: Episode, encoding: bytes | None = None) -> dict:
+    """
+    Translate an Episode into an engram dict for inscription into the engram complex.
+    Owns the Episode → MSB boundary mapping — single point of change if Episode schema evolves.
+    Encoding is optional — omitted for staging, included for synaptic consolidation.
+    """
+    engram = {                           # fill the episodes field into engram
+        "user_id"  : episode.user_id,    # speaker identity — preserved from original PMT
+        "timestamp": episode.timestamp,  # ISO-8601 temporal anchor
+        "date"     : episode.date,       # YYYY-MM-DD slice — B-tree indexed for date recall
+        "trace"    : episode.trace,      # formatted interaction text — embedding source and reinstatement display
+    }
+    if encoding is not None:             # if encoding present,
+        engram["encoding"] = encoding    # fp32 binary blob — only present after encoding cycle completes
+    return engram                        # return the translated engram
 
 class EpisodicScaffold:
     """
@@ -352,7 +368,7 @@ class EncodingCycle:
             with self._episodic_buffer_lock:                            # hold lock for binding stream append
                 for row in unencoded:                                   # iterate through each unencoded episode
                     self._episodic_buffer._binding_stream.append(Episode(  # add the unencoded episode to the binding stream
-                        staging_id = row["staging_id"],                 # staging_id for decay after consolidation
+                        staging_id = row["id"],                         # staging_id for decay after consolidation
                         user_id    = row["user_id"],                    # user id of episode
                         timestamp  = row["timestamp"],                  # preserved timestamp from original PMT
                         date       = row["date"],                       # preserved date from original PMT
@@ -422,12 +438,7 @@ class EncodingCycle:
                 if episode.staging_id is None::                             # if no staging_id, stage the episode
                     with self._inscription_lock:                            # hold inscription lock for staging write
                         episode.staging_id = self._ecx.stage_engram(        # insert the episode into the episodic buffer
-                            engram = {                                      # create engram with timestamp, date, and trace
-                                "user_id"  :   episode.user_id,             # user id of episode
-                                "timestamp":   episode.timestamp,           # timestamp of episode
-                                "date"     :   episode.date,                # date of episode
-                                "trace"    :   episode.trace,               # formatted interaction text of episode
-                            },
+                            engram   = translate_engram(episode),           # translate Episode → engram dict for staging — encoding excluded until consolidation
                             ecx_conn = encoder_conn,                        # connection to episodic buffer
                         )
       
@@ -474,13 +485,7 @@ class EncodingCycle:
         with self._inscription_lock:                                            # serializes all three inscriptions as one atomic operation
             # Primary episodic record
             episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
-                engram={                                                        # episode dictionary with timestamp, date, and trace
-                    "user_id":   episode.user_id,                               # user id of episode
-                    "timestamp": episode.timestamp,                             # episode timestamp
-                    "date":      episode.date,                                  # episode date
-                    "trace":     episode.trace,                                 # episode formatted interaction text
-                    "encoding":  encoding_blob,                                 # episode encoding
-                }, 
+                engram=translate_engram(episode, encoding=encoding_blob),       # translate Episode → engram dict for inscription — encoding included
                 ecx_conn=encoder_conn,                                          # connection to use for the operation
             )
 
