@@ -158,7 +158,25 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
     index_traces=["user_id", "timestamp"],                                                          # B-tree index — speeds up temporal-filtered recall
     temporal_trace="timestamp",                                                                     # temporal filter column — represents when the memory occurred
 )
-        
+
+@dataclass
+class Episode:
+    """
+    Episode — one consolidated episodic memory record in the engram complex.
+    Represents a complete interaction (user prompt + AI response) that has been
+    encoded into a semantic vector and inscribed into permanent storage.   
+    """
+    id           : int | None = None        # SQLite rowid — auto-assigned on inscription, None before storage
+    user_id      : str | None = None        # Speaker identity — preserved from original PMT
+    timestamp    : str = ""                 # ISO-8601 induction time — temporal anchor for chronological recall
+    date         : str = ""                 # YYYY-MM-DD slice of timestamp — indexed for date-filtered recall
+    trace        : str = ""                 # Formatted interaction text — "user said X\nYou replied Y" — used for both embedding and reinstatement display
+    vector       : bytes = b""              # fp32 binary vector blob — packed semantic encoding from sentence-transformers, linked to KNN index by rowid
+    created_at   : str = ""                 # Wall-clock inscription time — set by SQLite on INSERT, tracks when episode entered engram
+    salience_score : float = 0.0            # Emotional/personal significance (0.0–1.0) — preserved from WMC induction for Dream Cycle consolidation weighting
+    novelty_mult   : float = 1.0            # Unexpectedness multiplier (0.0–1.0+) — preserved from WMC induction as signal for semantic fact extraction
+    relevancy    : float = 0.0              # RRF-fused relevancy score (0.0–1.0) — computed only at recall time, not stored, populated transiently during reinstatement
+    
 @dataclass
 class EpisodicBuffer:
     """
