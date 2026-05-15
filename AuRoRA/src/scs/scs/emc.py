@@ -237,7 +237,7 @@ class EpisodicScaffold:
         self._chunk_sampler  = chunk_sampler           # for probing and truncating episode content
         self._chunk_limit    = EMC.RECALL_RESERVE      # chunk budget ceiling for reinstatement
 
-    def fragment(self, episodes: list[dict]) -> list[dict]:
+    def fragment(self, episodes: list[Episode]) -> list[Episode]:
         """
         Fragment recalled episodes to the RECALL_RESERVE chunk limit before reinstatement.
         Consumes episodes in RRF-ranked order — highest relevance preserved first.
@@ -248,23 +248,23 @@ class EpisodicScaffold:
         traces before prefrontal delivery to avoid overwriting active cognition.
 
         Args:
-            episodes (list[dict]): Relevancy-filtered episodes, RRF-ranked descending.
+            episodes (list[Episode]): Relevancy-filtered episodes, RRF-ranked descending.
 
         Returns:
-            list[dict]: Budget-clipped episode list. Final entry may carry a
+            list[Episode]: Budget-clipped episode list. Final entry may carry a
                         truncated content field if it exceeded the remaining reserve.
         """
         chunk_limit: int = self._chunk_limit                                                # remaining chunk budget for reinstatement
-        fragment: list[dict] = []                                                           # budget-trimmed episode list
+        fragment: list[Episode] = []                                                        # budget-trimmed episode list
 
         for episode in episodes:                                                            # consume in RRF rank order — highest relevance first
-            content     = episode.get("content", "")                                        # retrieve the content of the episode
+            content     = episode.trace                                                     # trace is the pre-formatted content field
             chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
-
+    
             if chunk_count > chunk_limit:                                                   # episode exceeds remaining budget — truncate to fragment
                 if chunk_limit > 0:                                                         # remaining budget can still surface a fragment
-                    episode            = dict(episode)                                      # shallow copy — never mutate source list
-                    episode["content"] = self._chunk_sampler.truncate(content, chunk_limit) # truncate content to remaining budget
+                    episode       = Episode(**vars(episode))                                # shallow copy — never mutate source list
+                    episode.trace = self._chunk_sampler.truncate(content, chunk_limit)      # truncate trace to remaining budget
                     fragment.append(episode)                                                # reinstate memory fragment into memory context
                     break                                                                   # budget exhausted after fragment — stop regardless
             
@@ -272,7 +272,7 @@ class EpisodicScaffold:
             fragment.append(episode)                                                        # episode fits — reinstate in full
         return fragment                                                                     # return budget-trimmed episode list
 
-    def sequence(self, episodes: list[dict]) -> list[dict]:
+    def sequence(self, episodes: list[Episode]) -> list[Episode]:
         """
         Re-organize fragmented episodes into ascending chronological order before reinstatement.
         RRF returns episodes ranked by relevancy — sequencing restores the temporal
@@ -283,14 +283,14 @@ class EpisodicScaffold:
         are ordered by their original encoding time before surfacing to prefrontal cortex.
 
         Args:
-            episodes (list[dict]): episode fragmented to fit the chunk reserve in any order.
+            episodes (list[Episode]): episode fragmented to fit the chunk reserve in any order.
 
         Returns:
-            list[dict]: Same episodes sorted ascending by timestamp.
+            list[Episode]: Same episodes sorted ascending by timestamp.
         """
         return sorted(                                                          # stable sort — preserves RRF rank within timestamp ties
             episodes,                                                           # episode fragmented to fit the chunk reserve in any order
-            key=lambda ep: ep.get("timestamp", "")                              # ISO-8601 lexicographic order == chronological order
+            key=lambda episode: episode.timestamp                               # ISO-8601 lexicographic order == chronological order
         )
         
 class EncodingCycle:
@@ -433,11 +433,11 @@ class EncodingCycle:
                         )
       
                 # Encode the episode content into a semantic vector
-                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode["content"]) # encode content into semantic vector
+                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode.trace)  # encode content into semantic vector
                 if not encoded_episode:                                             # if the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # log the warning message of unavailability of the encoding engine
-                        f"EMC encode skipped — encoding engine unavailable (date={episode['date']})"
+                        f"EMC encode skipped — encoding engine unavailable (date={episode.date})"
                     )
                     with self._episodic_buffer_lock:                                # hold lock for appendleft
                         self._episodic_buffer._binding_stream.appendleft(episode)   # requeue for next theta cycle
@@ -449,7 +449,7 @@ class EncodingCycle:
                 self._synaptic_consolidate(encoder_conn, episode, encoding_blob)    # consolidate the episode from episodic buffer into engram
     
                 self.logger.debug(                                                  # log successful synaptic consolidation of the episode
-                    f"EMC encoded → consolidated to engram (date={episode['date']})"
+                    f"EMC encoded → consolidated to engram (date={episode.date})"
                 )
     
         encoder_conn.close()                                                        # close the encoder connection
@@ -502,7 +502,7 @@ class EncodingCycle:
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
             if episode.staging_id is not None:                                  # staging_id present — episode was crash-recovered
                 self._ecx.decay_staged_engram(                                  # decay staging row — synaptic consolidation complete
-                    staging_id = episode["staging_id"],                         # episode ID for which to decay the encoding
+                    staging_id = episode.staging_id,                            # episode ID for which to decay the encoding
                     ecx_conn  = encoder_conn,                                   # connection to use for the operation
                 )
     
