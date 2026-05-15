@@ -378,7 +378,63 @@ class MemoryCoordinationCore:
             tuple[bool, float] : (should_encode, composite_score)
         """
         return False, 0.0                                                 # stub — replaced when anchor vectors are initialized
+
+    def _build_static_anchors(self, days: int = 7) -> None:
+        """
+        Build static session anchors from consolidated episodic memory.
+        Stores result on self._static_anchors for induction scoring.
+        Biological analogue: schema consolidation during sleep — distinct
+        experiential themes preserved as separate centroids rather than
+        dissolved into a single mean.
     
+        Intended to run during dreaming cycle, not on the hot path.
+        Results are persisted to SQLite and loaded at bootup.
+    
+        Args:
+            days (int) : Lookback window in days (1=today, 7=week, 30=month)
+        """
+        cutoff = datetime.utcnow() - timedelta(days=days)                        # earliest episode to include
+    
+        episodes = self._repository.get_episodes_since(cutoff)                  # fetch encoded episodes within window
+    
+        if not episodes:                                                         # no episodes in window — anchors undefined
+            return                                                               # leave self._static_anchors unchanged; caller handles absence
+    
+        vectors = []
+        ages_days = []
+    
+        for episode in episodes:                                                 # walk consolidated EM traces
+            if episode.encoding:                                                 # skip episodes with no stored encoding
+                vectors.append(np.frombuffer(episode.encoding, dtype=np.float32))   # packed bytes → ndarray view, no copy
+                age = (datetime.utcnow() - episode.created_at).total_seconds() / 86400  # age in fractional days
+                ages_days.append(age)                                            # track age for recency weighting
+    
+        if not vectors:                                                          # all episodes had empty encodings
+            return
+    
+        matrix = np.stack(vectors)                                               # (N, D) — one row per episode
+        weights = np.exp(-0.1 * np.array(ages_days, dtype=np.float32))          # recency decay — half-weight at ~7 days
+
+        try:
+            import hdbscan
+            clusterer = hdbscan.HDBSCAN(min_cluster_size=5)                     # discover topic clusters; no need to specify K
+            clusterer.fit(matrix)                                                # fit on raw vectors, not weighted — HDBSCAN handles density
+    
+            anchors = []
+            for label in set(clusterer.labels_):                                 # walk discovered clusters
+                if label == -1:                                                  # noise points — not a coherent theme, skip
+                    continue
+                mask = clusterer.labels_ == label                                # boolean mask for this cluster
+                cluster_weights = weights[mask]                                  # recency weights for members of this cluster
+                centroid = np.average(matrix[mask], axis=0, weights=cluster_weights)  # weighted centroid — recent episodes pull harder
+                anchors.append(centroid.tolist())                                # list[float] to match PMT.vector contract
+    
+            self._static_anchors = anchors if anchors else None                  # None if all points were noise
+
+        except ImportError:                                                      # hdbscan not available — fall back to single weighted mean
+            centroid = np.average(matrix, axis=0, weights=weights)              # loses topic separation but stays functional
+            self._static_anchors = [centroid.tolist()]                          # wrap in list to keep caller interface uniform
+            
     def _cosine_sim(self, a: list[float], b: list[float]) -> float:
         """
         Cosine similarity between two unit-normalized vectors.
