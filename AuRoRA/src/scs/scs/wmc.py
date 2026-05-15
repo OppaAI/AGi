@@ -156,7 +156,7 @@ class WorkingMemoryCortex:
             self._induced_pmt = PMT(                        # unpaired user prompt pending for pairing
                 user_id    = user_id,                       # speaker identity
                 timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
-                content    = "",                            # filled on assistant turn — JSON pair
+                content    = content,                        # raw user prompt — overwritten with JSON pair on assistant turn
                 trace      = f'{user_id} said: "{content}"',# partial trace — assistant appended on pairing
                 chunk_count = 0,                            # filled on assistant turn — cached chunk count
                 vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
@@ -189,7 +189,7 @@ class WorkingMemoryCortex:
 
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
-                user_prompt = self._induced_pmt.trace                                                        # user prompt stored at induction
+                user_prompt = self._induced_pmt.content                                                      # user prompt stored at induction
                 ai_response = content                                                                        # current AI response completes the pair
                 self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})     # serialize pair — WMC chat history format
                 self._induced_pmt.trace = f'{self._induced_pmt.trace}\nYou replied: "{ai_response}"'         # complete trace — append assistant response
