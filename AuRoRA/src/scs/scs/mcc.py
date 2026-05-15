@@ -56,6 +56,7 @@ Public interface:
 # System components
 import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
+import numpy as np                                  # for building vector anchor
 
 # AGi components
 from hrs.hru import GatewayMap, ChunkSampler        # establish engram gateway, and probe and truncate cognitive context for budget management
@@ -149,7 +150,6 @@ class MemoryCoordinationCore:
         # Score filled PMT at induction — only fires on assistant turn (filled_pmt is None on user turn)
         if filled_pmt is not None:                                                                  # assistant turn only — user turn returns None
             filled_pmt.vector      = self._encoding_engine.encode_engram(filled_pmt.trace)          # encode trace — clean formatted text, no JSON noise
-            self._build_session_anchor()                                                            # rebuild session anchor from current WMC slot — includes filled_pmt
             pending_binding, score = self._score_pmt_at_induction(filled_pmt)                       # 5+1-factor induction gate — biological analogue: hippocampal tagging during experience
             filled_pmt.retention_score = score                                                      # cache composite score — WMC eviction priority key
             if pending_binding:                                                                     # PMT scored above induction threshold — bind to EMC immediately
@@ -350,20 +350,20 @@ class MemoryCoordinationCore:
             active_pmts (list[PMT])              : Sustained PMTs from WMC — live vectors
             reinstated_episodes (list[Episode])  : Reinstated episodes from EMC — encoding blobs
         """
-        vectors = []
+        vectors: list[np.ndarray] = []                                           # accumulator for all active trace vectors
     
-        for pmt in active_pmts:                                              # unpack WM vectors
-            if pmt.vector:                                                   # guard — skip empty vectors
-                vectors.append(np.array(pmt.vector, dtype=np.float32))      # PMT.vector is list[float]
+        for pmt in active_pmts:                                                  # walk sustained WM traces
+            if pmt.vector:                                                       # skip PMTs that never received an embedding
+                vectors.append(np.array(pmt.vector, dtype=np.float32))           # list[float] → ndarray for uniform stack
     
-        for episode in reinstated_episodes:                                  # unpack EM blobs
-            if episode.encoding:                                             # guard — skip empty blobs
-                vectors.append(np.frombuffer(episode.encoding, dtype=np.float32))  # Episode.encoding is bytes
+        for episode in reinstated_episodes:                                      # walk reinstated EM traces
+            if episode.encoding:                                                 # skip episodes with no stored encoding
+                vectors.append(np.frombuffer(episode.encoding, dtype=np.float32))# packed bytes → ndarray view, no copy
     
-        if not vectors:                                                      # no vectors — anchor undefined
-            return                                                           # leave existing anchor unchanged
+        if not vectors:                                                          # nothing active — anchor is undefined
+            return                                                               # leave self._dynamic_anchor unchanged; caller handles absence
     
-        self._dynamic_anchor = np.mean(vectors, axis=0).tolist()         # mean across all active traces — store as list[float]
+        self._dynamic_anchor = np.mean(vectors, axis=0).tolist()                 # mean population vector → list[float] to match PMT.vector contract
         
     def _score_pmt_at_induction(self, pmt: PMT) -> tuple[bool, float]:
         """
