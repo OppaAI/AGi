@@ -128,7 +128,7 @@ from scs.msb import (                       # shared memory storage bank substra
 
 EMC_SCHEMA = EngramSchema(                  # define the engram schema for episodic memory
     storage=[
-        EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
+        EngramTrace(label="storage_id", modality=EngramModality.INTEGER),                           # auto-assigned primary key — rowid alias
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
@@ -136,8 +136,6 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
         # (TODO) M2a — importance scoring
-        EngramTrace(label="salience_score",   modality=EngramModality.REAL),                        # emotional/personal significance (0.0–1.0)
-        EngramTrace(label="novelty_factor",   modality=EngramModality.REAL),                        # unexpectedness multiplier — signal for Dream Cycle
         EngramTrace(label="last_recalled_at", modality=EngramModality.TEXT),                        # when the memory was last recalled
         EngramTrace(label="recall_count",     modality=EngramModality.INTEGER, baseline="0"),       # how many times the memory has been recalled
         # (TODO) M2b — versioning
@@ -147,7 +145,7 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="valid_until",      modality=EngramModality.TEXT),                        # when the memory is valid until
     ],
     staging=[
-        EngramTrace(label="id",         modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
+        EngramTrace(label="staging_id", modality=EngramModality.INTEGER),                           # auto-assigned staging_id — used for decay after consolidation
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
@@ -174,9 +172,6 @@ class Episode:
     trace          : str = ""               # Formatted interaction text — used for both embedding and reinstatement display
     encoding       : bytes = b""            # fp32 binary vector blob — linked to KNN index by rowid
     created_at     : str = ""               # Wall-clock inscription time — set by SQLite on INSERT
-    salience_score : float = 0.0            # Emotional/personal significance (0.0–1.0)
-    novelty_factor : float = 1.0            # Unexpectedness multiplier — signal for Dream Cycle
-    relevancy      : float = 0.0            # RRF-fused relevancy score — transient, populated at recall 
     
 @dataclass
 class EpisodicBuffer:
