@@ -338,45 +338,45 @@ class EncodingCycle:
         """
         # Batch recovery of unencoded episodes — drain in chunks of batch size
         # Avoids loading thousands of unencoded episodes into binding stream at once
-        recovery_count = 0                                          # total recovered episode count
-        recovery_offset = 0                                         # pagination offset for batch recovery
+        recovery_count = 0                                              # total recovered episode count
+        recovery_offset = 0                                             # pagination offset for batch recovery
 
-        while True:                                                 # keep recovering unencoded episodes in batches
-            unencoded = self._ecx.retrieve_staged_batch(            # query staging table for unencoded episodes
-                batch_size = EMC.RECOVERY_BATCH_SIZE,               # number of unencoded episodes to recover at once
-                offset     = recovery_offset,                       # offset for pagination — skips already-recovered episodes
+        while True:                                                     # keep recovering unencoded episodes in batches
+            unencoded = self._ecx.retrieve_staged_batch(                # query staging table for unencoded episodes
+                batch_size = EMC.RECOVERY_BATCH_SIZE,                   # number of unencoded episodes to recover at once
+                offset     = recovery_offset,                           # offset for pagination — skips already-recovered episodes
             )
 
-            if not unencoded:                                       # if no more unencoded episodes to recover,
-                break                                               # stop recovering unencoded episodes
+            if not unencoded:                                           # if no more unencoded episodes to recover,
+                break                                                   # stop recovering unencoded episodes
 
-            with self._episodic_buffer_lock:                        # hold lock for binding stream append
-                for row in unencoded:                               # iterate through each unencoded episode
-                    self._episodic_buffer._binding_stream.append({  # add the unencoded episode to the binding stream
-                        "staging_id" : row["id"],                   # staging_id for decay after consolidation
-                        "user_id"    : row["user_id"],              # user id of episode
-                        "timestamp": row["timestamp"],              # preserved timestamp from original PMT
-                        "date":      row["date"],                   # preserved date from original PMT
-                        "content":   row["content"],                # raw content pending encoding
-                    })
+            with self._episodic_buffer_lock:                            # hold lock for binding stream append
+                for row in unencoded:                                   # iterate through each unencoded episode
+                    self._episodic_buffer._binding_stream.append(Episode(  # add the unencoded episode to the binding stream
+                        staging_id = row["staging_id"],                 # staging_id for decay after consolidation
+                        user_id    = row["user_id"],                    # user id of episode
+                        timestamp  = row["timestamp"],                  # preserved timestamp from original PMT
+                        date       = row["date"],                       # preserved date from original PMT
+                        trace      = row["trace"],                      # formatted interaction text pending encoding
+                    ))
 
-            recovery_count  += len(unencoded)                       # accumulate total recovered count
-            recovery_offset += EMC.RECOVERY_BATCH_SIZE              # advance pagination offset
+            recovery_count  += len(unencoded)                           # accumulate total recovered count
+            recovery_offset += EMC.RECOVERY_BATCH_SIZE                  # advance pagination offset
 
-        if recovery_count:                                          # if any episodes were recovered,
-            self.logger.info(                                       # Log the recovery of unencoded episodes
+        if recovery_count:                                              # if any episodes were recovered,
+            self.logger.info(                                           # Log the recovery of unencoded episodes
                 f"⚡ EMC recovered {recovery_count} unencoded episode(s) from engram → binding stream"
             )                                                       
-            self._theta_rhythm.set()                                # wake encoding cycle for recovered episodes
+            self._theta_rhythm.set()                                    # wake encoding cycle for recovered episodes
 
-        self._encoder_running = True                                # mark cycle as active before thread starts
-        self._encoder_thread  = threading.Thread(                   # assign a dormant thread for the encoding cycle
-            target=self._run_cycle,                                 # encoding cycle main loop
-            name="emc-encoding-cycle",                              # named for debugging
-            daemon=True,                                            # dies with main process
+        self._encoder_running = True                                    # mark cycle as active before thread starts
+        self._encoder_thread  = threading.Thread(                       # assign a dormant thread for the encoding cycle
+            target=self._run_cycle,                                     # encoding cycle main loop
+            name="emc-encoding-cycle",                                  # named for debugging
+            daemon=True,                                                # dies with main process
         )
-        self._encoder_thread.start()                                # start the neural thread of encoding cycle
-        self.logger.info("🔄 EMC encoding cycle started")           # log the start of encoding cycle
+        self._encoder_thread.start()                                    # start the neural thread of encoding cycle
+        self.logger.info("🔄 EMC encoding cycle started")               # log the start of encoding cycle
 
     def _run_cycle(self) -> None:
         """
@@ -402,7 +402,7 @@ class EncodingCycle:
             with self._episodic_buffer_lock:                      # hold lock for snapshot and drain
                 if not self._episodic_buffer._binding_stream:     # binding stream empty — nothing to encode
                     continue                                      # skip this encoding cycle
-                rhythm: list[dict] = list(itertools.islice(       # snapshot up to batch limit — remaining stays for next cycle
+                rhythm: list[Episode] = list(itertools.islice(    # snapshot up to batch limit — remaining stays for next cycle
                     self._episodic_buffer._binding_stream, EMC.THETA_BATCH_LIMIT
                 ))
 
@@ -413,21 +413,21 @@ class EncodingCycle:
             self.logger.debug(f"EMC encoding cycle → {len(rhythm)} episode(s) in rhythm") # log the number of episodes in the rhythm
     
             # Replay each episode in the rhythm
-            for episode in rhythm:                              # for each episode in the rhythm,
-                if not self._encoder_running:                   # if the encoder is not running,
-                    break                                       # respect stop signal mid-rhythm
-                time.sleep(0.01)                                # 10ms yield — prevents starving active cognition
+            for episode in rhythm:                                 # for each episode in the rhythm,
+                if not self._encoder_running:                      # if the encoder is not running,
+                    break                                          # respect stop signal mid-rhythm
+                time.sleep(0.01)                                   # 10ms yield — prevents starving active cognition
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
-                if not episode.get("staging_id"):                           # if no staging_id, stage the episode
+                if episode.staging_id is None::                             # if no staging_id, stage the episode
                     with self._inscription_lock:                            # hold inscription lock for staging write
-                        episode["staging_id"] = self._ecx.stage_engram(     # insert the episode into the episodic buffer
+                        episode.staging_id = self._ecx.stage_engram(        # insert the episode into the episodic buffer
                             engram = {                                      # create engram with timestamp, date, and content
-                                "user_id":   episode["user_id"],            # user id of episode
-                                "timestamp": episode["timestamp"],          # timestamp of episode
-                                "date":      episode["date"],               # date of episode
-                                "content":   episode["content"],            # content of episode
+                                "user_id"  :   episode.user_id,             # user id of episode
+                                "timestamp":   episode.timestamp,           # timestamp of episode
+                                "date"     :   episode.date,                # date of episode
+                                "trace"    :   episode.trace,               # formatted interaction text of episode
                             },
                             ecx_conn = encoder_conn,                        # connection to episodic buffer
                         )
@@ -580,37 +580,38 @@ class EpisodicMemoryCortex:
         Receive an evicted PMT from MCC and bind it into the episodic buffer for encoding.
         Called at the WMC → EMC boundary — non-blocking, crash-safe via staging table.
 
-        Args:
-            timestamp (str): ISO-8601 timestamp of the original PMT
-            content (str)  : Raw PMT content — truncated internally to engram content limit
+    Args:
+        user_id (str)   : ID of the user who originated the PMT
+        timestamp (str) : ISO-8601 timestamp of the original PMT
+        content (str)   : Raw PMT content — truncated internally to engram content limit
 
         Returns:
             bool: True on success, False on failure
         """
-        episode: dict = {             
-            "user_id"   : user_id,                                                              # user ID — should be retrieved from MCC
-            "timestamp" : timestamp,                                                            # timestamp of PMT induced into WMC
-            "date"      : timestamp[:10],                                                       # YYYY-MM-DD slice — B-tree indexed for date recall
-            "content"   : self._chunk_sampler.truncate(content, EMC.EPISODE_CONTENT_LIMIT)      # truncate to engram limit before binding
-        }
+        episode = Episode(
+            user_id   = user_id,                                                                # user ID — should be retrieved from MCC
+            timestamp = timestamp,                                                              # timestamp of PMT induced into WMC
+            date      = timestamp[:10],                                                         # YYYY-MM-DD slice — B-tree indexed for date recall
+            trace     = self._chunk_sampler.truncate(content, EMC.EPISODE_CONTENT_LIMIT),       # truncate to engram limit before binding
+        )
 
-        try:                                                                        # attempt to bind the evicted PMT into episodic buffer
-            with self._episodic_buffer_lock:                                        # hold lock for binding stream append
-                _binding_stream = self.episodic_buffer._binding_stream              # reference for capacity check
-                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                # at capacity — oldest will be silently dropped by deque maxlen
-                    self.logger.warning(                                            # warn — encoding engine may be offline or falling behind
+        try:                                                                                    # attempt to bind the evicted PMT into episodic buffer
+            with self._episodic_buffer_lock:                                                    # hold lock for binding stream append
+                _binding_stream = self.episodic_buffer._binding_stream                          # reference for capacity check
+                if len(_binding_stream) >= EMC.BINDING_STREAM_LIMIT:                            # at capacity — oldest will be silently dropped by deque maxlen
+                    self.logger.warning(                                                        # warn — encoding engine may be offline or falling behind
                         f"⚠️  EMC binding stream at capacity ({EMC.BINDING_STREAM_LIMIT}) — "
                         f"oldest episode dropped. Encoding engine may be offline."
                     )
-                _binding_stream.append(episode)                                     # queue episode — oldest dropped automatically if at maxlen
-            self._encoding_cycle.trigger_theta_rhythm()                             # wake encoding cycle — theta rhythm
-            self.logger.debug(                                                      # log the binding of the evicted PMT into episodic buffer
+                _binding_stream.append(episode)                                                 # queue episode — oldest dropped automatically if at maxlen
+            self._encoding_cycle.trigger_theta_rhythm()                                         # wake encoding cycle — theta rhythm
+            self.logger.debug(                                                                  # log the binding of the evicted PMT into episodic buffer
                 f"EMC buffer ← {self._chunk_sampler.probe(content)} chunks"
             )
-            return True                                                             # indicate successful binding
+            return True                                                                         # indicate successful binding
         except Exception as e:
-            self.logger.warning(f"EMC binding PMT failed: {e}")                     # log failure with reason
-            return False                                                            # indicate failure during binding
+            self.logger.warning(f"EMC binding PMT failed: {e}")                                 # log failure with reason
+            return False                                                                        # indicate failure during binding
 
     def recall_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
