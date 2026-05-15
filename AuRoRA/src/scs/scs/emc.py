@@ -169,9 +169,9 @@ class Episode:
     timestamp      : str = ""               # ISO-8601 induction time — temporal anchor for chronological recall
     date           : str = ""               # YYYY-MM-DD slice of timestamp — indexed for date-filtered recall
     trace          : str = ""               # Formatted interaction text — used for both embedding and reinstatement display
-    encoding       : bytes = b""            # fp32 binary vector blob — linked to KNN index by rowid
+    encoding       : bytes = b""            # fp32 binary vector blob — inscribed at consolidation, pre-fetched at recall for M2 active vector memory
     created_at     : str = ""               # Wall-clock inscription time — set by SQLite on INSERT
-    relevancy   : float = 0.0           # transient — RRF-fused relevancy score, populated at recall time, never stored
+    relevancy   : float = 0.0               # transient — RRF-fused relevancy score, populated at recall time, never stored
     
 @dataclass
 class EpisodicBuffer:
@@ -646,6 +646,7 @@ class EpisodicMemoryCortex:
                 trace      = row.get("trace", ""),                                    # formatted interaction text for reinstatement display
                 created_at = row.get("created_at", ""),                               # wall-clock inscription time
                 relevancy  = row.get("relevancy", 0.0),                               # transient RRF-fused score — populated here, consumed by reinstate_episodes
+                encoding   = bytes(row["encoding"]) if row["encoding"] else b"",      # pre-fetch blob — active vector memory for M2 dual-plane reinstatement
             )
             for row in rows                                                           # iterate through each row
         ]
