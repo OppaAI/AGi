@@ -77,8 +77,8 @@ class PMT:
     """
     user_id         : str | None    # speaker identity — None for assistant-originated
     timestamp       : str           # ISO wall-clock induction time — M1.6 replaces with ROS2 time
-    content         : str           # JSON {"user": "...", "assistant": "..."} — WMC chat history only
-    raw_text        : str           # plain concat — EMC encoding and engram storage
+    content         : str           # JSON {"user": ..., "assistant": ...} — WMC chat history for LLM
+    trace           : str           # formatted text — EMC embedding input and reinstatement
     chunk_count     : int           # cached token count — O(1) eviction math, no reprobe on eviction
     vector          : list[float]   # semantic vector computed at induction — reused at EMC binding, no re-inference
     retention_score : float = 0.0   # composite induction score — WMC eviction priority key
@@ -146,7 +146,7 @@ class WorkingMemoryCortex:
         """
         if role == "user":                                      # user turn — stage as induced PMT pending AI response
             if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
-                self._induced_pmt.raw_text = self._induced_pmt.raw_text + "\n" + content  # append new message — preserve both user turns
+                self._induced_pmt.trace = self._induced_pmt.trace + "\n" + content  # append new message — preserve both user turns
                 self.logger.warn(                               # log the double message append
                     "WMC: second user message before AI response — appended to induced PMT"
                 )
@@ -157,7 +157,7 @@ class WorkingMemoryCortex:
                 user_id    = user_id,                       # speaker identity
                 timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
                 content    = "",                            # filled on assistant turn — JSON pair
-                raw_text   = content,                       # filled on assistant turn — plain concat for EMC
+                trace   = content,                          # user prompt — formatted and completed on assistant turn
                 chunk_count = 0,                            # filled on assistant turn — cached chunk count
                 vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
                 anchored   = False,                         # hard-gate flag
@@ -180,7 +180,7 @@ class WorkingMemoryCortex:
                         "user": "[context missing]",            # placeholder for missing user prompt
                         "assistant": content                    # AI response preserved
                     }),
-                    raw_text   = f"[context missing] {content}",# plain concat with placeholder for missing user prompt
+                    trace = f'[context missing]\nYou replied: "{content}"',  # formatted — consistent with paired trace format
                     chunk_count  = 0,                           # filled on assistant turn — cached chunk count
                     vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
                     anchored   = False,                         # hard-gate flag
@@ -189,10 +189,10 @@ class WorkingMemoryCortex:
 
             else:
                 # Complete the pairing of user prompt and AI response to form a complete interaction
-                user_prompt = self._induced_pmt.raw_text                                                    # user prompt stored at induction
-                ai_response = content                                                                       # current AI response completes the pair
-                self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})    # serialize pair — WMC chat history format
-                self._induced_pmt.raw_text = f"{user_prompt} {ai_response}"                                 # plain concat — EMC encoding and storage
+                user_prompt = self._induced_pmt.trace                                                        # user prompt stored at induction
+                ai_response = content                                                                        # current AI response completes the pair
+                self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})     # serialize pair — WMC chat history format
+                self._induced_pmt.trace = f"{user_id} said: '{user_prompt}'\nYou replied: '{ai_response}'"   # formatted — embedding input and EMC reinstatement
 
             # Decay induced PMT into evictable PMT
             induced_pmt: PMT = self._induced_pmt                        # promote staged PMT to evictable
