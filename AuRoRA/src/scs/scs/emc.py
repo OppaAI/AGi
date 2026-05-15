@@ -132,14 +132,14 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
-        EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw turn content — fed into FTS5 lexical index
+        EngramTrace(label="trace",      modality=EngramModality.TEXT, essential=True),                # formatted interaction text — used for both embedding and reinstatement display
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
         # (TODO) M2a — importance scoring
-        EngramTrace(label="memory_strength",  modality=EngramModality.REAL),                        # how strongly the memory is consolidated -
+        EngramTrace(label="salience_score",   modality=EngramModality.REAL),                        # emotional/personal significance (0.0–1.0)
+        EngramTrace(label="novelty_mult",    modality=EngramModality.REAL),                         # unexpectedness multiplier — signal for Dream Cycle
         EngramTrace(label="last_recalled_at", modality=EngramModality.TEXT),                        # when the memory was last recalled
         EngramTrace(label="recall_count",     modality=EngramModality.INTEGER, baseline="0"),       # how many times the memory has been recalled
-        EngramTrace(label="novelty_score",    modality=EngramModality.REAL),                        # how novel the memory is
         # (TODO) M2b — versioning
         EngramTrace(label="conflict",         modality=EngramModality.INTEGER, baseline="0"),       # if the memory is in conflict with another memory
         EngramTrace(label="superseded_by",    modality=EngramModality.INTEGER),                     # the ID of the memory that superseded this memory
@@ -151,10 +151,10 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # preserved from original PMT
-        EngramTrace(label="content",    modality=EngramModality.TEXT, essential=True),              # raw content pending encoding
+        EngramTrace(label="trace",      modality=EngramModality.TEXT, essential=True),              # plain-text — consistent with storage
     ],
     semantic_traces="encoding",                                                                     # column linked to vec0 virtual table for KNN search
-    lexical_traces=["content"],                                                                     # column fed into FTS5 virtual table for keyword search
+    lexical_traces=["trace"],                                                                       # FTS5 now indexes clean natural language
     index_traces=["user_id", "timestamp"],                                                          # B-tree index — speeds up temporal-filtered recall
     temporal_trace="timestamp",                                                                     # temporal filter column — represents when the memory occurred
 )
@@ -171,7 +171,7 @@ class Episode:
     timestamp    : str = ""                 # ISO-8601 induction time — temporal anchor for chronological recall
     date         : str = ""                 # YYYY-MM-DD slice of timestamp — indexed for date-filtered recall
     trace        : str = ""                 # Formatted interaction text — "user said X\nYou replied Y" — used for both embedding and reinstatement display
-    vector       : bytes = b""              # fp32 binary vector blob — packed semantic encoding from sentence-transformers, linked to KNN index by rowid
+    encoding     : bytes = b""              # fp32 binary vector blob — packed semantic encoding from sentence-transformers, linked to KNN index by rowid
     created_at   : str = ""                 # Wall-clock inscription time — set by SQLite on INSERT, tracks when episode entered engram
     salience_score : float = 0.0            # Emotional/personal significance (0.0–1.0) — preserved from WMC induction for Dream Cycle consolidation weighting
     novelty_mult   : float = 1.0            # Unexpectedness multiplier (0.0–1.0+) — preserved from WMC induction as signal for semantic fact extraction
@@ -186,7 +186,7 @@ class EpisodicBuffer:
     _binding_stream — evicted PMTs pending encoding into episodic memory
     recall_stream   — recalled episodes pending reinstatement into active cognition
     """
-    _binding_stream: deque[dict] = field(                                      # evicted PMTs queued for encoding — drained by encoding cycle
+    _binding_stream: deque[Ellipsis] = field(                                  # evicted PMTs queued for encoding — drained by encoding cycle
         default_factory=lambda: deque(maxlen=EMC.BINDING_STREAM_LIMIT)         # maxlen cap — oldest silently dropped if encoding engine offline too long
     )
     recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly
