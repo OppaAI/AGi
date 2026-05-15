@@ -146,7 +146,7 @@ class WorkingMemoryCortex:
         """
         if role == "user":                                      # user turn — stage as induced PMT pending AI response
             if self._induced_pmt is not None:                   # unpaired user prompt already pending — append rather than overwrite
-                self._induced_pmt.trace = self._induced_pmt.trace + "\n" + content  # append new message — preserve both user turns
+                self._induced_pmt.trace = self._induced_pmt.trace + "\n" + content  # append raw content — user_id label already prefixed
                 self.logger.warn(                               # log the double message append
                     "WMC: second user message before AI response — appended to induced PMT"
                 )
@@ -157,7 +157,7 @@ class WorkingMemoryCortex:
                 user_id    = user_id,                       # speaker identity
                 timestamp  = datetime.now().isoformat(),    # wall-clock induction time (TODO M1.6: use ROS2 time)
                 content    = "",                            # filled on assistant turn — JSON pair
-                trace   = content,                          # user prompt — formatted and completed on assistant turn
+                trace      = f'{user_id} said: "{content}"',# partial trace — assistant appended on pairing
                 chunk_count = 0,                            # filled on assistant turn — cached chunk count
                 vector     = [],                            # filled by MCC at induction scoring — reused at EMC binding
                 anchored   = False,                         # hard-gate flag
@@ -192,7 +192,7 @@ class WorkingMemoryCortex:
                 user_prompt = self._induced_pmt.trace                                                        # user prompt stored at induction
                 ai_response = content                                                                        # current AI response completes the pair
                 self._induced_pmt.content  = json.dumps({"user": user_prompt, "assistant": ai_response})     # serialize pair — WMC chat history format
-                self._induced_pmt.trace = f"{user_id} said: '{user_prompt}'\nYou replied: '{ai_response}'"   # formatted — embedding input and EMC reinstatement
+                self._induced_pmt.trace = f'{self._induced_pmt.trace}\nYou replied: "{ai_response}"'         # complete trace — append assistant response
 
             # Decay induced PMT into evictable PMT
             induced_pmt: PMT = self._induced_pmt                        # promote staged PMT to evictable
