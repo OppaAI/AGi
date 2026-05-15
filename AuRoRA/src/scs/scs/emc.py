@@ -132,12 +132,12 @@ EMC_SCHEMA = EngramSchema(                  # define the engram schema for episo
         EngramTrace(label="user_id",    modality=EngramModality.TEXT, essential=True),              # ID of the user who created the engram
         EngramTrace(label="timestamp",  modality=EngramModality.TEXT, essential=True),              # ISO-8601 datetime of the original PMT
         EngramTrace(label="date",       modality=EngramModality.TEXT, essential=True),              # YYYY-MM-DD slice of timestamp — reserved for Dream Cycle
-        EngramTrace(label="trace",      modality=EngramModality.TEXT, essential=True),                # formatted interaction text — used for both embedding and reinstatement display
+        EngramTrace(label="trace",      modality=EngramModality.TEXT, essential=True),              # formatted interaction text — used for both embedding and reinstatement display
         EngramTrace(label="encoding",   modality=EngramModality.BLOB, essential=True),              # fp32 binary vector — linked to vec0 KNN index by rowid
         EngramTrace(label="created_at", modality=EngramModality.TEXT, baseline="(datetime('now'))"), # wall-clock inscription time — set by SQLite on INSERT
         # (TODO) M2a — importance scoring
         EngramTrace(label="salience_score",   modality=EngramModality.REAL),                        # emotional/personal significance (0.0–1.0)
-        EngramTrace(label="novelty_mult",    modality=EngramModality.REAL),                         # unexpectedness multiplier — signal for Dream Cycle
+        EngramTrace(label="novelty_factor",   modality=EngramModality.REAL),                        # unexpectedness multiplier — signal for Dream Cycle
         EngramTrace(label="last_recalled_at", modality=EngramModality.TEXT),                        # when the memory was last recalled
         EngramTrace(label="recall_count",     modality=EngramModality.INTEGER, baseline="0"),       # how many times the memory has been recalled
         # (TODO) M2b — versioning
@@ -166,30 +166,31 @@ class Episode:
     Represents a complete interaction (user prompt + AI response) that has been
     encoded into a semantic vector and inscribed into permanent storage.   
     """
-    id           : int | None = None        # SQLite rowid — auto-assigned on inscription, None before storage
-    user_id      : str | None = None        # Speaker identity — preserved from original PMT
-    timestamp    : str = ""                 # ISO-8601 induction time — temporal anchor for chronological recall
-    date         : str = ""                 # YYYY-MM-DD slice of timestamp — indexed for date-filtered recall
-    trace        : str = ""                 # Formatted interaction text — "user said X\nYou replied Y" — used for both embedding and reinstatement display
-    encoding     : bytes = b""              # fp32 binary vector blob — packed semantic encoding from sentence-transformers, linked to KNN index by rowid
-    created_at   : str = ""                 # Wall-clock inscription time — set by SQLite on INSERT, tracks when episode entered engram
-    salience_score : float = 0.0            # Emotional/personal significance (0.0–1.0) — preserved from WMC induction for Dream Cycle consolidation weighting
-    novelty_mult   : float = 1.0            # Unexpectedness multiplier (0.0–1.0+) — preserved from WMC induction as signal for semantic fact extraction
-    relevancy    : float = 0.0              # RRF-fused relevancy score (0.0–1.0) — computed only at recall time, not stored, populated transiently during reinstatement
+    storage_id     : int | None = None      # SQLite rowid — auto-assigned on inscription, None before storage
+    staging_id     : int | None = None      # transient — staging rowid for decay after consolidation, None if not yet staged
+    user_id        : str | None = None      # Speaker identity — preserved from original PMT
+    timestamp      : str = ""               # ISO-8601 induction time — temporal anchor for chronological recall
+    date           : str = ""               # YYYY-MM-DD slice of timestamp — indexed for date-filtered recall
+    trace          : str = ""               # Formatted interaction text — used for both embedding and reinstatement display
+    encoding       : bytes = b""            # fp32 binary vector blob — linked to KNN index by rowid
+    created_at     : str = ""               # Wall-clock inscription time — set by SQLite on INSERT
+    salience_score : float = 0.0            # Emotional/personal significance (0.0–1.0)
+    novelty_factor : float = 1.0            # Unexpectedness multiplier — signal for Dream Cycle
+    relevancy      : float = 0.0            # RRF-fused relevancy score — transient, populated at recall 
     
 @dataclass
 class EpisodicBuffer:
     """
-    Episodic Buffer — shared workspace between WMC and 
+    Episodic Buffer — shared workspace between WMC and EMC.
     Modelled on Baddeley's episodic buffer — one buffer, two streams.
 
     _binding_stream — evicted PMTs pending encoding into episodic memory
     recall_stream   — recalled episodes pending reinstatement into active cognition
     """
-    _binding_stream: deque[Ellipsis] = field(                                  # evicted PMTs queued for encoding — drained by encoding cycle
+    _binding_stream: deque[Episode] = field(                                   # evicted PMTs queued for encoding — drained by encoding cycle
         default_factory=lambda: deque(maxlen=EMC.BINDING_STREAM_LIMIT)         # maxlen cap — oldest silently dropped if encoding engine offline too long
     )
-    recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly
+    recall_stream: list[dict] = field(default_factory=list)                    # recalled episodes queued for MCC context assembly@dataclass
 
     def __post_init__(self) -> None:
         """Initialize locks not expressible as dataclass fields."""
