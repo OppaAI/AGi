@@ -91,7 +91,7 @@ class PMT:
     vector          : list[float]       # semantic vector computed at induction — reused at EMC binding, no re-inference
     retention_score : float = 0.0       # composite induction score — WMC eviction priority key
     salience_score  : float = 0.0       # Factor 1 score — logged and inspectable at eviction boundary
-    novelty_mult    : float = 1.0       # Factor 2 multiplier — inspectable at eviction boundary
+    novelty_factor  : float = 1.0       # Factor 2 multiplier — inspectable at eviction boundary
     depth_score     : float = 0.0       # Factor 3 score — logged and inspectable at eviction boundary
     anchored        : bool  = False     # True if hard-gated (explicit marker or salience override)
     smc_candidate   : bool  = False     # True if regex fact extractor flagged remainder for Dream Cycle
