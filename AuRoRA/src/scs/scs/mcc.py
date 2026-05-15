@@ -184,7 +184,7 @@ class MemoryCoordinationCore:
             for evicted_pmt in evicted_pmts:                         # iterate through each evicted PMT
                 # Anchor vector safety net — depth check only, no full composite re-run
                 depth_score = self._cosine_sim(                      # single cosine sim — last-chance gate at eviction boundary
-                    evicted_pmt.vector, self._meaningful_anchor
+                    evicted_pmt.vector, self._dynamic_anchor
                 )
                 if depth_score < SCS.MCC.EVICTION_THRESHOLD:         # below safety net threshold — truly forgotten
                     self.logger.debug(                               # log the discarded PMT at eviction boundary
@@ -218,11 +218,12 @@ class MemoryCoordinationCore:
             list[dict] : List of message dicts [{role, content}] ready for inference
         """
         # Recall WMC PMTs directly in main neural pathway
-        wmc_pmts: list[dict[str, str]] = self.wmc.reinstate_pmt_schema()    # recall sustained PMTs from working memory
+        active_pmts: list[PMT] = self.wmc.recall_pmt_schema()                # retrieve the sustained PMT schema
+        recalled_pmts: list[dict[str, str]] = self.wmc.reinstate_pmt_schema() # recall the sustained PMT schema in dict structure
         
         # EMC reinstatement on isolated neural pathway — recall, filter, format, inject
         self.emc.episodic_buffer.clear_recall_stream()                       # clear recall stream before reinstating fresh episodes
-        reinstated_episodes: list[dict] = []                                 # holds reinstated episodes from EMC
+        reinstated_episodes: list[Episode] = []                              # holds reinstated episodes from EMC
         try:                                                                 # attempt to recall EMC episodes
             future = asyncio.get_running_loop().run_in_executor(             # recruit a dormant thread — EMC recall blocks on encoding engine
                 self._executor, self.emc.reinstate_episodes, user_id, user_prompt     # reinstate relevant episodes using current prompt as cue
@@ -234,11 +235,14 @@ class MemoryCoordinationCore:
             self.logger.warning("⚠️  EMC recall timed out — proceeding without episodic context")    # log the timeout error while recalling EMC episodes
 
         # Reinstate WMC PMTs after EMC episodes — for chronological order in memory context
-        self.emc.episodic_buffer.stage_episode_list(wmc_pmts)                # inject WMC PMTs after EMC episodes — preserves chronological order
+        self.emc.episodic_buffer.stage_episode_list(recalled_pmts)           # inject recalled WMC PMTs into episodic buffer after EMC episodes — preserves chronological order
+
+        # Build dynamic anchor vector for scoring PMT for binding decision
+        _build_dynamic_anchor(active_pmts, reinstated_episodes)              # build a dynamic anchor vector from current memory context
         
         self.logger.debug(                                                   # log the memory context assembled
             f"MCC context assembled: "
-            f"{len(wmc_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
+            f"{len(recalled_pmts)} WMC PMTs + {len(reinstated_episodes)} EMC episodes reinstated"
         )
 
         # Cortical capacity assessment  — aggregate WMC + EMC chunks vs total cortical capacity
@@ -334,7 +338,7 @@ class MemoryCoordinationCore:
 
         self.emc.terminate()                                                  # release EMC engram gateway file handles
         self.logger.info("🗄️  MCC shutdown sequence complete")                # log completion of MCC shutdown
-        
+               
     def _score_pmt_at_induction(self, pmt: PMT) -> tuple[bool, float]:
         """
         5+1-factor WMC→EMC encoding gate — stub pending anchor init.
