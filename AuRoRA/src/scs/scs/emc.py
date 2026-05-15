@@ -251,19 +251,19 @@ class EpisodicScaffold:
 
         Returns:
             list[Episode]: Budget-clipped episode list. Final entry may carry a
-                        truncated content field if it exceeded the remaining reserve.
+                        truncated trace field if it exceeded the remaining reserve.
         """
         chunk_limit: int = self._chunk_limit                                                # remaining chunk budget for reinstatement
         fragment: list[Episode] = []                                                        # budget-trimmed episode list
 
         for episode in episodes:                                                            # consume in RRF rank order — highest relevance first
-            content     = episode.trace                                                     # trace is the pre-formatted content field
-            chunk_count = self._chunk_sampler.probe(content)                                # estimate chunk count of the episode content
+            trace       = episode.trace                                                     # trace is the pre-formatted text field
+            chunk_count = self._chunk_sampler.probe(trace  )                                # estimate chunk count of the episode trace
     
             if chunk_count > chunk_limit:                                                   # episode exceeds remaining budget — truncate to fragment
                 if chunk_limit > 0:                                                         # remaining budget can still surface a fragment
                     episode       = Episode(**vars(episode))                                # shallow copy — never mutate source list
-                    episode.trace = self._chunk_sampler.truncate(content, chunk_limit)      # truncate trace to remaining budget
+                    episode.trace = self._chunk_sampler.truncate(trace, chunk_limit)        # truncate trace to remaining budget
                     fragment.append(episode)                                                # reinstate memory fragment into memory context
                     break                                                                   # budget exhausted after fragment — stop regardless
             
@@ -422,7 +422,7 @@ class EncodingCycle:
                 if episode.staging_id is None::                             # if no staging_id, stage the episode
                     with self._inscription_lock:                            # hold inscription lock for staging write
                         episode.staging_id = self._ecx.stage_engram(        # insert the episode into the episodic buffer
-                            engram = {                                      # create engram with timestamp, date, and content
+                            engram = {                                      # create engram with timestamp, date, and trace
                                 "user_id"  :   episode.user_id,             # user id of episode
                                 "timestamp":   episode.timestamp,           # timestamp of episode
                                 "date"     :   episode.date,                # date of episode
@@ -431,8 +431,8 @@ class EncodingCycle:
                             ecx_conn = encoder_conn,                        # connection to episodic buffer
                         )
       
-                # Encode the episode content into a semantic vector
-                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode.trace)  # encode content into semantic vector
+                # Encode the episode trace into a semantic vector
+                encoded_episode: list[float] = self._encoding_engine.encode_engram(episode.trace)  # encode trace into semantic vector
                 if not encoded_episode:                                             # if the encoding failed,
                     # Encoding engine unavailable — skip for now, retry later
                     self.logger.warning(                                            # log the warning message of unavailability of the encoding engine
@@ -474,7 +474,7 @@ class EncodingCycle:
         with self._inscription_lock:                                            # serializes all three inscriptions as one atomic operation
             # Primary episodic record
             episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
-                engram={                                                        # episode dictionary with timestamp, date, and content
+                engram={                                                        # episode dictionary with timestamp, date, and trace
                     "user_id":   episode.user_id,                               # user id of episode
                     "timestamp": episode.timestamp,                             # episode timestamp
                     "date":      episode.date,                                  # episode date
@@ -492,9 +492,9 @@ class EncodingCycle:
             )
      
             # Engram lexical index (FTS5 index for lexical search)
-            self._ecx.inscribe_lexical_index(                                   # inscribe content into FTS5 index — rowid matches episode_id
+            self._ecx.inscribe_lexical_index(                                   # inscribe trace into FTS5 index — rowid matches episode_id
                 engram_id = episode_id,                                         # episode ID for which to insert the encoding
-                content = episode.trace,                                        # formattted interactive text of the episode
+                trace = episode.trace,                                          # formattted interactive text of the episode
                 ecx_conn = encoder_conn,                                        # connection to use for the operation
             )
      
@@ -622,7 +622,7 @@ class EpisodicMemoryCortex:
 
         Returns:
             list[Episode]: Recalled episodes sorted by descending relevancy.
-                        Each dict: id, timestamp, date, content, relevancy
+                        Each dict: id, timestamp, date, trace, relevancy
         """
         if not cue or not cue.strip():                                                # empty cue — nothing to recall
             return []                                                                 # return empty list if no cue
