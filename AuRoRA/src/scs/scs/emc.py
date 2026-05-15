@@ -215,7 +215,7 @@ class EpisodicBuffer:
         with self._recall_lock:                                                # hold lock while copying — prevents mutation mid-read
             return list(self.recall_stream)                                    # shallow copy — safe for iteration outside the lock
 
-def )translate_engram(episode: Episode, encoding: bytes | None = None) -> dict:
+def _translate_engram(episode: Episode, encoding: bytes | None = None) -> dict:
     """
     Translate an Episode into an engram dict for inscription into the engram complex.
     Owns the Episode → MSB boundary mapping — single point of change if Episode schema evolves.
@@ -435,7 +435,7 @@ class EncodingCycle:
 
                 # Inscribe to episodic_buffer (crash-safe record) before encoding
                 # Skip if already recovered from episodic_buffer on restart
-                if episode.staging_id is None::                             # if no staging_id, stage the episode
+                if episode.staging_id is None:                     # if no staging_id, stage the episode
                     with self._inscription_lock:                            # hold inscription lock for staging write
                         episode.staging_id = self._ecx.stage_engram(        # insert the episode into the episodic buffer
                             engram   = translate_engram(episode),           # translate Episode → engram dict for staging — encoding excluded until consolidation
@@ -639,7 +639,7 @@ class EpisodicMemoryCortex:
     
         return [                                                                      # map SQL rows to Episode dataclasses at the EMC boundary
             Episode(
-                storage_id = row.get("storage_id"),                                   # SQLite rowid of the stored engram
+                storage_id = row.get("id"),                                           # SQLite rowid of the stored engram
                 user_id    = row.get("user_id"),                                      # speaker identity preserved from original PMT
                 timestamp  = row.get("timestamp", ""),                                # ISO-8601 temporal anchor
                 date       = row.get("date", ""),                                     # YYYY-MM-DD slice for date-filtered recall
