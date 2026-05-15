@@ -646,7 +646,7 @@ class EpisodicMemoryCortex:
             for row in rows                                                           # iterate through each row
         ]
 
-    def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
+    def reinstate_episodes(self, user_id: str, cue: str) -> list[Episode]:
         """
         Recall, fragment, sequence, format, and reinstate relevant episodes into the recall stream.
         Full episodic reinstatement pipeline — MCC calls this once per turn.
@@ -664,22 +664,22 @@ class EpisodicMemoryCortex:
             cue (str)    : Current user prompt used as recall cue.
 
         Returns:
-            list[dict]: Reinstated episodes — informational only, primary output is recall stream injection.
+            list[Episode]: Reinstated episodes — informational only, primary output is recall stream injection.
         """
         # Recall candidates
-        raw_episodes: list[dict] = self.recall_episodes(user_id, cue)                       # recall candidates via RRF dual-path retrieval
+        raw_episodes: list[Episode] = self.recall_episodes(user_id, cue)                    # recall candidates via RRF dual-path retrieval
 
         # Relevancy gate — EMC owns this threshold
-        episode_scaffold: list[dict] = [                                                    # filter out irrelevant episodes
+        episode_scaffold: list[Episode] = [                                                 # filter out irrelevant episodes
             episode for episode in raw_episodes                                             # iterate over raw episodes 
-            if episode["relevancy"] >= EMC.RELEVANCE_THRESHOLD                              # episode must meet relevance threshold
+            if episode.relevancy >= EMC.RELEVANCE_THRESHOLD                                 # episode must meet relevance threshold
         ]
 
         # Memory fragmenting — surface fragments of memory when recall reserve is exceeded
-        episode_scaffold: list[dict] = self._episodic_scaffold.fragment(episode_scaffold)   # trim the recalled episodes to fit chunk reserve
+        episode_scaffold: list[Episode] = self._episodic_scaffold.fragment(episode_scaffold) # trim the recalled episodes to fit chunk reserve
 
         # Reorder episodes chronologically (oldest → newest)
-        episode_scaffold: list[dict] = self._episodic_scaffold.sequence(episode_scaffold)   # sequence episodes in chronological order
+        episode_scaffold: list[Episode] = self._episodic_scaffold.sequence(episode_scaffold) # sequence episodes in chronological order
 
         if not episode_scaffold:                                                            # nothing to stage — skip
             return []                                                                       # return if no filtered episodes
@@ -689,16 +689,10 @@ class EpisodicMemoryCortex:
             ""
         ]    
         
-        for episode in episode_scaffold:                                                    # format each episode as a single line
-            try:                                                                            # attempt to deserialize and format the episode
-                content = json.loads(episode.get("content", ""))                            # deserialize stored JSON pair
-                date    = episode.get("date", "unknown date")                               # retrieve episode date for temporal context
-                lines.append(f"[{date}] {episode['user_id']} said: \"{content['user']}\"")  # append user's prompt
-                lines.append(f"         You replied: \"{content['assistant']}\"")           # append AI's response
-                lines.append("")                                                            # add a blank line for readability
-            except (json.JSONDecodeError, KeyError):                                        # malformed engram — surface raw rather than silent drop
-                lines.append(f"- {episode.get('content', '')}")                             # append raw content
-                lines.append("")                                                            # add a blank line for readability
+        for episode in episode_scaffold:                                                    # iterate through each episode in the scaffold
+            date = episode.date or "unknown date"                                           # date attribute — fallback if empty
+            lines.append(f"[{date}] {episode.trace}")                                       # trace is pre-formatted at bind time — no deserialization needed
+            lines.append("")                                                                # blank line for readability
     
         self.episodic_buffer.stage_single_episode({                                         # inject as single system message to the recallstream
             "role":    "system",                                                            # set role as system
