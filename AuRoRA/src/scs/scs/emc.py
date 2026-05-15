@@ -172,6 +172,7 @@ class Episode:
     trace          : str = ""               # Formatted interaction text — used for both embedding and reinstatement display
     encoding       : bytes = b""            # fp32 binary vector blob — linked to KNN index by rowid
     created_at     : str = ""               # Wall-clock inscription time — set by SQLite on INSERT
+    relevancy   : float = 0.0           # transient — RRF-fused relevancy score, populated at recall time, never stored
     
 @dataclass
 class EpisodicBuffer:
@@ -271,7 +272,6 @@ class EpisodicScaffold:
             fragment.append(episode)                                                        # episode fits — reinstate in full
         return fragment                                                                     # return budget-trimmed episode list
 
-    
     def sequence(self, episodes: list[dict]) -> list[dict]:
         """
         Re-organize fragmented episodes into ascending chronological order before reinstatement.
@@ -461,7 +461,7 @@ class EncodingCycle:
         """
         self._theta_rhythm.set()                            # wake the theta rhythm to start encoding
 
-    def _synaptic_consolidate(self, encoder_conn, episode: dict, encoding_blob: bytes) -> None:
+    def _synaptic_consolidate(self, encoder_conn, episode: Episode, encoding_blob: bytes) -> None:
         """
         Stabilize one encoded episode into all three engram indexes.
         Biological analogue: LTP-driven trace stabilization in the hippocampus during wake.
@@ -469,17 +469,17 @@ class EncodingCycle:
 
         Args:
             encoder_conn          : Bifurcated connection for encoding cycle writes
-            episode (dict)        : Episode with timestamp, date, content, staging_id
+            episode (Episode)     : Episode with timestamp, date, trace, staging_id
             encoding_blob (bytes) : fp32 binary vector of the encoded episode
         """
         with self._inscription_lock:                                            # serializes all three inscriptions as one atomic operation
             # Primary episodic record
             episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
                 engram={                                                        # episode dictionary with timestamp, date, and content
-                    "user_id":   episode["user_id"],                            # user id of episode
-                    "timestamp": episode["timestamp"],                          # episode timestamp
-                    "date":      episode["date"],                               # episode date
-                    "content":   episode["content"],                            # episode content
+                    "user_id":   episode.user_id,                               # user id of episode
+                    "timestamp": episode.timestamp,                             # episode timestamp
+                    "date":      episode.date,                                  # episode date
+                    "trace":     episode.trace,                                 # episode formatted interaction text
                     "encoding":  encoding_blob,                                 # episode encoding
                 }, 
                 ecx_conn=encoder_conn,                                          # connection to use for the operation
@@ -495,12 +495,12 @@ class EncodingCycle:
             # Engram lexical index (FTS5 index for lexical search)
             self._ecx.inscribe_lexical_index(                                   # inscribe content into FTS5 index — rowid matches episode_id
                 engram_id = episode_id,                                         # episode ID for which to insert the encoding
-                content = episode["content"],                                   # raw text content of the episode
+                content = episode.trace,                                        # formattted interactive text of the episode
                 ecx_conn = encoder_conn,                                        # connection to use for the operation
             )
      
             # Remove the entry in episodic buffer — synaptic consolidation is complete, staging row no longer needed
-            if episode.get("staging_id") is not None:                           # staging_id present — episode was crash-recovered
+            if episode.staging_id is not None:                                  # staging_id present — episode was crash-recovered
                 self._ecx.decay_staged_engram(                                  # decay staging row — synaptic consolidation complete
                     staging_id = episode["staging_id"],                         # episode ID for which to decay the encoding
                     ecx_conn  = encoder_conn,                                   # connection to use for the operation
@@ -625,11 +625,26 @@ class EpisodicMemoryCortex:
             list[dict]: Recalled episodes sorted by descending relevancy.
                         Each dict: id, timestamp, date, content, relevancy
         """
-        if not cue or not cue.strip():                                                           # empty cue — nothing to recall
-            return []                                                                            # return empty list if no cue
+        if not cue or not cue.strip():                                                # empty cue — nothing to recall
+            return []                                                                 # return empty list if no cue
     
-        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                            # encode cue into vector + raw text for dual-path recall
-        return self._ecx.recall_engram(user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH) # semantic + lexical RRF fusion — handled by MSB
+        recall_cue: RecallCue = self._encoding_engine.encode_cue(cue)                 # encode cue into vector + raw text for dual-path recall
+        rows: list[dict] = self._ecx.recall_engram(                                   # semantic + lexical RRF fusion — handled by MSB
+            user_id, recall_cue, EMC.RECALL_SURFACE_LIMIT, EMC.RECALL_DEPTH
+        )
+    
+        return [                                                                      # map SQL rows to Episode dataclasses at the EMC boundary
+            Episode(
+                storage_id = row.get("storage_id"),                                   # SQLite rowid of the stored engram
+                user_id    = row.get("user_id"),                                      # speaker identity preserved from original PMT
+                timestamp  = row.get("timestamp", ""),                                # ISO-8601 temporal anchor
+                date       = row.get("date", ""),                                     # YYYY-MM-DD slice for date-filtered recall
+                trace      = row.get("trace", ""),                                    # formatted interaction text for reinstatement display
+                created_at = row.get("created_at", ""),                               # wall-clock inscription time
+                relevancy  = row.get("relevancy", 0.0),                               # transient RRF-fused score — populated here, consumed by reinstate_episodes
+            )
+            for row in rows                                                           # iterate through each row
+        ]
 
     def reinstate_episodes(self, user_id: str, cue: str) -> list[dict]:
         """
