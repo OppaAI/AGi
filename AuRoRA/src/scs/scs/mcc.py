@@ -396,7 +396,7 @@ class MemoryCoordinationCore:
         """
         cutoff = datetime.utcnow() - timedelta(days=days)                        # earliest episode to include
     
-        encodings = self.emc.msb.get_episode_encodings_since(cutoff)             # fetch encoded episodes within window
+        encodings = self.emc.get_episode_encodings_since(cutoff)                 # fetch encoded episodes within window
     
         if not episodes:                                                         # no episodes in window — anchors undefined
             return                                                               # leave self._static_anchors unchanged; caller handles absence
