@@ -256,6 +256,28 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* min/max range display — two colored spans */
+    .stat-range {
+      font-size: 0.7rem;
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      gap: 6px;
+      margin-top: 1px;
+    }
+
+    .range-min {
+      color: var(--success);
+    }
+
+    .range-max {
+      color: var(--warning);
+    }
+
+    .range-sep {
+      color: var(--text-muted);
+      opacity: 0.4;
+    }
+
     /* ─── Debug Stream — Chat Layout ─── */
     .debug-stream {
       flex: 1;
@@ -306,7 +328,7 @@
       background: var(--glass-border);
     }
 
-    /* ── USER bubble — right-aligned cyan ── */
+    /* ── Bubbles ── */
     .bubble-row {
       display: flex;
     }
@@ -387,7 +409,7 @@
       font-style: italic;
     }
 
-    /* streaming cursor blink */
+    /* streaming cursor */
     .streaming-cursor::after {
       content: '▍';
       animation: blink 0.7s step-end infinite;
@@ -400,7 +422,7 @@
       }
     }
 
-    /* ── Context Inspector — collapsible panel inside the turn ── */
+    /* ── Context Inspector ── */
     .context-inspector {
       margin: 0 4px;
       border-radius: 12px;
@@ -459,7 +481,7 @@
       display: flex;
     }
 
-    /* ── Inspector rows (SYSTEM / WMC / EMC slots) ── */
+    /* ── Inspector rows ── */
     .ctx-row {
       display: flex;
       gap: 8px;
@@ -556,7 +578,7 @@
       font-style: italic;
     }
 
-    /* ── Inspector summary pills ── */
+    /* ── Pills ── */
     .pill {
       display: inline-flex;
       align-items: center;
@@ -593,7 +615,7 @@
       color: var(--text-muted);
     }
 
-    /* ── System log entries (non-turn events) ── */
+    /* ── System log entries ── */
     .sys-entry {
       display: flex;
       gap: 8px;
@@ -613,7 +635,7 @@
       color: var(--danger);
     }
 
-    /* legacy — keep so nothing crashes if called */
+    /* legacy shims */
     .stream-badge {
       display: none;
     }
@@ -798,38 +820,58 @@
 
       <!-- ═══ DEBUG TAB ═══ -->
       <div class="tab-content active" id="tab-debug">
+
         <!-- Stats Bar -->
         <div class="stats-bar">
+
           <div class="stat-item">
             <div class="stat-label">WMC Size</div>
             <div class="stat-value" id="statWmcSize">—</div>
             <div class="stat-sub" id="statWmcPct">— / — chunks</div>
           </div>
+
           <div class="stat-item">
             <div class="stat-label">EMC Episodes</div>
             <div class="stat-value" id="statEmcSize">—</div>
             <div class="stat-sub" id="statEmcLast">Last: —</div>
           </div>
+
+          <!-- Tokens/sec — now shows current + min/max range -->
           <div class="stat-item">
             <div class="stat-label">Tokens/sec</div>
             <div class="stat-value" id="statTokensSec">—</div>
-            <div class="stat-sub" id="statTokensTotal">— total</div>
+            <div class="stat-sub" id="statTokensTotal">— tokens</div>
+            <div class="stat-range">
+              <span class="range-min" id="statTpsMin">↓ —</span>
+              <span class="range-sep">·</span>
+              <span class="range-max" id="statTpsMax">↑ —</span>
+            </div>
           </div>
+
+          <!-- Latency — now shows current + avg + min/max range -->
           <div class="stat-item">
             <div class="stat-label">Latency</div>
             <div class="stat-value" id="statLatency">—</div>
             <div class="stat-sub" id="statLatencyAvg">Avg: —</div>
+            <div class="stat-range">
+              <span class="range-min" id="statLatMin">↓ —</span>
+              <span class="range-sep">·</span>
+              <span class="range-max" id="statLatMax">↑ —</span>
+            </div>
           </div>
+
           <div class="stat-item">
             <div class="stat-label">Turn Count</div>
             <div class="stat-value" id="statTurnCount">0</div>
             <div class="stat-sub" id="statUptime">Up: 00:00</div>
           </div>
+
           <div class="stat-item">
             <div class="stat-label">GCE Status</div>
             <div class="stat-value success" id="statGceStatus">Ready</div>
             <div class="stat-sub" id="statGceModel">—</div>
           </div>
+
         </div>
 
         <!-- Legend -->
@@ -848,9 +890,9 @@
               Inspector</em></span>
         </div>
 
-        <!-- Continuous Debug Stream -->
+        <!-- Debug Stream -->
         <div class="debug-stream" id="debugStream">
-          <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
+          <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:40px;">
             Waiting for Grace to think...
           </div>
         </div>
@@ -859,12 +901,12 @@
       <!-- ═══ CHAT TAB ═══ -->
       <div class="tab-content" id="tab-chat">
         <div class="glass-card"
-          style="height: calc(100vh - 100px); display:flex; align-items:center; justify-content:center; flex-direction:column;">
-          <div style="font-size:4rem; margin-bottom:16px;">🤖</div>
-          <div style="color:var(--lavender-soft); font-size:1.2rem; font-weight:600;">Grace Chat Interface</div>
-          <div style="color:var(--text-muted); margin-top:8px;">Embed your existing grace.html here</div>
+          style="height:calc(100vh - 100px);display:flex;align-items:center;justify-content:center;flex-direction:column;">
+          <div style="font-size:4rem;margin-bottom:16px;">🤖</div>
+          <div style="color:var(--lavender-soft);font-size:1.2rem;font-weight:600;">Grace Chat Interface</div>
+          <div style="color:var(--text-muted);margin-top:8px;">Embed your existing grace.html here</div>
           <code
-            style="margin-top:16px; background:rgba(0,0,0,0.3); padding:12px 20px; border-radius:8px; font-size:0.85rem; color:var(--lavender-soft);">
+            style="margin-top:16px;background:rgba(0,0,0,0.3);padding:12px 20px;border-radius:8px;font-size:0.85rem;color:var(--lavender-soft);">
             &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
           </code>
         </div>
@@ -910,7 +952,7 @@
         </div>
         <div class="glass-card">
           <div class="card-title">📈 System Log</div>
-          <div style="color:var(--text-muted); font-size:0.9rem;">VCS health data will appear here when implemented.
+          <div style="color:var(--text-muted);font-size:0.9rem;">VCS health data will appear here when implemented.
           </div>
         </div>
       </div>
@@ -919,27 +961,20 @@
   </div>
 
   <script>
-    // ─── State ───
+    // ─── State ───────────────────────────────────────────────────────────────
     let ros = null;
     let currentRobot = document.getElementById('robotSelect').value;
     let turnCount = 0;
-    let latencies = [];
+    let latencies = [];   // all completed turn latencies (seconds)
+    let tpsReadings = [];   // all completed turn tok/s values
     let isAutoScroll = true;
-
-    // currentTurn tracks the active turn card DOM references
     let currentTurn = null;
-    // {
-    //   id, startTime, tokenCount,
-    //   card        — .turn-card element
-    //   inspector   — .context-inspector element
-    //   inspBody    — .inspector-body element
-    //   pills       — .inspector-pills element
-    //   graceBubble — .bubble.grace-bubble element (null until first delta)
-    //   thinkingBubble — shown while waiting
-    //   contextSlots — array of {kind, charCount} for pill summary
-    // }
+    // currentTurn shape:
+    // { id, prompt, startTime, tokenCount,
+    //   card, inspector, inspBody, graceRow, thinkingBubble,
+    //   pills, contextSlots, graceBubble, graceText, graceMeta }
 
-    // ─── Tab Switching ───
+    // ─── Tab Switching ────────────────────────────────────────────────────────
     function switchTab(tabName, el) {
       document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
@@ -947,14 +982,14 @@
       if (el) el.classList.add('active');
     }
 
-    // ─── ROS2 Connection ───
+    // ─── ROS2 Connection ──────────────────────────────────────────────────────
     function connect(url) {
       if (ros) { ros.close(); ros = null; }
 
       document.getElementById('statusDot').classList.remove('connected');
       document.getElementById('statusText').textContent = 'Connecting...';
 
-      ros = new ROSLIB.Ros({ url: url });
+      ros = new ROSLIB.Ros({ url });
 
       ros.on('connection', () => {
         document.getElementById('statusDot').classList.add('connected');
@@ -975,50 +1010,37 @@
       });
     }
 
-    // ─── Topic Subscriptions ───
+    // ─── Topic Subscriptions ──────────────────────────────────────────────────
     function subscribeTopics() {
 
-      // /scs/text_input — new user turn begins here
+      // /scs/text_input
       const inputTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/scs/text_input',
-        messageType: 'std_msgs/String'
+        ros, name: '/scs/text_input', messageType: 'std_msgs/String'
       });
       inputTopic.subscribe((msg) => {
         try {
           const data = JSON.parse(msg.data);
-          const prompt = data.text || data.user_prompt || msg.data;
-          startNewTurn(prompt, data.user_id);
+          startNewTurn(data.text || data.user_prompt || msg.data, data.user_id);
         } catch (e) {
           startNewTurn(msg.data, null);
         }
       });
 
-      // /scs/response — streaming JSON events: start | delta | done | error
+      // /scs/response
       const responseTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/scs/response',
-        messageType: 'std_msgs/String'
+        ros, name: '/scs/response', messageType: 'std_msgs/String'
       });
       responseTopic.subscribe((msg) => {
         try {
-          const data = JSON.parse(msg.data);
-          handleResponseChunk(data);
+          handleResponseChunk(JSON.parse(msg.data));
         } catch (e) {
           appendSysEntry('Malformed response: ' + msg.data.substring(0, 100), true);
         }
       });
 
-      // /scs/memory_context — full GCE input context published by CNC before inference
-      // Payload: {"messages": [{role, content}, ...]}
-      // roles: "system" (Grace system prompt + long-term memory appended by CNC)
-      //        "user" / "assistant" (WMC PMT conversation history)
-      //        last "user" = the current live prompt (may duplicate text_input)
-      // EMC recalled episodes are embedded inside content; detected by marker heuristics.
+      // /scs/memory_context
       const contextTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/scs/memory_context',
-        messageType: 'std_msgs/String'
+        ros, name: '/scs/memory_context', messageType: 'std_msgs/String'
       });
       contextTopic.subscribe((msg) => {
         let data;
@@ -1028,11 +1050,9 @@
           return;
         }
 
-        // Ensure we have a turn card to inject context into.
-        // memory_context can arrive before or after text_input depending on timing.
         if (!currentTurn) startNewTurn('(context received before prompt)', null);
 
-        // Top-level EMC-only payload e.g. {emc:[...], episodes:[...]}
+        // Top-level EMC-only payload
         if (data.emc || data.episodes) {
           const eps = data.emc ?? data.episodes ?? [];
           const lines = Array.isArray(eps)
@@ -1051,7 +1071,6 @@
           return;
         }
 
-        // EMC injection detection — patterns CNC may embed in content
         const EMC_MARKERS = [
           /\[RECALLED EPISODE/i, /\[EMC/i, /<<EMC/i, /\[EPISODIC MEMORY/i,
           /^\s*\[\d+\]\s+\{.*"timestamp"/m,
@@ -1068,7 +1087,6 @@
           const slot = `${i + 1}/${total}`;
 
           if (role === 'system') {
-            // System prompt may have EMC injected at the end — split it out
             const emcIdx = content.search(/\n(?=\[RECALLED EPISODE|\[EMC|<<EMC|\[EPISODIC)/i);
             if (emcIdx > -1) {
               addContextRow('system', 'SYSTEM', content.slice(0, emcIdx).trim(),
@@ -1087,7 +1105,6 @@
               addContextRow('emc', 'EMC', content,
                 `EMC recalled episodes · slot ${slot} · ${content.length} chars`);
             } else {
-              // Skip if this is just the live prompt (already shown as user bubble)
               const isLivePrompt = i === total - 1 && currentTurn &&
                 content.trim() === currentTurn.prompt.trim();
               if (!isLivePrompt) {
@@ -1096,8 +1113,7 @@
               }
             }
           } else {
-            addContextRow('wmc', `WMC·${role.toUpperCase()}`, content,
-              `WMC [${role}] · slot ${slot}`);
+            addContextRow('wmc', `WMC·${role.toUpperCase()}`, content, `WMC [${role}] · slot ${slot}`);
           }
         });
 
@@ -1106,29 +1122,26 @@
 
       // /scs/memory_stats
       const statsTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/scs/memory_stats',
-        messageType: 'std_msgs/String'
+        ros, name: '/scs/memory_stats', messageType: 'std_msgs/String'
       });
       statsTopic.subscribe((msg) => {
         try { updateStats(JSON.parse(msg.data)); } catch (e) { }
       });
     }
 
-    // ─── Turn Management ───
+    // ─── Turn Management ──────────────────────────────────────────────────────
     function startNewTurn(prompt, userId) {
       turnCount++;
       document.getElementById('statTurnCount').textContent = turnCount;
 
-      const streamStartTime = Date.now();
       const id = turnCount;
+      const streamStartTime = Date.now();
 
-      // ── Turn card DOM ──
       const card = document.createElement('div');
       card.className = 'turn-card';
       card.dataset.turnId = id;
 
-      // Turn header divider
+      // Turn header
       const hdr = document.createElement('div');
       hdr.className = 'turn-header';
       const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1149,7 +1162,7 @@
       userRow.appendChild(userBubble);
       card.appendChild(userRow);
 
-      // Context inspector (collapsed by default)
+      // Context inspector
       const inspector = document.createElement('div');
       inspector.className = 'context-inspector';
       const toggle = document.createElement('div');
@@ -1168,7 +1181,7 @@
       inspector.appendChild(inspBody);
       card.appendChild(inspector);
 
-      // Thinking bubble (placeholder until first response delta)
+      // Thinking bubble
       const graceRow = document.createElement('div');
       graceRow.className = 'bubble-row grace-row';
       const thinkingBubble = document.createElement('div');
@@ -1178,8 +1191,9 @@
       card.appendChild(graceRow);
 
       const stream = document.getElementById('debugStream');
-      // Remove placeholder text if present
-      if (stream.children.length === 1 && !stream.children[0].classList.contains('turn-card') && !stream.children[0].classList.contains('sys-entry')) {
+      if (stream.children.length === 1 &&
+        !stream.children[0].classList.contains('turn-card') &&
+        !stream.children[0].classList.contains('sys-entry')) {
         stream.innerHTML = '';
       }
       stream.appendChild(card);
@@ -1191,10 +1205,12 @@
         pills: toggle.querySelector('.inspector-pills'),
         contextSlots: [],
         graceBubble: null,
+        graceText: null,
+        graceMeta: null,
       };
     }
 
-    // ─── Add a context row inside the inspector ───
+    // ─── Context Inspector helpers ─────────────────────────────────────────────
     function addContextRow(kind, label, content, meta) {
       if (!currentTurn) return;
       const row = document.createElement('div');
@@ -1225,23 +1241,21 @@
       currentTurn.contextSlots.push({ kind, charCount: content.length });
     }
 
-    // ─── Update inspector summary pills ───
     function updateInspectorPills() {
       if (!currentTurn) return;
-      const slots = currentTurn.contextSlots;
       const counts = { system: 0, emc: 0, wmc: 0, 'wmc-assistant': 0 };
-      slots.forEach(s => { if (counts[s.kind] !== undefined) counts[s.kind]++; });
+      currentTurn.contextSlots.forEach(s => { if (counts[s.kind] !== undefined) counts[s.kind]++; });
 
       const pills = currentTurn.pills;
       pills.innerHTML = '';
       if (counts.system) pills.innerHTML += `<span class="pill system">🔴 SYS</span>`;
       if (counts.emc) pills.innerHTML += `<span class="pill emc">🟠 EMC×${counts.emc}</span>`;
-      if (counts.wmc + counts['wmc-assistant'] > 0)
-        pills.innerHTML += `<span class="pill wmc">🟡 WMC×${counts.wmc + counts['wmc-assistant']}</span>`;
-      if (!slots.length) pills.innerHTML = `<span class="pill none">no context yet</span>`;
+      const wmcTotal = counts.wmc + counts['wmc-assistant'];
+      if (wmcTotal > 0) pills.innerHTML += `<span class="pill wmc">🟡 WMC×${wmcTotal}</span>`;
+      if (!currentTurn.contextSlots.length) pills.innerHTML = `<span class="pill none">no context yet</span>`;
     }
 
-    // ─── Handle streaming response chunks ───
+    // ─── Response Chunk Handler ───────────────────────────────────────────────
     function handleResponseChunk(data) {
       if (!currentTurn) return;
 
@@ -1257,7 +1271,7 @@
         document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
 
         if (!currentTurn.graceBubble) {
-          // First delta — replace thinking bubble with real Grace bubble
+          // First delta — swap thinking → real Grace bubble
           currentTurn.thinkingBubble.remove();
           const graceBubble = document.createElement('div');
           graceBubble.className = 'bubble grace-bubble streaming-cursor';
@@ -1280,23 +1294,48 @@
         }
 
       } else if (data.type === 'done') {
-        const latency = ((now - currentTurn.startTime) / 1000).toFixed(2);
-        latencies.push(parseFloat(latency));
-        const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
 
+        // ── Compute latency for this turn ──
+        const latency = parseFloat(((now - currentTurn.startTime) / 1000).toFixed(2));
+        latencies.push(latency);
+
+        // ── Compute tok/s for this turn ──
+        const tps = latency > 0
+          ? parseFloat((currentTurn.tokenCount / latency).toFixed(1))
+          : 0;
+        tpsReadings.push(tps);
+
+        // ── Derived stats ──
+        const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
+        const minLatency = Math.min(...latencies).toFixed(2);
+        const maxLatency = Math.max(...latencies).toFixed(2);
+
+        const minTps = Math.min(...tpsReadings).toFixed(1);
+        const maxTps = Math.max(...tpsReadings).toFixed(1);
+
+        // ── Update DOM ──
         document.getElementById('statLatency').textContent = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
+        document.getElementById('statLatMin').textContent = `↓ ${minLatency}s`;
+        document.getElementById('statLatMax').textContent = `↑ ${maxLatency}s`;
 
+        document.getElementById('statTokensSec').textContent = tps.toFixed(1);
+        document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
+        document.getElementById('statTpsMin').textContent = `↓ ${minTps}`;
+        document.getElementById('statTpsMax').textContent = `↑ ${maxTps}`;
+
+        // ── Finalise Grace bubble ──
         if (currentTurn.graceBubble) {
           currentTurn.graceBubble.classList.remove('streaming-cursor');
           currentTurn.graceMeta.textContent =
-            `${latency}s · ${currentTurn.tokenCount} tokens · ${(currentTurn.tokenCount / parseFloat(latency)).toFixed(1)} tok/s`;
+            `${latency}s · ${currentTurn.tokenCount} tokens · ${tps.toFixed(1)} tok/s`;
         } else {
-          // done with no content (empty response)
+          // done but no content
           currentTurn.thinkingBubble.className = 'bubble grace-bubble';
           currentTurn.thinkingBubble.querySelector('div').textContent = '✓ Grace';
           currentTurn.thinkingBubble.querySelector('span').textContent = '(empty response)';
         }
+
         currentTurn = null;
 
       } else if (data.type === 'error') {
@@ -1321,13 +1360,14 @@
       }
     }
 
+    // ─── Token Estimator ──────────────────────────────────────────────────────
     function estimateTokens(text) {
       if (!text) return 0;
       const cjk = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
       return Math.ceil(cjk / 2 + (text.length - cjk) / 4) || 1;
     }
 
-    // ─── System log entry (non-turn events) ───
+    // ─── System Log ───────────────────────────────────────────────────────────
     function appendSysEntry(msg, isError = false) {
       const stream = document.getElementById('debugStream');
       const el = document.createElement('div');
@@ -1339,11 +1379,9 @@
       if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
     }
 
-    // Legacy shim — keeps teleop calls working
-    function addStreamEntry(type, content, opts = {}) {
-      if (type === 'system' || type === 'error') {
-        appendSysEntry(content, type === 'error');
-      }
+    // legacy shim
+    function addStreamEntry(type, content) {
+      if (type === 'system' || type === 'error') appendSysEntry(content, type === 'error');
     }
 
     function clearStream() {
@@ -1353,12 +1391,13 @@
         </div>`;
     }
 
-    // ─── Stats Update ───
+    // ─── Stats Update (memory_stats topic) ────────────────────────────────────
     function updateStats(stats) {
       if (stats.wmc) {
         const wmc = stats.wmc;
         document.getElementById('statWmcSize').textContent = wmc.pmt_count;
-        document.getElementById('statWmcPct').textContent = `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
+        document.getElementById('statWmcPct').textContent =
+          `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
         const wmcEl = document.getElementById('statWmcSize');
         wmcEl.className = 'stat-value';
         if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
@@ -1367,11 +1406,12 @@
       if (stats.emc) {
         const emc = stats.emc;
         document.getElementById('statEmcSize').textContent = emc.engram_count || 0;
-        document.getElementById('statEmcLast').textContent = `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
+        document.getElementById('statEmcLast').textContent =
+          `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
       }
     }
 
-    // ─── Auto-scroll pause ───
+    // ─── Auto-scroll pause on manual scroll ───────────────────────────────────
     const debugStream = document.getElementById('debugStream');
     debugStream.addEventListener('scroll', () => {
       const nearBottom = debugStream.scrollHeight - debugStream.scrollTop - debugStream.clientHeight < 50;
@@ -1379,15 +1419,11 @@
       document.getElementById('pauseIndicator').classList.toggle('active', !nearBottom);
     });
 
-    // ─── Teleop ───
-    function teleop(direction) {
-      appendSysEntry(`Teleop: ${direction}`);
-    }
-    function emergencyStop() {
-      appendSysEntry('🚨 EMERGENCY STOP ACTIVATED', true);
-    }
+    // ─── Teleop ───────────────────────────────────────────────────────────────
+    function teleop(direction) { appendSysEntry(`Teleop: ${direction}`); }
+    function emergencyStop() { appendSysEntry('🚨 EMERGENCY STOP ACTIVATED', true); }
 
-    // ─── Keyboard Controls ───
+    // ─── Keyboard Controls ────────────────────────────────────────────────────
     document.addEventListener('keydown', (e) => {
       if (document.getElementById('tab-teleop').classList.contains('active')) {
         switch (e.key.toLowerCase()) {
@@ -1401,7 +1437,7 @@
       }
     });
 
-    // ─── Uptime Counter ───
+    // ─── Uptime Counter ───────────────────────────────────────────────────────
     let uptimeSeconds = 0;
     setInterval(() => {
       uptimeSeconds++;
@@ -1410,15 +1446,14 @@
       document.getElementById('statUptime').textContent = `Up: ${mins}:${secs}`;
     }, 1000);
 
-    // ─── Robot Selector ───
+    // ─── Robot Selector ───────────────────────────────────────────────────────
     document.getElementById('robotSelect').addEventListener('change', (e) => {
       currentRobot = e.target.value;
       connect(currentRobot);
     });
 
-    // ─── Init ───
+    // ─── Init ─────────────────────────────────────────────────────────────────
     connect(currentRobot);
-
   </script>
 
 </body>
