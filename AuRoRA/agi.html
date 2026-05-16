@@ -256,174 +256,370 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* ─── Debug Stream ─── */
+    /* ─── Debug Stream — Chat Layout ─── */
     .debug-stream {
       flex: 1;
       overflow-y: auto;
-      padding: 12px 20px;
+      padding: 16px 20px;
       min-height: 0;
       font-size: 0.88rem;
       line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
-    .stream-entry {
-      margin-bottom: 3px;
-      padding: 8px 12px;
-      border-radius: 10px;
-      border-left: 3px solid transparent;
-      animation: slideIn 0.15s ease;
+    /* ── Turn Card ── */
+    .turn-card {
       display: flex;
-      gap: 10px;
-      align-items: flex-start;
+      flex-direction: column;
+      gap: 6px;
+      animation: slideIn 0.2s ease;
     }
 
     @keyframes slideIn {
       from {
         opacity: 0;
-        transform: translateX(-6px);
+        transform: translateY(8px);
       }
 
       to {
         opacity: 1;
-        transform: translateX(0);
+        transform: translateY(0);
       }
     }
 
-    /* ── Block colours ── */
-
-    /* USER PROMPT — Cyan */
-    .stream-entry.user-prompt {
-      background: rgba(34, 211, 238, 0.07);
-      border-left-color: #22d3ee;
+    .turn-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 0 4px;
     }
 
-    .badge-user {
-      background: rgba(34, 211, 238, 0.18);
-      color: #67e8f9;
+    .turn-header-line {
+      flex: 1;
+      height: 1px;
+      background: var(--glass-border);
     }
 
-    /* SYSTEM PROMPT — Red */
-    .stream-entry.system-prompt {
-      background: rgba(248, 113, 113, 0.08);
-      border-left-color: #f87171;
+    /* ── USER bubble — right-aligned cyan ── */
+    .bubble-row {
+      display: flex;
     }
 
-    .badge-system-prompt {
-      background: rgba(248, 113, 113, 0.20);
-      color: #fca5a5;
+    .bubble-row.user-row {
+      justify-content: flex-end;
     }
 
-    /* EMC MEMORY — Orange */
-    .stream-entry.emc-context {
-      background: rgba(251, 146, 60, 0.08);
-      border-left-color: #fb923c;
+    .bubble-row.grace-row {
+      justify-content: flex-start;
     }
 
-    .badge-emc {
-      background: rgba(251, 146, 60, 0.20);
-      color: #fdba74;
+    .bubble {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      position: relative;
     }
 
-    /* WMC MEMORY — Yellow */
-    .stream-entry.memory-context {
-      background: rgba(253, 224, 71, 0.07);
-      border-left-color: #fde047;
+    .bubble.user-bubble {
+      background: rgba(34, 211, 238, 0.12);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      border-bottom-right-radius: 4px;
+      color: #cffafe;
     }
 
-    .badge-memory {
-      background: rgba(253, 224, 71, 0.18);
-      color: #fef08a;
+    .bubble.grace-bubble {
+      background: rgba(167, 139, 250, 0.10);
+      border: 1px solid rgba(167, 139, 250, 0.22);
+      border-bottom-left-radius: 4px;
+      color: var(--text-primary);
     }
 
-    /* AI THINKING */
-    .stream-entry.ai-thinking {
-      background: rgba(251, 191, 36, 0.04);
-      border-left-color: var(--warning);
-    }
-
-    .badge-thinking {
-      background: rgba(251, 191, 36, 0.15);
+    .bubble.thinking-bubble {
+      background: rgba(251, 191, 36, 0.06);
+      border: 1px solid rgba(251, 191, 36, 0.18);
+      border-bottom-left-radius: 4px;
       color: var(--warning);
+      font-style: italic;
     }
 
-    /* GRACE RESPONSE — Lavender */
-    .stream-entry.ai-response,
-    .stream-entry.ai-done {
-      background: rgba(167, 139, 250, 0.08);
-      border-left-color: #a78bfa;
-    }
-
-    .badge-ai {
-      background: rgba(167, 139, 250, 0.20);
-      color: #c4b5fd;
-    }
-
-    /* ERROR */
-    .stream-entry.error {
+    .bubble.error-bubble {
       background: rgba(248, 113, 113, 0.08);
-      border-left-color: var(--danger);
-    }
-
-    .badge-error {
-      background: rgba(248, 113, 113, 0.15);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      border-bottom-left-radius: 4px;
       color: var(--danger);
     }
 
-    /* SYSTEM */
-    .stream-entry.system {
-      background: rgba(148, 163, 184, 0.04);
-      border-left-color: var(--text-muted);
-    }
-
-    .badge-system {
-      background: rgba(148, 163, 184, 0.1);
-      color: var(--text-muted);
-    }
-
-    .stream-time {
-      color: var(--text-muted);
-      font-size: 0.72rem;
-      min-width: 64px;
-      flex-shrink: 0;
-      margin-top: 2px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .stream-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 0.67rem;
-      font-weight: 700;
+    .bubble-label {
+      font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      flex-shrink: 0;
-      margin-top: 2px;
-      white-space: nowrap;
+      font-weight: 700;
+      margin-bottom: 4px;
+      opacity: 0.7;
     }
 
-    .stream-content {
-      color: var(--text-primary);
-      word-break: break-word;
-      flex: 1;
-      white-space: pre-wrap;
+    .user-bubble .bubble-label {
+      color: #22d3ee;
     }
 
-    .stream-content.collapsed {
-      max-height: 3.2em;
+    .grace-bubble .bubble-label {
+      color: var(--lavender-soft);
+    }
+
+    .thinking-bubble .bubble-label {
+      color: var(--warning);
+    }
+
+    .bubble-meta {
+      font-size: 0.67rem;
+      color: var(--text-muted);
+      margin-top: 5px;
+      font-style: italic;
+    }
+
+    /* streaming cursor blink */
+    .streaming-cursor::after {
+      content: '▍';
+      animation: blink 0.7s step-end infinite;
+      color: var(--lavender);
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+
+    /* ── Context Inspector — collapsible panel inside the turn ── */
+    .context-inspector {
+      margin: 0 4px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
       overflow: hidden;
-      mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-      -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      background: rgba(10, 10, 20, 0.35);
+    }
+
+    .inspector-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      background: rgba(167, 139, 250, 0.04);
+      border-bottom: 1px solid transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .inspector-toggle:hover {
+      background: rgba(167, 139, 250, 0.09);
+      color: var(--lavender-soft);
+    }
+
+    .inspector-toggle.open {
+      border-bottom-color: var(--glass-border);
+    }
+
+    .inspector-arrow {
+      font-size: 0.6rem;
+      transition: transform 0.2s;
+      opacity: 0.5;
+    }
+
+    .inspector-toggle.open .inspector-arrow {
+      transform: rotate(90deg);
+    }
+
+    .inspector-pills {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .inspector-body {
+      display: none;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .inspector-body.open {
+      display: flex;
+    }
+
+    /* ── Inspector rows (SYSTEM / WMC / EMC slots) ── */
+    .ctx-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       cursor: pointer;
     }
 
-    .stream-meta {
-      font-size: 0.72rem;
+    .ctx-row:last-child {
+      border-bottom: none;
+    }
+
+    .ctx-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .ctx-row.system {
+      border-left: 3px solid #f87171;
+    }
+
+    .ctx-row.emc {
+      border-left: 3px solid #fb923c;
+    }
+
+    .ctx-row.wmc {
+      border-left: 3px solid #fde047;
+    }
+
+    .ctx-row.wmc-assistant {
+      border-left: 3px solid #a78bfa;
+    }
+
+    .ctx-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      white-space: nowrap;
+    }
+
+    .ctx-badge.system {
+      background: rgba(248, 113, 113, 0.18);
+      color: #fca5a5;
+    }
+
+    .ctx-badge.emc {
+      background: rgba(251, 146, 60, 0.18);
+      color: #fdba74;
+    }
+
+    .ctx-badge.wmc {
+      background: rgba(253, 224, 71, 0.15);
+      color: #fef08a;
+    }
+
+    .ctx-badge.wmc-assistant {
+      background: rgba(167, 139, 250, 0.18);
+      color: #c4b5fd;
+    }
+
+    .ctx-content {
+      flex: 1;
+      font-size: 0.78rem;
       color: var(--text-muted);
-      margin-top: 3px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 2.8em;
+      overflow: hidden;
+      mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      transition: max-height 0.25s ease, mask-image 0s 0.25s;
+    }
+
+    .ctx-content.expanded {
+      max-height: 400px;
+      overflow-y: auto;
+      mask-image: none;
+      -webkit-mask-image: none;
+      color: var(--text-primary);
+    }
+
+    .ctx-meta {
+      font-size: 0.63rem;
+      color: rgba(148, 163, 184, 0.55);
+      margin-top: 2px;
       font-style: italic;
+    }
+
+    /* ── Inspector summary pills ── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      opacity: 0.75;
+    }
+
+    .pill.system {
+      background: rgba(248, 113, 113, 0.14);
+      color: #fca5a5;
+    }
+
+    .pill.emc {
+      background: rgba(251, 146, 60, 0.14);
+      color: #fdba74;
+    }
+
+    .pill.wmc {
+      background: rgba(253, 224, 71, 0.12);
+      color: #fef08a;
+    }
+
+    .pill.grace {
+      background: rgba(167, 139, 250, 0.14);
+      color: #c4b5fd;
+    }
+
+    .pill.none {
+      background: rgba(148, 163, 184, 0.08);
+      color: var(--text-muted);
+    }
+
+    /* ── System log entries (non-turn events) ── */
+    .sys-entry {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.04);
+      border-left: 2px solid var(--text-muted);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      animation: slideIn 0.15s ease;
+    }
+
+    .sys-entry.error-entry {
+      background: rgba(248, 113, 113, 0.06);
+      border-left-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* legacy — keep so nothing crashes if called */
+    .stream-badge {
+      display: none;
+    }
+
+    .stream-entry {
+      display: none;
     }
 
     /* ─── Scrollbar ─── */
@@ -639,12 +835,17 @@
         <!-- Legend -->
         <div class="stream-legend">
           <span class="legend-label">Legend:</span>
-          <span class="stream-badge badge-system-prompt">🔴 SYSTEM</span>
-          <span class="stream-badge badge-emc">🟠 EMC</span>
-          <span class="stream-badge badge-memory">🟡 WMC</span>
-          <span class="stream-badge badge-user">🔵 USER</span>
-          <span class="stream-badge badge-ai">🟣 GRACE</span>
-          <span class="stream-badge badge-error">✗ ERROR</span>
+          <span class="pill system" style="font-size:0.68rem;padding:2px 8px;">🔴 SYSTEM PROMPT</span>
+          <span class="pill emc" style="font-size:0.68rem;padding:2px 8px;">🟠 EMC RECALLED</span>
+          <span class="pill wmc" style="font-size:0.68rem;padding:2px 8px;">🟡 WMC PMT</span>
+          <span
+            style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.68rem;background:rgba(34,211,238,0.12);color:#67e8f9;">🔵
+            USER</span>
+          <span
+            style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.68rem;background:rgba(167,139,250,0.12);color:#c4b5fd;">🟣
+            GRACE</span>
+          <span style="font-size:0.62rem;color:var(--text-muted);margin-left:4px;">· System/WMC/EMC inside <em>Context
+              Inspector</em></span>
         </div>
 
         <!-- Continuous Debug Stream -->
@@ -722,11 +923,21 @@
     let ros = null;
     let currentRobot = document.getElementById('robotSelect').value;
     let turnCount = 0;
-    let streamStartTime = null;
-    let tokenCount = 0;
     let latencies = [];
     let isAutoScroll = true;
+
+    // currentTurn tracks the active turn card DOM references
     let currentTurn = null;
+    // {
+    //   id, startTime, tokenCount,
+    //   card        — .turn-card element
+    //   inspector   — .context-inspector element
+    //   inspBody    — .inspector-body element
+    //   pills       — .inspector-pills element
+    //   graceBubble — .bubble.grace-bubble element (null until first delta)
+    //   thinkingBubble — shown while waiting
+    //   contextSlots — array of {kind, charCount} for pill summary
+    // }
 
     // ─── Tab Switching ───
     function switchTab(tabName, el) {
@@ -755,7 +966,7 @@
       ros.on('error', (err) => {
         document.getElementById('statusDot').classList.remove('connected');
         document.getElementById('statusText').textContent = 'Error';
-        addStreamEntry('system', 'Connection error: ' + err.message, { error: true });
+        appendSysEntry('Connection error: ' + (err.message || err), true);
       });
 
       ros.on('close', () => {
@@ -766,26 +977,27 @@
 
     // ─── Topic Subscriptions ───
     function subscribeTopics() {
-      // User Prompt
+
+      // /scs/text_input — new user turn begins here
       const inputTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/scs/text_input_gateway',
+        name: '/scs/text_input',
         messageType: 'std_msgs/String'
       });
       inputTopic.subscribe((msg) => {
         try {
           const data = JSON.parse(msg.data);
           const prompt = data.text || data.user_prompt || msg.data;
-          startNewTurn(prompt);
+          startNewTurn(prompt, data.user_id);
         } catch (e) {
-          startNewTurn(msg.data);
+          startNewTurn(msg.data, null);
         }
       });
 
-      // Response Gateway
+      // /scs/response — streaming JSON events: start | delta | done | error
       const responseTopic = new ROSLIB.Topic({
         ros: ros,
-        name: '/scs/response_gateway',
+        name: '/scs/response',
         messageType: 'std_msgs/String'
       });
       responseTopic.subscribe((msg) => {
@@ -793,11 +1005,16 @@
           const data = JSON.parse(msg.data);
           handleResponseChunk(data);
         } catch (e) {
-          addStreamEntry('system', 'Malformed response: ' + msg.data.substring(0, 100), { error: true });
+          appendSysEntry('Malformed response: ' + msg.data.substring(0, 100), true);
         }
       });
 
-      // Memory Context (WMC) — handles full assembled context payload
+      // /scs/memory_context — full GCE input context published by CNC before inference
+      // Payload: {"messages": [{role, content}, ...]}
+      // roles: "system" (Grace system prompt + long-term memory appended by CNC)
+      //        "user" / "assistant" (WMC PMT conversation history)
+      //        last "user" = the current live prompt (may duplicate text_input)
+      // EMC recalled episodes are embedded inside content; detected by marker heuristics.
       const contextTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/memory_context',
@@ -805,82 +1022,89 @@
       });
       contextTopic.subscribe((msg) => {
         let data;
-        try {
-          data = JSON.parse(msg.data);
-        } catch (e) {
-          addStreamEntry('error', 'memory_context: JSON parse failed — ' + msg.data.substring(0, 120), { meta: 'Parse error' });
+        try { data = JSON.parse(msg.data); }
+        catch (e) {
+          appendSysEntry('memory_context parse fail: ' + msg.data.substring(0, 80), true);
           return;
         }
 
-        // Support both {messages:[...]} and flat array payloads
+        // Ensure we have a turn card to inject context into.
+        // memory_context can arrive before or after text_input depending on timing.
+        if (!currentTurn) startNewTurn('(context received before prompt)', null);
+
+        // Top-level EMC-only payload e.g. {emc:[...], episodes:[...]}
+        if (data.emc || data.episodes) {
+          const eps = data.emc ?? data.episodes ?? [];
+          const lines = Array.isArray(eps)
+            ? eps.map((ep, i) => `[${i + 1}] ${typeof ep === 'string' ? ep : JSON.stringify(ep)}`).join('\n')
+            : JSON.stringify(eps).substring(0, 800);
+          addContextRow('emc', 'EMC', lines, `${Array.isArray(eps) ? eps.length : '?'} episodes recalled`);
+          return;
+        }
+
         const messages = Array.isArray(data) ? data
           : Array.isArray(data.messages) ? data.messages
             : null;
 
         if (!messages) {
-          // Unknown shape — dump raw so we can see what's arriving
-          addStreamEntry('system', 'memory_context: unexpected shape — ' + JSON.stringify(data).substring(0, 200), { meta: 'Unknown payload' });
+          appendSysEntry('memory_context: unknown shape — ' + JSON.stringify(data).substring(0, 120));
           return;
         }
 
+        // EMC injection detection — patterns CNC may embed in content
+        const EMC_MARKERS = [
+          /\[RECALLED EPISODE/i, /\[EMC/i, /<<EMC/i, /\[EPISODIC MEMORY/i,
+          /^\s*\[\d+\]\s+\{.*"timestamp"/m,
+          /^\s*\[\d+\]\s+\w.*\d{4}-\d{2}-\d{2}/m,
+        ];
+        const isEmc = (text) => EMC_MARKERS.some(re => re.test(text));
+
+        const total = messages.length;
         messages.forEach((m, i) => {
           const role = (m.role || 'unknown').toLowerCase();
           const content = Array.isArray(m.content)
-            ? m.content.map(c => (typeof c === 'string' ? c : c.text ?? JSON.stringify(c))).join('\n')
+            ? m.content.map(c => typeof c === 'string' ? c : (c.text ?? JSON.stringify(c))).join('\n')
             : (m.content ?? '');
-          const total = messages.length;
+          const slot = `${i + 1}/${total}`;
 
           if (role === 'system') {
-            addStreamEntry('system-prompt', content, {
-              turnId: currentTurn?.id,
-              collapsed: true,
-              meta: `System prompt · ${content.length} chars`
-            });
-          } else if (role === 'user') {
-            addStreamEntry('user-prompt', content, {
-              turnId: currentTurn?.id,
-              collapsed: true,
-              meta: `WMC USER · ${i + 1}/${total}`
-            });
+            // System prompt may have EMC injected at the end — split it out
+            const emcIdx = content.search(/\n(?=\[RECALLED EPISODE|\[EMC|<<EMC|\[EPISODIC)/i);
+            if (emcIdx > -1) {
+              addContextRow('system', 'SYSTEM', content.slice(0, emcIdx).trim(),
+                `System prompt · slot ${slot} · ${emcIdx} chars`);
+              addContextRow('emc', 'EMC', content.slice(emcIdx).trim(),
+                `EMC injected into system · slot ${slot}`);
+            } else {
+              addContextRow('system', 'SYSTEM', content,
+                `System prompt · slot ${slot} · ${content.length} chars`);
+            }
           } else if (role === 'assistant') {
-            addStreamEntry('ai-done', content, {
-              turnId: currentTurn?.id,
-              collapsed: true,
-              meta: `WMC ASSISTANT · ${i + 1}/${total}`
-            });
+            addContextRow('wmc-assistant', 'WMC·GRACE', content,
+              `WMC prior Grace turn · slot ${slot} · ${content.length} chars`);
+          } else if (role === 'user') {
+            if (isEmc(content)) {
+              addContextRow('emc', 'EMC', content,
+                `EMC recalled episodes · slot ${slot} · ${content.length} chars`);
+            } else {
+              // Skip if this is just the live prompt (already shown as user bubble)
+              const isLivePrompt = i === total - 1 && currentTurn &&
+                content.trim() === currentTurn.prompt.trim();
+              if (!isLivePrompt) {
+                addContextRow('wmc', 'WMC·USER', content,
+                  `WMC prior user turn · slot ${slot} · ${content.length} chars`);
+              }
+            }
           } else {
-            addStreamEntry('memory-context', content, {
-              turnId: currentTurn?.id,
-              collapsed: true,
-              meta: `WMC [${role.toUpperCase()}] · ${i + 1}/${total}`
-            });
+            addContextRow('wmc', `WMC·${role.toUpperCase()}`, content,
+              `WMC [${role}] · slot ${slot}`);
           }
         });
+
+        updateInspectorPills();
       });
 
-      // EMC Context — orange block
-      const emcTopic = new ROSLIB.Topic({
-        ros: ros,
-        name: '/scs/emc_context',
-        messageType: 'std_msgs/String'
-      });
-      emcTopic.subscribe((msg) => {
-        let data;
-        try { data = JSON.parse(msg.data); } catch (e) {
-          addStreamEntry('emc-context', msg.data, { collapsed: true, meta: 'EMC recall (raw)' });
-          return;
-        }
-        const content = data.episodes
-          ? data.episodes.map((ep, i) => `[${i + 1}] ${ep}`).join('\n')
-          : (data.content || JSON.stringify(data).substring(0, 300));
-        addStreamEntry('emc-context', content, {
-          turnId: currentTurn?.id,
-          collapsed: true,
-          meta: `EMC · ${data.count ?? data.episodes?.length ?? '?'} episodes · score ${data.score ?? '—'}`
-        });
-      });
-
-      // Memory Stats
+      // /scs/memory_stats
       const statsTopic = new ROSLIB.Topic({
         ros: ros,
         name: '/scs/memory_stats',
@@ -892,31 +1116,132 @@
     }
 
     // ─── Turn Management ───
-    function startNewTurn(prompt) {
+    function startNewTurn(prompt, userId) {
       turnCount++;
       document.getElementById('statTurnCount').textContent = turnCount;
 
-      streamStartTime = Date.now();
-      tokenCount = 0;
+      const streamStartTime = Date.now();
+      const id = turnCount;
+
+      // ── Turn card DOM ──
+      const card = document.createElement('div');
+      card.className = 'turn-card';
+      card.dataset.turnId = id;
+
+      // Turn header divider
+      const hdr = document.createElement('div');
+      hdr.className = 'turn-header';
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      hdr.innerHTML = `<div class="turn-header-line"></div>
+        <span>Turn #${id} · ${ts}${userId ? ' · ' + userId : ''}</span>
+        <div class="turn-header-line"></div>`;
+      card.appendChild(hdr);
+
+      // User bubble
+      const userRow = document.createElement('div');
+      userRow.className = 'bubble-row user-row';
+      const userBubble = document.createElement('div');
+      userBubble.className = 'bubble user-bubble';
+      userBubble.innerHTML = `<div class="bubble-label">👤 You</div>`;
+      const userText = document.createElement('div');
+      userText.textContent = prompt;
+      userBubble.appendChild(userText);
+      userRow.appendChild(userBubble);
+      card.appendChild(userRow);
+
+      // Context inspector (collapsed by default)
+      const inspector = document.createElement('div');
+      inspector.className = 'context-inspector';
+      const toggle = document.createElement('div');
+      toggle.className = 'inspector-toggle';
+      toggle.innerHTML = `<span class="inspector-arrow">▶</span>
+        <span style="font-weight:600;color:var(--lavender-soft);margin-right:4px;">Context Inspector</span>
+        <div class="inspector-pills"></div>
+        <span style="margin-left:auto;opacity:0.4;font-size:0.6rem;">click to expand</span>`;
+      const inspBody = document.createElement('div');
+      inspBody.className = 'inspector-body';
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('open');
+        inspBody.classList.toggle('open');
+      });
+      inspector.appendChild(toggle);
+      inspector.appendChild(inspBody);
+      card.appendChild(inspector);
+
+      // Thinking bubble (placeholder until first response delta)
+      const graceRow = document.createElement('div');
+      graceRow.className = 'bubble-row grace-row';
+      const thinkingBubble = document.createElement('div');
+      thinkingBubble.className = 'bubble thinking-bubble';
+      thinkingBubble.innerHTML = `<div class="bubble-label">⚡ Grace</div><span>Thinking...</span>`;
+      graceRow.appendChild(thinkingBubble);
+      card.appendChild(graceRow);
+
+      const stream = document.getElementById('debugStream');
+      // Remove placeholder text if present
+      if (stream.children.length === 1 && !stream.children[0].classList.contains('turn-card') && !stream.children[0].classList.contains('sys-entry')) {
+        stream.innerHTML = '';
+      }
+      stream.appendChild(card);
+      if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
+
       currentTurn = {
-        id: turnCount,
-        prompt: prompt,
-        response: '',
-        startTime: streamStartTime,
+        id, prompt, startTime: streamStartTime, tokenCount: 0,
+        card, inspector, inspBody, graceRow, thinkingBubble,
+        pills: toggle.querySelector('.inspector-pills'),
+        contextSlots: [],
+        graceBubble: null,
       };
-
-      addStreamEntry('user-prompt', prompt, {
-        turnId: turnCount,
-        meta: `Turn #${turnCount} · ${prompt.length} chars · ~${Math.ceil(prompt.length / 4)} tokens`
-      });
-
-      addStreamEntry('ai-thinking', 'GCE streaming...', {
-        turnId: turnCount,
-        isThinking: true,
-        meta: 'Waiting for first token...'
-      });
     }
 
+    // ─── Add a context row inside the inspector ───
+    function addContextRow(kind, label, content, meta) {
+      if (!currentTurn) return;
+      const row = document.createElement('div');
+      row.className = `ctx-row ${kind}`;
+
+      const badge = document.createElement('span');
+      badge.className = `ctx-badge ${kind}`;
+      badge.textContent = label;
+
+      const right = document.createElement('div');
+      right.style.cssText = 'flex:1;min-width:0;';
+
+      const contentEl = document.createElement('div');
+      contentEl.className = 'ctx-content';
+      contentEl.textContent = content;
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'ctx-meta';
+      metaEl.textContent = meta;
+
+      right.appendChild(contentEl);
+      right.appendChild(metaEl);
+      row.appendChild(badge);
+      row.appendChild(right);
+
+      row.addEventListener('click', () => contentEl.classList.toggle('expanded'));
+      currentTurn.inspBody.appendChild(row);
+      currentTurn.contextSlots.push({ kind, charCount: content.length });
+    }
+
+    // ─── Update inspector summary pills ───
+    function updateInspectorPills() {
+      if (!currentTurn) return;
+      const slots = currentTurn.contextSlots;
+      const counts = { system: 0, emc: 0, wmc: 0, 'wmc-assistant': 0 };
+      slots.forEach(s => { if (counts[s.kind] !== undefined) counts[s.kind]++; });
+
+      const pills = currentTurn.pills;
+      pills.innerHTML = '';
+      if (counts.system) pills.innerHTML += `<span class="pill system">🔴 SYS</span>`;
+      if (counts.emc) pills.innerHTML += `<span class="pill emc">🟠 EMC×${counts.emc}</span>`;
+      if (counts.wmc + counts['wmc-assistant'] > 0)
+        pills.innerHTML += `<span class="pill wmc">🟡 WMC×${counts.wmc + counts['wmc-assistant']}</span>`;
+      if (!slots.length) pills.innerHTML = `<span class="pill none">no context yet</span>`;
+    }
+
+    // ─── Handle streaming response chunks ───
     function handleResponseChunk(data) {
       if (!currentTurn) return;
 
@@ -924,33 +1249,37 @@
       const elapsed = (now - currentTurn.startTime) / 1000;
 
       if (data.type === 'start' || data.type === 'delta') {
-        // Remove thinking indicator
-        const thinkingEl = document.querySelector('.stream-entry.ai-thinking');
-        if (thinkingEl && thinkingEl.dataset.turnId == currentTurn.id) thinkingEl.remove();
+        const chunk = data.content ?? data.text ?? '';
+        currentTurn.tokenCount += estimateTokens(chunk);
 
-        currentTurn.response += data.content;
-        tokenCount += estimateTokens(data.content);
-
-        const tps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '—';
+        const tps = elapsed > 0 ? (currentTurn.tokenCount / elapsed).toFixed(1) : '—';
         document.getElementById('statTokensSec').textContent = tps;
-        document.getElementById('statTokensTotal').textContent = `${tokenCount} tokens`;
+        document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
 
-        const allResp = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
-        const existingResponse = allResp.length > 0 ? allResp[allResp.length - 1] : null;
-
-        if (data.type === 'start' || !existingResponse) {
-          addStreamEntry('ai-response', data.content, {
-            turnId: currentTurn.id,
-            isStreaming: true,
-            meta: `Streaming... ${tps} tok/s`
-          });
+        if (!currentTurn.graceBubble) {
+          // First delta — replace thinking bubble with real Grace bubble
+          currentTurn.thinkingBubble.remove();
+          const graceBubble = document.createElement('div');
+          graceBubble.className = 'bubble grace-bubble streaming-cursor';
+          graceBubble.innerHTML = `<div class="bubble-label">🤖 Grace</div>`;
+          const responseText = document.createElement('div');
+          responseText.className = 'grace-text';
+          responseText.textContent = chunk;
+          graceBubble.appendChild(responseText);
+          const metaEl = document.createElement('div');
+          metaEl.className = 'bubble-meta';
+          metaEl.textContent = `Streaming... ${tps} tok/s`;
+          graceBubble.appendChild(metaEl);
+          currentTurn.graceRow.appendChild(graceBubble);
+          currentTurn.graceBubble = graceBubble;
+          currentTurn.graceText = responseText;
+          currentTurn.graceMeta = metaEl;
         } else {
-          existingResponse.querySelector('.stream-content').textContent += data.content;
-          const metaEl = existingResponse.querySelector('.stream-meta');
-          if (metaEl) metaEl.textContent = `Streaming... ${tps} tok/s · ${tokenCount} tokens`;
+          currentTurn.graceText.textContent += chunk;
+          currentTurn.graceMeta.textContent = `Streaming... ${tps} tok/s · ${currentTurn.tokenCount} tokens`;
         }
-      }
-      else if (data.type === 'done') {
+
+      } else if (data.type === 'done') {
         const latency = ((now - currentTurn.startTime) / 1000).toFixed(2);
         latencies.push(parseFloat(latency));
         const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
@@ -958,97 +1287,70 @@
         document.getElementById('statLatency').textContent = `${latency}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
 
-        const allResponses = document.querySelectorAll(`.stream-entry.ai-response[data-turn-id="${currentTurn.id}"]`);
-        const lastEntry = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
-        if (lastEntry) {
-          lastEntry.classList.remove('ai-response');
-          lastEntry.classList.add('ai-done');
-          const badge = lastEntry.querySelector('.stream-badge');
-          if (badge) { badge.className = 'stream-badge badge-ai'; badge.innerHTML = '✓ DONE'; }
-          const metaEl = lastEntry.querySelector('.stream-meta');
-          if (metaEl) metaEl.textContent = `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`;
+        if (currentTurn.graceBubble) {
+          currentTurn.graceBubble.classList.remove('streaming-cursor');
+          currentTurn.graceMeta.textContent =
+            `${latency}s · ${currentTurn.tokenCount} tokens · ${(currentTurn.tokenCount / parseFloat(latency)).toFixed(1)} tok/s`;
         } else {
-          addStreamEntry('ai-done', currentTurn.response, {
-            turnId: currentTurn.id,
-            meta: `${latency}s · ${tokenCount} tokens · ${(tokenCount / parseFloat(latency)).toFixed(1)} tok/s`
-          });
+          // done with no content (empty response)
+          currentTurn.thinkingBubble.className = 'bubble grace-bubble';
+          currentTurn.thinkingBubble.querySelector('div').textContent = '✓ Grace';
+          currentTurn.thinkingBubble.querySelector('span').textContent = '(empty response)';
         }
         currentTurn = null;
-      }
-      else if (data.type === 'error') {
-        addStreamEntry('error', data.content, { turnId: currentTurn?.id, meta: 'GCE Error' });
+
+      } else if (data.type === 'error') {
+        if (currentTurn.graceBubble) {
+          currentTurn.graceBubble.classList.remove('streaming-cursor');
+        } else {
+          currentTurn.thinkingBubble.remove();
+        }
+        const errBubble = document.createElement('div');
+        errBubble.className = 'bubble error-bubble';
+        errBubble.innerHTML = `<div class="bubble-label">✗ Error</div>`;
+        const errText = document.createElement('div');
+        errText.textContent = data.content ?? data.message ?? 'Unknown error';
+        errBubble.appendChild(errText);
+        currentTurn.graceRow.appendChild(errBubble);
         currentTurn = null;
+      }
+
+      if (isAutoScroll) {
+        const stream = document.getElementById('debugStream');
+        stream.scrollTop = stream.scrollHeight;
       }
     }
 
     function estimateTokens(text) {
-      const cjkCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-      const otherCount = text.length - cjkCount;
-      return Math.ceil(cjkCount / 2 + otherCount / 4) || 1;
+      if (!text) return 0;
+      const cjk = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      return Math.ceil(cjk / 2 + (text.length - cjk) / 4) || 1;
     }
 
-    // ─── Stream Entry Builder ───
-    function addStreamEntry(type, content, options = {}) {
+    // ─── System log entry (non-turn events) ───
+    function appendSysEntry(msg, isError = false) {
       const stream = document.getElementById('debugStream');
-
-      if (stream.children.length === 1 && stream.children[0].tagName === 'DIV') {
-        stream.innerHTML = '';
-      }
-
-      const entry = document.createElement('div');
-      entry.className = `stream-entry ${type}`;
-      if (options.turnId) entry.dataset.turnId = options.turnId;
-
-      const contentEl = document.createElement('div');
-      contentEl.className = 'stream-content' + (options.collapsed ? ' collapsed' : '');
-      contentEl.textContent = content;
-
-      const time = new Date().toLocaleTimeString('en-US', {
-        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
-      });
-
-      const badgeMap = {
-        'user-prompt': { cls: 'badge-user', icon: '👤', label: 'USER' },
-        'system-prompt': { cls: 'badge-system-prompt', icon: '🔴', label: 'SYSTEM' },
-        'emc-context': { cls: 'badge-emc', icon: '🟠', label: 'EMC' },
-        'memory-context': { cls: 'badge-memory', icon: '🟡', label: 'WMC' },
-        'ai-thinking': { cls: 'badge-thinking', icon: '⚡', label: 'THINK' },
-        'ai-response': { cls: 'badge-ai', icon: '🤖', label: 'GRACE' },
-        'ai-done': { cls: 'badge-ai', icon: '✓', label: 'DONE' },
-        'error': { cls: 'badge-error', icon: '✗', label: 'ERROR' },
-        'system': { cls: 'badge-system', icon: '◆', label: 'SYS' }
-      };
-      const badge = badgeMap[type] || badgeMap['system'];
-
-      entry.innerHTML = `
-        <div class="stream-time">${time}</div>
-        <div class="stream-badge ${badge.cls}">${badge.icon} ${badge.label}</div>
-        <div style="flex:1; min-width:0;">
-        </div>
-      `;
-      entry.querySelector('div:last-child').appendChild(contentEl);
-      if (options.meta) {
-        const metaEl = document.createElement('div');
-        metaEl.className = 'stream-meta';
-        metaEl.textContent = options.meta;
-        entry.querySelector('div:last-child').appendChild(metaEl);
-      }
-
-      if (options.collapsed) {
-        entry.addEventListener('click', () => contentEl.classList.toggle('collapsed'));
-      }
-
-      stream.appendChild(entry);
+      const el = document.createElement('div');
+      el.className = 'sys-entry' + (isError ? ' error-entry' : '');
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      el.innerHTML = `<span style="color:var(--text-muted);font-size:0.65rem;flex-shrink:0;">${ts}</span>
+        <span>${msg}</span>`;
+      stream.appendChild(el);
       if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
-      while (stream.children.length > 200) stream.removeChild(stream.firstChild);
+    }
+
+    // Legacy shim — keeps teleop calls working
+    function addStreamEntry(type, content, opts = {}) {
+      if (type === 'system' || type === 'error') {
+        appendSysEntry(content, type === 'error');
+      }
     }
 
     function clearStream() {
       document.getElementById('debugStream').innerHTML = `
-        <div style="color:var(--text-muted); font-style:italic; text-align:center; margin-top:40px;">
-          Connected. Waiting for Grace to think...
-        </div>
-      `;
+        <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:60px;font-size:0.9rem;">
+          Connected · Waiting for Grace to think...
+        </div>`;
     }
 
     // ─── Stats Update ───
@@ -1079,10 +1381,10 @@
 
     // ─── Teleop ───
     function teleop(direction) {
-      addStreamEntry('system', `Teleop: ${direction}`, { meta: 'Manual override' });
+      appendSysEntry(`Teleop: ${direction}`);
     }
     function emergencyStop() {
-      addStreamEntry('error', '🚨 EMERGENCY STOP ACTIVATED', { meta: 'All motors halted' });
+      appendSysEntry('🚨 EMERGENCY STOP ACTIVATED', true);
     }
 
     // ─── Keyboard Controls ───
@@ -1116,6 +1418,7 @@
 
     // ─── Init ───
     connect(currentRobot);
+
   </script>
 
 </body>
