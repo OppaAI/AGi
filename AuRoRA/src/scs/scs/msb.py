@@ -861,3 +861,30 @@ class EngramComplex:
         Close the engram complex connection and release all resources.
         """
         self._ecx_conn.close()                                              # release SQLite connection — no further ops possible after this
+
+    def get_episode_encodings_since(self, cutoff: datetime) -> list[tuple[bytes, datetime]]:
+        """
+        Fetch raw encoding blobs and timestamps for all episodes since cutoff.
+        Used by MCC dreaming cycle to build static anchors — skips full engram
+        hydration since only the vector and age are needed.
+    
+        Args:
+            cutoff (datetime) : Earliest created_at to include — naive UTC
+    
+        Returns:
+            list[tuple[bytes, datetime]] : (encoding blob, created_at) per engram
+        """
+        rows = self._ecx_conn.execute(                                               # query storage schema directly — no full engram hydration
+            f"SELECT {self._blueprint.semantic_traces}, "                            # encoding blob column — name sourced from blueprint
+            f"{self._blueprint.temporal_trace} "                                     # timestamp column — name sourced from blueprint
+            f"FROM {self._storage_schema} "                                          # storage table — cortex-namespaced
+            f"WHERE {self._blueprint.temporal_trace} >= ? "                          # cutoff gate — exclude episodes before window
+            f"AND {self._blueprint.semantic_traces} IS NOT NULL "                    # guard against unencoded engrams
+            f"ORDER BY {self._blueprint.temporal_trace} ASC",                        # oldest first — caller applies recency decay by age
+            (cutoff.isoformat(),)                                                    # datetime → ISO string for SQLite text comparison
+        ).fetchall()                                                                 # materialize full result set — N bounded by days window
+    
+        return [                                                                     # unpack rows → typed tuples; ISO string → datetime
+            (row[0], datetime.fromisoformat(row[1]))
+            for row in rows
+        ]
