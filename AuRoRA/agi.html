@@ -256,6 +256,95 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .chunk-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      margin-top: 4px;
+    }
+
+    .chunk-seg {
+      height: 100%;
+      min-width: 0;
+      transition: width 0.2s ease;
+    }
+
+    .chunk-seg.system {
+      background: rgba(248, 113, 113, 0.88);
+    }
+
+    .chunk-seg.emc {
+      background: rgba(251, 191, 36, 0.88);
+    }
+
+    .chunk-seg.wmc-user {
+      background: rgba(250, 204, 21, 0.88);
+    }
+
+    .chunk-seg.wmc-grace {
+      background: rgba(167, 139, 250, 0.88);
+    }
+
+    .chunk-seg.live-user {
+      background: rgba(96, 165, 250, 0.92);
+    }
+
+    .chunk-seg.free {
+      background: rgba(148, 163, 184, 0.22);
+    }
+
+    .chunk-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      margin-top: 6px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .chunk-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .chunk-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .chunk-dot.system {
+      background: rgba(248, 113, 113, 0.95);
+    }
+
+    .chunk-dot.emc {
+      background: rgba(251, 191, 36, 0.95);
+    }
+
+    .chunk-dot.wmc-user {
+      background: rgba(250, 204, 21, 0.95);
+    }
+
+    .chunk-dot.wmc-grace {
+      background: rgba(167, 139, 250, 0.95);
+    }
+
+    .chunk-dot.live-user {
+      background: rgba(96, 165, 250, 0.95);
+    }
+
+    .chunk-dot.free {
+      background: rgba(148, 163, 184, 0.55);
+    }
+
     /* min/max range display — two colored spans */
     .stat-range {
       font-size: 0.7rem;
@@ -825,9 +914,11 @@
         <div class="stats-bar">
 
           <div class="stat-item">
-            <div class="stat-label">WMC Size</div>
+            <div class="stat-label">Chunk Graph</div>
             <div class="stat-value" id="statWmcSize">—</div>
             <div class="stat-sub" id="statWmcPct">— / — chunks</div>
+            <div class="chunk-bar" id="statChunkBar"></div>
+            <div class="chunk-legend" id="statChunkLegend"></div>
           </div>
 
           <div class="stat-item">
@@ -848,13 +939,13 @@
             </div>
           </div>
 
-          <!-- Latency — now shows current + avg + min/max range -->
+          <!-- End-to-end timing with TTFT and generation breakdown -->
           <div class="stat-item">
-            <div class="stat-label">Latency</div>
+            <div class="stat-label">End-to-end</div>
             <div class="stat-value" id="statLatency">—</div>
-            <div class="stat-sub" id="statLatencyAvg">Avg: —</div>
+            <div class="stat-sub" id="statTimingBreakdown">TTFT: — · Gen: —</div>
             <div class="stat-range">
-              <span class="range-min" id="statLatMin">↓ —</span>
+              <span class="range-min" id="statLatencyAvg">Avg: —</span>
               <span class="range-sep">·</span>
               <span class="range-max" id="statLatMax">↑ —</span>
             </div>
@@ -965,12 +1056,14 @@
     let ros = null;
     let currentRobot = document.getElementById('robotSelect').value;
     let turnCount = 0;
-    let latencies = [];   // all completed turn latencies (seconds)
+    let endToEndLatencies = [];   // all completed turn end-to-end latencies (seconds)
     let tpsReadings = [];   // all completed turn tok/s values
     let isAutoScroll = true;
     let currentTurn = null;
+    let latestMemoryStats = null;
+    let latestChunkBreakdown = null;
     // currentTurn shape:
-    // { id, prompt, startTime, tokenCount,
+    // { id, prompt, startTime, firstTokenTime, tokenCount,
     //   card, inspector, inspBody, graceRow, thinkingBubble,
     //   pills, contextSlots, graceBubble, graceText, graceMeta }
 
@@ -1079,6 +1172,13 @@
         const isEmc = (text) => EMC_MARKERS.some(re => re.test(text));
 
         const total = messages.length;
+        const breakdown = {
+          system: 0,
+          emc: 0,
+          wmcUser: 0,
+          wmcGrace: 0,
+          liveUser: 0,
+        };
         messages.forEach((m, i) => {
           const role = (m.role || 'unknown').toLowerCase();
           const content = Array.isArray(m.content)
@@ -1089,27 +1189,37 @@
           if (role === 'system') {
             const emcIdx = content.search(/\n(?=\[RECALLED EPISODE|\[EMC|<<EMC|\[EPISODIC)/i);
             if (emcIdx > -1) {
+              const systemContent = content.slice(0, emcIdx).trim();
+              const emcContent = content.slice(emcIdx).trim();
+              breakdown.system += estimateTokens(systemContent);
+              breakdown.emc += estimateTokens(emcContent);
               addContextRow('system', 'SYSTEM', content.slice(0, emcIdx).trim(),
                 `System prompt · slot ${slot} · ${emcIdx} chars`);
               addContextRow('emc', 'EMC', content.slice(emcIdx).trim(),
                 `EMC injected into system · slot ${slot}`);
             } else {
+              breakdown.system += estimateTokens(content);
               addContextRow('system', 'SYSTEM', content,
                 `System prompt · slot ${slot} · ${content.length} chars`);
             }
           } else if (role === 'assistant') {
+            breakdown.wmcGrace += estimateTokens(content);
             addContextRow('wmc-assistant', 'WMC·GRACE', content,
               `WMC prior Grace turn · slot ${slot} · ${content.length} chars`);
           } else if (role === 'user') {
             if (isEmc(content)) {
+              breakdown.emc += estimateTokens(content);
               addContextRow('emc', 'EMC', content,
                 `EMC recalled episodes · slot ${slot} · ${content.length} chars`);
             } else {
               const isLivePrompt = i === total - 1 && currentTurn &&
                 content.trim() === currentTurn.prompt.trim();
               if (!isLivePrompt) {
+                breakdown.wmcUser += estimateTokens(content);
                 addContextRow('wmc', 'WMC·USER', content,
                   `WMC prior user turn · slot ${slot} · ${content.length} chars`);
+              } else {
+                breakdown.liveUser += estimateTokens(content);
               }
             }
           } else {
@@ -1117,6 +1227,8 @@
           }
         });
 
+        latestChunkBreakdown = breakdown;
+        renderChunkGraph();
         updateInspectorPills();
       });
 
@@ -1133,6 +1245,8 @@
     function startNewTurn(prompt, userId) {
       turnCount++;
       document.getElementById('statTurnCount').textContent = turnCount;
+      latestChunkBreakdown = null;
+      renderChunkGraph();
 
       const id = turnCount;
       const streamStartTime = Date.now();
@@ -1200,7 +1314,7 @@
       if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
 
       currentTurn = {
-        id, prompt, startTime: streamStartTime, tokenCount: 0,
+        id, prompt, startTime: streamStartTime, firstTokenTime: null, tokenCount: 0,
         card, inspector, inspBody, graceRow, thinkingBubble,
         pills: toggle.querySelector('.inspector-pills'),
         contextSlots: [],
@@ -1264,6 +1378,7 @@
 
       if (data.type === 'start' || data.type === 'delta') {
         const chunk = data.content ?? data.text ?? '';
+        if (currentTurn.firstTokenTime === null) currentTurn.firstTokenTime = now;
         currentTurn.tokenCount += estimateTokens(chunk);
 
         const tps = elapsed > 0 ? (currentTurn.tokenCount / elapsed).toFixed(1) : '—';
@@ -1295,28 +1410,33 @@
 
       } else if (data.type === 'done') {
 
-        // ── Compute latency for this turn ──
-        const latency = parseFloat(((now - currentTurn.startTime) / 1000).toFixed(2));
-        latencies.push(latency);
+        // ── Compute timings for this turn ──
+        const endToEnd = parseFloat(((now - currentTurn.startTime) / 1000).toFixed(2));
+        const ttft = currentTurn.firstTokenTime === null
+          ? endToEnd
+          : parseFloat(((currentTurn.firstTokenTime - currentTurn.startTime) / 1000).toFixed(2));
+        const generation = currentTurn.firstTokenTime === null
+          ? 0
+          : parseFloat(((now - currentTurn.firstTokenTime) / 1000).toFixed(2));
+        endToEndLatencies.push(endToEnd);
 
         // ── Compute tok/s for this turn ──
-        const tps = latency > 0
-          ? parseFloat((currentTurn.tokenCount / latency).toFixed(1))
+        const tps = generation > 0
+          ? parseFloat((currentTurn.tokenCount / generation).toFixed(1))
           : 0;
         tpsReadings.push(tps);
 
         // ── Derived stats ──
-        const avgLatency = (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2);
-        const minLatency = Math.min(...latencies).toFixed(2);
-        const maxLatency = Math.max(...latencies).toFixed(2);
+        const avgLatency = (endToEndLatencies.reduce((a, b) => a + b, 0) / endToEndLatencies.length).toFixed(2);
+        const maxLatency = Math.max(...endToEndLatencies).toFixed(2);
 
         const minTps = Math.min(...tpsReadings).toFixed(1);
         const maxTps = Math.max(...tpsReadings).toFixed(1);
 
         // ── Update DOM ──
-        document.getElementById('statLatency').textContent = `${latency}s`;
+        document.getElementById('statLatency').textContent = `${endToEnd}s`;
+        document.getElementById('statTimingBreakdown').textContent = `TTFT: ${ttft}s · Gen: ${generation}s`;
         document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
-        document.getElementById('statLatMin').textContent = `↓ ${minLatency}s`;
         document.getElementById('statLatMax').textContent = `↑ ${maxLatency}s`;
 
         document.getElementById('statTokensSec').textContent = tps.toFixed(1);
@@ -1328,7 +1448,7 @@
         if (currentTurn.graceBubble) {
           currentTurn.graceBubble.classList.remove('streaming-cursor');
           currentTurn.graceMeta.textContent =
-            `${latency}s · ${currentTurn.tokenCount} tokens · ${tps.toFixed(1)} tok/s`;
+            `TTFT ${ttft}s · Gen ${generation}s · E2E ${endToEnd}s · ${currentTurn.tokenCount} tokens · ${tps.toFixed(1)} tok/s`;
         } else {
           // done but no content
           currentTurn.thinkingBubble.className = 'bubble grace-bubble';
@@ -1367,6 +1487,79 @@
       return Math.ceil(cjk / 2 + (text.length - cjk) / 4) || 1;
     }
 
+    function renderChunkGraph() {
+      const bar = document.getElementById('statChunkBar');
+      const legend = document.getElementById('statChunkLegend');
+      const valueEl = document.getElementById('statWmcSize');
+      const subEl = document.getElementById('statWmcPct');
+      if (!bar || !legend || !valueEl || !subEl) return;
+
+      const wmc = latestMemoryStats?.wmc || null;
+      const breakdown = latestChunkBreakdown || {
+        system: 0,
+        emc: 0,
+        wmcUser: 0,
+        wmcGrace: 0,
+        liveUser: 0,
+      };
+      const used = Object.values(breakdown).reduce((sum, count) => sum + count, 0);
+      const limit = Math.max(wmc?.global_chunk_limit || 0, used || 0);
+      const free = Math.max(0, limit - used);
+      const occupancy = limit > 0 ? ((used / limit) * 100).toFixed(1) : '0.0';
+      const hasBreakdown = latestChunkBreakdown !== null;
+
+      valueEl.textContent = hasBreakdown ? `${used}` : (wmc?.sustained_chunks ?? '—');
+      valueEl.className = 'stat-value';
+      if (limit > 0 && used / limit > 0.9) valueEl.classList.add('danger');
+      else if (limit > 0 && used / limit > 0.7) valueEl.classList.add('warning');
+
+      const pmtCount = wmc?.pmt_count;
+      if (!hasBreakdown && wmc) {
+        subEl.textContent =
+          `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks${typeof pmtCount === 'number' ? ` · ${pmtCount} PMTs` : ''}`;
+      } else {
+        subEl.textContent = limit > 0
+          ? `${occupancy}% · ${used}/${limit} chunks${typeof pmtCount === 'number' ? ` · ${pmtCount} PMTs` : ''}`
+          : `${used} chunks`;
+      }
+
+      const segments = [
+        { key: 'system', label: 'SYS', value: breakdown.system, className: 'system' },
+        { key: 'emc', label: 'EMC', value: breakdown.emc, className: 'emc' },
+        { key: 'wmc-user', label: 'WMC U', value: breakdown.wmcUser, className: 'wmc-user' },
+        { key: 'wmc-grace', label: 'WMC G', value: breakdown.wmcGrace, className: 'wmc-grace' },
+        { key: 'live-user', label: 'USER', value: breakdown.liveUser, className: 'live-user' },
+        { key: 'free', label: 'FREE', value: free, className: 'free' },
+      ];
+
+      if (!hasBreakdown) {
+        const fallbackUsed = wmc?.sustained_chunks || 0;
+        const fallbackLimit = wmc?.global_chunk_limit || 0;
+        const fallbackFree = Math.max(0, fallbackLimit - fallbackUsed);
+        bar.innerHTML = fallbackLimit > 0
+          ? [
+            `<span class="chunk-seg wmc-user" style="width:${(fallbackUsed / fallbackLimit) * 100}%"></span>`,
+            fallbackFree > 0 ? `<span class="chunk-seg free" style="width:${(fallbackFree / fallbackLimit) * 100}%"></span>` : '',
+          ].join('')
+          : '';
+        legend.innerHTML = [
+          fallbackUsed > 0 ? `<span class="chunk-pill"><span class="chunk-dot wmc-user"></span>WMC ${fallbackUsed}</span>` : '',
+          fallbackFree > 0 ? `<span class="chunk-pill"><span class="chunk-dot free"></span>FREE ${fallbackFree}</span>` : '',
+        ].join('');
+        return;
+      }
+
+      bar.innerHTML = segments
+        .filter(seg => limit > 0 && seg.value > 0)
+        .map(seg => `<span class="chunk-seg ${seg.className}" style="width:${(seg.value / limit) * 100}%"></span>`)
+        .join('');
+
+      legend.innerHTML = segments
+        .filter(seg => seg.value > 0)
+        .map(seg => `<span class="chunk-pill"><span class="chunk-dot ${seg.className}"></span>${seg.label} ${seg.value}</span>`)
+        .join('');
+    }
+
     // ─── System Log ───────────────────────────────────────────────────────────
     function appendSysEntry(msg, isError = false) {
       const stream = document.getElementById('debugStream');
@@ -1385,6 +1578,8 @@
     }
 
     function clearStream() {
+      latestChunkBreakdown = null;
+      renderChunkGraph();
       document.getElementById('debugStream').innerHTML = `
         <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:60px;font-size:0.9rem;">
           Connected · Waiting for Grace to think...
@@ -1393,15 +1588,9 @@
 
     // ─── Stats Update (memory_stats topic) ────────────────────────────────────
     function updateStats(stats) {
+      latestMemoryStats = stats;
       if (stats.wmc) {
-        const wmc = stats.wmc;
-        document.getElementById('statWmcSize').textContent = wmc.pmt_count;
-        document.getElementById('statWmcPct').textContent =
-          `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks`;
-        const wmcEl = document.getElementById('statWmcSize');
-        wmcEl.className = 'stat-value';
-        if (wmc.chunk_occupancy > 90) wmcEl.classList.add('danger');
-        else if (wmc.chunk_occupancy > 70) wmcEl.classList.add('warning');
+        renderChunkGraph();
       }
       if (stats.emc) {
         const emc = stats.emc;
