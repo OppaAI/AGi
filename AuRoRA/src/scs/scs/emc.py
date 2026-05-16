@@ -764,3 +764,7 @@ class EpisodicMemoryCortex:
         self._encoding_cycle.stop_cycle()                                   # signal encoding cycle to stop and wait for clean exit
         self._ecx.terminate()                                               # release engram complex connection
         self.logger.info("🗄️ EMC deactivated")                              # log successful termination
+
+    def get_episode_encodings_since(self, cutoff: datetime) -> list[tuple[bytes, datetime]]:
+        """Delegate to MSB — fetch encoding blobs and timestamps since cutoff for anchor building."""
+        return self._ecx.get_episode_encodings_since(cutoff)                 # pass-through — EMC owns _ecx, MCC never touches it directly
