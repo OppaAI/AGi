@@ -70,7 +70,7 @@ EMC = AGi.SCS.EMC                                   # EMC parameter namespace al
 # M2 cleanup: move EncodingEngine to scs/eee.py — dedicated encoding layer between MCC and MSB.
 from scs.msb import EncodingEngine                  # shared encoding engine — owned by MCC, passed to all cortices
 from scs.wmc import PMT, WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memory
-from scs.emc import EpisodicMemoryCortex            # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
+from scs.emc import Episode, EpisodicMemoryCortex   # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
 class MemoryCoordinationCore:
     """
@@ -268,7 +268,7 @@ class MemoryCoordinationCore:
             self.logger.warning(                                                         # log warning message of chunk counts of memory context over cortical capacity
                 f"⚠️  MCC cortical overflow — "
                 f"{memory_chunks} chunks memory context vs {SCS.CORTICAL_CAPACITY} capacity "
-                f"(WMC: {len(wmc_pmts)} PMTs | EMC: {len(reinstated_episodes)} episodes)"
+                f"(WMC: {len(recalled_pmts)} PMTs | EMC: {len(reinstated_episodes)} episodes)"
             )
         else:                                                                            # if token cost within budget
             self.logger.debug(                                                           # log load for tuning visibility
