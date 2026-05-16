@@ -149,6 +149,7 @@ class EncodingEngine:
         CPython GIL guarantees atomic attribute assignment — no lock needed.
         """
         try:                                                                                # attempt to load SentenceTransformer on a background thread
+            import huggingface_hub.utils                                                    # import sentence-transformers on a background thread
             from sentence_transformers import SentenceTransformer                           # deferred import — avoids hard crash if package missing
             self.logger.info(f"⏳ Activating Encoding Engine ({self.encoding_engine})…")    # log before the blocking load
             self._core = SentenceTransformer(self.encoding_engine)                          # blocking model load — safe here, isolated from init path
@@ -159,7 +160,7 @@ class EncodingEngine:
                 "   Memory cortices falling back to lexical recall.\n"
                 "   Note to technician: pip3 install sentence-transformers --break-system-packages"
             )
-        except Exception as e:                                                              # bad model path, corrupted weights, OOM — _core stays None
+        except Exception as e:    
             self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")               # log specific failure with reason
         
     @property
@@ -341,7 +342,7 @@ class EngramComplex:
 
     # Schema version — increment when storage schema changes
     # On mismatch, MSB raises clearly rather than silently operating on wrong schema
-    SCHEMA_VERSION: int = 3                                     # set schema version for migration purposes if needed 
+    SCHEMA_VERSION: int = 4                                         # set schema version for migration purposes if needed 
 
     def _build_schema(self) -> None:
         """

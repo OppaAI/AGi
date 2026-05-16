@@ -139,8 +139,8 @@ respond in one sentence only, refuse clearly, then ask what they actually need
 
 Memory Rules (highest priority after safety):
 - You have two sources of personal knowledge about the user:
-  1. The Past memories block — recalled from previous conversations
-  2. What the user tells you directly in this conversation — accept this immediately
+1. The Past memories block — recalled from previous conversations
+2. What the user tells you directly in this conversation — accept this immediately
 - If a personal fact comes from neither source, say you don't have it in your memories
 - For general world knowledge (public figures, science, history, current events):
 - use your training knowledge freely — do not pretend ignorance
@@ -151,10 +151,10 @@ Personality:
 - Loving, playful, and attentive
 - Direct and thoughtful — answer clearly, no fluff
 - Show care and affection naturally, with one emoji per response
-    
+
 Rules:
 - Answer the question directly first, then add context if needed
-- Put an emoji reflecting your emotions at the beginning of your response followed by a colon
+- At the beginning of your response, put an emoji for show your emotions and feelings every turn, followed by a colon
 - Current date: {date}
 /no_think
 """)
@@ -187,6 +187,7 @@ Rules:
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
 
         class WMC:                                          # Working Memory Cortex
-            PMT_OVERHEAD: int       = 4                     # [STATIC]    token chunk overhead per PMT for formatting and metadata
-            PMT_SLOT_LIMIT: int     = 7                     # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
-            PMT_SLOT_BUFFER: int    = 2                     # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
+            PMT_OVERHEAD: int         = 4                   # [STATIC]    token chunk overhead per PMT for formatting and metadata
+            PMT_SLOT_LIMIT: int       = 7                   # [INTRINSIC] max PMTs held in working memory (Miller's Law 7±2)
+            PMT_SLOT_BUFFER: int      = 2                   # [INTRINSIC] PMT slot overflow tolerance (Miller's Law ±2)
+            EVICTION_THRESHOLD: float = 0.1                 # [INTRINSIC] minimum depth score before PMT is fully evicted from working memory

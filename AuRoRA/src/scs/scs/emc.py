@@ -94,20 +94,22 @@ Lifecycle:
     (System Consolidation — EMC → SMC distillation — deferred to M2 Dream Cycle)
 
 Public interface:
-    emc.bind_pmt(timestamp, content) → bool
-    emc.recall_episodes(cue) → → list[Episode]
-    emc.assess_emc() → dict
-    emc.terminate() → None
+    emc.bind_pmt(timestamp: str, content: str) -> bool
+    emc.recall_episodes(cue: str) -> list[Episode]
+    emc.assess_emc() -> dict
+    emc.terminate() -> None
 """
 
 # System components
+from email import contentmanager
+from collections import deque               # for O(1) append/popleft in binding stream
+from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
+from datetime import datetime               # for ISO wall-clock timestamps — (TODO) M1.6 replaces with hrs.blc
 import itertools                            # for islice — caps binding stream snapshot per theta rhythm cycle
 import os                                   # for encoding thread priority via os.nice()
 from pathlib import Path                    # for building engram complex storage path
 import threading                            # for background thread, locks, and theta rhythm event
 import time                                 # for CPU yield during theta rhythm cycle
-from collections import deque               # for O(1) append/popleft in binding stream
-from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 
 # AGi components
 from hrs.hrm import AGi                     # homeostatic regulation manifest namespace — system-wide constants
@@ -438,7 +440,7 @@ class EncodingCycle:
                 if episode.staging_id is None:                     # if no staging_id, stage the episode
                     with self._inscription_lock:                            # hold inscription lock for staging write
                         episode.staging_id = self._ecx.stage_engram(        # insert the episode into the episodic buffer
-                            engram   = translate_engram(episode),           # translate Episode → engram dict for staging — encoding excluded until consolidation
+                            engram   = _translate_engram(episode),          # translate Episode → engram dict for staging — encoding excluded until consolidation
                             ecx_conn = encoder_conn,                        # connection to episodic buffer
                         )
       
@@ -485,7 +487,7 @@ class EncodingCycle:
         with self._inscription_lock:                                            # serializes all three inscriptions as one atomic operation
             # Primary episodic record
             episode_id = self._ecx.inscribe_engram(                             # inscribe primary episodic record into emc_storage
-                engram=translate_engram(episode, encoding=encoding_blob),       # translate Episode → engram dict for inscription — encoding included
+                engram=_translate_engram(episode, encoding=encoding_blob),      # translate Episode → engram dict for inscription — encoding included
                 ecx_conn=encoder_conn,                                          # connection to use for the operation
             )
 
@@ -579,15 +581,15 @@ class EpisodicMemoryCortex:
 
         self.logger.info(f"✅ EMC initialized → {engram_gateway}")          # log successful init with engram path
    
-    def bind_pmt(self, user_id: str, timestamp: str, content: str) -> bool:
+    def bind_pmt(self, user_id: str, timestamp: str, trace: str) -> bool:
         """
         Receive an evicted PMT from MCC and bind it into the episodic buffer for encoding.
         Called at the WMC → EMC boundary — non-blocking, crash-safe via staging table.
 
-    Args:
-        user_id (str)   : ID of the user who originated the PMT
-        timestamp (str) : ISO-8601 timestamp of the original PMT
-        content (str)   : Raw PMT content — truncated internally to engram content limit
+        Args:
+            user_id   (str) : ID of the user who originated the PMT
+            timestamp (str) : ISO-8601 timestamp of the original PMT
+            trace     (str) : Raw PMT trace — truncated internally to engram content limit
 
         Returns:
             bool: True on success, False on failure
@@ -596,7 +598,7 @@ class EpisodicMemoryCortex:
             user_id   = user_id,                                                                # user ID — should be retrieved from MCC
             timestamp = timestamp,                                                              # timestamp of PMT induced into WMC
             date      = timestamp[:10],                                                         # YYYY-MM-DD slice — B-tree indexed for date recall
-            trace     = self._chunk_sampler.truncate(content, EMC.EPISODE_CONTENT_LIMIT),       # truncate to engram limit before binding
+            trace     = self._chunk_sampler.truncate(trace, EMC.EPISODE_CONTENT_LIMIT),         # truncate to engram limit before binding
         )
 
         try:                                                                                    # attempt to bind the evicted PMT into episodic buffer
@@ -610,7 +612,7 @@ class EpisodicMemoryCortex:
                 _binding_stream.append(episode)                                                 # queue episode — oldest dropped automatically if at maxlen
             self._encoding_cycle.trigger_theta_rhythm()                                         # wake encoding cycle — theta rhythm
             self.logger.debug(                                                                  # log the binding of the evicted PMT into episodic buffer
-                f"EMC buffer ← {self._chunk_sampler.probe(content)} chunks"
+                f"EMC buffer ← {self._chunk_sampler.probe(trace)} chunks"
             )
             return True                                                                         # indicate successful binding
         except Exception as e:

@@ -80,7 +80,7 @@ class PersonalProgressionUnit:
         Retrieves AuRoRA's active persona and applies to the HRS manifest.
         Falls back to HRS default active cognition if persona is missing or malformed.
         """
-        gateway = GatewayMap().user_profiles                                                            # retrieve the path to users.yaml file
+        gateway = GatewayMap().active_persona                                                           # retrieve the path to active persona file
 
         if not gateway.exists():                                                                        # no persona file — fall back to HRS default
             self._logger.warning(f"⚠️ No persona file at {gateway} — using HRM default")                # log missing user profile at gateway path
@@ -88,8 +88,8 @@ class PersonalProgressionUnit:
 
         try:                                                                                            # attempt to load persona
             active_persona = yaml.safe_load(gateway.read_text())                                        # parse persona.yaml — AuRoRA's active identity
-            if active_persona and active_persona.get("active_cognition"):                               # if persona exists,
-                AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["active_cognition"]                       # hydrate manifest — overrides HRM default
+            if active_persona and active_persona.get("gce", {}).get("active_cognition"):                # if persona exists,
+                AGi.SCS.GCE.ACTIVE_COGNITION = active_persona["gce"]["active_cognition"]                # hydrate manifest — overrides HRM default
                 self._logger.info("✅ Persona retrieved")                                               # log succesful retrieval of persona
             else:                                                                                       # if active persona not found,
                 self._logger.warning("⚠️ Persona file missing active cognition — using HRM default")    # log the warning that active user not found in persona.yaml

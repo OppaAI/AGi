@@ -46,7 +46,7 @@ Terminology:
 Public interface:
     MemoryCoordinationCore:
         await register_memory(user_id: str, content: str) -> None
-        context = await assemble_memory_context(user_prompt: str) -> list[dict]
+        context = await assemble_memory_context(user_id: str, user_prompt: str) -> list[dict]
         assess_memory_schema() -> dict
         report_memory_stats() -> None
         forget_memory() -> None
@@ -56,7 +56,7 @@ Public interface:
 # System components
 import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta            # for ISO wall-clock timestamps — (TODO) M1.6 replaces with hrs.blc
 import numpy as np                                  # for building vector anchor
 
 # AGi components
@@ -196,14 +196,14 @@ class MemoryCoordinationCore:
         try:                                                         # attempt binding evicted PMTs to episodic buffer
             for evicted_pmt in evicted_pmts:                         # iterate through each evicted PMT
                 # Anchor vector safety net — depth check only, no full composite re-run
-                depth_score = self._cosine_sim(                      # single cosine sim — last-chance gate at eviction boundary
-                    evicted_pmt.vector, self._dynamic_anchor
-                )
-                if depth_score < SCS.MCC.EVICTION_THRESHOLD:         # below safety net threshold — truly forgotten
-                    self.logger.debug(                               # log the discarded PMT at eviction boundary
-                        "MCC eviction safety net — PMT discarded"
-                    )
-                    continue                                         # skip — not worth encoding into episodic memory
+                #depth_score = self._cosine_sim(                      # single cosine sim — last-chance gate at eviction boundary
+                #    evicted_pmt.vector, self._dynamic_anchor
+                #)
+                #if depth_score < SCS.WMC.EVICTION_THRESHOLD:         # below safety net threshold — truly forgotten
+                #    self.logger.debug(                               # log the discarded PMT at eviction boundary
+                #        "MCC eviction safety net — PMT discarded"
+                #    )
+                #    continue                                         # skip — not worth encoding into episodic memory
                 self.emc.bind_pmt(                                   # bind evicted PMT into episodic buffer
                     user_id=evicted_pmt.user_id,                     # speaker identity of the original PMT
                     timestamp=evicted_pmt.timestamp,                 # induction timestamp of the original PMT
@@ -390,7 +390,7 @@ class MemoryCoordinationCore:
         Returns:
             tuple[bool, float] : (should_encode, composite_score)
         """
-        return False, 0.0                                                 # stub — replaced when anchor vectors are initialized
+        return True, 1.0                                                 # stub — replaced when anchor vectors are initialized
 
     def _build_static_anchors(self, days: int = 7) -> None:
         """

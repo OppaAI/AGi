@@ -1,6 +1,6 @@
 """
-migrate_engram_v4.py
-====================
+migrate_engram_complex.py
+=========================
 AuRoRA · EMC schema migration — old → new
 
 Changes applied to engram_complex.db
@@ -8,6 +8,7 @@ Changes applied to engram_complex.db
   schema_meta : schema_version 3 → 4
 
   emc_storage : content → trace        (rename via table rebuild)
+                reformat trace data   (JSON {user,assistant} → plain text)
                 DROP memory_strength   (removed in new schema)
                 DROP novelty_score     (removed in new schema)
 
@@ -24,7 +25,7 @@ Note: SQLite has no DROP COLUMN before 3.35 and no RENAME COLUMN before 3.25.
 
 Usage
 ─────
-  python migrate_engram_v4.py [--db PATH] [--dry-run] [--no-backup]
+  python migrate_engram_complex.py [--db PATH] [--dry-run] [--no-backup]
 
   --db PATH      Path to engram_complex.db  (default: ./engram_complex.db)
   --dry-run      Print SQL plan only — no writes
@@ -39,6 +40,7 @@ Safety
 """
 
 import argparse
+import json
 import shutil
 import sqlite3
 import sys
@@ -87,6 +89,32 @@ def fts_sql(conn: sqlite3.Connection, table: str) -> str:
     ).fetchone()
     return row[0] if row else ""
 
+def _safe_default(dflt: str, typ: str) -> str:
+    """
+    Normalize a DEFAULT value from PRAGMA table_info for use in CREATE TABLE.
+
+    PRAGMA table_info returns the stored default without the DEFAULT keyword:
+        (datetime('now'))  — expression with parens — pass through as-is
+        datetime('now')    — expression without parens — wrap in parens
+        '0'                — quoted numeric for INTEGER/REAL — strip quotes
+        'active'           — quoted TEXT string — pass through as-is
+    """
+    # Quoted numeric for INTEGER/REAL — strip spurious quotes e.g. '0' → 0
+    if typ.upper() in ("INTEGER", "REAL") and dflt.startswith("'") and dflt.endswith("'"):
+        inner = dflt[1:-1]
+        try:
+            float(inner)    # confirm actually numeric before stripping
+            return inner
+        except ValueError:
+            return dflt     # not numeric — leave quoted
+
+    # Bare SQL expression (contains a function call but no wrapping parens)
+    # e.g. datetime('now') → (datetime('now'))
+    if "(" in dflt and not dflt.startswith("(") and not dflt.startswith("'"):
+        return f"({dflt})"
+
+    return dflt             # already correct — (datetime('now')), '0', 'text' etc.
+
 
 # ── Backup ─────────────────────────────────────────────────────────────────────
 
@@ -131,16 +159,31 @@ def preflight(conn: sqlite3.Connection) -> dict:
 
 
 def check_schema_version(state: dict) -> None:
-    """Abort if the DB is not at the expected source version."""
+    """Abort if the DB is not at the expected source version.
+    Also accepts v4 already stamped (from a previously failed run) — will reset to v3 then re-migrate.
+    """
     v = state["current_version"]
     if v is None:
         print(f"\n  ERROR: schema_meta table missing or has no schema_version.")
         print(f"         Cannot migrate safely — inspect DB manually.")
         sys.exit(1)
+    if v == SCHEMA_VERSION_NEW:
+        print(f"\n  NOTE: schema_version already {SCHEMA_VERSION_NEW} — likely from a previously failed run.")
+        print(f"        Will reset to {SCHEMA_VERSION_OLD} and re-migrate cleanly.")
+        return   # allowed — reset happens inside transaction
     if v != SCHEMA_VERSION_OLD:
         print(f"\n  ERROR: Expected schema_version {SCHEMA_VERSION_OLD}, found {v}.")
         print(f"         This script migrates {SCHEMA_VERSION_OLD} → {SCHEMA_VERSION_NEW} only.")
         sys.exit(1)
+
+
+def reset_schema_version_if_needed(conn: sqlite3.Connection, state: dict, dry_run: bool) -> None:
+    """If version was pre-stamped to v4 by a failed prior run, reset it to v3 before migrating."""
+    if state["current_version"] == SCHEMA_VERSION_NEW:
+        sql = "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'"
+        log(f"{'[DRY RUN] ' if dry_run else ''}Resetting schema_version {SCHEMA_VERSION_NEW} → {SCHEMA_VERSION_OLD} (prior failed run)")
+        if not dry_run:
+            conn.execute(sql, (str(SCHEMA_VERSION_OLD),))
 
 
 def migrate_schema_version(conn: sqlite3.Connection, dry_run: bool) -> None:
@@ -183,7 +226,7 @@ def migrate_storage(conn: sqlite3.Connection, state: dict, dry_run: bool) -> Non
             if notnull:
                 parts.append("NOT NULL")
             if dflt is not None:
-                parts.append(f"DEFAULT {dflt}")
+                parts.append(f"DEFAULT {_safe_default(dflt, typ)}")
             new_col_defs.append(" ".join(parts))
         select_exprs.append(f'"{name}"')
 
@@ -198,6 +241,9 @@ def migrate_storage(conn: sqlite3.Connection, state: dict, dry_run: bool) -> Non
          "ALTER TABLE emc_storage_new RENAME TO emc_storage"),
     ]
 
+    # Print full CREATE TABLE DDL so syntax errors are visible
+    log(f"Full DDL:\n{stmts[0][1]}")
+
     for label, sql in stmts:
         log(f"{'[DRY RUN] ' if dry_run else ''}{label}")
         if not dry_run:
@@ -205,6 +251,55 @@ def migrate_storage(conn: sqlite3.Connection, state: dict, dry_run: bool) -> Non
 
     if not dry_run:
         log("emc_storage migrated ✓")
+
+
+# ── reformat trace data ────────────────────────────────────────────────────────
+
+def reformat_trace_data(conn: sqlite3.Connection, dry_run: bool) -> None:
+    """
+    Reformat emc_storage.trace from old JSON content to new plain-text format.
+
+    Old format (content column, stored as JSON):
+        {"user": "...", "assistant": "..."}
+
+    New format (trace column, plain text):
+        {user_id} said: "{user_prompt}"
+        You replied: "{ai_response}"
+
+    Rows that are already plain text (not valid JSON) are left unchanged —
+    idempotent: safe to re-run if migration was interrupted mid-batch.
+    Must run AFTER migrate_storage and BEFORE rebuild_fts — FTS indexes
+    the reformatted trace, not the raw JSON.
+    """
+    section("emc_storage  (reformat trace: JSON → plain text)")
+
+    if dry_run:
+        log("[DRY RUN] SELECT id, user_id, trace FROM emc_storage → reformat each row")
+        return
+
+    rows = conn.execute("SELECT id, user_id, trace FROM emc_storage").fetchall()
+    reformatted = 0
+    skipped     = 0
+
+    for row in rows:
+        raw = row["trace"]
+        try:
+            parsed = json.loads(raw)                                        # attempt JSON parse — old format
+            user_turn      = parsed.get("user", "")
+            assistant_turn = parsed.get("assistant", "")
+            new_trace = (
+                f'{row["user_id"]} said: "{user_turn}"\n'
+                f'You replied: "{assistant_turn}"'
+            )
+            conn.execute(
+                "UPDATE emc_storage SET trace = ? WHERE id = ?",
+                (new_trace, row["id"]),
+            )
+            reformatted += 1
+        except (json.JSONDecodeError, KeyError):
+            skipped += 1                                                    # already plain text or malformed — leave as-is
+
+    log(f"Reformatted {reformatted} row(s), skipped {skipped} (already plain text) ✓")
 
 
 # ── emc_staging ────────────────────────────────────────────────────────────────
@@ -234,7 +329,7 @@ def migrate_staging(conn: sqlite3.Connection, state: dict, dry_run: bool) -> Non
             if notnull:
                 parts.append("NOT NULL")
             if dflt is not None:
-                parts.append(f"DEFAULT {dflt}")
+                parts.append(f"DEFAULT {_safe_default(dflt, typ)}")
             new_col_defs.append(" ".join(parts))
         select_exprs.append(f'"{name}"')
 
@@ -395,8 +490,10 @@ def main() -> None:
             conn.execute("BEGIN")
 
         try:
+            reset_schema_version_if_needed(conn, state, args.dry_run)  # fix pre-stamped v4 from failed run
             migrate_schema_version(conn, args.dry_run)
             migrate_storage(conn, state, args.dry_run)
+            reformat_trace_data(conn, args.dry_run)     # must run after storage rebuild, before FTS
             migrate_staging(conn, state, args.dry_run)
             rebuild_fts(conn, state, args.dry_run)
             ensure_btree_index(conn, args.dry_run)

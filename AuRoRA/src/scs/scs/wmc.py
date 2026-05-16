@@ -57,9 +57,8 @@ Public interface:
 """
 
 # System components
-from huggingface_hub.inference._generated.types import zero_shot_image_classification
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
-from dataclasses import dataclass       # for PMT — phonological memory trace schema
+from dataclasses import dataclass, field # for PMT — phonological memory trace schema
 from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
 import json                              # for structured PMT storage — serialization and recall
 
@@ -81,20 +80,20 @@ class PMT:
     Biological analogue: a single episode held in the phonological loop,
     tagged by the hippocampus during experience for potential consolidation.
     """
-    user_id         : str | None        # speaker identity — None for assistant-originated
-    timestamp       : str = ""          # ISO wall-clock induction time — M1.6 replaces with ROS2 time
-    user_prompt     : str = ""          # raw user prompt — source of truth during staging
-    ai_response     : str = ""          # raw AI response — empty until pairing complete
-    content         : str = ""          # JSON pair — derived at pairing, WMC chat history for LLM
-    trace           : str = ""          # formatted text — for EMC embedding and reinstatement
-    chunk_count     : int = 0           # cached token count — O(1) eviction math, no reprobe on eviction
-    vector          : list[float]       # semantic vector computed at induction — reused at EMC binding, no re-inference
-    retention_score : float = 0.0       # composite induction score — WMC eviction priority key
-    salience_score  : float = 0.0       # Factor 1 score — logged and inspectable at eviction boundary
-    novelty_factor  : float = 1.0       # Factor 2 multiplier — inspectable at eviction boundary
-    depth_score     : float = 0.0       # Factor 3 score — logged and inspectable at eviction boundary
-    anchored        : bool  = False     # True if hard-gated (explicit marker or salience override)
-    smc_candidate   : bool  = False     # True if regex fact extractor flagged remainder for Dream Cycle
+    user_id         : str | None = None                 # speaker identity — None for assistant-originated
+    timestamp       : str = ""                          # ISO wall-clock induction time — M1.6 replaces with ROS2 time
+    user_prompt     : str = ""                          # raw user prompt — source of truth during staging
+    ai_response     : str = ""                          # raw AI response — empty until pairing complete
+    content         : str = ""                          # JSON pair — derived at pairing, WMC chat history for LLM
+    trace           : str = ""                          # formatted text — for EMC embedding and reinstatement
+    chunk_count     : int = 0                           # cached token count — O(1) eviction math, no reprobe on eviction
+    vector: list[float] = field(default_factory=list)   # semantic vector computed at induction — reused at EMC binding, no re-inference
+    retention_score : float = 0.0                       # composite induction score — WMC eviction priority key
+    salience_score  : float = 0.0                       # Factor 1 score — logged and inspectable at eviction boundary
+    novelty_factor  : float = 1.0                       # Factor 2 multiplier — inspectable at eviction boundary
+    depth_score     : float = 0.0                       # Factor 3 score — logged and inspectable at eviction boundary
+    anchored        : bool  = False                     # True if hard-gated (explicit marker or salience override)
+    smc_candidate   : bool  = False                     # True if regex fact extractor flagged remainder for Dream Cycle
     
 class WorkingMemoryCortex:
     """
@@ -131,7 +130,6 @@ class WorkingMemoryCortex:
         self._induced_pmt: PMT | None = None                # induced user prompt pending pairing with AI response
         self._pmt_slot: deque[PMT]   = deque()              # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                    # running count of sustained chunks across all PMTs
-
 
         self.logger.info(                                   # log entry on WMC initialization with configured capacity
             f"   [Working Memory Cortex]  ONLINE ✅ — "
