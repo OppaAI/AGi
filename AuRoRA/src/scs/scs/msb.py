@@ -50,6 +50,7 @@ Public interface:
 
 # System components
 from dataclasses import dataclass                       # dataclass for EngramTrace/EngramSchema
+from datetime import datetime
 from enum import Enum                                   # enum base for EngramModality type definitions
 import hashlib                                          # for prime key generation
 from pathlib import Path                                # for calculating database size — owned here, never passed back up
