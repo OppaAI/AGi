@@ -56,6 +56,7 @@ Public interface:
 # System components
 import asyncio                                      # for fire-and-forget episodic binding and EMC recall timeout racing
 from concurrent.futures import ThreadPoolExecutor   # for type hint on executor parameter
+from datetime import datetime, timedelta
 import numpy as np                                  # for building vector anchor
 
 # AGi components
@@ -395,7 +396,7 @@ class MemoryCoordinationCore:
         """
         cutoff = datetime.utcnow() - timedelta(days=days)                        # earliest episode to include
     
-        episodes = self._repository.get_episodes_since(cutoff)                  # fetch encoded episodes within window
+        encodings = self.emc.msb.get_episode_encodings_since(cutoff)             # fetch encoded episodes within window
     
         if not episodes:                                                         # no episodes in window — anchors undefined
             return                                                               # leave self._static_anchors unchanged; caller handles absence
@@ -403,11 +404,11 @@ class MemoryCoordinationCore:
         vectors = []
         ages_days = []
     
-        for episode in episodes:                                                 # walk consolidated EM traces
-            if episode.encoding:                                                 # skip episodes with no stored encoding
-                vectors.append(np.frombuffer(episode.encoding, dtype=np.float32))   # packed bytes → ndarray view, no copy
-                age = (datetime.utcnow() - episode.created_at).total_seconds() / 86400  # age in fractional days
-                ages_days.append(age)                                            # track age for recency weighting
+        for blob, created_at in encodings:                                               # walk consolidated EM traces — (encoding blob, timestamp) tuples
+            if blob:                                                                     # skip unencoded engrams
+                vectors.append(np.frombuffer(blob, dtype=np.float32))                    # packed bytes → ndarray view, no copy
+                age = (datetime.utcnow() - created_at).total_seconds() / 86400          # age in fractional days
+                ages_days.append(age)                                                    # track age for recency weighting
     
         if not vectors:                                                          # all episodes had empty encodings
             return
