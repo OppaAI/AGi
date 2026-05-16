@@ -124,6 +124,18 @@ class MemoryCoordinationCore:
 
         self.logger.info("✅ Memory Coordination Core Activated")                          # log entry on successful MCC activation
 
+        # Anchor state
+        self._dynamic_anchor: list[float] | None = None          # rebuilt each turn from live WMC + EMC vectors
+        self._static_anchors: list[list[float]] | None = None    # rebuilt at bootup and dreaming cycle from consolidated episodes
+
+        # Temporary until M2 dreaming cycle — build static anchors at bootup
+        self.logger.info("🔄 Building static anchors from episodic memory…")               # log before potentially slow HDBSCAN fit
+        self._build_static_anchors(days=7)                                                 # TODO M2: move to dreaming cycle
+        if self._static_anchors:                                                           # anchors built successfully
+            self.logger.info(f"✅ Static anchors loaded — {len(self._static_anchors)} cluster(s)")  # log cluster count for tuning visibility
+        else:                                                                              # no episodes in window or all noise
+            self.logger.warning("⚠️  Static anchors unavailable — no episodic memory in window")    # expected on first boot
+
     async def register_memory(self, user_id: str | None, role: str, content: str) -> None:
         """
         Receive a new conversation turn and commit it to working memory.
@@ -239,7 +251,7 @@ class MemoryCoordinationCore:
         self.emc.episodic_buffer.stage_episode_list(recalled_pmts)           # inject recalled WMC PMTs into episodic buffer after EMC episodes — preserves chronological order
 
         # Build dynamic anchor vector for scoring PMT for binding decision
-        _build_dynamic_anchor(active_pmts, reinstated_episodes)              # build a dynamic anchor vector from current memory context
+        self._build_dynamic_anchor(active_pmts, reinstated_episodes)         # build a dynamic anchor vector from current memory context
         
         self.logger.debug(                                                   # log the memory context assembled
             f"MCC context assembled: "
@@ -398,7 +410,7 @@ class MemoryCoordinationCore:
     
         encodings = self.emc.get_episode_encodings_since(cutoff)                 # fetch encoded episodes within window
     
-        if not episodes:                                                         # no episodes in window — anchors undefined
+        if not encodings:                                                        # no episodes in window — anchors undefined
             return                                                               # leave self._static_anchors unchanged; caller handles absence
     
         vectors = []
