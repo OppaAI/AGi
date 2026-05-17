@@ -10,12 +10,21 @@ find_package(ament_cmake REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+#find_package(rosidl_default_generators REQUIRED)
+#find_package(builtin_interfaces REQUIRED)
 
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/EngramTrace.msg"
-  DEPENDENCIES builtin_interfaces
+#rosidl_generate_interfaces(${PROJECT_NAME}
+#  "msg/gms.msg"
+#  DEPENDENCIES builtin_interfaces
+#)
+
+install(DIRECTORY include/
+    DESTINATION include
 )
+
+ament_python_install_package(gms)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

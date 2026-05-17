@@ -3,9 +3,9 @@
 
 <package format="3">
   <!-- Basic package information -->
-  <name>hrs</name>
+  <name>prs</name>
   <version>0.1.0</version>
-  <description>Homeostatic Regulatory System for AGi</description>
+  <description>Peripheral Reception System for AGi</description>
   
   <!-- Maintainer and author information -->
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>

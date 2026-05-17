@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'hrs'
+package_name = 'prs'
 
 setup(
     name=package_name,
@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='OppaAI',
     maintainer_email='oppa.ai.org@gmail.com',
-    description='Homeostatic Regulation System for AGi',
+    description='Peripheral Reception System for AGi',
     license='GPL-3.0-only',
     extras_require={
         'test': [

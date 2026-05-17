@@ -58,52 +58,18 @@ Public interface:
 
 # System components
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
-from dataclasses import dataclass, field # for PMT — phonological memory trace schema
 from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
-from enum import Enum                    # enum base for PMT state classification
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi components
+from gms.csb import AGi                  # obtains the centralized structural blueprints for PMT
+PMT = AGi.SCS.WMC.PMT                    # PMT class alias
+PMTState = AGi.SCS.WMC.PMTState          # PMTState class alias
 from hrs.hru import ChunkSampler         # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
 
-class PMTState(Enum):
-    STAGED    = 0    # User prompt received but AI response not yet generated
-    COMPLETED = 1    # Both user prompt and AI response received and paired
-    
-
-@dataclass
-class PMT:
-    """
-    Phonological Memory Trace — one complete interaction in working memory.
-    Pairs a user prompt and AI response into a single evictable unit.
-
-    Lifecycle:
-        Induction → Filling → Sustaining → Receding → Evicting
-
-    Biological analogue: a single episode held in the phonological loop,
-    tagged by the hippocampus during experience for potential consolidation.
-    """
-    user_id         : str | None = None                 # speaker identity — None for assistant-originated
-    timestamp       : str = ""                          # ISO wall-clock induction time — M1.6 replaces with ROS2 time
-    interval        : int = 0                           # time interval taken to generate this PMT — M1.6 replaces with ROS2 time
-    state           : PMTState = PMTState.STAGED        # current state in the PMT lifecycle
-    proc            : str = ""                          # process name — for tracking which process generated this PMT is currently being processed
-    user_prompt     : str = ""                          # raw user prompt — source of truth during staging
-    ai_response     : str = ""                          # raw AI response — empty until pairing complete
-    content         : str = ""                          # JSON pair — derived at pairing, WMC chat history for LLM
-    trace           : str = ""                          # formatted text — for EMC embedding and reinstatement
-    chunk_count     : int = 0                           # cached token count — O(1) eviction math, no reprobe on eviction
-    vector: list[float] = field(default_factory=list)   # semantic vector computed at induction — reused at EMC binding, no re-inference
-    retention_score : float = 0.0                       # composite induction score — WMC eviction priority key
-    salience_score  : float = 0.0                       # Factor 1 score — logged and inspectable at eviction boundary
-    novelty_factor  : float = 1.0                       # Factor 2 multiplier — inspectable at eviction boundary
-    depth_score     : float = 0.0                       # Factor 3 score — logged and inspectable at eviction boundary
-    anchored        : bool  = False                     # True if hard-gated (explicit marker or salience override)
-    smc_candidate   : bool  = False                     # True if regex fact extractor flagged remainder for Dream Cycle
-    
 class WorkingMemoryCortex:
     """
     Working Memory Cortex — the active conversation window of the SCS.
@@ -145,7 +111,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def induction(self, user_id: str | None, role: str, content: str) -> PMT | None:
+    def induce(self, user_id: str | None, role: str, content: str) -> PMT | None:
         """
         Induction: prepare a user/assistant interaction to be added to the working memory.
 
