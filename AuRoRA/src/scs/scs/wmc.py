@@ -60,6 +60,7 @@ Public interface:
 from collections import deque            # for PMT slot — O(1) append and popleft on eviction
 from dataclasses import dataclass, field # for PMT — phonological memory trace schema
 from datetime import datetime            # for PMT timestamps — (TODO) M1.6 replaced by hrs.blc when BioLogic Clock is built
+from enum import Enum                    # enum base for PMT state classification
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi components
@@ -67,6 +68,11 @@ from hrs.hru import ChunkSampler         # probes and truncates cognitive contex
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                            # WMC parameter namespace alias — keeps WMC constant references concise
+
+class PMTState(Enum):
+    STAGED    = 0    # User prompt received but AI response not yet generated
+    COMPLETED = 1    # Both user prompt and AI response received and paired
+    
 
 @dataclass
 class PMT:
@@ -82,6 +88,9 @@ class PMT:
     """
     user_id         : str | None = None                 # speaker identity — None for assistant-originated
     timestamp       : str = ""                          # ISO wall-clock induction time — M1.6 replaces with ROS2 time
+    interval        : int = 0                           # time interval taken to generate this PMT — M1.6 replaces with ROS2 time
+    state           : PMTState = PMTState.STAGED        # current state in the PMT lifecycle
+    proc            : str = ""                          # process name — for tracking which process generated this PMT is currently being processed
     user_prompt     : str = ""                          # raw user prompt — source of truth during staging
     ai_response     : str = ""                          # raw AI response — empty until pairing complete
     content         : str = ""                          # JSON pair — derived at pairing, WMC chat history for LLM
@@ -136,9 +145,12 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def _induce_pmt(self, user_id: str | None, role: str, content: str) -> PMT | None:
+    def induction(self, user_id: str | None, role: str, content: str) -> PMT | None:
         """
-        Induce a conversation turn into a staged or completed PMT.
+        Induction: prepare a user/assistant interaction to be added to the working memory.
+
+        Biological Analogue: Prefrontal Cortex (PFC) working memory -
+        
         User turn stages the prompt into an induced PMT pending AI response.
         Assistant turn completes the pairing and promotes to an evictable PMT.
 

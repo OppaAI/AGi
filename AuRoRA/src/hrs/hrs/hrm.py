@@ -69,30 +69,24 @@ class RRR:
     SELF_DEFENSE_SYSTEM            : str = "sds"        # [STATIC] ROS namespace + YAML key for the Self Defense System
 
 # Metadata classes
-class _SCSType(type):
-    @property
-    def GLOBAL_CHUNK_LIMIT(cls) -> int:
-        """[DERIVED] Total usable token budget — CORTICAL_CAPACITY minus all reserves."""
-        return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE        # [DERIVED] total usable token budget
-
-class _EMCType(type):
-    @property
-    def RECALL_DEPTH(cls) -> int:
-        """[DERIVED] Total recall candidate pool — RECALL_SURFACE_LIMIT × RECALL_POOL."""
-        return cls.RECALL_SURFACE_LIMIT * cls.RECALL_POOL                                    # [DERIVED] total recall candidate pool
 
 class AGi:                                                              # Amazing Grace infrastructure
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
 
-    class SCS(metaclass=_SCSType):                                      # Semantic Cognitive System
+    class SCS:                                      # Semantic Cognitive System
         CORTICAL_CAPACITY: int  = 24576                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
         NEURAL_GATEWAY: str     = f"{RRR.SEMANTIC_COGNITIVE_SYSTEM}"    # [STATIC] ROS namespace prefix for SCS topics
         MEMORY_GATEWAY: str     = f"{RRR.MEMORY_COORDINATION_CORTEX}"   # [STATIC] ROS namespace prefix for MCC topics
         ENGRAM_COMPLEX: str     = "engram_complex.db"                   # [STATIC] SQLite filename for long-term memory storage
         UNITS_PER_CHUNK: int    = 4                                     # [STATIC] tokens per chunk unit (TODO: obsolete post-tokenizer M1.5)
+
+        @classmethod
+        def GLOBAL_CHUNK_LIMIT(cls) -> int:
+            """[DERIVED] Total usable token budget — CORTICAL_CAPACITY minus all reserves."""
+            return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE        # [DERIVED] total usable token budget
 
         # Config file registry — single source of truth for all YAML filenames
         AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
@@ -185,6 +179,11 @@ Rules:
             RECALL_TIMEOUT: float             = 2.0         # [INTRINSIC] max seconds for a full recall cycle (query encode + KNN + FTS5 + RRF)
             RECOVERY_BATCH_SIZE: int          = 50          # [INTRINSIC] max unencoded episodes loaded per startup recovery batch
             RELEVANCE_THRESHOLD: float        = 0.45        # [INTRINSIC] minimum RRF score for an episode to pass recall filter
+
+            @classmethod
+            def RECALL_DEPTH(cls) -> int:
+                """[DERIVED] Total recall candidate pool — RECALL_SURFACE_LIMIT × RECALL_POOL."""
+                return cls.RECALL_SURFACE_LIMIT * cls.RECALL_POOL                                    # [DERIVED] total recall candidate pool
 
         class WMC:                                          # Working Memory Cortex
             PMT_OVERHEAD: int         = 4                   # [STATIC]    token chunk overhead per PMT for formatting and metadata

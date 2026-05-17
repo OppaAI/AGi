@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <!-- Basic package information -->
+  <name>sts</name>
+  <version>0.1.0</version>
+  <description>Signal Transmission System for AGi</description>
+  
+  <!-- Maintainer and author information -->
+  <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
+  <author email="oppa.ai.org@gmail.com">OppaAI</author>
+  <license file="LICENSE">GPL-3.0-only</license>
+
+  <!-- Repository URLs -->
+  <url type="website">https://github.com/OppaAI/AGi</url>
+  <url type="repository">https://github.com/OppaAI/AGi/tree/main/robot/src/vcs</url>
+  <url type="bugtracker">https://github.com/OppaAI/AGi/issues</url>
+
+  <!-- Build tool dependencies -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Runtime dependencies -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- Test Dependencies -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <!-- Export tags -->
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
