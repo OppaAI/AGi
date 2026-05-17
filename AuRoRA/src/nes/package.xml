@@ -2,9 +2,9 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <!-- Basic package information -->
-  <name>sts</name>
+  <name>nes</name>
   <version>0.1.0</version>
-  <description>Signal Transmission System for AGi</description>
+  <description>Neural Encoding System for AGi</description>
   
   <!-- Maintainer and author information -->
   <maintainer email="oppa.ai.org@gmail.com">OppaAI</maintainer>
