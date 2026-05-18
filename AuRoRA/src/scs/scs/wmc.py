@@ -7,7 +7,8 @@ Working memory layer of the SCS — mirrors human working memory.
 Fast, limited capacity, current focus only.
 
 Responsibilities:
-    - Receive new PMTs from MCC and fill into active buffer (induction → filling)
+    - Encode incoming SSS from MCC into PMTs (semantic encoding → dynamic workspace gate → clustering → static anchor gate → retention scoring)
+    - Fill inducted PMTs into active buffer (induction → filling)
     - Sustain PMTs in active buffer for context construction (sustaining)
     - Evict receding PMTs back to MCC when capacity exceeded (receding → evicting)
     - Provide sustained PMT schema to MCC for context assembly on each turn (recalling)
