@@ -62,9 +62,9 @@ from datetime import datetime            # for PMT timestamps — (TODO) M1.6 re
 import json                              # for structured PMT storage — serialization and recall
 
 # AGi components
-from gms.csb import AGi                  # obtains the centralized structural blueprints for PMT
-PMT = AGi.SCS.WMC.PMT                    # PMT class alias
-PMTState = AGi.SCS.WMC.PMTState          # PMTState class alias
+from gms.csb.AGi.SIU import SensoryInputChannel, SensoryModality, SSS  # sensory input channel — input gateway for all peripheral stimuli (text, speech, vision, etc.)
+from gms.csb.AGi.SCS import TraceType  # trace type — PMT, VST, or AST
+from gms.csb.AGi.SCS.WMC import PMT, VST, WMCState,       # PMT and PMTState classes — phonological and visuospatial memory traces
 from hrs.hru import ChunkSampler         # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                  # homeostatic regulation manifest namespace — system-wide constants
 SCS = AGi.SCS                            # SCS parameter namespace alias — keeps constant references concise
@@ -111,7 +111,57 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def induce(self, user_id: str | None, role: str, content: str) -> PMT | None:
+    def _encode(self, sss: SSS) -> PMT | VST:
+        """
+        Encode sensory stimulus into PMT or VST based on modality.
+        """
+        match sss.trace_type:
+            case TraceType.PMT:
+                return PMT(
+                    # ── from SSS identity ─────────────────────────
+                    user_id     = sss.user_id,          # SSS.user_id → PMT.user_id
+                    timestamp   = sss.generated_at,     # SSS.generated_at → PMT.timestamp
+                    interval    = sss.interval,         # SSS.interval → PMT.interval
+                    proc        = sss.proc,             # SSS.proc → PMT.proc
+                    # ── from SSS content ──────────────────────────
+                    user_prompt = sss.text,             # SSS.text → PMT.user_prompt
+                    trace       = f'{sss.user_id} said: "{sss.text}"',  # derived from SSS.text
+                    # ── from SSS scoring ──────────────────────────
+                    vector          = sss.vector,       # SSS.vector → PMT.vector (if pre-computed)
+                    salience_score  = sss.urgency,      # SSS.urgency → PMT.salience_score
+                    # ── defaults ──────────────────────────────────
+                    state           = WMCState.INDUCED,
+                    ai_response     = "",               # empty — bind step completes this
+                    content         = "",               # empty — bind step completes this
+                    chunk_count     = 0,                # filled after bind — full pair needed
+                    anchored        = False,
+                )
+            case TraceType.VST:
+                return VST(
+                    # ── from SSS identity ─────────────────────────
+                    sensor_id   = sss.location,         # SSS.location → VST.sensor_id
+                    timestamp   = sss.generated_at,     # SSS.generated_at → VST.timestamp
+                    interval    = sss.interval,         # SSS.interval → VST.interval
+                    proc        = sss.proc,             # SSS.proc → VST.proc
+                    # ── from SSS content ──────────────────────────
+                    raw_frame   = sss.raw,              # SSS.raw → VST.raw_frame (path/ref only)
+                    # ── from SSS scoring ──────────────────────────
+                    vector          = sss.vector,       # SSS.vector → VST.vector
+                    salience_score  = sss.urgency,      # SSS.urgency → VST.salience_score
+                    # ── defaults ──────────────────────────────────
+                    state           = WMCState.INDUCED,
+                    interpretation  = "",               # empty — perception pipeline fills this
+                    objects         = [],               # empty — perception pipeline fills this
+                    spatial_map     = "",               # empty — perception pipeline fills this
+                    pose            = [],               # empty — filled from ROS2 tf
+                    chunk_count     = 0,                # filled after interpretation complete
+                    anchored        = False,
+                )            
+            case _:
+                raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
+                
+
+    def induce(self, sss: SSS) -> PMT | None:
         """
         Induction: prepare a user/assistant interaction to be added to the working memory.
 

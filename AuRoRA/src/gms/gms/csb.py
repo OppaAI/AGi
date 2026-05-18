@@ -23,68 +23,79 @@ from enum import Enum                                   # for generating the enu
 # ══════════════════════════════════════════════════════════════════════════════
 
 class AGi:
-    class SIU:
-        class NeuralInputChannel(Enum):
-            CLI      = "cli"
-            WEBUI    = "webui"
-            VOICE    = "voice"
-            TELEGRAM = "telegram"
-            DISCORD  = "discord"
-            GMAIL    = "gmail"
+    class PRS:
+        class SIU:
+            class SensoryInputChannel(Enum):
+                CLI      = "cli"
+                WEBUI    = "webui"
+                VOICE    = "voice"
+                TELEGRAM = "telegram"
+                DISCORD  = "discord"
+                GMAIL    = "gmail"
 
+            class SensoryModality(Enum):
+                TEXT    = "text"    # CLI, webUI, messaging bridges
+                AUDIO   = "audio"   # voice pipeline — (TODO: M1.X-b)
+                VISION  = "vision"  # camera — OAK-D
+                SPATIAL = "spatial" # LiDAR, IMU
+                TOUCH   = "touch"   # tactile sensors — (TODO: M2+)
 
-        @dataclass
-        class SSS:
-            """
-            Sensory Stimulus Signal — one complete sensory stimulus package.
-            Travels the full pre-WM pipeline as a single object.
-            Adapters fill raw fields. CNC enriches in-place before forwarding to MCC.
-            Biological analogue: afferent signal — transduced at periphery,
-            enriched at thalamus, never enters WM directly.
-            Lifecycle:
-                Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
-            """
-            # ── raw — filled by adapter ────────────────────────────────────
-            source          : AGi.SIU.NeuralInputChannel = AGi.SIU.NeuralInputChannel.CLI   # input modality — required
-            user_id         : str   = field(default="demo")                 # speaker identity
-            text            : str   = field(default="")                     # text payload — CLI, webUI, bridges
-            audio           : bytes = field(default=b"")                    # audio payload — voice pipeline (TODO: M1.X-b)
-            image           : bytes = field(default=b"")                    # image payload — vision pipeline (TODO: M2+)
+            @dataclass
+            class SSS:
+                """
+                Sensory Stimulus Signal — one complete sensory stimulus package.
+                Travels the full pre-WM pipeline as a single object.
+                Adapters fill raw fields. CNC enriches in-place before forwarding to MCC.
+                Biological analogue: afferent signal — transduced at periphery,
+                enriched at thalamus, never enters WM directly.
+                Lifecycle:
+                    Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
+                """
+                # ── raw — filled by adapter ────────────────────────────────────
+                source          : AGi.PRS.SIU.SensoryInputChannel = AGi.PRS.SIU.SensoryInputChannel.CLI   # input modality — required
+                user_id         : str   = field(default="demo")                 # speaker identity
+                text            : str   = field(default="")                     # text payload — CLI, webUI, bridges
+                audio           : bytes = field(default=b"")                    # audio payload — voice pipeline (TODO: M1.X-b)
+                image           : bytes = field(default=b"")                    # image payload — vision pipeline (TODO: M2+)
 
-            # ── enriched — filled by CNC ───────────────────────────────────
-            sss_id          : str   = ""    # unique signal ID — e.g. "sss_a1b2c3"
-            sequence        : int   = 0     # ordinal position in stimulus stream
-            modality        : str   = ""    # "text" | "audio" | "vision" — derived from source
-            trace_type      : str   = ""    # WMC trace target — "pmt" | "vst" | "ast"
-            proc            : str   = ""    # process that enriched this SSS
-            location        : str   = ""    # physical origin — e.g. "microphone_left"
+                # ── enriched — filled by CNC ───────────────────────────────────
+                sss_id          : str   = ""    # unique signal ID — e.g. "sss_a1b2c3"
+                sequence        : int   = 0     # ordinal position in stimulus stream
+                modality        : AGi.SIU.SensoryModality  = AGi.SIU.SensoryModality.TEXT  # "text" | "audio" | "vision" — derived from source
+                trace_type      : str   = ""    # WMC trace target — "pmt" | "vst" | "ast"
+                proc            : str   = ""    # process that enriched this SSS
+                location        : str   = ""    # physical origin — e.g. "microphone_left"
 
-            # ── scoring — filled by CNC ────────────────────────────────────
-            urgency         : float = 0.0   # dispatch priority — higher preempts lower
-            confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
-            vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
+                # ── scoring — filled by CNC ────────────────────────────────────
+                urgency         : float = 0.0   # dispatch priority — higher preempts lower
+                confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
+                vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
 
-            # ── lifecycle — filled by CNC ──────────────────────────────────
-            state           : str   = ""    # SSSState — "raw" | "enriched" | "triaged" | "dispatched" | "dropped"
-            generated_at    : str   = ""    # wall-clock time of generation
-            queued_at       : str   = ""    # wall-clock time of queuing
-            fired_at        : str   = ""    # wall-clock time of transmission
-            received_at     : str   = ""    # wall-clock time of reception
-            processed_at    : str   = ""    # wall-clock time of processing
-            completed_at    : str   = ""    # wall-clock time of completion
-            depleted_at     : str   = ""    # wall-clock time of depletion
-            dropped_at      : str   = ""    # wall-clock time of dropping
-            lifecycle       : float = 0.0   # elapsed ms from generation to depletion
-            drop_reason     : str   = ""    # "below_threshold" | "duplicate" | "overload"
+                # ── lifecycle — filled by CNC ──────────────────────────────────
+                state           : str   = ""    # SSSState — "raw" | "enriched" | "triaged" | "dispatched" | "dropped"
+                generated_at    : str   = ""    # wall-clock time of generation
+                queued_at       : str   = ""    # wall-clock time of queuing
+                fired_at        : str   = ""    # wall-clock time of transmission
+                received_at     : str   = ""    # wall-clock time of reception
+                processed_at    : str   = ""    # wall-clock time of processing
+                completed_at    : str   = ""    # wall-clock time of completion
+                depleted_at     : str   = ""    # wall-clock time of depletion
+                dropped_at      : str   = ""    # wall-clock time of dropping
+                lifecycle       : float = 0.0   # elapsed ms from generation to depletion
+                drop_reason     : str   = ""    # "below_threshold" | "duplicate" | "overload"
 
-            # ── flags — filled by adapter or CNC ──────────────────────────
-            internal        : bool  = False # true if GRACE-originated — not external environment
-            requires_response: bool = False # true if stimulus expects a reply
-            interval        : int   = 0     # ms to generate this SSS
+                # ── flags — filled by adapter or CNC ──────────────────────────
+                internal        : bool  = False # true if GRACE-originated — not external environment
+                requires_response: bool = False # true if stimulus expects a reply
+                interval        : int   = 0     # ms to generate this SSS
 
     class SCS:
+        class TraceType(Enum):
+            PMT = "pmt"   # phonological memory trace — text/audio
+            VST = "vst"   # visuospatial trace — vision/spatial
+            AST = "ast"   # affective state trace — (TODO: M2+)
         class WMC:
-            class PMTState(Enum):
+            class WMCState(Enum):
                 """
                 State of a PMT in the working memory.
                 """
@@ -111,14 +122,14 @@ class AGi:
                 interval        : int           = 0     # time taken to generate this PMT in ms — (TODO: M1.6 replaces with ROS2 time)
 
                 # ── lifecycle ─────────────────────────────────────────────────
-                state           : AGi.SCS.WMC.PMTState = AGi.SCS.WMC.PMTState.INDUCED    # PMTState value — induced/filled/sustained/receded/evicted
+                state           : AGi.SCS.WMC.WMCState = AGi.SCS.WMC.WMCState.INDUCED    # WMCState value — induced/filled/sustained/receded/evicted
                 proc            : str           = ""    # process name — which process generated this PMT
 
                 # ── content ───────────────────────────────────────────────────
                 user_prompt     : str           = ""    # raw user prompt — source of truth during staging
                 ai_response     : str           = ""    # raw AI response — empty until pairing complete
                 content         : str           = ""    # JSON pair — WMC chat history for LLM
-                trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
+                trace_type      : AGi.SCS.WMC.TraceType = AGi.SCS.WMC.TraceType.PMT  # formatted text — for EMC embedding and reinstatement
 
                 # ── scoring ───────────────────────────────────────────────────
                 chunk_count     : int           = 0     # cached token count — O(1) eviction math, no reprobe on eviction
@@ -147,7 +158,7 @@ class AGi:
                 timestamp       : str           = ""    # ISO wall-clock induction time — (TODO: M1.6 replaces with ROS2 time)
                 interval        : int           = 0     # time taken to generate this VST in ms — (TODO: M1.6 replaces with ROS2 time)
                 # ── lifecycle ─────────────────────────────────────────────────
-                state           : str           = ""    # VSTState value — induced/filled/sustained/receded/evicted
+                state           : AGi.SCS.WMC.WMCState = AGi.SCS.WMC.WMCState.INDUCED  # WMCState value — induced/filled/sustained/receded/evicted
                 proc            : str           = ""    # process name — which process generated this VST
                 # ── content ───────────────────────────────────────────────────
                 raw_frame       : str           = ""    # raw sensor input — base64 image, point cloud ref, or IMU reading

@@ -67,7 +67,8 @@ from std_msgs.msg import String                            # ROS2 string message
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from scs.niu import NeuralStimulus, NeuralInputChannel     # neural input channel— input gateway for all neural stimuli (text, speech, etc.)
+from gms.csb.AGi.SIU import SensoryInputChannel, SensoryModality, SSS       # neural input channel— input gateway for all neural stimuli (text, speech, etc.)
+from gms.csb.AGi.SCS.WMC import PMT, VST, WMCState         # PMT and PMTState classes — phonological and visuospatial memory traces
 from scs.iru import IdentityRecognitionUnit                # identity recognition unit — identify user and establish session identity and user context
 from scs.ppu import PersonalProgressionUnit                # Personal Provisioning Unit — session identity and user context loader
 
