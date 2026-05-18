@@ -157,7 +157,7 @@ Rules:
             ENCODING_ENGINE: str              = "BAAI/bge-base-en-v1.5"  # [STATIC] sentence-transformers model for semantic embeddings
             ENCODING_DIM: int                 = 768                      # [STATIC] embedding vector dimensionality
 
-        class EMC(metaclass=_EMCType):                       # Episodic Memory Cortex
+        class EMC:                                          # Episodic Memory Cortex
             BINDING_STREAM_LIMIT: int         = 512         # [INTRINSIC] max unencoded PMTs queued before OOM guard triggers
 
             EPISODE_CONTENT_LIMIT: int        = 512         # [INTRINSIC] max tokens per PMT written to episodic buffer
