@@ -202,7 +202,6 @@ class EncodingEngine:
         CPython GIL guarantees atomic attribute assignment — no lock needed.
         """
         try:                                                                                # attempt to load SentenceTransformer on a background thread
-            import huggingface_hub.utils                                                    # import sentence-transformers on a background thread
             from sentence_transformers import SentenceTransformer                           # deferred import — avoids hard crash if package missing
             self.logger.info(f"⏳ Activating Encoding Engine ({self.encoding_engine})…")    # log before the blocking load
             self._core = SentenceTransformer(self.encoding_engine)                          # blocking model load — safe here, isolated from init path
