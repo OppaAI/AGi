@@ -111,7 +111,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def _encode(self, sss: SSS) -> PMT | VST:
+    def _semantic_feature_extraction(self, sss: SSS) -> PMT | VST:
         """
         Encode sensory stimulus into PMT or VST based on modality.
         """
@@ -164,24 +164,24 @@ class WorkingMemoryCortex:
         """
         Pair the user/assistant turns and add time and other info.
         """
-      if role == "user":
-            if self._induced_pmt is not None:                                           # unpaired prompt already pending — append
-                self._induced_pmt.user_prompt += "\n" + content                         # plain append — no json.loads needed
-                self._induced_pmt.trace       += "\n" + content                         # mirror in trace
-                self.logger.warn("WMC: second user message — appended to induced PMT")  # log double message
-                return None                                                             # still incomplete
+        if role == "user":
+                if self._induced_pmt is not None:                                           # unpaired prompt already pending — append
+                    self._induced_pmt.user_prompt += "\n" + content                         # plain append — no json.loads needed
+                    self._induced_pmt.trace       += "\n" + content                         # mirror in trace
+                    self.logger.warn("WMC: second user message — appended to induced PMT")  # log double message
+                    return None                                                             # still incomplete
 
-            self._induced_pmt = PMT(                                                    # stage user prompt — pending for AI response
-                user_id     = user_id,
-                timestamp   = datetime.now().isoformat(),                               # wall-clock induction time (TODO M1.6: use ROS2 time)
-                user_prompt = content,                                                  # raw user prompt — source of truth during staging
-                trace       = f'{user_id} said: "{content}"',                           # partial trace — assistant appended on pairing
-                chunk_count = 0,                                                        # filled on assistant turn — cached chunk count
-                vector      = [],                                                       # filled by MCC at induction scoring — reused at EMC binding
-                anchored    = False,                                                    # hard-gate flag
-            )
-            self.logger.debug("WMC induced unpaired user prompt — pending for AI response")
-            return None                                                                 # exchange incomplete — nothing to fill or evict
+                self._induced_pmt = PMT(                                                    # stage user prompt — pending for AI response
+                    user_id     = user_id,
+                    timestamp   = datetime.now().isoformat(),                               # wall-clock induction time (TODO M1.6: use ROS2 time)
+                    user_prompt = content,                                                  # raw user prompt — source of truth during staging
+                    trace       = f'{user_id} said: "{content}"',                           # partial trace — assistant appended on pairing
+                    chunk_count = 0,                                                        # filled on assistant turn — cached chunk count
+                    vector      = [],                                                       # filled by MCC at induction scoring — reused at EMC binding
+                    anchored    = False,                                                    # hard-gate flag
+                )
+                self.logger.debug("WMC induced unpaired user prompt — pending for AI response")
+                return None                                                                 # exchange incomplete — nothing to fill or evict
 
         elif role == "assistant":
             if self._induced_pmt is None:                                               # no induced PMT — unpaired AI response
@@ -215,7 +215,7 @@ class WorkingMemoryCortex:
 
         return None                                                                     # unknown speaker
 
-    def _early_attention_gate(self, sss: SSS) -> bool:
+    def _static_anchor_gate(self, sss: SSS) -> bool:
         """
         Early gate to filter out irrelevant PMTs.
         """
@@ -232,23 +232,17 @@ class WorkingMemoryCortex:
         else:
             raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
 
-    def _late_attention_gate(self, sss: SSS) -> bool:  
-        """
-        Late gate to filter out irrelevant PMTs.
-        """
-        return sss.urgency > self.urgency_threshold
-
-    def _binding(self, pmt: PMT, vss: VST) -> bool:
-        """
-        Binding: add time information to the PMT, and check if there is a 
-        """
-        pass
-
-    def semantic_grouping(self, pmt: PMT) -> bool:
+    def _associative_semantic_clustering(self, pmt: PMT) -> bool:
         """
         Semantic grouping: group related PMTs together.
         """
         pass
+
+    def _dynamic_workspace_gate(self, sss: SSS) -> bool:  
+        """
+        Late gate to filter out irrelevant PMTs.
+        """
+        return sss.urgency > self.urgency_threshold
 
     def induce(self, sss: SSS) -> PMT | None:
         """
