@@ -111,109 +111,194 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def _semantic_encode(self, sss: SSS) -> PMT | VST:
+    def _semantic_encode(self, sss: SSS) -> PMT | VST | None:
         """
-        Encode sensory stimulus into PMT or VST based on modality.
+        Transform SSS into a staged or completed memory trace.
+    
+        Routes to _populate on first turn (user/raw) to construct and stage
+        an incomplete trace, or to _pair on second turn (assistant/interpreted)
+        to complete the staged trace and return it for the gating pipeline.
+    
+        A PMT or VST does not exist until both turns are encoded.
+    
+        Args:
+            sss : SSS — incoming sensory stimulus, either first or second turn
+    
+        Returns:
+            PMT | VST | None — completed trace on second turn, None on first turn
+        """
+        match sss.role:
+            case "user" | "raw":                return self._populate(sss)
+            case "assistant" | "interpreted":   return self._pair(sss)
+            case _: raise ValueError(f"Unknown SSS role: {sss.role}")
+    
+    
+    def _populate(self, sss: SSS) -> None:
+        """
+        First turn — construct an incomplete trace shell from SSS and stage it
+        in the modality induction slot, pending the second turn.
+    
+        PMT : user SSS       → populate user fields    → stage in _induced_pmt
+        VST : raw frame SSS  → populate sensor fields  → stage in _induced_vst
+    
+        Always returns None — trace is incomplete until second turn arrives.
+    
+        Args:
+            sss : SSS — first turn sensory stimulus, role 'user' or 'raw'
         """
         match sss.trace_type:
             case TraceType.PMT:
-                return PMT(
-                    # ── from SSS identity ─────────────────────────
-                    user_id     = sss.user_id,          # SSS.user_id → PMT.user_id
-                    timestamp   = sss.generated_at,     # SSS.generated_at → PMT.timestamp
-                    interval    = sss.interval,         # SSS.interval → PMT.interval
-                    proc        = sss.proc,             # SSS.proc → PMT.proc
-                    # ── from SSS content ──────────────────────────
-                    user_prompt = sss.text,             # SSS.text → PMT.user_prompt
-                    trace       = f'{sss.user_id} said: "{sss.text}"',  # derived from SSS.text
-                    # ── from SSS scoring ──────────────────────────
-                    vector          = sss.vector,       # SSS.vector → PMT.vector (if pre-computed)
-                    salience_score  = sss.urgency,      # SSS.urgency → PMT.salience_score
-                    # ── defaults ──────────────────────────────────
-                    state           = WMCState.INDUCED,
-                    ai_response     = "",               # empty — bind step completes this
-                    content         = "",               # empty — bind step completes this
-                    chunk_count     = 0,                # filled after bind — full pair needed
-                    anchored        = False,
-                )
-            case TraceType.VST:
-                return VST(
-                    # ── from SSS identity ─────────────────────────
-                    sensor_id   = sss.location,         # SSS.location → VST.sensor_id
-                    timestamp   = sss.generated_at,     # SSS.generated_at → VST.timestamp
-                    interval    = sss.interval,         # SSS.interval → VST.interval
-                    proc        = sss.proc,             # SSS.proc → VST.proc
-                    # ── from SSS content ──────────────────────────
-                    raw_frame   = sss.raw,              # SSS.raw → VST.raw_frame (path/ref only)
-                    # ── from SSS scoring ──────────────────────────
-                    vector          = sss.vector,       # SSS.vector → VST.vector
-                    salience_score  = sss.urgency,      # SSS.urgency → VST.salience_score
-                    # ── defaults ──────────────────────────────────
-                    state           = WMCState.INDUCED,
-                    interpretation  = "",               # empty — perception pipeline fills this
-                    objects         = [],               # empty — perception pipeline fills this
-                    spatial_map     = "",               # empty — perception pipeline fills this
-                    pose            = [],               # empty — filled from ROS2 tf
-                    chunk_count     = 0,                # filled after interpretation complete
-                    anchored        = False,
-                )            
-            case _:
-                raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
+                if self._induced_pmt is not None:                                       # unpaired prompt already pending — append
+                    self._induced_pmt.user_prompt += "\n" + sss.text                    # plain append — no json.loads needed
+                    self._induced_pmt.trace       += "\n" + sss.text                    # mirror in trace
+                    self.logger.warning("WMC: second user SSS — appended to staged PMT")
+                    return None                                                         # still incomplete
     
-    def pair(self, pmt: PMT, vss: VST) -> bool:
-        """
-        Pair the user/assistant turns and add time and other info.
-        """
-        if role == "user":
-                if self._induced_pmt is not None:                                           # unpaired prompt already pending — append
-                    self._induced_pmt.user_prompt += "\n" + content                         # plain append — no json.loads needed
-                    self._induced_pmt.trace       += "\n" + content                         # mirror in trace
-                    self.logger.warn("WMC: second user message — appended to induced PMT")  # log double message
-                    return None                                                             # still incomplete
-
-                self._induced_pmt = PMT(                                                    # stage user prompt — pending for AI response
-                    user_id     = user_id,
-                    timestamp   = datetime.now().isoformat(),                               # wall-clock induction time (TODO M1.6: use ROS2 time)
-                    user_prompt = content,                                                  # raw user prompt — source of truth during staging
-                    trace       = f'{user_id} said: "{content}"',                           # partial trace — assistant appended on pairing
-                    chunk_count = 0,                                                        # filled on assistant turn — cached chunk count
-                    vector      = [],                                                       # filled by MCC at induction scoring — reused at EMC binding
-                    anchored    = False,                                                    # hard-gate flag
+                self._induced_pmt = PMT(
+                    # ── identity ──────────────────────────────────────────────────
+                    user_id         = sss.user_id,          # SSS.user_id → PMT.user_id
+                    timestamp       = sss.generated_at,     # SSS.generated_at → PMT.timestamp
+                    interval        = sss.interval,         # SSS.interval → PMT.interval
+                    proc            = sss.proc,             # SSS.proc → PMT.proc
+                    # ── lifecycle ─────────────────────────────────────────────────
+                    state           = WMCState.INDUCED,
+                    # ── content ───────────────────────────────────────────────────
+                    user_prompt     = sss.text,             # SSS.text → PMT.user_prompt — source of truth during staging
+                    ai_response     = "",                   # empty — assistant turn completes this
+                    content         = "",                   # empty — derived on pairing completion
+                    trace           = f'{sss.user_id} said: "{sss.text}"',  # partial — assistant turn appends
+                    # ── scoring ───────────────────────────────────────────────────
+                    vector          = sss.vector,           # SSS.vector → PMT.vector — reused at EMC binding
+                    salience_score  = sss.urgency,          # SSS.urgency → PMT.salience_score
+                    chunk_count     = 0,                    # filled on pairing completion — full pair needed
+                    # ── flags ─────────────────────────────────────────────────────
+                    anchored        = False,
                 )
-                self.logger.debug("WMC induced unpaired user prompt — pending for AI response")
-                return None                                                                 # exchange incomplete — nothing to fill or evict
-
-        elif role == "assistant":
-            if self._induced_pmt is None:                                               # no induced PMT — unpaired AI response
-                self.logger.warning("WMC: AI response without user prompt — wrapping with placeholder")
-                self._induced_pmt = PMT(                                                # wrap with placeholder
-                    user_id     = user_id,
-                    timestamp   = datetime.now().isoformat(),                           # wall-clock induction time
-                    user_prompt = "[context missing]",                                  # placeholder for missing user prompt
-                    ai_response = content,                                              # AI response preserved
-                    content     = json.dumps({"user": "[context missing]", "assistant": content}), # derived immediately — pair already complete
-                    trace       = f'[context missing]\nYou replied: "{content}"',       # formatted — consistent with paired trace format
-                    chunk_count = 0,                                                    # filled below — cached chunk count
-                    vector      = [],                                                   # filled by MCC at induction scoring
-                    anchored    = False,                                                # hard-gate flag
+                self.logger.debug("WMC: user SSS staged — pending assistant turn")
+                return None
+    
+            case TraceType.VST:
+                if self._induced_vst is not None:                                       # unpaired frame already pending — warn and replace
+                    self.logger.warning("WMC: second raw VST — replacing staged VST")
+    
+                self._induced_vst = VST(
+                    # ── identity ──────────────────────────────────────────────────
+                    sensor_id       = sss.location,         # SSS.location → VST.sensor_id
+                    timestamp       = sss.generated_at,     # SSS.generated_at → VST.timestamp
+                    interval        = sss.interval,         # SSS.interval → VST.interval
+                    proc            = sss.proc,             # SSS.proc → VST.proc
+                    # ── lifecycle ─────────────────────────────────────────────────
+                    state           = WMCState.INDUCED,
+                    # ── content ───────────────────────────────────────────────────
+                    raw_frame       = sss.raw,              # SSS.raw → VST.raw_frame — path/ref only
+                    interpretation  = "",                   # empty — interpreted turn completes this
+                    content         = "",                   # empty — derived on pairing completion
+                    trace           = "",                   # empty — derived on pairing completion
+                    # ── spatial ───────────────────────────────────────────────────
+                    objects         = [],                   # empty — interpreted turn fills this
+                    spatial_map     = "",                   # empty — interpreted turn fills this
+                    pose            = [],                   # empty — filled from ROS2 tf on interpreted turn
+                    # ── scoring ───────────────────────────────────────────────────
+                    vector          = sss.vector,           # SSS.vector → VST.vector
+                    salience_score  = sss.urgency,          # SSS.urgency → VST.salience_score
+                    chunk_count     = 0,                    # filled on pairing completion
+                    # ── flags ─────────────────────────────────────────────────────
+                    anchored        = False,
                 )
-            else:                                                                       # normal path — complete the pairing
-                self._induced_pmt.ai_response = content                          # store raw AI response
-                self._induced_pmt.content = json.dumps({                                # derive JSON once — pairing complete
-                    "user"      : self._induced_pmt.user_prompt,                        # raw user prompt
-                    "assistant" : content                                               # raw AI response
+                self.logger.debug("WMC: raw VST staged — pending interpreted turn")
+                return None
+    
+            case _:
+                raise ValueError(f"Unknown trace type in _populate: {sss.trace_type}")
+    
+    
+    def _pair(self, sss: SSS) -> PMT | VST | None:
+        """
+        Second turn — complete the staged trace with the response or interpretation
+        and return the fully formed memory object for the gating pipeline.
+    
+        PMT : assistant SSS      → complete _induced_pmt → return completed PMT
+        VST : interpreted SSS    → complete _induced_vst → return completed VST
+    
+        Orphan handling:
+            PMT — assistant turn without staged PMT wraps with placeholder, preserved.
+            VST — interpreted turn without staged VST is discarded, nothing to recover.
+    
+        Args:
+            sss : SSS — second turn sensory stimulus, role 'assistant' or 'interpreted'
+    
+        Returns:
+            PMT | VST | None — completed trace, or None if VST orphan discarded
+        """
+        match sss.trace_type:
+            case TraceType.PMT:
+                if self._induced_pmt is None:                                           # orphaned assistant turn — wrap with placeholder
+                    self.logger.warning("WMC: assistant SSS without staged PMT — wrapping with placeholder")
+                    self._induced_pmt = PMT(
+                        # ── identity ──────────────────────────────────────────────
+                        user_id         = sss.user_id,
+                        timestamp       = sss.generated_at,
+                        interval        = sss.interval,
+                        proc            = sss.proc,
+                        # ── lifecycle ─────────────────────────────────────────────
+                        state           = WMCState.INDUCED,
+                        # ── content ───────────────────────────────────────────────
+                        user_prompt     = "[context missing]",                          # placeholder — user turn was lost
+                        ai_response     = sss.text,
+                        content         = json.dumps({                                  # derive immediately — pair already complete
+                            "user"      : "[context missing]",
+                            "assistant" : sss.text,
+                        }),
+                        trace           = f'[context missing]\nYou replied: "{sss.text}"',
+                        # ── scoring ───────────────────────────────────────────────
+                        vector          = sss.vector,
+                        salience_score  = sss.urgency,
+                        chunk_count     = 0,                                            # filled below
+                        # ── flags ─────────────────────────────────────────────────
+                        anchored        = False,
+                    )
+                else:                                                                   # normal path — complete staged PMT
+                    self._induced_pmt.ai_response   = sss.text                          # SSS.text → PMT.ai_response
+                    self._induced_pmt.content       = json.dumps({                      # derive JSON — pairing complete
+                        "user"      : self._induced_pmt.user_prompt,
+                        "assistant" : sss.text,
+                    })
+                    self._induced_pmt.trace        += f'\nYou replied: "{sss.text}"'    # complete trace — append assistant turn
+    
+                self._induced_pmt.chunk_count = self.chunk_sampler.probe(               # cache chunk count — avoid reprobe on eviction
+                    content  = self._induced_pmt.content,
+                    overhead = WMC.PMT_OVERHEAD,
+                )
+                completed           = self._induced_pmt                                 # promote staged PMT
+                self._induced_pmt   = None                                              # clear staging slot — ready for next exchange
+                return completed                                                        # fully formed PMT — ready for gating pipeline
+    
+            case TraceType.VST:
+                if self._induced_vst is None:                                           # orphaned interpretation — nothing to recover
+                    self.logger.warning("WMC: interpreted SSS without staged VST — discarding")
+                    return None
+    
+                self._induced_vst.interpretation    = sss.text                          # SSS.text → VST.interpretation
+                self._induced_vst.objects           = sss.objects                       # SSS.objects → VST.objects
+                self._induced_vst.spatial_map       = sss.spatial_map                   # SSS.spatial_map → VST.spatial_map
+                self._induced_vst.pose              = sss.pose                          # SSS.pose → VST.pose
+                self._induced_vst.content           = json.dumps({                      # derive JSON — pairing complete
+                    "raw_frame"     : self._induced_vst.raw_frame,
+                    "interpretation": sss.text,
                 })
-                self._induced_pmt.trace = f'{self._induced_pmt.trace}\nYou replied: "{content}"'  # complete trace
-
-            induced_pmt             = self._induced_pmt                                 # promote staged PMT to evictable
-            induced_pmt.chunk_count = self.chunk_sampler.probe(                         # cache chunk count — avoid reprobe on eviction
-                content  = induced_pmt.content,
-                overhead = WMC.PMT_OVERHEAD
-            )
-            self._induced_pmt = None                                                    # clear induced PMT — exchange complete
-            return induced_pmt                                                          # completed PMT — ready for eviction and filling
-
-        return None                                                                     # unknown speaker
+                self._induced_vst.trace             = (                                 # derive trace — for EMC embedding
+                    f'Sensor {self._induced_vst.sensor_id} captured: "{sss.text}"'
+                )
+                self._induced_vst.chunk_count = self.chunk_sampler.probe(               # cache chunk count — avoid reprobe on eviction
+                    content  = self._induced_vst.content,
+                    overhead = WMC.VST_OVERHEAD,
+                )
+                completed           = self._induced_vst                                 # promote staged VST
+                self._induced_vst   = None                                              # clear staging slot — ready for next exchange
+                return completed                                                        # fully formed VST — ready for gating pipeline
+    
+            case _:
+                raise ValueError(f"Unknown trace type in _pair: {sss.trace_type}")
         
     def _cosine_sim(self, a: list[float], b: list[float]) -> float:
         """Cosine similarity between two vectors."""
