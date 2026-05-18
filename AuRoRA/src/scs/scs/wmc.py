@@ -361,7 +361,7 @@ class WorkingMemoryCortex:
         Recompute the running mean vector of all sustained PMTs in the slot.
         Called after every slot mutation — fill_pmt append and _evict_pmt remove.
         Not called during induction — the slot is unchanged until fill.
-
+     
         Biological analogue: the dynamic anchor is the aggregate semantic context
         of working memory — the attentional focus of all currently sustained traces.
         """
@@ -427,87 +427,88 @@ class WorkingMemoryCortex:
     #  GATE 1 — _dynamic_workspace_gate
     #  Admission decision: does this PMT belong in WM at all?
     # ══════════════════════════════════════════════════════════════════════════════
-
-    def _dynamic_workspace_gate(self, pmt: PMT) -> bool:
+     
+    def _dynamic_workspace_gate(self, pmt) -> bool:
         """
         Admission gate — decide whether the incoming PMT belongs in working memory.
-
+     
         Compares the PMT's vector against self._dynamic_anchor (the running mean of
         all currently sustained PMTs). A cosine sim below EVENT_BOUNDARY_THRESHOLD
         signals that the topic has shifted too far from the current WM context —
         the PMT is rejected to prevent workspace fragmentation.
-
+     
         Pass conditions (PMT admitted):
             - No dynamic anchor yet (slot empty — first PMT always admitted)
             - No vector on PMT (unmeasurable — admit by default)
             - Cosine sim >= EVENT_BOUNDARY_THRESHOLD (topic continuous)
-
+     
         Fail condition (PMT rejected):
             - Cosine sim < EVENT_BOUNDARY_THRESHOLD (event boundary detected)
-
+     
         Rejection means the PMT is dropped from the induction pipeline entirely.
         MCC receives None from induce() and decides whether to buffer or discard.
-
+     
         Biological analogue: prefrontal gating of working memory (O'Reilly & Frank) —
         the PFC actively filters inputs to maintain coherent task representations,
         blocking topic discontinuities that would cause interference.
-
+     
         Args:
             pmt : PMT — incoming completed trace with vector set
-
+     
         Returns:
             bool — True if admitted, False if rejected at event boundary
         """
         if self._dynamic_anchor is None or not pmt.vector:
-            return True                                              # empty slot or no vector — admit unconditionally
-
+            return True                                             # empty slot or no vector — admit unconditionally
+     
         sim      = self._cosine_sim(pmt.vector, self._dynamic_anchor)
-        admitted = sim >= self._EVENT_BOUNDARY_THRESHOLD             # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
-
+        admitted = sim >= _EVENT_BOUNDARY_THRESHOLD                 # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
+     
         if not admitted:
             self.logger.debug(
                 f"WMC gate: event boundary — PMT rejected "
-                f"(sim={sim:.3f} < threshold={self._EVENT_BOUNDARY_THRESHOLD})"
+                f"(sim={sim:.3f} < threshold={_EVENT_BOUNDARY_THRESHOLD})"
             )
         return admitted
-
+     
+     
     # ══════════════════════════════════════════════════════════════════════════════
     #  GATE 2 — _semantic_clustering
     #  Assignment: which cluster does this admitted PMT belong to?
     # ══════════════════════════════════════════════════════════════════════════════
-
-    def _semantic_clustering(self, pmt: PMT) -> int:
+     
+    def _semantic_clustering(self, pmt) -> int:
         """
         Assign a cluster_id to the incoming PMT without touching the deque.
         Called only on PMTs that have already passed _dynamic_workspace_gate.
-
+     
         Two paths determine assignment:
-
+     
         Path A — Explicit marker (hard override)
             pmt.anchored=True → assign to reserved anchor cluster (id=0).
             Skips centroid comparison entirely.
             Biological analogue: hippocampal tagging — explicitly marked events
             bypass encoding thresholds and are bound with priority.
-
+     
         Path B — Nearest centroid match
             Compare pmt.vector against each existing cluster's centroid.
             Join if best sim >= NOVELTY_CLUSTER_THRESHOLD (familiar topic).
             Open new cluster if best sim < threshold (novel topic).
             Cluster overflow (> CLUSTER_LIMIT) → collapse oldest into nearest neighbour.
-
+     
         cluster_id is written to pmt.cluster_id.
         Actual deque insertion happens in fill_pmt — not here.
-
+     
         Args:
             pmt : PMT — incoming trace, already admitted by _dynamic_workspace_gate
-
+     
         Returns:
             int — assigned cluster_id (also written to pmt.cluster_id)
         """
-
+     
         # ── Path A: explicit marker — hard override ────────────────────────────
         if pmt.anchored:
-            anchor_cluster_id = 0                                            # reserved id — never auto-assigned
+            anchor_cluster_id = 0                                           # reserved id — never auto-assigned
             if anchor_cluster_id not in self._cluster_registry:
                 self._cluster_registry[anchor_cluster_id] = []
                 self._cluster_ages[anchor_cluster_id]     = pmt.timestamp
@@ -516,10 +517,10 @@ class WorkingMemoryCortex:
             pmt.cluster_id = anchor_cluster_id
             self.logger.debug("WMC cluster: anchored → cluster 0 (hard override)")
             return anchor_cluster_id
-
+     
         # ── Path B: nearest centroid match ────────────────────────────────────
         assigned_id: int | None = None
-
+     
         if pmt.vector and self._cluster_registry:
             best_sim = -1.0
             best_id  = -1
@@ -531,30 +532,30 @@ class WorkingMemoryCortex:
                 if sim > best_sim:
                     best_sim = sim
                     best_id  = cid
-
-            if best_sim >= self._NOVELTY_CLUSTER_THRESHOLD and best_id >= 0:   # TODO: WMC.NOVELTY_CLUSTER_THRESHOLD
-                assigned_id = best_id                                           # join existing cluster — topic familiar
+     
+            if best_sim >= _NOVELTY_CLUSTER_THRESHOLD and best_id >= 0:    # TODO: WMC.NOVELTY_CLUSTER_THRESHOLD
+                assigned_id = best_id                                       # join existing cluster — topic familiar
                 self.logger.debug(
                     f"WMC cluster: joined cluster {assigned_id} (sim={best_sim:.3f})"
                 )
-
+     
         # ── Open new cluster if no match ──────────────────────────────────────
         if assigned_id is None:
             assigned_id           = self._next_cluster_id
-            self._next_cluster_id += 1                                          # monotonic — never reused
+            self._next_cluster_id += 1                                      # monotonic — never reused
             self._cluster_registry[assigned_id] = []
             self._cluster_ages[assigned_id]     = pmt.timestamp
             self.logger.debug(f"WMC cluster: new cluster opened → id={assigned_id}")
-
+     
         # ── Cluster overflow guard ─────────────────────────────────────────────
         non_anchor_clusters = [cid for cid in self._cluster_registry if cid != 0]
-        if len(non_anchor_clusters) > self._CLUSTER_LIMIT:                     # TODO: WMC.CLUSTER_LIMIT
+        if len(non_anchor_clusters) > _CLUSTER_LIMIT:                       # TODO: WMC.CLUSTER_LIMIT
             self._collapse_oldest_cluster(exclude_id=assigned_id)
-
+     
         # ── Register vector in assigned cluster ───────────────────────────────
         if pmt.vector:
             self._cluster_registry[assigned_id].append(pmt.vector)
-
+     
         pmt.cluster_id = assigned_id
         return assigned_id
 
@@ -660,62 +661,62 @@ class WorkingMemoryCortex:
     #  PUBLIC INTERFACE
     # ══════════════════════════════════════════════════════════════════════════════
 
-    def induce(self, sss: SSS, static_anchors: list[list[float]] | None) -> PMT | None:
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  induce — full induction pipeline
+    # ══════════════════════════════════════════════════════════════════════════════
+     
+    def induce(self, sss, static_anchors: list | None):
         """
         Full induction pipeline for one SSS turn.
-
+     
         Pipeline:
             1. _semantic_encode        — stage user turn or complete assistant turn
             2. _static_anchor_gate     — depth + novelty from static episodic centroids
             3. _dynamic_workspace_gate — event boundary check vs self._dynamic_anchor
             4. _score_retention        — salience * recency_decay * depth → cached on PMT
             5. _semantic_clustering    — assign cluster_id, no deque touch
-
+     
         Returns None on user turn (staged, not yet complete).
         Returns None if PMT rejected at dynamic gate (event boundary detected).
         Returns completed, scored, clustered PMT — caller calls fill_pmt next.
-
+     
         dynamic_anchor is read from self._dynamic_anchor — not passed as parameter.
         self._dynamic_anchor reflects the slot state before this induction,
         which is the correct comparison point (PMT not yet in the slot).
-
-        Biological analogue: phonological loop encoding — the user prompt is held
-        in active rehearsal until the AI response arrives to complete the episode.
-        The completed pair is then tagged by the hippocampus for potential consolidation.
-
+     
         Args:
             sss            : SSS — incoming sensory stimulus
             static_anchors : list[list[float]] | None — episodic centroids from bootup
-
+     
         Returns:
-            PMT | None — completed trace ready for fill_pmt, or None
+            PMT | VST | None — completed trace ready for fill_pmt, or None
         """
         # Stage 1 — encode: stage on user turn, complete on assistant turn
         completed = self._semantic_encode(sss)
         if completed is None:
-            return None                                          # user turn — staged, nothing to gate or score yet
-
+            return None                                         # user turn — staged, nothing to gate or score yet
+     
         # Stage 2 — static anchor gate: depth + novelty from episode history
         depth, novelty = self._static_anchor_gate(completed, static_anchors)
         # TODO: if PMT gains novelty_score field → completed.novelty_score = novelty
-
+     
         # Stage 3 — dynamic workspace gate: event boundary admission check
         if not self._dynamic_workspace_gate(completed):
             self.logger.debug("WMC induce: PMT rejected — event boundary detected")
-            return None                                          # topic too distant — MCC decides what to do
-
+            return None                                         # topic too distant — MCC decides what to do
+     
         # Stage 4 — retention score: salience * recency_decay * depth
         self._score_retention(completed, depth)
-
+     
         # Stage 5 — cluster assignment: tag with cluster_id, no deque insert
         self._semantic_clustering(completed)
-
+     
         self.logger.debug(
             f"WMC induced: cluster={completed.cluster_id} "
             f"retention={completed.retention_score:.4f} "
             f"depth={depth:.3f} novelty={novelty:.3f}"
         )
-        return completed                                         # scored + clustered — ready for fill_pmt
+        return completed                                        # scored + clustered — ready for fill_pmt
 
     def fill_pmt(self, induced_pmt: PMT) -> list[PMT]:
         """
