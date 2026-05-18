@@ -29,28 +29,28 @@ Terminology:
 
 Public interface:
     EngramComplex:
-        bifurcate_ecx() → sqlite3.Connection
-        stage_engram(engram: dict, ecx_conn?) → int
-        inscribe_engram(engram: dict, schema?, ecx_conn?) → int
-        retrieve_staged_batch(batch_size: int, offset: int) → list[dict]
-        decay_staged_engram(staging_id: int, ecx_conn?) → None
-        inscribe_vector_index(engram_id: int, blob: bytes, ecx_conn?) → None
-        inscribe_lexical_index(engram_id: int, trace: str, ecx_conn?) → None
-        recall_engram(cue: RecallCue, depth: int, date_range?) → list[dict]
-        assess_engram_complex() → dict
-        terminate() → None
+        bifurcate_ecx() -> sqlite3.Connection
+        stage_engram(engram: dict, ecx_conn?) -> int
+        inscribe_engram(engram: dict, schema?, ecx_conn?) -> int
+        retrieve_staged_batch(batch_size: int, offset: int) -> list[dict]
+        decay_staged_engram(staging_id: int, ecx_conn?) -> None
+        inscribe_vector_index(engram_id: int, blob: bytes, ecx_conn?) -> None
+        inscribe_lexical_index(engram_id: int, trace: str, ecx_conn?) -> None
+        recall_engram(cue: RecallCue, depth: int, date_range?) -> list[dict]
+        assess_engram_complex() -> dict
+        terminate() -> None
 """
 
 # System components
-from dataclasses import dataclass                                   # dataclass for EngramTrace/EngramSchema
-from datetime import datetime
-from enum import Enum                                               # enum base for EngramModality type definitions
-from pathlib import Path                                            # for calculating database size — owned here, never passed back up
-import re                                                           # for lexical cue sanitization
-import sqlite3                                                      # for engram connection factory
+from dataclasses import dataclass                     # dataclass for EngramTrace/EngramSchema
+from datetime import datetime                         # for ISO wall-clock timestamps — (TODO) M1.6 replaces with hrs.blc
+from enum import Enum                                 # enum base for EngramModality type definitions
+from pathlib import Path                              # for calculating database size — owned here, never passed back up
+import re                                             # for lexical cue sanitization
+import sqlite3                                        # for engram connection factory
 
 # AGi components
-from scs.stc import RecallCue, normalize_vector, pack_vector        # for calling vector math utils — normalize to unit length, pack to fp32 blob
+from scs.stc import RecallCue, pack_vector            # for calling vector math utils — normalize to unit length, pack to fp32 blob
 
 class EngramModality(Enum):
     """
