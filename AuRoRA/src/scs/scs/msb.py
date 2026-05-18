@@ -42,15 +42,15 @@ Public interface:
 """
 
 # System components
-from dataclasses import dataclass                       # dataclass for EngramTrace/EngramSchema
+from dataclasses import dataclass                                   # dataclass for EngramTrace/EngramSchema
 from datetime import datetime
-from enum import Enum                                   # enum base for EngramModality type definitions
-from pathlib import Path                                # for calculating database size — owned here, never passed back up
-import re                                               # for lexical cue sanitization
-import sqlite3                                          # for engram connection factory
+from enum import Enum                                               # enum base for EngramModality type definitions
+from pathlib import Path                                            # for calculating database size — owned here, never passed back up
+import re                                                           # for lexical cue sanitization
+import sqlite3                                                      # for engram connection factory
 
 # AGi components
-from scs.stc import normalize_vector, pack_vector       # vector math utilities — normalize to unit length, pack to fp32 blob
+from scs.stc import RecallCue, normalize_vector, pack_vector        # for calling vector math utils — normalize to unit length, pack to fp32 blob
 
 class EngramModality(Enum):
     """
