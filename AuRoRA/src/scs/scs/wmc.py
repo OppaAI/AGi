@@ -139,22 +139,22 @@ class WorkingMemoryCortex:
     #  SSS → PMT | VST — construct, stage, and pair memory traces
     # ══════════════════════════════════════════════════════════════════════════════
 
-    def _semantic_encode(self, sss: SSS) -> PMT | VST | None:
+    def _semantic_encode(self, sss: SSS) -> PMT | None:
         """
-        Transform SSS into a staged or completed memory trace.
-    
-        Routes to _populate_trace to fill fields from SSS onto the trace,
-        then _pair_trace to make the staging/promotion decision.
-    
-        A PMT or VST does not exist until both turns are paired.
+        Transform SSS into a staged or completed PMT.
+        Routes to _pair_trace which drives all staging and promotion decisions.
+        VST encoding deferred — implemented when CV/sensor pipeline is wired.
     
         Args:
-            sss : SSS — incoming sensory stimulus, either first or second turn
+            sss : SSS — incoming sensory stimulus
     
         Returns:
-            PMT | VST | None — completed trace on assistant turn, None on user turn
+            PMT | None — completed PMT on assistant turn, None on user turn
         """
-        return self._pair_trace(sss, self._populate_trace(sss))
+        if sss.trace_type != TraceType.PMT:
+            self.logger.warning(f"WMC: non-PMT trace type received — skipping ({sss.trace_type})")
+            return None                                             # VST deferred — skip silently
+        return self._pair_trace(sss)
     
     def _populate_trace(self, sss: SSS, content: str = "", trace: str = "") -> PMT:
         """
