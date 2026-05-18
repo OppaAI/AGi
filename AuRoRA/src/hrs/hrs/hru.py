@@ -36,9 +36,7 @@ Public interface:
 # System components
 from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
 from enum import Enum                       # enum base for UserType identity classification
-import numpy as np                          # for vector normalization — normalize_vector
 from pathlib import Path                    # filesystem path abstraction — GatewayMap builds all AuRoRA paths from this
-import struct                               # for vector packing — pack_vector
 
 # ROS2 components
 from rclpy.node import Node                 # for node type hinting (Node) and core node
@@ -133,34 +131,6 @@ def _hydrate_system(core: Node, manifest: type, system: str) -> None:
             core.declare_parameter(param_key, param_value)                           # declare parameter with default value on the core node
             setattr(manifest, param_name, core.get_parameter(param_key).value)       # write server value back into manifest — AuRoRA overrides the default
 
-def normalize_vector(vector: list[float]) -> list[float]:
-    """
-    Normalize an encoding vector to unit length for cosine-equivalent L2 distance search.".
-
-    Args:
-        vector (list[float]): Vector to normalize
-
-    Returns:
-        list[float]: unit-normalized vector, or the original if already normalized or empty
-    """
-    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
-    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
-    if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
-    return vector                                                                  # already unit length — skip normalization
-    
-def pack_vector(vector: list[float]) -> bytes:
-    """
-    Pack an encoding vector into a binary blob for engram storage.
-
-    Args:
-        vector (list[float]): encoding vector to pack
-
-    Returns:
-        bytes: fp32 binary blob — e.g. 768 floats → 3072 bytes
-    """
-    return struct.pack(f"{len(vector)}f", *vector)                                  # pack float list into fp32 binary blob — e.g. "768f" for 768 floats
-    
 @dataclass(frozen=True)
 class GatewayMap:
     """
