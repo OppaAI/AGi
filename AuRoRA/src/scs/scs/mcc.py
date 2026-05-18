@@ -136,7 +136,7 @@ class MemoryCoordinationCore:
         else:                                                                              # no episodes in window or all noise
             self.logger.warning("⚠️  Static anchors unavailable — no episodic memory in window")    # expected on first boot
 
-    async def register_memory(self, user_id: str | None, role: str, content: str) -> None:
+    async def register_memory(self, sss: SSS) -> None:
         """
         Receive a new conversation turn and commit it to working memory.
         Any PMTs evicted by WMC are handed off to the episodic buffer — non-blocking.
@@ -151,14 +151,21 @@ class MemoryCoordinationCore:
             content (str)        : Content of the conversation turn
         """
 
-        chunks = self._chunk_sampler.probe(content)                                                 # estimate token cost of the content
-        if role == "user":                                                                          # if user prompt,
+        chunks = self._chunk_sampler.probe(sss.text)                                                 # estimate token cost of the content
+        if sss.role == "user":                                                                       # if user prompt,
             self.logger.info(f"📝 stimulus: {chunks} tokens")                                       # log token cost of user prompt
-        elif role == "assistant":                                                                   # if AI response,
+        elif sss.role == "assistant":                                                                # if AI response,
             self.logger.info(f"🧠 response: {chunks} tokens")                                       # log token cost of AI response
+
+        # 1. Induction -> prepare sensory stimulus for staging to working memory
+        induced_pmt: PMT = self.wmc.induce(
+            sss            = sss,
+            static_anchors = self._static_anchors,   # cached at bootup
+            dynamic_anchor = self._dynamic_anchor,   # last built in assemble_memory_context
+        )
         
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
-        filled_pmt, evicted_pmts = self.wmc.fill_pmt(user_id=user_id, role=role, content=content)   # induce turn into WMC — returns filled PMT and any displaced PMTs
+        filled_pmt, evicted_pmts = self.wmc.fill_pmt(induced_pmt)                                   # induce turn into WMC — returns filled PMT and any displaced PMTs
 
         # Score filled PMT at induction — only fires on assistant turn (filled_pmt is None on user turn)
         if filled_pmt is not None:                                                                  # assistant turn only — user turn returns None
