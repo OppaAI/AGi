@@ -30,9 +30,12 @@ Terminology:
     prime key       — MD5 hash of a truncated trace used for prime lookup
 
 Public interface:
+    RecallCue -> dataclass
+    normalize_vector(vector: list[float]) -> list[float]
+    pack_vector(vector: list[float]) -> bytes
     EncodingEngine:
-        encode_engram(trace: str) → bytes
-        encode_cue(cue: str) → RecallCue
+        encode_engram(trace: str) -> bytes
+        encode_cue(cue: str) -> RecallCue
 """
 # System libraries
 from dataclasses import dataclass                       # for defining data structures
@@ -50,6 +53,34 @@ class RecallCue:
     vector: list[float]     # encoded semantic vector — passed to semantic recall
     text: str               # raw cue text — passed to lexical recall
 
+def normalize_vector(vector: list[float]) -> list[float]:
+    """
+    Normalize an encoding vector to unit length for cosine-equivalent L2 distance search.".
+
+    Args:
+        vector (list[float]): Vector to normalize
+
+    Returns:
+        list[float]: unit-normalized vector, or the original if already normalized or empty
+    """
+    vector_array = np.array(vector)                                                # list → ndarray for vectorized math
+    vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
+    if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
+        return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
+    return vector                                                                  # already unit length — skip normalization
+    
+def pack_vector(vector: list[float]) -> bytes:
+    """
+    Pack an encoding vector into a binary blob for engram storage.
+
+    Args:
+        vector (list[float]): encoding vector to pack
+
+    Returns:
+        bytes: fp32 binary blob — e.g. 768 floats → 3072 bytes
+    """
+    return struct.pack(f"{len(vector)}f", *vector)                                  # pack float list into fp32 binary blob — e.g. "768f" for 768 floats
+        
 class EncodingEngine:
     """
     Encoding engine for semantic encoding of memory traces for storage and recall.
@@ -184,33 +215,3 @@ class EncodingEngine:
             )
         except Exception as e:    
             self.logger.warning(f"⚠️ Encoding Engine activation failed: {e}")               # log specific failure with reason
-
-    @staticmethod
-    def normalize_vector(vector: list[float]) -> list[float]:
-        """
-        Normalize an encoding vector to unit length for cosine-equivalent L2 distance search.".
-
-        Args:
-            vector (list[float]): Vector to normalize
-
-        Returns:
-            list[float]: unit-normalized vector, or the original if already normalized or empty
-        """
-        vector_array = np.array(vector)                                                # list → ndarray for vectorized math
-        vector_mag = np.linalg.norm(vector_array)                                      # L2 norm — Euclidean length of the vector
-        if vector_mag > 0 and abs(vector_mag - 1.0) > 1e-6:                            # tolerance check — exact == 1.0 unreliable with floats
-            return (vector_array / vector_mag).tolist()                                # divide each element by magnitude → unit vector; zero vector guard
-        return vector                                                                  # already unit length — skip normalization
-        
-    @staticmethod
-    def pack_vector(vector: list[float]) -> bytes:
-        """
-        Pack an encoding vector into a binary blob for engram storage.
-
-        Args:
-            vector (list[float]): encoding vector to pack
-
-        Returns:
-            bytes: fp32 binary blob — e.g. 768 floats → 3072 bytes
-        """
-        return struct.pack(f"{len(vector)}f", *vector)                                  # pack float list into fp32 binary blob — e.g. "768f" for 768 floats
