@@ -159,30 +159,12 @@ class WorkingMemoryCortex:
                 )            
             case _:
                 raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
-                
-
-    def induce(self, sss: SSS) -> PMT | None:
+    
+    def pair(self, pmt: PMT, vss: VST) -> bool:
         """
-        Induction: prepare a user/assistant interaction to be added to the working memory.
-
-        Biological Analogue: Prefrontal Cortex (PFC) working memory -
-        
-        User turn stages the prompt into an induced PMT pending AI response.
-        Assistant turn completes the pairing and promotes to an evictable PMT.
-
-        Biological analogue: phonological loop encoding — the user prompt is held
-        in active rehearsal until the AI response arrives to complete the episode.
-        The completed pair is then tagged by the hippocampus for potential consolidation.
-
-        Args:
-            user_id (str | None) : Speaker identity — None for assistant-originated
-            role (str)           : Role of the speaker — 'user' or 'assistant'
-            content (str)        : Content of the conversation turn
-
-        Returns:
-            PMT | None : Completed evictable PMT on assistant turn — None on user turn or unknown speaker
+        Pair the user/assistant turns and add time and other info.
         """
-        if role == "user":
+      if role == "user":
             if self._induced_pmt is not None:                                           # unpaired prompt already pending — append
                 self._induced_pmt.user_prompt += "\n" + content                         # plain append — no json.loads needed
                 self._induced_pmt.trace       += "\n" + content                         # mirror in trace
@@ -233,6 +215,68 @@ class WorkingMemoryCortex:
 
         return None                                                                     # unknown speaker
 
+    def _early_attention_gate(self, sss: SSS) -> bool:
+        """
+        Early gate to filter out irrelevant PMTs.
+        """
+        if sss.modality == Modality.TEXT:
+            return True
+        elif sss.modality == Modality.IMAGE:
+            return True
+        elif sss.modality == Modality.AUDIO:
+            return True
+        elif sss.modality == Modality.VIDEO:
+            return True
+        elif sss.modality == Modality.OTHER:
+            return True
+        else:
+            raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
+
+    def _late_attention_gate(self, sss: SSS) -> bool:  
+        """
+        Late gate to filter out irrelevant PMTs.
+        """
+        return sss.urgency > self.urgency_threshold
+
+    def _binding(self, pmt: PMT, vss: VST) -> bool:
+        """
+        Binding: add time information to the PMT, and check if there is a 
+        """
+        pass
+
+    def semantic_grouping(self, pmt: PMT) -> bool:
+        """
+        Semantic grouping: group related PMTs together.
+        """
+        pass
+
+    def induce(self, sss: SSS) -> PMT | None:
+        """
+        Induction: prepare a user/assistant interaction to be added to the working memory.
+
+        Biological Analogue: Prefrontal Cortex (PFC) working memory -
+        
+        User turn stages the prompt into an induced PMT pending AI response.
+        Assistant turn completes the pairing and promotes to an evictable PMT.
+
+        Biological analogue: phonological loop encoding — the user prompt is held
+        in active rehearsal until the AI response arrives to complete the episode.
+        The completed pair is then tagged by the hippocampus for potential consolidation.
+
+        Args:
+            user_id (str | None) : Speaker identity — None for assistant-originated
+            role (str)           : Role of the speaker — 'user' or 'assistant'
+            content (str)        : Content of the conversation turn
+
+        Returns:
+            PMT | None : Completed evictable PMT on assistant turn — None on user turn or unknown speaker
+        """
+        self._semantic_feature_extraction(sss)
+        self._static_anchor_gate(sss)
+        self._associative_semantic_clustering(sss)
+        self._dynamic_workspace_gate(sss)
+        self.sss.state = WMCState.READY
+        
     def _evict_pmt(self, induced_pmt_chunks: int) -> list[PMT]:
         """
         Evict receding PMTs from the slot until the incoming PMT fits within capacity.
