@@ -422,7 +422,42 @@ class WorkingMemoryCortex:
         score               = pmt.salience_score * decay * depth     # multiplicative — all three must hold
         pmt.retention_score = round(score, 6)                        # cache on PMT — no reprobe on eviction
         return pmt.retention_score
-
+        
+    def _static_anchor_gate(self, pmt: PMT,
+                             static_anchors: list[list[float]] | None) -> tuple[float, float]:
+        """
+        Compute depth and novelty scores from static episodic anchors.
+    
+        Depth   — cosine sim to nearest static anchor centroid
+                  High depth = PMT connects to established episodic themes
+        Novelty — 1.0 - depth — polar opposite of depth
+                  High novelty = PMT is far from any known theme
+    
+        Both scores feed into _score_retention via the depth parameter.
+        Novelty available for future PMT.novelty_score field if added.
+    
+        Biological analogue:
+            Depth   — levels of processing (Craik & Lockhart) — deeper encoding
+                      for semantically rich material connecting to known knowledge
+            Novelty — dopamine novelty signal — heightened encoding for unexpected stimuli
+    
+        Args:
+            pmt            : PMT — incoming trace being scored at induction
+            static_anchors : list[list[float]] | None — episodic centroids from bootup
+    
+        Returns:
+            tuple[float, float] — (depth_score, novelty_score), both in [0.0, 1.0]
+        """
+        if static_anchors is None or not pmt.vector:
+            return 0.0, 1.0                                         # no anchor or no vector — depth undefined, novelty maximum
+    
+        depth = max(
+            self._cosine_sim(pmt.vector, anchor)
+            for anchor in static_anchors                            # nearest cluster wins — any topic match counts
+        )
+        novelty = 1.0 - depth                                       # polar opposite — one axis, two poles
+    
+        return depth, novelty
     # ══════════════════════════════════════════════════════════════════════════════
     #  GATE 1 — _dynamic_workspace_gate
     #  Admission decision: does this PMT belong in WM at all?
