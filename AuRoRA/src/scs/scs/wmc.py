@@ -699,30 +699,29 @@ class WorkingMemoryCortex:
     # ══════════════════════════════════════════════════════════════════════════════
     #  induce — full induction pipeline
     # ══════════════════════════════════════════════════════════════════════════════
-     
     def induce(self, sss, static_anchors: list | None):
         """
         Full induction pipeline for one SSS turn.
-     
+    
         Pipeline:
             1. _semantic_encode        — stage user turn or complete assistant turn
-            2. _static_anchor_gate     — depth + novelty from static episodic centroids
-            3. _dynamic_workspace_gate — event boundary check vs self._dynamic_anchor
-            4. _score_retention        — salience * recency_decay * depth → cached on PMT
-            5. _semantic_clustering    — assign cluster_id, no deque touch
-     
+            2. _dynamic_workspace_gate — event boundary check vs self._dynamic_anchor
+            3. _semantic_clustering    — assign cluster_id, no deque touch
+            4. _static_anchor_gate     — depth + novelty from static episodic centroids
+            5. _score_retention        — salience * recency_decay * depth → cached on PMT
+    
         Returns None on user turn (staged, not yet complete).
         Returns None if PMT rejected at dynamic gate (event boundary detected).
         Returns completed, scored, clustered PMT — caller calls fill_pmt next.
-     
+    
         dynamic_anchor is read from self._dynamic_anchor — not passed as parameter.
         self._dynamic_anchor reflects the slot state before this induction,
         which is the correct comparison point (PMT not yet in the slot).
-     
+    
         Args:
             sss            : SSS — incoming sensory stimulus
             static_anchors : list[list[float]] | None — episodic centroids from bootup
-     
+    
         Returns:
             PMT | VST | None — completed trace ready for fill_pmt, or None
         """
@@ -730,29 +729,29 @@ class WorkingMemoryCortex:
         completed = self._semantic_encode(sss)
         if completed is None:
             return None                                         # user turn — staged, nothing to gate or score yet
-     
-        # Stage 2 — static anchor gate: depth + novelty from episode history
-        depth, novelty = self._static_anchor_gate(completed, static_anchors)
-        # TODO: if PMT gains novelty_score field → completed.novelty_score = novelty
-     
-        # Stage 3 — dynamic workspace gate: event boundary admission check
+    
+        # Stage 2 — dynamic workspace gate: cheapest rejection — kill before any centroid math
         if not self._dynamic_workspace_gate(completed):
             self.logger.debug("WMC induce: PMT rejected — event boundary detected")
             return None                                         # topic too distant — MCC decides what to do
-     
-        # Stage 4 — retention score: salience * recency_decay * depth
-        self._score_retention(completed, depth)
-     
-        # Stage 5 — cluster assignment: tag with cluster_id, no deque insert
+    
+        # Stage 3 — cluster assignment: tag with cluster_id before scoring — no deque insert
         self._semantic_clustering(completed)
-     
+    
+        # Stage 4 — static anchor gate: depth + novelty from episode history
+        depth, novelty = self._static_anchor_gate(completed, static_anchors)
+        # TODO: if PMT gains novelty_score field → completed.novelty_score = novelty
+    
+        # Stage 5 — retention score: salience * recency_decay * depth
+        self._score_retention(completed, depth)
+    
         self.logger.debug(
             f"WMC induced: cluster={completed.cluster_id} "
             f"retention={completed.retention_score:.4f} "
             f"depth={depth:.3f} novelty={novelty:.3f}"
         )
         return completed                                        # scored + clustered — ready for fill_pmt
-
+    
     def fill_pmt(self, induced_pmt: PMT) -> list[PMT]:
         """
         Fill a completed, scored, clustered PMT into the slot.
