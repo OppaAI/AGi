@@ -111,7 +111,7 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def _semantic_feature_extraction(self, sss: SSS) -> PMT | VST:
+    def _semantic_encode(self, sss: SSS) -> PMT | VST:
         """
         Encode sensory stimulus into PMT or VST based on modality.
         """
@@ -214,25 +214,53 @@ class WorkingMemoryCortex:
             return induced_pmt                                                          # completed PMT — ready for eviction and filling
 
         return None                                                                     # unknown speaker
-
-    def _static_anchor_gate(self, sss: SSS) -> bool:
+        
+    def _cosine_sim(self, a: list[float], b: list[float]) -> float:
+        """Cosine similarity between two vectors."""
+        dot = sum(x * y for x, y in zip(a, b))
+        mag_a = sum(x * x for x in a) ** 0.5
+        mag_b = sum(x * x for x in b) ** 0.5
+        if mag_a == 0.0 or mag_b == 0.0:
+            return 0.0                                    # degenerate vector — no similarity
+        return dot / (mag_a * mag_b)
+    
+    def _static_anchor_gate(self, pmt: PMT,
+                             static_anchors: list[list[float]] | None) -> tuple[float, float]:
         """
-        Early gate to filter out irrelevant PMTs.
+        Factor #2 Novelty + Factor #3 Depth from static anchors.
+        
+        Depth   — cosine sim to nearest static anchor centroid — base score
+                  High depth = PMT connects to established episodic themes
+        Novelty — 1.0 - depth — polar opposite of depth
+                  High novelty = PMT is far from any known theme
+        
+        Both scores returned for composite weighting in _score_pmt_at_induction.
+        Thresholds tuned during testing — not applied here.
+    
+        Args:
+            pmt             : PMT being scored at induction
+            static_anchors  : Consolidated episodic centroids from bootup — None if no history
+    
+        Returns:
+            tuple[float, float] : (depth_score, novelty_score) — both in [0.0, 1.0]
+        
+        Biological analogue:
+            Depth   — levels of processing (Craik & Lockhart) — deeper encoding for
+                      semantically rich material connecting to established knowledge
+            Novelty — dopamine novelty signal — heightened encoding for unexpected stimuli
         """
-        if sss.modality == Modality.TEXT:
-            return True
-        elif sss.modality == Modality.IMAGE:
-            return True
-        elif sss.modality == Modality.AUDIO:
-            return True
-        elif sss.modality == Modality.VIDEO:
-            return True
-        elif sss.modality == Modality.OTHER:
-            return True
-        else:
-            raise ValueError(f"Unknown sensory stimulus modality: {sss.modality}")
+        if static_anchors is None or not pmt.vector:
+            return 0.0, 1.0                                         # no anchor or no vector — depth undefined, novelty maximum
+    
+        depth = max(
+            self._cosine_sim(pmt.vector, anchor)
+            for anchor in static_anchors                            # nearest cluster wins — any topic match counts
+        )
+        novelty = 1.0 - depth                                       # polar opposite — one axis, two poles
+    
+        return depth, novelty
 
-    def _associative_semantic_clustering(self, pmt: PMT) -> bool:
+    def _semantic_clustering(self, pmt: PMT) -> bool:
         """
         Semantic grouping: group related PMTs together.
         """
@@ -244,7 +272,9 @@ class WorkingMemoryCortex:
         """
         return sss.urgency > self.urgency_threshold
 
-    def induce(self, sss: SSS) -> PMT | None:
+    def induce(self, sss: SSS, 
+           static_anchors: list[list[float]] | None,
+           dynamic_anchor: list[float] | None) -> PMT | None:
         """
         Induction: prepare a user/assistant interaction to be added to the working memory.
 
@@ -265,10 +295,10 @@ class WorkingMemoryCortex:
         Returns:
             PMT | None : Completed evictable PMT on assistant turn — None on user turn or unknown speaker
         """
-        self._semantic_feature_extraction(sss)
-        self._static_anchor_gate(sss)
-        self._associative_semantic_clustering(sss)
-        self._dynamic_workspace_gate(sss)
+        self._semantic_encode(sss)
+        self._static_anchors_gate(sss, static_anchors)
+        self._semantic_cluster(sss)
+        self._dynamic_workspace_gate(sss, dynamic_anchors)
         self.sss.state = WMCState.READY
         
     def _evict_pmt(self, induced_pmt_chunks: int) -> list[PMT]:
