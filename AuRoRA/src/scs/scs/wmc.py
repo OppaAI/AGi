@@ -128,8 +128,8 @@ class WorkingMemoryCortex:
             PMT | VST | None — completed trace on second turn, None on first turn
         """
         match sss.role:
-            case "user":      return self._populate(sss)
-            case "assistant": return self._pair(sss)
+            case "user":      return self._populate_trace(sss)
+            case "assistant": return self._pair_trace(sss)
             case _: raise ValueError(f"Unknown SSS role: {sss.role}")
     
     
