@@ -128,12 +128,12 @@ class WorkingMemoryCortex:
             PMT | VST | None — completed trace on second turn, None on first turn
         """
         match sss.role:
-            case "user" | "raw":                return self._populate(sss)
-            case "assistant" | "interpreted":   return self._pair(sss)
+            case "user":      return self._populate(sss)
+            case "assistant": return self._pair(sss)
             case _: raise ValueError(f"Unknown SSS role: {sss.role}")
     
     
-    def _populate(self, sss: SSS) -> None:
+    def _populate_trace(self, sss: SSS) -> None:
         """
         First turn — construct an incomplete trace shell from SSS and stage it
         in the modality induction slot, pending the second turn.
@@ -212,7 +212,7 @@ class WorkingMemoryCortex:
                 raise ValueError(f"Unknown trace type in _populate: {sss.trace_type}")
     
     
-    def _pair(self, sss: SSS) -> PMT | VST | None:
+    def _pair_trace(self, sss: SSS) -> PMT | VST | None:
         """
         Second turn — complete the staged trace with the response or interpretation
         and return the fully formed memory object for the gating pipeline.
@@ -232,31 +232,20 @@ class WorkingMemoryCortex:
         """
         match sss.trace_type:
             case TraceType.PMT:
-                if self._induced_pmt is None:                                           # orphaned assistant turn — wrap with placeholder
-                    self.logger.warning("WMC: assistant SSS without staged PMT — wrapping with placeholder")
-                    self._induced_pmt = PMT(
-                        # ── identity ──────────────────────────────────────────────
-                        user_id         = sss.user_id,
-                        timestamp       = sss.generated_at,
-                        interval        = sss.interval,
-                        proc            = sss.proc,
-                        # ── lifecycle ─────────────────────────────────────────────
-                        state           = WMCState.INDUCED,
-                        # ── content ───────────────────────────────────────────────
-                        user_prompt     = "[context missing]",                          # placeholder — user turn was lost
-                        ai_response     = sss.text,
-                        content         = json.dumps({                                  # derive immediately — pair already complete
-                            "user"      : "[context missing]",
-                            "assistant" : sss.text,
-                        }),
-                        trace           = f'[context missing]\nYou replied: "{sss.text}"',
-                        # ── scoring ───────────────────────────────────────────────
-                        vector          = sss.vector,
-                        salience_score  = sss.urgency,
-                        chunk_count     = 0,                                            # filled below
-                        # ── flags ─────────────────────────────────────────────────
-                        anchored        = False,
+                if self._induced_pmt is None:                                           # orphaned assistant turn — recover with placeholder
+                    self.logger.warning("WMC: assistant SSS without staged PMT — recovering with placeholder")
+                    placeholder = SSS(
+                        user_id      = sss.user_id,
+                        generated_at = sss.generated_at,
+                        interval     = sss.interval,
+                        proc         = sss.proc,
+                        role         = "user",
+                        trace_type   = TraceType.PMT,
+                        text         = "[context missing]",                             # placeholder — user turn was lost
+                        vector       = [],
+                        urgency      = 0.0,
                     )
+                    self._populate(placeholder)                                         # stage placeholder as if it were the user turn
                 else:                                                                   # normal path — complete staged PMT
                     self._induced_pmt.ai_response   = sss.text                          # SSS.text → PMT.ai_response
                     self._induced_pmt.content       = json.dumps({                      # derive JSON — pairing complete
