@@ -111,240 +111,479 @@ class WorkingMemoryCortex:
             f"{self.pmt_slot_limit}±{self.pmt_slot_buffer} PMT slots | {self.global_chunk_limit} chunks allocated"
         )
 
-    def _semantic_encode(self, sss: SSS) -> PMT | VST | None:
+    """
+    WMC — Clustering, Retention Scoring, and Induction Pipeline
+    ============================================================
+    AuRoRA · Semantic Cognitive System (SCS) — WorkingMemoryCortex additions
+    
+    New fields required on PMT dataclass (add to AGi/SCS/WMC/__init__.py):
+        cluster_id      : int   = -1   # assigned cluster slot — -1 = unassigned
+        retention_score : float = 0.0  # salience * recency_decay * depth — drives eviction priority
+    
+    New fields required on WorkingMemoryCortex.__init__ (after existing assignments):
+        self._dynamic_anchor    : list[float] | None            = None
+            # running mean vector of all sustained PMTs — updated on fill and eviction
+        self._cluster_registry  : dict[int, list[list[float]]]  = {}
+            # maps cluster_id → member PMT vectors — used to recompute centroids
+        self._next_cluster_id   : int                           = 0
+            # monotonic counter — never reused, avoids id collision after collapse
+        self._cluster_ages      : dict[int, datetime]           = {}
+            # maps cluster_id → timestamp of first PMT — oldest cluster evicted on overflow
+    
+    New HRS constants required (stubs used until hrm.py is shared):
+        WMC.CLUSTER_LIMIT             — max topic clusters before oldest is collapsed
+        WMC.NOVELTY_CLUSTER_THRESHOLD — cosine sim floor below which a new cluster is opened
+        WMC.EVENT_BOUNDARY_THRESHOLD  — cosine sim drop vs dynamic anchor that signals topic shift
+        WMC.RECENCY_HALF_LIFE_SECONDS — half-life for exponential recency decay
+    
+    Induction pipeline (induce):
+        1. _semantic_encode        — stage user turn or complete assistant turn into PMT/VST
+        2. _static_anchor_gate     — depth + novelty scores from static episodic centroids
+        3. _dynamic_workspace_gate — admission gate: event boundary check vs _dynamic_anchor
+        4. _score_retention        — salience * recency_decay * depth → cached on PMT
+        5. _semantic_clustering    — assign cluster_id, no deque touch
+        fill_pmt / _evict_pmt      — actual slot mutation + _dynamic_anchor recompute
+    """
+    
+    import math
+    from datetime import datetime, timezone
+    
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  STUB CONSTANTS  (replace with WMC.* references once hrm.py is shared)
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    _CLUSTER_LIMIT             = 4      # TODO: replace with WMC.CLUSTER_LIMIT
+    _NOVELTY_CLUSTER_THRESHOLD = 0.35   # TODO: replace with WMC.NOVELTY_CLUSTER_THRESHOLD
+    _EVENT_BOUNDARY_THRESHOLD  = 0.30   # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
+    _RECENCY_HALF_LIFE_SECONDS = 300.0  # TODO: replace with WMC.RECENCY_HALF_LIFE_SECONDS
+    
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  PRIVATE HELPERS
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def _cluster_mean(self, cluster_id: int) -> list[float] | None:
         """
-        Transform SSS into a staged or completed memory trace.
-    
-        Routes to _populate on first turn (user/raw) to construct and stage
-        an incomplete trace, or to _pair on second turn (assistant/interpreted)
-        to complete the staged trace and return it for the gating pipeline.
-    
-        A PMT or VST does not exist until both turns are encoded.
+        Compute the mean vector of all PMTs in a cluster.
+        Returns None if cluster is empty or all vectors are degenerate.
     
         Args:
-            sss : SSS — incoming sensory stimulus, either first or second turn
+            cluster_id : int — target cluster
     
         Returns:
-            PMT | VST | None — completed trace on second turn, None on first turn
+            list[float] | None — centroid of the cluster, or None if uncomputable
         """
-        match sss.role:
-            case "user":      return self._populate_trace(sss)
-            case "assistant": return self._pair_trace(sss)
-            case _: raise ValueError(f"Unknown SSS role: {sss.role}")
+        vectors = [v for v in self._cluster_registry.get(cluster_id, []) if v]   # drop empty vectors
+        if not vectors:
+            return None
+        dim  = len(vectors[0])
+        mean = [0.0] * dim
+        for v in vectors:
+            for i, x in enumerate(v):
+                mean[i] += x
+        n = len(vectors)
+        return [x / n for x in mean]                                              # element-wise mean — cluster centroid
     
     
-    def _populate_trace(self, sss: SSS) -> None:
+    def _recompute_dynamic_anchor(self) -> None:
         """
-        First turn — construct an incomplete trace shell from SSS and stage it
-        in the modality induction slot, pending the second turn.
+        Recompute the running mean vector of all sustained PMTs in the slot.
+        Called after every slot mutation — fill_pmt append and _evict_pmt remove.
+        Not called during induction — the slot is unchanged until fill.
     
-        PMT : user SSS       → populate user fields    → stage in _induced_pmt
-        VST : raw frame SSS  → populate sensor fields  → stage in _induced_vst
+        Biological analogue: the dynamic anchor is the aggregate semantic context
+        of working memory — the attentional focus of all currently sustained traces.
+        """
+        vectors = [p.vector for p in self._pmt_slot if p.vector]   # collect non-empty vectors only
+        if not vectors:
+            self._dynamic_anchor = None                             # empty slot — no anchor
+            return
+        dim  = len(vectors[0])
+        mean = [0.0] * dim
+        for v in vectors:
+            for i, x in enumerate(v):
+                mean[i] += x
+        n = len(vectors)
+        self._dynamic_anchor = [x / n for x in mean]               # replaces previous anchor
     
-        Always returns None — trace is incomplete until second turn arrives.
+    
+    def _recency_decay(self, pmt_timestamp: datetime) -> float:
+        """
+        Exponential recency decay based on PMT age.
+        Returns 1.0 for a brand-new PMT, approaches 0.0 as age grows.
+    
+        Biological analogue: Ebbinghaus forgetting curve —
+        memory traces decay exponentially without rehearsal.
     
         Args:
-            sss : SSS — first turn sensory stimulus, role 'user' or 'raw'
-        """
-        match sss.trace_type:
-            case TraceType.PMT:
-                if self._induced_pmt is not None:                                       # unpaired prompt already pending — append
-                    self._induced_pmt.user_prompt += "\n" + sss.text                    # plain append — no json.loads needed
-                    self._induced_pmt.trace       += "\n" + sss.text                    # mirror in trace
-                    self.logger.warning("WMC: second user SSS — appended to staged PMT")
-                    return None                                                         # still incomplete
-    
-                self._induced_pmt = PMT(
-                    # ── identity ──────────────────────────────────────────────────
-                    user_id         = sss.user_id,          # SSS.user_id → PMT.user_id
-                    timestamp       = sss.generated_at,     # SSS.generated_at → PMT.timestamp
-                    interval        = sss.interval,         # SSS.interval → PMT.interval
-                    proc            = sss.proc,             # SSS.proc → PMT.proc
-                    # ── lifecycle ─────────────────────────────────────────────────
-                    state           = WMCState.INDUCED,
-                    # ── content ───────────────────────────────────────────────────
-                    user_prompt     = sss.text,             # SSS.text → PMT.user_prompt — source of truth during staging
-                    ai_response     = "",                   # empty — assistant turn completes this
-                    content         = "",                   # empty — derived on pairing completion
-                    trace           = f'{sss.user_id} said: "{sss.text}"',  # partial — assistant turn appends
-                    # ── scoring ───────────────────────────────────────────────────
-                    vector          = sss.vector,           # SSS.vector → PMT.vector — reused at EMC binding
-                    salience_score  = sss.urgency,          # SSS.urgency → PMT.salience_score
-                    chunk_count     = 0,                    # filled on pairing completion — full pair needed
-                    # ── flags ─────────────────────────────────────────────────────
-                    anchored        = False,
-                )
-                self.logger.debug("WMC: user SSS staged — pending assistant turn")
-                return None
-    
-            case TraceType.VST:
-                if self._induced_vst is not None:                                       # unpaired frame already pending — warn and replace
-                    self.logger.warning("WMC: second raw VST — replacing staged VST")
-    
-                self._induced_vst = VST(
-                    # ── identity ──────────────────────────────────────────────────
-                    sensor_id       = sss.location,         # SSS.location → VST.sensor_id
-                    timestamp       = sss.generated_at,     # SSS.generated_at → VST.timestamp
-                    interval        = sss.interval,         # SSS.interval → VST.interval
-                    proc            = sss.proc,             # SSS.proc → VST.proc
-                    # ── lifecycle ─────────────────────────────────────────────────
-                    state           = WMCState.INDUCED,
-                    # ── content ───────────────────────────────────────────────────
-                    raw_frame       = sss.raw,              # SSS.raw → VST.raw_frame — path/ref only
-                    interpretation  = "",                   # empty — interpreted turn completes this
-                    content         = "",                   # empty — derived on pairing completion
-                    trace           = "",                   # empty — derived on pairing completion
-                    # ── spatial ───────────────────────────────────────────────────
-                    objects         = [],                   # empty — interpreted turn fills this
-                    spatial_map     = "",                   # empty — interpreted turn fills this
-                    pose            = [],                   # empty — filled from ROS2 tf on interpreted turn
-                    # ── scoring ───────────────────────────────────────────────────
-                    vector          = sss.vector,           # SSS.vector → VST.vector
-                    salience_score  = sss.urgency,          # SSS.urgency → VST.salience_score
-                    chunk_count     = 0,                    # filled on pairing completion
-                    # ── flags ─────────────────────────────────────────────────────
-                    anchored        = False,
-                )
-                self.logger.debug("WMC: raw VST staged — pending interpreted turn")
-                return None
-    
-            case _:
-                raise ValueError(f"Unknown trace type in _populate: {sss.trace_type}")
-    
-    
-    def _pair_trace(self, sss: SSS) -> PMT | VST | None:
-        """
-        Second turn — complete the staged trace with the response or interpretation
-        and return the fully formed memory object for the gating pipeline.
-    
-        PMT : assistant SSS      → complete _induced_pmt → return completed PMT
-        VST : interpreted SSS    → complete _induced_vst → return completed VST
-    
-        Orphan handling:
-            PMT — assistant turn without staged PMT wraps with placeholder, preserved.
-            VST — interpreted turn without staged VST is discarded, nothing to recover.
-    
-        Args:
-            sss : SSS — second turn sensory stimulus, role 'assistant' or 'interpreted'
+            pmt_timestamp : datetime — when the PMT was created
     
         Returns:
-            PMT | VST | None — completed trace, or None if VST orphan discarded
+            float — decay factor in (0.0, 1.0]
         """
-        match sss.trace_type:
-            case TraceType.PMT:
-                if self._induced_pmt is None:                                           # orphaned assistant turn — recover with placeholder
-                    self.logger.warning("WMC: assistant SSS without staged PMT — recovering with placeholder")
-                    placeholder = SSS(
-                        user_id      = sss.user_id,
-                        generated_at = sss.generated_at,
-                        interval     = sss.interval,
-                        proc         = sss.proc,
-                        role         = "user",
-                        trace_type   = TraceType.PMT,
-                        text         = "[context missing]",                             # placeholder — user turn was lost
-                        vector       = [],
-                        urgency      = 0.0,
-                    )
-                    self._populate(placeholder)                                         # stage placeholder as if it were the user turn
-                else:                                                                   # normal path — complete staged PMT
-                    self._induced_pmt.ai_response   = sss.text                          # SSS.text → PMT.ai_response
-                    self._induced_pmt.content       = json.dumps({                      # derive JSON — pairing complete
-                        "user"      : self._induced_pmt.user_prompt,
-                        "assistant" : sss.text,
-                    })
-                    self._induced_pmt.trace        += f'\nYou replied: "{sss.text}"'    # complete trace — append assistant turn
+        now = datetime.now(timezone.utc)
+        if pmt_timestamp.tzinfo is None:                            # defensive — make tz-aware if bare
+            pmt_timestamp = pmt_timestamp.replace(tzinfo=timezone.utc)
+        age_sec   = (now - pmt_timestamp).total_seconds()
+        half_life = _RECENCY_HALF_LIFE_SECONDS                      # TODO: replace with WMC.RECENCY_HALF_LIFE_SECONDS
+        return math.exp(-0.693 * age_sec / half_life)               # ln(2) ≈ 0.693 — standard half-life decay
     
-                self._induced_pmt.chunk_count = self.chunk_sampler.probe(               # cache chunk count — avoid reprobe on eviction
-                    content  = self._induced_pmt.content,
-                    overhead = WMC.PMT_OVERHEAD,
-                )
-                completed           = self._induced_pmt                                 # promote staged PMT
-                self._induced_pmt   = None                                              # clear staging slot — ready for next exchange
-                return completed                                                        # fully formed PMT — ready for gating pipeline
     
-            case TraceType.VST:
-                if self._induced_vst is None:                                           # orphaned interpretation — nothing to recover
-                    self.logger.warning("WMC: interpreted SSS without staged VST — discarding")
-                    return None
-    
-                self._induced_vst.interpretation    = sss.text                          # SSS.text → VST.interpretation
-                self._induced_vst.objects           = sss.objects                       # SSS.objects → VST.objects
-                self._induced_vst.spatial_map       = sss.spatial_map                   # SSS.spatial_map → VST.spatial_map
-                self._induced_vst.pose              = sss.pose                          # SSS.pose → VST.pose
-                self._induced_vst.content           = json.dumps({                      # derive JSON — pairing complete
-                    "raw_frame"     : self._induced_vst.raw_frame,
-                    "interpretation": sss.text,
-                })
-                self._induced_vst.trace             = (                                 # derive trace — for EMC embedding
-                    f'Sensor {self._induced_vst.sensor_id} captured: "{sss.text}"'
-                )
-                self._induced_vst.chunk_count = self.chunk_sampler.probe(               # cache chunk count — avoid reprobe on eviction
-                    content  = self._induced_vst.content,
-                    overhead = WMC.VST_OVERHEAD,
-                )
-                completed           = self._induced_vst                                 # promote staged VST
-                self._induced_vst   = None                                              # clear staging slot — ready for next exchange
-                return completed                                                        # fully formed VST — ready for gating pipeline
-    
-            case _:
-                raise ValueError(f"Unknown trace type in _pair: {sss.trace_type}")
-        
-    def _cosine_sim(self, a: list[float], b: list[float]) -> float:
-        """Cosine similarity between two vectors."""
-        dot = sum(x * y for x, y in zip(a, b))
-        mag_a = sum(x * x for x in a) ** 0.5
-        mag_b = sum(x * x for x in b) ** 0.5
-        if mag_a == 0.0 or mag_b == 0.0:
-            return 0.0                                    # degenerate vector — no similarity
-        return dot / (mag_a * mag_b)
-    
-    def _static_anchor_gate(self, pmt: PMT,
-                             static_anchors: list[list[float]] | None) -> tuple[float, float]:
+    def _score_retention(self, pmt, depth: float) -> float:
         """
-        Factor #2 Novelty + Factor #3 Depth from static anchors.
-        
-        Depth   — cosine sim to nearest static anchor centroid — base score
-                  High depth = PMT connects to established episodic themes
-        Novelty — 1.0 - depth — polar opposite of depth
-                  High novelty = PMT is far from any known theme
-        
-        Both scores returned for composite weighting in _score_pmt_at_induction.
-        Thresholds tuned during testing — not applied here.
+        Compute and cache the retention score on the PMT.
+        Drives eviction priority — lowest score evicted first.
+    
+        Formula: salience * recency_decay * depth
+            salience      — urgency signal from SSS — how important was this exchange
+            recency_decay — exponential age decay — older PMTs fade without rehearsal
+            depth         — cosine sim to nearest static anchor — grounded in known themes
+    
+        Multiplicative: all three factors must be non-negligible for a PMT to stay.
+        A zero on any axis collapses the score — correct for WM eviction.
     
         Args:
-            pmt             : PMT being scored at induction
-            static_anchors  : Consolidated episodic centroids from bootup — None if no history
+            pmt   : PMT — target trace (salience_score and timestamp must be set)
+            depth : float — from _static_anchor_gate, already computed at induction
     
         Returns:
-            tuple[float, float] : (depth_score, novelty_score) — both in [0.0, 1.0]
-        
-        Biological analogue:
-            Depth   — levels of processing (Craik & Lockhart) — deeper encoding for
-                      semantically rich material connecting to established knowledge
-            Novelty — dopamine novelty signal — heightened encoding for unexpected stimuli
+            float — retention score in [0.0, 1.0], cached on pmt.retention_score
         """
-        if static_anchors is None or not pmt.vector:
-            return 0.0, 1.0                                         # no anchor or no vector — depth undefined, novelty maximum
+        decay               = self._recency_decay(pmt.timestamp)
+        score               = pmt.salience_score * decay * depth    # multiplicative — all three must hold
+        pmt.retention_score = round(score, 6)                       # cache on PMT — no reprobe on eviction
+        return pmt.retention_score
     
-        depth = max(
-            self._cosine_sim(pmt.vector, anchor)
-            for anchor in static_anchors                            # nearest cluster wins — any topic match counts
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  GATE 1 — _dynamic_workspace_gate
+    #  Admission decision: does this PMT belong in WM at all?
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def _dynamic_workspace_gate(self, pmt) -> bool:
+        """
+        Admission gate — decide whether the incoming PMT belongs in working memory.
+    
+        Compares the PMT's vector against self._dynamic_anchor (the running mean of
+        all currently sustained PMTs). A cosine sim below EVENT_BOUNDARY_THRESHOLD
+        signals that the topic has shifted too far from the current WM context —
+        the PMT is rejected to prevent workspace fragmentation.
+    
+        Pass conditions (PMT admitted):
+            - No dynamic anchor yet (slot empty — first PMT always admitted)
+            - No vector on PMT (unmeasurable — admit by default)
+            - Cosine sim >= EVENT_BOUNDARY_THRESHOLD (topic continuous)
+    
+        Fail condition (PMT rejected):
+            - Cosine sim < EVENT_BOUNDARY_THRESHOLD (event boundary detected)
+    
+        Rejection means the PMT is dropped from the induction pipeline entirely.
+        MCC receives None from induce() and decides whether to buffer or discard.
+    
+        Biological analogue: prefrontal gating of working memory (O'Reilly & Frank) —
+        the PFC actively filters inputs to maintain coherent task representations,
+        blocking topic discontinuities that would cause interference.
+    
+        Args:
+            pmt : PMT — incoming completed trace with vector set
+    
+        Returns:
+            bool — True if admitted, False if rejected at event boundary
+        """
+        if self._dynamic_anchor is None or not pmt.vector:
+            return True                                             # empty slot or no vector — admit unconditionally
+    
+        sim      = self._cosine_sim(pmt.vector, self._dynamic_anchor)
+        admitted = sim >= _EVENT_BOUNDARY_THRESHOLD                 # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
+    
+        if not admitted:
+            self.logger.debug(
+                f"WMC gate: event boundary — PMT rejected "
+                f"(sim={sim:.3f} < threshold={_EVENT_BOUNDARY_THRESHOLD})"
+            )
+        return admitted
+    
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  GATE 2 — _semantic_clustering
+    #  Assignment: which cluster does this admitted PMT belong to?
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def _semantic_clustering(self, pmt) -> int:
+        """
+        Assign a cluster_id to the incoming PMT without touching the deque.
+        Called only on PMTs that have already passed _dynamic_workspace_gate.
+    
+        Two paths determine assignment:
+    
+        Path A — Explicit marker (hard override)
+            pmt.anchored=True → assign to reserved anchor cluster (id=0).
+            Skips centroid comparison entirely.
+            Biological analogue: hippocampal tagging — explicitly marked events
+            bypass encoding thresholds and are bound with priority.
+    
+        Path B — Nearest centroid match
+            Compare pmt.vector against each existing cluster's centroid.
+            Join if best sim >= NOVELTY_CLUSTER_THRESHOLD (familiar topic).
+            Open new cluster if best sim < threshold (novel topic).
+            Cluster overflow (> CLUSTER_LIMIT) → collapse oldest into nearest neighbour.
+    
+        cluster_id is written to pmt.cluster_id.
+        Actual deque insertion happens in fill_pmt — not here.
+    
+        Args:
+            pmt : PMT — incoming trace, already admitted by _dynamic_workspace_gate
+    
+        Returns:
+            int — assigned cluster_id (also written to pmt.cluster_id)
+        """
+    
+        # ── Path A: explicit marker — hard override ────────────────────────────
+        if pmt.anchored:
+            anchor_cluster_id = 0                                           # reserved id — never auto-assigned
+            if anchor_cluster_id not in self._cluster_registry:
+                self._cluster_registry[anchor_cluster_id] = []
+                self._cluster_ages[anchor_cluster_id]     = pmt.timestamp
+            if pmt.vector:
+                self._cluster_registry[anchor_cluster_id].append(pmt.vector)
+            pmt.cluster_id = anchor_cluster_id
+            self.logger.debug("WMC cluster: anchored → cluster 0 (hard override)")
+            return anchor_cluster_id
+    
+        # ── Path B: nearest centroid match ────────────────────────────────────
+        assigned_id: int | None = None
+    
+        if pmt.vector and self._cluster_registry:
+            best_sim = -1.0
+            best_id  = -1
+            for cid in self._cluster_registry:
+                centroid = self._cluster_mean(cid)
+                if centroid is None:
+                    continue
+                sim = self._cosine_sim(pmt.vector, centroid)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_id  = cid
+    
+            if best_sim >= _NOVELTY_CLUSTER_THRESHOLD and best_id >= 0:    # TODO: WMC.NOVELTY_CLUSTER_THRESHOLD
+                assigned_id = best_id                                       # join existing cluster — topic familiar
+                self.logger.debug(
+                    f"WMC cluster: joined cluster {assigned_id} (sim={best_sim:.3f})"
+                )
+    
+        # ── Open new cluster if no match ──────────────────────────────────────
+        if assigned_id is None:
+            assigned_id           = self._next_cluster_id
+            self._next_cluster_id += 1                                      # monotonic — never reused
+            self._cluster_registry[assigned_id] = []
+            self._cluster_ages[assigned_id]     = pmt.timestamp
+            self.logger.debug(f"WMC cluster: new cluster opened → id={assigned_id}")
+    
+        # ── Cluster overflow guard ─────────────────────────────────────────────
+        non_anchor_clusters = [cid for cid in self._cluster_registry if cid != 0]
+        if len(non_anchor_clusters) > _CLUSTER_LIMIT:                       # TODO: WMC.CLUSTER_LIMIT
+            self._collapse_oldest_cluster(exclude_id=assigned_id)
+    
+        # ── Register vector in assigned cluster ───────────────────────────────
+        if pmt.vector:
+            self._cluster_registry[assigned_id].append(pmt.vector)
+    
+        pmt.cluster_id = assigned_id
+        return assigned_id
+    
+    
+    def _collapse_oldest_cluster(self, exclude_id: int) -> None:
+        """
+        Collapse the oldest non-anchor cluster when CLUSTER_LIMIT is exceeded.
+        Re-assigns its PMTs to their nearest remaining neighbour by centroid similarity.
+        PMTs with no remaining neighbour keep their old id and evict naturally.
+    
+        Biological analogue: schema consolidation — when topic capacity is saturated,
+        the least-recent context is absorbed into the nearest existing schema.
+    
+        Args:
+            exclude_id : int — the newly opened cluster, protected from immediate collapse
+        """
+        candidates = {
+            cid: ts for cid, ts in self._cluster_ages.items()
+            if cid != 0 and cid != exclude_id                              # never collapse anchor or new cluster
+        }
+        if not candidates:
+            return
+    
+        oldest_id     = min(candidates, key=lambda cid: candidates[cid])  # oldest by first-PMT timestamp
+        remaining_ids = [cid for cid in self._cluster_registry if cid != oldest_id]
+    
+        for pmt in self._pmt_slot:                                         # re-point affected PMTs in the deque
+            if pmt.cluster_id != oldest_id:
+                continue
+            best_sim = -1.0
+            best_id  = oldest_id                                           # fallback — keeps old id if no neighbour
+            for cid in remaining_ids:
+                centroid = self._cluster_mean(cid)
+                if centroid is None or not pmt.vector:
+                    continue
+                sim = self._cosine_sim(pmt.vector, centroid)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_id  = cid
+            pmt.cluster_id = best_id
+    
+        del self._cluster_registry[oldest_id]
+        del self._cluster_ages[oldest_id]
+        self.logger.debug(f"WMC cluster: collapsed cluster {oldest_id} → redistributed to neighbours")
+    
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  EVICTION — retention-score-ordered, anchor-protected
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def _evict_pmt(self, induced_pmt_chunks: int) -> list:
+        """
+        Evict PMTs until the incoming PMT fits within both capacity limits.
+        Eviction order: lowest retention_score first (salience * recency * depth).
+    
+        Cluster-awareness: eviction naturally drains low-score clusters first —
+        retention score already encodes relevance, no explicit cluster selection needed.
+    
+        Anchored PMTs (cluster_id=0) are eviction-protected — skipped unless slot is anchor-only.
+        Calls _recompute_dynamic_anchor after each remove — slot has mutated.
+    
+        Args:
+            induced_pmt_chunks : int — cached chunk count of the incoming PMT
+    
+        Returns:
+            list[PMT] : Evicted PMTs — returned to MCC for episodic binding
+        """
+        evicted: list = []
+    
+        while self._pmt_slot and (
+            self._sustained_chunks + induced_pmt_chunks > self.global_chunk_limit
+            or len(self._pmt_slot) >= self.pmt_slot_limit + self.pmt_slot_buffer
+        ):
+            candidates = [p for p in self._pmt_slot if p.cluster_id != 0]  # prefer non-anchored
+            if not candidates:
+                candidates = list(self._pmt_slot)                           # all anchored — must evict anyway
+    
+            target = min(candidates, key=lambda p: p.retention_score)      # lowest retention goes first
+    
+            self._pmt_slot.remove(target)                                   # O(n) — slot ≤9 PMTs, acceptable
+            evicted.append(target)
+            self._sustained_chunks = max(0, self._sustained_chunks - target.chunk_count)
+    
+            # clean vector from cluster registry — keeps centroids accurate after eviction
+            if target.vector and target.cluster_id in self._cluster_registry:
+                vecs = self._cluster_registry[target.cluster_id]
+                try:
+                    vecs.remove(target.vector)
+                except ValueError:
+                    pass                                                    # already gone — harmless
+                if not vecs:                                                # cluster emptied by this eviction
+                    del self._cluster_registry[target.cluster_id]
+                    self._cluster_ages.pop(target.cluster_id, None)
+    
+            self._recompute_dynamic_anchor()                                # slot mutated — anchor must reflect new state
+    
+            self.logger.debug(
+                f"WMC evict → EMC: cluster={target.cluster_id} "
+                f"retention={target.retention_score:.4f} chunks={target.chunk_count}"
+            )
+    
+        return evicted
+    
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  fill_pmt — slot mutation entry point
+    #  (replaces the original fill_pmt in wmc.py)
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def fill_pmt(self, induced_pmt) -> list:
+        """
+        Fill a completed, scored, clustered PMT into the slot.
+        Evict receding PMTs first until the incoming PMT fits within capacity.
+        Recompute dynamic anchor after append — slot has grown.
+    
+        Called by MCC after induce() returns a non-None PMT.
+        chunk_count must already be set on induced_pmt before calling.
+    
+        Args:
+            induced_pmt : PMT — completed trace from induce()
+    
+        Returns:
+            list[PMT] : Evicted PMTs — returned to MCC for episodic binding
+        """
+        evicted = self._evict_pmt(induced_pmt.chunk_count)                 # evict until incoming fits
+    
+        self._pmt_slot.append(induced_pmt)                                 # fill into slot
+        self._sustained_chunks += induced_pmt.chunk_count                  # increment sustained chunk count
+        self._recompute_dynamic_anchor()                                    # slot grew — update anchor
+    
+        self.logger.debug(
+            f"WMC filled: cluster={induced_pmt.cluster_id} "
+            f"sustained={len(self._pmt_slot)} PMTs | "
+            f"chunks={self._sustained_chunks}/{self.global_chunk_limit} | "
+            f"evicted={len(evicted)}"
         )
-        novelty = 1.0 - depth                                       # polar opposite — one axis, two poles
+        return evicted
     
-        return depth, novelty
-
-    def _semantic_clustering(self, pmt: PMT) -> bool:
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+    #  induce — full induction pipeline
+    # ══════════════════════════════════════════════════════════════════════════════
+    
+    def induce(self, sss, static_anchors: list | None):
         """
-        Semantic grouping: group related PMTs together.
+        Full induction pipeline for one SSS turn.
+    
+        Pipeline:
+            1. _semantic_encode        — stage user turn or complete assistant turn
+            2. _static_anchor_gate     — depth + novelty from static episodic centroids
+            3. _dynamic_workspace_gate — event boundary check vs self._dynamic_anchor
+            4. _score_retention        — salience * recency_decay * depth → cached on PMT
+            5. _semantic_clustering    — assign cluster_id, no deque touch
+    
+        Returns None on user turn (staged, not yet complete).
+        Returns None if PMT rejected at dynamic gate (event boundary detected).
+        Returns completed, scored, clustered PMT — caller calls fill_pmt next.
+    
+        dynamic_anchor is read from self._dynamic_anchor — not passed as parameter.
+        self._dynamic_anchor reflects the slot state before this induction,
+        which is the correct comparison point (PMT not yet in the slot).
+    
+        Args:
+            sss            : SSS — incoming sensory stimulus
+            static_anchors : list[list[float]] | None — episodic centroids from bootup
+    
+        Returns:
+            PMT | VST | None — completed trace ready for fill_pmt, or None
         """
-        pass
-
-    def _dynamic_workspace_gate(self, sss: SSS) -> bool:  
-        """
-        Late gate to filter out irrelevant PMTs.
-        """
-        return sss.urgency > self.urgency_threshold
+        # Stage 1 — encode: stage on user turn, complete on assistant turn
+        completed = self._semantic_encode(sss)
+        if completed is None:
+            return None                                         # user turn — staged, nothing to gate or score yet
+    
+        # Stage 2 — static anchor gate: depth + novelty from episode history
+        depth, novelty = self._static_anchor_gate(completed, static_anchors)
+        # TODO: if PMT gains novelty_score field → completed.novelty_score = novelty
+    
+        # Stage 3 — dynamic workspace gate: event boundary admission check
+        if not self._dynamic_workspace_gate(completed):
+            self.logger.debug("WMC induce: PMT rejected — event boundary detected")
+            return None                                         # topic too distant — MCC decides what to do
+    
+        # Stage 4 — retention score: salience * recency_decay * depth
+        self._score_retention(completed, depth)
+    
+        # Stage 5 — cluster assignment: tag with cluster_id, no deque insert
+        self._semantic_clustering(completed)
+    
+        self.logger.debug(
+            f"WMC induced: cluster={completed.cluster_id} "
+            f"retention={completed.retention_score:.4f} "
+            f"depth={depth:.3f} novelty={novelty:.3f}"
+        )
+        return completed                                        # scored + clustered — ready for fill_pmt
 
     def induce(self, sss: SSS, 
            static_anchors: list[list[float]] | None,
