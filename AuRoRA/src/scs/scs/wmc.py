@@ -65,7 +65,7 @@ import json                            # for structured PMT storage — serializ
 # AGi components
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                # homeostatic regulation manifest namespace — system-wide constants
-from gms.csb import SSS, PMT, VST, TraceBuffer, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
+from gms.csb import SSS, PMT, VST, TraceType, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
 
 SCS = AGi.SCS                          # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                          # WMC parameter namespace alias — keeps WMC constant references concise

@@ -65,7 +65,7 @@ from hrs.hrm import AGi                             # homeostatic regulation man
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 EMC = AGi.SCS.EMC                                   # EMC parameter namespace alias — keeps WMC constant references concise
 
-from gms.csb import PMT, SSS, VST
+from gms.csb import PMT, SSS, VST                     # PMT and VST classes — phonological and visuospatial memory traces
 from scs.stc import EncodingEngine                  # shared encoding engine — owned by STC, passed to all cortices
 from scs.wmc import WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memoryview
 from scs.emc import Episode, EpisodicMemoryCortex   # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
