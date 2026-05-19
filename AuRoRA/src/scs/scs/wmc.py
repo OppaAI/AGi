@@ -188,9 +188,11 @@ class WorkingMemoryCortex:
         """
         if self._active_pmt is None:                                               # no active PMT present — 
             return PMT(                                                            # return the constructed 
-                # ── identity ──────────────────────────────────────────────────
+                # Memory trace identifier
+                auuuid          =                                                  # AuRoRA unified univeral unique identifier
                 user_id         = sss.user_id,                                     # identified of the user AuRoRA is interacting with
-                # ── lifecycle ─────────────────────────────────────────────────
+                
+                # Memory trace lifecycle
                 state           = WMCState.INDUCED,                                # state: which phrase PMT is in (ie. induced to working memory)
                 status          = "Staged"                                         # status of the PMT 
                 induced_at      = sss.generated_at,                                # initial time of PMT induced
@@ -199,14 +201,17 @@ class WorkingMemoryCortex:
                 evicted_at      =                                                  # time of PMT being evicted from PMT slot
                 destroyed_at    =                                                  # time of PMT destruction
                 lifetime        = sss.interval,                                    # interval of the PMT construction to 
-                # ── content ───────────────────────────────────────────────────
+            
+                # Memory content
                 content         = content,                                         # empty on user turn — derived on pairing
                 trace           = trace,                                           # partial on user turn — completed on pairing
-                # ── scoring ───────────────────────────────────────────────────
+                chunk_count     = 0,                                               # filled on pairing — full pair needed
+            
+                # Retention-decision scores
                 vector          = sss.vector,                                      # 
                 salience_score  = sss.urgency,                                     #
-                chunk_count     = 0,                                               # filled on pairing — full pair needed
-                # ── flags ─────────────────────────────────────────────────────
+            
+                # Flags
                 anchored        = False,
             )
         else:                                                                      # staged PMT exists — update fill
