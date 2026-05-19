@@ -156,21 +156,23 @@ class WorkingMemoryCortex:
     
     def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT:
         """
-        Receive sensory stimulus from MCC and prepare a memory trace captured with information to be memorized.
-        Memory trace is primed with pre-constructed memory content, and other information; perform chunk count of the content
+        Working Memory Cycle -> Phase 1 - Induction -> 1.1 - Semantic Encoding -> 1.1.1 - Construct Memory Trace 
+        
+        Construct a memory trace from an incoming sensory stimulus passed from MCC,
+        capturing relevant information across two sequential stages.
     
-        Construction goes through 2 phases:
-        The stage of the phase is determined from the presence/absence of the active memory trace.
-        Phase 1: Staged construction — active memory trace is being initialized and contructed;
+        Construction goes through 2 stages:
+        The stage is determined from the presence/absence of the active memory trace.
+        Stage 1: Staged construction — active memory trace is being initialized and constructed;
                                        captures all the necessary information from stimulus.
-        Phase 2: Committed construction — active memory tace is already contructed; 
+        Stage 2: Committed construction — active memory trace is already constructed; 
                                           captures additional memory content from AI response;
                                           verify completeness and correctness of memory trace.
    
         Life cycle: 
-        Phase 1: Stimulus (from MCC) -> (activates) -> Phonological Memory Trace (PMT) (for text/transcibed text)
+        Stage 1: Stimulus (from MCC) -> (activates) -> Phonological Memory Trace (PMT) (for text/transcibed text)
                                                     -> Visuospatial Memory Trace (VST) (for vision/spatial related)
-        Phase 2: Active PMT/VST (incomplete) -> (completes/verifies) -> Finalized PMT/VST
+        Stage 2: Active PMT/VST (incomplete) -> (completes/verifies) -> Primed PMT/VST
         
         Incoming substrate(s):
             stimulus    : SSS — Incoming sensory stimulus signal passed from SIU -> CNC -> MCC
@@ -180,7 +182,7 @@ class WorkingMemoryCortex:
                                 (empty in Phase 1, used in Phase 2 only; in plain text specialized format)
     
         Outgoing substrate(s):
-            PMT / VMT         — Staged (Phase 1) / Finalized (Phase 2) version of memory trace with stimulus information
+            PMT / VST         — Staged (Phase 1) / Finalized (Phase 2) version of memory trace with stimulus information
         """
         if self._induced_pmt is None:                                               # no staged PMT — full fill
             return PMT(
