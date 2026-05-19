@@ -50,6 +50,7 @@ class SSS:
     # ── raw — filled by adapter ────────────────────────────────────
     source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
     user_id         : str   = field(default="demo")                 # speaker identity
+    role            : str   = field(default="user")                 # speaker role — "user" or "assistant"
     text            : str   = field(default="")                     # text payload — CLI, webUI, bridges
     audio           : bytes = field(default=b"")                    # audio payload — voice pipeline (TODO: M1.X-b)
     image           : bytes = field(default=b"")                    # image payload — vision pipeline (TODO: M2+)
@@ -124,6 +125,7 @@ class PMT:
     user_prompt     : str           = ""    # raw user prompt — source of truth during staging
     ai_response     : str           = ""    # raw AI response — empty until pairing complete
     content         : str           = ""    # JSON pair — WMC chat history for LLM
+    trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
     trace_type      : TraceType     = TraceType.PMT  # formatted text — for EMC embedding and reinstatement
 
     # ── scoring ───────────────────────────────────────────────────

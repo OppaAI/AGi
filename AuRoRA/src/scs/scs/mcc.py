@@ -65,9 +65,9 @@ from hrs.hrm import AGi                             # homeostatic regulation man
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 EMC = AGi.SCS.EMC                                   # EMC parameter namespace alias — keeps WMC constant references concise
 
-from gms.csb import PMT, SSS, VST                     # PMT and VST classes — phonological and visuospatial memory traces
+from gms.csb import PMT, SSS, VST                   # type: ignore[import-untyped] PMT and VST classes — phonological and visuospatial memory traces 
 from scs.stc import EncodingEngine                  # shared encoding engine — owned by STC, passed to all cortices
-from scs.wmc import WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memoryview
+from scs.wmc import WorkingMemoryCortex             # Working Memory Cortex — sustains active PMTs in hot short-term memoryview
 from scs.emc import Episode, EpisodicMemoryCortex   # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
 class MemoryCoordinationCore:
@@ -156,11 +156,15 @@ class MemoryCoordinationCore:
             self.logger.info(f"🧠 response: {chunks} tokens")                                       # log token cost of AI response
 
         # 1. Induction -> prepare sensory stimulus for staging to working memory
-        induced_pmt: PMT = self.wmc.induce(
+        induced_pmt: PMT | None = self.wmc.induce(
             sss            = sss,
             static_anchors = self._static_anchors,   # cached at bootup
             dynamic_anchor = self._dynamic_anchor,   # last built in assemble_memory_context
         )
+
+        if induced_pmt is None:                                                                     # user turn — PMT slot was empty, no eviction
+            self.logger.debug("WMC: user SSS staged — pending assistant turn")                   # log user turn staging
+            return                                                                                      # early exit — no PMT to fill, no eviction
         
         # Fill induced PMT to WMC — returns evicted PMTs synchronously (fast, in-memory)
         filled_pmt, evicted_pmts = self.wmc.fill_pmt(induced_pmt)                                   # induce turn into WMC — returns filled PMT and any displaced PMTs

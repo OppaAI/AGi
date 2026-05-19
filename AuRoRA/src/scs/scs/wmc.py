@@ -65,7 +65,7 @@ import json                            # for structured PMT storage — serializ
 # AGi components
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                # homeostatic regulation manifest namespace — system-wide constants
-from gms.csb import SSS, PMT, VST, TraceType, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
+from gms.csb import SSS, PMT, VST, TraceType, WMCState  # type: ignore[import-untyped] PMT and WMCState classes — phonological and visuospatial memory traces
 
 SCS = AGi.SCS                          # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                          # WMC parameter namespace alias — keeps WMC constant references concise
@@ -236,7 +236,6 @@ class WorkingMemoryCortex:
             self._induced_pmt = self._populate_trace(                               # full fill — new PMT shell
                 sss,
                 trace = f'{sss.user_id} said: "{sss.text}"',                        # partial trace — assistant turn appends
-                full  = True,
             )
             self.logger.debug("WMC: user SSS staged — pending assistant turn")
             return None                                                             # always None on user turn
@@ -247,7 +246,6 @@ class WorkingMemoryCortex:
                 self._induced_pmt = self._populate_trace(                           # full fill with placeholder identity
                     sss,
                     trace = "[context missing]",                                    # placeholder — user turn was lost
-                    full  = True,
                 )
     
             # derive content and trace — same path for normal and orphan
@@ -261,7 +259,6 @@ class WorkingMemoryCortex:
                 sss,
                 content = content,
                 trace   = trace,
-                full    = False,
             )
             self._induced_pmt = None                                                # clear staging slot — ready for next exchange
             self.logger.debug("WMC: assistant SSS paired — PMT promoted")
@@ -652,7 +649,7 @@ class WorkingMemoryCortex:
     # ══════════════════════════════════════════════════════════════════════════════
     #  induce — full induction pipeline
     # ══════════════════════════════════════════════════════════════════════════════
-    def induce(self, sss, static_anchors: list | None):
+    def induce(self, sss, static_anchors: list | None, dynamic_anchor: list[float] | None = None):
         """
         Full induction pipeline for one SSS turn.
     

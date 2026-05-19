@@ -67,8 +67,7 @@ from std_msgs.msg import String                            # ROS2 string message
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from gms.csb import SensoryInputChannel, SensoryModality, SSS       # neural input channel— input gateway for all neural stimuli (text, speech, etc.)
-from gms.csb import PMT, VST, WMCState         # PMT and PMTState classes — phonological and visuospatial memory traces
+from gms.csb import SensoryInputChannel, TraceType, SSS       # type: ignore[import-untyped] neural input channel— input gateway for all neural stimuli (text, speech, etc.)
 from scs.iru import IdentityRecognitionUnit                # identity recognition unit — identify user and establish session identity and user context
 from scs.ppu import PersonalProgressionUnit                # Personal Provisioning Unit — session identity and user context loader
 
@@ -196,10 +195,12 @@ class CNC(Node):
             raw_input: dict = json.loads(msg.data.strip())                                                      # deserialize JSON payload — all input sources send JSON
             if not isinstance(raw_input, dict) or not raw_input.get("text"):                                    # malformed or missing text field — reject at boundary
                 return                                                                                          # abort early
-            ui_input = NeuralStimulus(                                                                          # parse against typed contract — enforces field presence
+            ui_input: SSS = SSS(                                                                          # parse against typed contract — enforces field presence
+                role    = raw_input.get("role", "user"),                                                      # speaker role — "user" or "assistant"
                 text    = raw_input["text"].strip(),                                                            # user message content
                 user_id = raw_input.get("user_id", "demo"),                                                     # speaker identity — defaults to demo if omitted
-                source  = NeuralInputChannel(raw_input .get("source", NeuralInputChannel.CLI.value)),           # input modality — defaults to CLI if omitted
+                source  = SensoryInputChannel(raw_input .get("source", SensoryInputChannel.CLI.value)),           # input modality — defaults to CLI if omitted
+                trace_type = TraceType.PMT                                                                      # set the trace type to PMT — permanent phonological memory trace
             )
         except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid NeuralInputChannel value — reject at boundary
             return                                                                                              # abort early — no plain string fallback, contract enforced
@@ -213,10 +214,10 @@ class CNC(Node):
             
         self._attention_gate = True                                                                             # close gate before scheduling — prevents TOCTOU
         asyncio.run_coroutine_threadsafe(                                                                       # schedule cognitive pipeline — crosses thread boundary safely
-            self._process_stimulus(ui_input.text), self._cognitive_cycle                                        # submit to gamma rhythm — never blocks ROS2 spin
+            self._process_stimulus(ui_input), self._cognitive_cycle                                        # submit to gamma rhythm — never blocks ROS2 spin
         )
 
-    async def _process_stimulus(self, user_prompt: str) -> None:
+    async def _process_stimulus(self, stimulus: SSS) -> None:
         """
         Process one full stimulus-response cycle.
     
@@ -229,16 +230,12 @@ class CNC(Node):
 
         try:                                                                                      # wrap full pipeline — any failure publishes error and resets attention gate
             # 1. Register user turn in memory
-            await self.mcc.register_memory(                                                       # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
-                role="user",
-                user_id=self._active_user,
-                content=user_prompt
-            )
+            await self.mcc.register_memory(stimulus)                                              # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
 
             # 2. Assemble memory context
             memory_context: list[dict] = await self.mcc.assemble_memory_context(                  # assemble full memory context — EMC episodes + WMC PMTs
                 user_id=self._active_user if self._access_level == UserAccessLevel.GUEST else None,
-                user_prompt=user_prompt,
+                user_prompt=stimulus.text,
             )
 
             # 3. Separate system and conversation parts
@@ -258,7 +255,7 @@ class CNC(Node):
             # 5. Build final message list
             messages: list[dict] = [{"role": "system", "content": system_content}]                # system prompt — always first
             messages.extend(short_term_memory)                                                    # inject WMC PMTs — chronological conversation history
-            messages.append({"role": "user", "content": user_prompt})                             # append current user prompt — last message before inference
+            messages.append({"role": "user", "content": stimulus.text})                             # append current user prompt — last message before inference
             
             context_signal = String()                                                             # create ROS2 String message
             context_signal.data = json.dumps({"messages": messages})                              # serialize payload to JSON string
@@ -270,7 +267,13 @@ class CNC(Node):
 
             # 7. Register assistant turn in memory
             if cognitive_response:                                                                # only register non-empty responses — empty means GCE failed
-                await self.mcc.register_memory(role="assistant", user_id=None, content=cognitive_response) # bind assistant response into WMC — completes the PMT pair
+                await self.mcc.register_memory(SSS(                                                   # assistant response as a PMT for permanent memory storage    
+                    role    = "assistant",
+                    user_id = None,
+                    text    = cognitive_response,
+                    source  = SensoryInputChannel.CLI,
+                    trace_type = TraceType.PMT,
+                ))
 
             # 8. Report memory stats
             stats = self.mcc.report_memory_stats()                                                # log WMC and EMC health after every turn
