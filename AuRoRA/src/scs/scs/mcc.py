@@ -65,11 +65,9 @@ from hrs.hrm import AGi                             # homeostatic regulation man
 SCS = AGi.SCS                                       # SCS parameter namespace alias — keeps constant references concise
 EMC = AGi.SCS.EMC                                   # EMC parameter namespace alias — keeps WMC constant references concise
 
-# TODO: MCC imports EncodingEngine directly from msb.py as a temporary layering exception.
-# Encoding engine construction is owned here to avoid multiple model loads across cortices.
-# M2 cleanup: move EncodingEngine to scs/eee.py — dedicated encoding layer between MCC and MSB.
-from scs.msb import EncodingEngine                  # shared encoding engine — owned by MCC, passed to all cortices
-from scs.wmc import PMT, WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memory
+from gms.csb import PMT, SSS, VST
+from scs.stc import EncodingEngine                  # shared encoding engine — owned by STC, passed to all cortices
+from scs.wmc import WorkingMemoryCortex        # Working Memory Cortex — sustains active PMTs in hot short-term memoryview
 from scs.emc import Episode, EpisodicMemoryCortex   # Episodic Memory Cortex — encodes evicted PMTs and recalls past episodes
 
 class MemoryCoordinationCore:

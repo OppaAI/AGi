@@ -1,4 +1,4 @@
-# nes/msg/nis.msg
+# nes/msg/NeuralImpulse.msg
 # Neural Impulse Signal (NIS)
 # ============================
 # Universal signal unit — carries any structured impulse between any two
@@ -29,7 +29,7 @@
 # Source: any AGi component
 # Target: any AGi component
 #
-# Topics: /<entity>/<system>/<source>/nis
+# Topics: /<entity>/<system>/<source>/neural_impulse
 
 # ── identity ──────────────────────────────────────────────────────────────────
 string                  nis_id              # unique impulse ID — e.g. "nis_a1b2c3"

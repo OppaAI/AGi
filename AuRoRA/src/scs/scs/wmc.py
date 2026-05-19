@@ -63,11 +63,9 @@ from datetime import datetime, timezone  # for PMT timestamps and UTC-aware age 
 import json                            # for structured PMT storage — serialization and recall
 
 # AGi components
-from gms.csb.AGi.SIU import SensoryInputChannel, SensoryModality, SSS  # sensory input channel — input gateway for all peripheral stimuli (text, speech, vision, etc.)
-from gms.csb.AGi.SCS import TraceType  # trace type — PMT, VST, or AST
-from gms.csb.AGi.SCS.WMC import PMT, VST, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                # homeostatic regulation manifest namespace — system-wide constants
+from gms.csb import SSS, PMT, VST, TraceBuffer, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
 
 SCS = AGi.SCS                          # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                          # WMC parameter namespace alias — keeps WMC constant references concise

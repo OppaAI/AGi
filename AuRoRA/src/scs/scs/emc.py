@@ -101,7 +101,6 @@ Public interface:
 """
 
 # System components
-from email import contentmanager
 from collections import deque               # for O(1) append/popleft in binding stream
 from dataclasses import dataclass, field    # for EpisodicBuffer and episode dataclasses
 from datetime import datetime               # for ISO wall-clock timestamps — (TODO) M1.6 replaces with hrs.blc
@@ -112,18 +111,15 @@ import threading                            # for background thread, locks, and 
 import time                                 # for CPU yield during theta rhythm cycle
 
 # AGi components
+from hrs.hru import ChunkSampler            # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                     # homeostatic regulation manifest namespace — system-wide constants
 EMC = AGi.SCS.EMC                           # EMC parameter namespace alias — keeps WMC constant references concise
-from hrs.hru import(                        # homeostatic regulation helper functions
-    pack_vector,                            # for packing float list into fp32 binary blob   
-    ChunkSampler,                           # probes and truncates cognitive context for budget management
-)
+from scs.stc import pack_vector, EncodingEngine  # packing float list into fp32 binary blob and sentence-transformers wrapper
 from scs.msb import (                       # shared memory storage bank substrate
     EngramSchema,                           # blueprint for engram table structure
     EngramTrace,                            # single column definition within a blueprint
     EngramModality,                         # TEXT / INTEGER / REAL / BLOB type enum
     RecallCue,                              # encoded vector + raw text for dual-path recall
-    EncodingEngine,                         # sentence-transformers wrapper with LRU prime
     EngramComplex,                          # all SQL ops for a memory cortex
 )
 
