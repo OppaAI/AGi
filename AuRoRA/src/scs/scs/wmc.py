@@ -154,13 +154,13 @@ class WorkingMemoryCortex:
             return None                                             # VST deferred — skip silently
         return self._pair_trace(sss)
     
-    def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT:
+    def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT | VST:
         """
         Working Memory Cycle -> Phase 1 - Induction -> 1.1 - Semantic Encoding -> 1.1.1 - Construct Memory Trace 
         
         Construct a memory trace from an incoming sensory stimulus passed from MCC,
         capturing relevant information across two sequential stages.
-    
+            
         Construction goes through 2 stages:
         The stage is determined from the presence/absence of the active memory trace.
         Stage 1: Staged construction — active memory trace is being initialized and constructed;
@@ -183,6 +183,8 @@ class WorkingMemoryCortex:
     
         Outgoing substrate(s):
             PMT / VST         — Staged (Phase 1) / Finalized (Phase 2) version of memory trace with stimulus information
+
+        TODO: VST is planned for vision/spatial sensors in future milestones
         """
         if self._induced_pmt is None:                                               # no staged PMT — full fill
             return PMT(
