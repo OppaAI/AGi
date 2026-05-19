@@ -116,8 +116,8 @@ class WorkingMemoryCortex:
         self.global_chunk_limit: int = global_chunk_limit    # maximum chunks WMC can sustain before eviction
         self.pmt_slot_limit: int     = pmt_slot_limit        # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer       # additional PMT buffer beyond Miller's Law limit
-        self._induced_pmt: PMT | None = None                 # induced user prompt pending pairing with AI response
-        self._induced_vst: VST | None = None                 # induced raw frame pending pairing with interpreted turn
+        self._active_PMT: PMT | None = None                  # induced user prompt pending pairing with AI response
+        self._active_vst: VST | None = None                  # induced raw frame pending pairing with interpreted turn
         self._pmt_slot: deque[PMT]   = deque()               # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                     # running count of sustained chunks across all PMTs
 
@@ -156,7 +156,7 @@ class WorkingMemoryCortex:
     
     def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT | VST:
         """
-        Working Memory Cycle -> Phase 1 - Induction -> 1.1 - Semantic Encoding -> 1.1.1 - Construct Memory Trace 
+        Working Memory Cycle -> Phase 1 - Induction -> 1.1 - Semantic Encoding -> 1.1.2 - Construct Memory Trace 
         
         Construct a memory trace from an incoming sensory stimulus passed from MCC,
         capturing relevant information across two sequential stages.
@@ -164,15 +164,15 @@ class WorkingMemoryCortex:
         Construction goes through 2 stages:
         The stage is determined from the presence/absence of the active memory trace.
         Stage 1: Staged construction — active memory trace is being initialized and constructed;
-                                       captures all the necessary information from stimulus.
+                                       captures all the necessary information from the received stimulus.
         Stage 2: Committed construction — active memory trace is already constructed; 
                                           captures additional memory content from AI response;
-                                          verify completeness and correctness of memory trace.
+                                          passed to next for verification of completeness and correctness.
    
         Life cycle: 
         Stage 1: Stimulus (from MCC) -> (activates) -> Phonological Memory Trace (PMT) (for text/transcibed text)
                                                     -> Visuospatial Memory Trace (VST) (for vision/spatial related)
-        Stage 2: Active PMT/VST (incomplete) -> (completes/verifies) -> Primed PMT/VST
+        Stage 2: Active PMT/VST (incomplete) -> (completes) -> Primed PMT/VST
         
         Incoming substrate(s):
             stimulus    : SSS — Incoming sensory stimulus signal passed from SIU -> CNC -> MCC
@@ -186,33 +186,37 @@ class WorkingMemoryCortex:
 
         TODO: VST is planned for vision/spatial sensors in future milestones
         """
-        if self._induced_pmt is None:                                               # no staged PMT — full fill
-            return PMT(
+        if self._active_pmt is None:                                               # no active PMT present — 
+            return PMT(                                                            # return the constructed 
                 # ── identity ──────────────────────────────────────────────────
-                user_id         = sss.user_id,
-                timestamp       = sss.generated_at,
-                interval        = sss.interval,
-                proc            = sss.proc,
+                user_id         = sss.user_id,                                     # identified of the user AuRoRA is interacting with
                 # ── lifecycle ─────────────────────────────────────────────────
-                state           = WMCState.INDUCED,
+                state           = WMCState.INDUCED,                                # state: which phrase PMT is in (ie. induced to working memory)
+                status          = "Staged"                                         # status of the PMT 
+                induced_at      = sss.generated_at,                                # initial time of PMT induced
+                filled_at       =                                                  # time when PMT filled into PMT slot
+                sustained_interval =                                               # interval how long memory trace is sustained in PMT slot
+                evicted_at      =                                                  # time of PMT being evicted from PMT slot
+                destroyed_at    =                                                  # time of PMT destruction
+                lifetime        = sss.interval,                                    # interval of the PMT construction to 
                 # ── content ───────────────────────────────────────────────────
-                content         = content,              # empty on user turn — derived on pairing
-                trace           = trace,                # partial on user turn — completed on pairing
+                content         = content,                                         # empty on user turn — derived on pairing
+                trace           = trace,                                           # partial on user turn — completed on pairing
                 # ── scoring ───────────────────────────────────────────────────
-                vector          = sss.vector,
-                salience_score  = sss.urgency,
-                chunk_count     = 0,                    # filled on pairing — full pair needed
+                vector          = sss.vector,                                      # 
+                salience_score  = sss.urgency,                                     #
+                chunk_count     = 0,                                               # filled on pairing — full pair needed
                 # ── flags ─────────────────────────────────────────────────────
                 anchored        = False,
             )
-        else:                                                                       # staged PMT exists — update fill
-            self._induced_pmt.content     = content                                # derived by _pair_trace
-            self._induced_pmt.trace       = trace                                  # derived by _pair_trace
-            self._induced_pmt.chunk_count = self.chunk_sampler.probe(              # cache chunk count — avoid reprobe on eviction
+        else:                                                                      # staged PMT exists — update fill
+            self._active_pmt.content     = content                                 # derived by _pair_trace
+            self._active_pmt.trace       = trace                                   # derived by _pair_trace
+            self._active_pmt.chunk_count = self.chunk_sampler.probe(               # cache chunk count — avoid reprobe on eviction
                 content  = content,
                 overhead = WMC.PMT_OVERHEAD,
             )
-            return self._induced_pmt                                               # updated in place — ready for promotion
+            return self._active_pmt                                                # updated in place — ready for promotion
     
     
     def _pair_trace(self, sss: SSS) -> PMT | None:
@@ -235,16 +239,16 @@ class WorkingMemoryCortex:
             PMT | None — promoted PMT on assistant turn, None on user turn
         """
         if sss.role == "user":
-            if self._induced_pmt is not None:                                       # double user — append to staged PMT
-                self._induced_pmt.trace        += f'\n{sss.user_id} said: "{sss.text}"'  # consistent format — mirror initial trace
-                self._induced_pmt.vector        = sss.vector                        # latest user turn wins
-                self._induced_pmt.salience_score = max(                             # keep highest urgency across appended turns
-                    self._induced_pmt.salience_score, sss.urgency
+            if self._active_pmt is not None:                                       # double user — append to staged PMT
+                self._active_pmt.trace        += f'\n{sss.user_id} said: "{sss.text}"'  # consistent format — mirror initial trace
+                self._active_pmt.vector        = sss.vector                        # latest user turn wins
+                self._active_pmt.salience_score = max(                             # keep highest urgency across appended turns
+                    self._active_pmt.salience_score, sss.urgency
                 )
                 self.logger.warning("WMC: second user SSS — appended to staged PMT")
                 return None                                                         # still incomplete — pair not ready
     
-            self._induced_pmt = self._populate_trace(                               # full fill — new PMT shell
+            self._active_pmt = self._populate_trace(                               # full fill — new PMT shell
                 sss,
                 trace = f'{sss.user_id} said: "{sss.text}"',                        # partial trace — assistant turn appends
             )
@@ -252,15 +256,15 @@ class WorkingMemoryCortex:
             return None                                                             # always None on user turn
     
         elif sss.role == "assistant":
-            if self._induced_pmt is None:                                           # orphan — no staged user turn
+            if self._active_pmt is None:                                           # orphan — no staged user turn
                 self.logger.warning("WMC: assistant SSS without staged PMT — recovering")
-                self._induced_pmt = self._populate_trace(                           # full fill with placeholder identity
+                self._active_pmt = self._populate_trace(                           # full fill with placeholder identity
                     sss,
                     trace = "[context missing]",                                    # placeholder — user turn was lost
                 )
     
             # derive content and trace — same path for normal and orphan
-            staged_trace = self._induced_pmt.trace                                  # partial trace from user turn or placeholder
+            staged_trace = self._active_pmt.trace                                  # partial trace from user turn or placeholder
             content      = json.dumps({                                             # derive JSON pair — pairing complete
                 "user"      : staged_trace,                                         # user turn trace as source of truth
                 "assistant" : sss.text,
@@ -271,7 +275,7 @@ class WorkingMemoryCortex:
                 content = content,
                 trace   = trace,
             )
-            self._induced_pmt = None                                                # clear staging slot — ready for next exchange
+            self._active_pmt = None                                                # clear staging slot — ready for next exchange
             self.logger.debug("WMC: assistant SSS paired — PMT promoted")
             return completed                                                        # fully formed PMT — ready for gating pipeline
 
@@ -786,7 +790,7 @@ class WorkingMemoryCortex:
         """
         forgotten_pmt_schema: list[PMT] = list(self._pmt_slot)      # snapshot before wipe — safe under CNC._busy
         self._pmt_slot.clear()                                       # evict all sustaining PMTs
-        self._induced_pmt    = None                                  # discard any incomplete induced PMT
+        self._active_pmt    = None                                  # discard any incomplete induced PMT
         self._induced_vst    = None                                  # discard any incomplete induced VST
         self._sustained_chunks = 0                                   # reset sustained chunk count
         self._dynamic_anchor = None                                  # clear anchor — slot is empty
