@@ -154,26 +154,29 @@ class WorkingMemoryCortex:
             return None                                             # VST deferred — skip silently
         return self._pair_trace(sss)
     
-    def _populate_trace(self, sss: SSS, content: str = "", trace: str = "") -> PMT:
+    def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT:
         """
-        Populate a PMT from SSS fields.
+        Receive sensory stimulus from MCC
     
-        Full fill   — self._induced_pmt is None, construct complete PMT shell from SSS
-        Update fill — self._induced_pmt exists, update only content, trace, chunk_count
+        Construction goes through 2 phases:
+        The stage of the phase is determined from the presence/absence of the active memory trace.
+        Phase 1: Staged construction — active memory trace is being constructed and initialized;
+                                       transfer all the necessary information from stimulus
+        Phase 2: Committed construction — active memory tace is already contructed; 
+                                          complete and verify completeness and correctness of memory trace.
+   
+        Life cycle: 
+        Phase 1: Stimulus (from MCC) -> Phonological Memory Trace (PMT) (for text/transcibed text)
+                                     -> Visuospatial Memory Trace (VST) (for vision/spatial related)
+        Phase 2: Active PMT/VST () ->
+        
+        Incoming substrate(s):
+            stimulus    : SSS — Incoming sensory stimulus passed from SIU -> CNC -> MCC
+            content     : str — Content to be filled into memory trace in Phase 2 in JSON format
+            trace       : str — Content to be filled into memory trace in Phase 2 in plain text specialized format
     
-        Detects which path by checking self._induced_pmt directly —
-        no bool flag needed, no field inspection on PMT.
-    
-        content and trace always derived by _pair_trace and passed in.
-        Never constructs strings internally.
-    
-        Args:
-            sss     : SSS — incoming sensory stimulus
-            content : str — derived JSON pair from _pair_trace
-            trace   : str — derived trace string from _pair_trace
-    
-        Returns:
-            PMT — populated or updated trace
+        Outgoing substrate(s):
+            PMT               — populated or updated trace
         """
         if self._induced_pmt is None:                                               # no staged PMT — full fill
             return PMT(
