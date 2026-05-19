@@ -114,7 +114,7 @@ class PMT:
 
     # ── identity ──────────────────────────────────────────────────
     user_id         : str | None    = None  # speaker identity — None for assistant-originated
-    timestamp       : str           = ""    # ISO wall-clock induction time — (TODO: M1.6 replaces with ROS2 time)
+    timestamp       : float           = 0.0    # ISO wall-clock induction time — (TODO: M1.6 replaces with ROS2 time)
     interval        : int           = 0     # time taken to generate this PMT in ms — (TODO: M1.6 replaces with ROS2 time)
 
     # ── lifecycle ─────────────────────────────────────────────────

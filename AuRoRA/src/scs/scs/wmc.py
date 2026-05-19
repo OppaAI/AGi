@@ -447,7 +447,7 @@ class WorkingMemoryCortex:
             return True                                             # empty slot or no vector — admit unconditionally
      
         sim      = self._cosine_sim(pmt.vector, self._dynamic_anchor)
-        admitted = sim >= _EVENT_BOUNDARY_THRESHOLD                 # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
+        admitted = sim >= self._EVENT_BOUNDARY_THRESHOLD                 # TODO: replace with WMC.EVENT_BOUNDARY_THRESHOLD
      
         if not admitted:
             self.logger.debug(
@@ -518,7 +518,7 @@ class WorkingMemoryCortex:
                     best_sim = sim
                     best_id  = cid
      
-            if best_sim >= _NOVELTY_CLUSTER_THRESHOLD and best_id >= 0:    # TODO: WMC.NOVELTY_CLUSTER_THRESHOLD
+            if best_sim >= self._NOVELTY_CLUSTER_THRESHOLD and best_id >= 0:    # TODO: WMC.NOVELTY_CLUSTER_THRESHOLD
                 assigned_id = best_id                                       # join existing cluster — topic familiar
                 self.logger.debug(
                     f"WMC cluster: joined cluster {assigned_id} (sim={best_sim:.3f})"
@@ -534,7 +534,7 @@ class WorkingMemoryCortex:
      
         # ── Cluster overflow guard ─────────────────────────────────────────────
         non_anchor_clusters = [cid for cid in self._cluster_registry if cid != 0]
-        if len(non_anchor_clusters) > _CLUSTER_LIMIT:                       # TODO: WMC.CLUSTER_LIMIT
+        if len(non_anchor_clusters) > self._CLUSTER_LIMIT:                       # TODO: WMC.CLUSTER_LIMIT
             self._collapse_oldest_cluster(exclude_id=assigned_id)
      
         # ── Register vector in assigned cluster ───────────────────────────────
