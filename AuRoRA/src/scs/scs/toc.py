@@ -8,7 +8,7 @@ Receives CRS from CNC motor gateway, streams response fragments back to WebUI.
 
 Architecture:
     TOC mirrors the efferent motor pathway — carries signals away from the brain.
-    It is the biological analogue of the efference copy pathway: Grace's generated
+    It is the biological analogue of the efference copy pathway: AuRoRA's generated
     output is relayed back outward to the originating symbolic channel.
 
     TOC owns no state beyond active connections.
@@ -30,7 +30,7 @@ Topics:
 Terminology:
     Efferent Pathway   — carries signals away from the brain (output direction)
     Efference Copy     — outgoing signal relayed back to the originating channel
-    Telepathy Channel  — Grace's term for direct symbolic output with no physical substrate
+    Telepathy Channel  — AuRoRA's term for direct symbolic output with no physical substrate
     Motor Gateway      — ROS2 topic carrying CRS from CNC to TOC
 """
 
