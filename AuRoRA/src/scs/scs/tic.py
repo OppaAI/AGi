@@ -11,7 +11,7 @@ Architecture:
     Text input has no physical sensory organ; it arrives pre-decoded, pre-linguistic.
     TIC is the thinnest possible adapter: validate, normalize, publish. No cognition.
 
-    In biological terms this is the closest Grace has to "telepathy" —
+    In biological terms this is the closest AuRoRA has to "telepathy" —
     pure symbolic thought injected directly past all sensory processing layers.
     TIC acknowledges this honestly: it does not pretend to be a sensory organ.
 
@@ -33,7 +33,7 @@ Message contract (outbound SSS JSON):
 Terminology:
     Afferent Pathway   — carries signals toward the brain (input direction)
     Symbolic Injection — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel  — Grace's term for direct symbolic input with no physical substrate
+    Telepathy Channel  — AuRoRA's term for direct symbolic input with no physical substrate
 """
 
 import asyncio                                              # event loop for websocket server — isolated from ROS2 spin
