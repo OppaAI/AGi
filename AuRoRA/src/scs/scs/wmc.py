@@ -187,20 +187,22 @@ class WorkingMemoryCortex:
         TODO: VST is planned for vision/spatial sensors in future milestones
         """
         if self._active_pmt is None:                                               # no active PMT present — 
-            return PMT(                                                            # return the constructed 
+            return PMT(                                                            # return the constructed PNT
                 # Memory trace identifier
-                auuuid          =                                                  # AuRoRA unified univeral unique identifier
-                user_id         = sss.user_id,                                     # identified of the user AuRoRA is interacting with
+                trace_id        =                                                  # identifier of this PMT "PMT-<source>-<induced_at>
+                user_id         = sss.user_id,                                     # identifier of the user AuRoRA is interacting with
+                robot_id        =                                                  # identifier of the AuRoRA robot iteself
+                source          =                                                  # origin of the sensory stimulus
                 
                 # Memory trace lifecycle
                 state           = WMCState.INDUCED,                                # state: which phrase PMT is in (ie. induced to working memory)
                 status          = "Staged"                                         # status of the PMT 
                 induced_at      = sss.generated_at,                                # initial time of PMT induced
-                filled_at       =                                                  # time when PMT filled into PMT slot
-                sustained_interval =                                               # interval how long memory trace is sustained in PMT slot
-                evicted_at      =                                                  # time of PMT being evicted from PMT slot
-                destroyed_at    =                                                  # time of PMT destruction
-                lifetime        = sss.interval,                                    # interval of the PMT construction to 
+                #filled_at       =                                                 # time when PMT filled into PMT slot
+                #sustained_interval =                                              # interval how long memory trace is sustained in PMT slot
+                #evicted_at      =                                                 # time of PMT being evicted from PMT slot
+                #destroyed_at    =                                                 # time of PMT destruction
+                #lifetime        = sss.interval,                                   # interval of the PMT construction to 
             
                 # Memory content
                 content         = content,                                         # empty on user turn — derived on pairing
@@ -208,11 +210,11 @@ class WorkingMemoryCortex:
                 chunk_count     = 0,                                               # filled on pairing — full pair needed
             
                 # Retention-decision scores
-                vector          = sss.vector,                                      # 
-                salience_score  = sss.urgency,                                     #
+                #vector          = sss.vector,                                      # 
+                #salience_score  = sss.urgency,                                     #
             
                 # Flags
-                anchored        = False,
+                #anchored        = False,
             )
         else:                                                                      # staged PMT exists — update fill
             self._active_pmt.content     = content                                 # derived by _pair_trace
