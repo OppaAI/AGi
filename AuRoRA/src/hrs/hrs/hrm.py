@@ -74,6 +74,7 @@ class AGi:                                                              # Amazin
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
+    ROBOT_ID: str         = "AuRoRA-ZERO-Prototype                      # (TODO) [STATIC] robot ID to be stored in encrypted file
 
     class SCS:                                      # Semantic Cognitive System
         CORTICAL_CAPACITY: int  = 24576                                 # [INTRINSIC] total token budget for the active LLM context window
