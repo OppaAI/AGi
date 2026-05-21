@@ -6,7 +6,7 @@ System: Telepathy Management System (TMS)
 This module is the afferent pathway for remote human communication. It receives raw input from
 peripheral interfaces (WebUI, messaging apps, email, etc.), gates and normalizes it into a
 structured Sensory Stimulus Signal (SSS), and transmits it to the CNS via the Neural Gateway.
-Biological analogue: Peripheral Nervous System (PNS)— transduction at the sensory organ,
+Biological analogue: Peripheral Nervous System (PNS) — transduction at the sensory organ,
 local reflex handling, and afferent transmission to the thalamus.
 
 Architecture:
@@ -19,32 +19,32 @@ SSS GENERATED
 [RECEIVED]
         │
         ▼
-[Transduction Threshold Gate] ────────────────► [Heuristic Intercept Gate]
-        │                                                    │
- (fail: discard)                             (intercept: handle locally)
-        │                                      (efference echo: suppress)
-   [DISCARDED]                                              │
-                                                         (pass)
-                                                            │
-                                                            ▼
-                                                   [Sensory Buffer]
-                                                   HOLD / EXTRACT / CONSOLIDATE
-                                                   AFFECTIVE TAG
-                                                   [BUFFERED]
-                                                            │
-                                                            ▼
-[SCS Processing Loop] ◄────────────────────────────[Neural Gateway]
-        │                                          [DISPATCHED]
-        │                (SCS response)
-        └────────────────────────────────────────► [Sensory Buffer]
-                                                   [INTEGRATED]
-                                                            │
-                                                            ▼
-                                                   [Neural Pathway]
-                                                   [DEPLETED]
-
+[Transduction Threshold Gate] ──── (pass) ──────────────► [Heuristic Intercept Gate]
+        │                                                            │
+ (fail: discard)                                   (intercept: handle locally)
+        │                                            (efference echo: suppress)
+   [DISCARDED]                                                      │
+                                                                 (pass)
+                                                                    │
+                                                                    ▼
+                                                           [Sensory Buffer]
+                                                           HOLD / EXTRACT / CONSOLIDATE
+                                                           AFFECTIVE TAG
+                                                           [BUFFERED]
+                                                                    │
+                                                                    ▼
+            [SCS Processing Loop] ◄────────────────────────────[Neural Gateway]
+                    │                                          [DISPATCHED]
+                    │                (SCS response)
+                    └────────────────────────────────────────► [Sensory Buffer]        ← stage 6 (planned)
+                                                               [INTEGRATED]
+                                                                     │
+                                                                     ▼
+                                                               [Neural Pathway]        ← stage 7 (planned)
+                                                               [DEPLETED]
 Adapters:
-    CLI, Web UI, Telegram, Discord, Email, Teleops
+    Current: CLI, Web UI
+    Planned: Telegram, Discord, Email, Teleops
 
 Lifecycle:
     1. Reception
@@ -95,7 +95,6 @@ Lifecycle:
        consolidation downstream. TIC's lifecycle ends here — SSS fully depleted.
        SSS marked DEPLETED.
 
-
 Topics:
     Sub: TMS.EFFERENCE_ECHO (std_msgs/String) — CNC-published echo hashes for suppression
     Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
@@ -109,13 +108,18 @@ Message schema (outbound SSS JSON):
      "fast_path": false}
 
 Terminology:
-    Afferent Pathway      — carries signals toward the Semantic Cognitive System (SCS) (input direction)
-    Symbolic Injection    — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel     — The term for direct symbolic input with no physical substrate
-    Efference Copy        — CNC-published prediction of expected input; suppressed at periphery
-                            to avoid processing own outputs as external stimuli
-    Affective Tagging     — fast valence/arousal scoring applied before cortical dispatch;
-                            analogous to amygdala pre-processing of sensory signals
+    Sensory Stimulus Signal (SSS) — the canonical internal event object that wraps a single inbound
+                                    stimulus from reception through depletion. Instantiated during
+                                    receiving, mutated at each pipeline stage via state/locus fields,
+                                    and finally serialized for dispatch to Semantic Cognitive System (SCS).
+                                    Defined in genomic substrates blueprint.
+    Afferent Pathway              — carries signals toward the Semantic Cognitive System (SCS) (input direction)
+    Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing
+    Telepathy Channel             — The term for direct symbolic input with no physical substrate
+    Efference Copy                — CNC-published prediction of expected input; suppressed at periphery
+                                    to avoid processing own outputs as external stimuli
+    Affective Tagging             — fast valence/arousal scoring applied before cortical dispatch;
+                                    analogous to amygdala pre-processing of sensory signals
 """
 
 import asyncio                                              # event loop for websocket server — isolated from ROS2 spin
