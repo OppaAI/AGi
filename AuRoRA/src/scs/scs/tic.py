@@ -143,7 +143,8 @@ TMS = AGi.TMS                                               # module-level alias
 # TODO: promote to AGi.TMS.MAX_PAYLOAD_BYTES in hrm.py and aurora.yaml
 _MAX_PAYLOAD_BYTES: int = 2048
 
-# Debounce window in seconds — duplicate payloads arriving within this window are intercepted.
+# Debounce window in seconds — duplicate payloads from the same user arriving within this
+# window are intercepted. Keyed per user_id — distinct senders never suppress each other.
 # TODO: promote to AGi.TMS.DEBOUNCE_WINDOW in hrm.py and aurora.yaml
 _DEBOUNCE_WINDOW_S: float = 1.0
 
@@ -221,8 +222,10 @@ class TIC(Node):
         hydrate_manifest(self, system="tms")                                    # hydrate manifest — binds TMS constants from AuRoRA parameter server
 
         self._active_connections: Set = set()                                   # registry of live websocket connections — for clean shutdown
-        self._last_payload: str = ""                                            # most recent accepted payload text — debounce comparison target
-        self._last_payload_time: float = 0.0                                    # epoch time of last accepted payload — debounce window anchor
+
+        # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
+        # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
+        self._last_payload: Dict[str, tuple[str, float]] = {}
 
         # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
         # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
@@ -444,7 +447,7 @@ class TIC(Node):
           2. /commands                 — local reflex handler (TODO)
           3. Injection patterns        — symbolic injection attempt
           4. Efference echoes          — CNC self-generated signal suppression
-          5. Duplicate debounce        — same payload within debounce window
+          5. Duplicate debounce        — same payload from same user within debounce window
 
         SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
 
@@ -502,12 +505,13 @@ class TIC(Node):
             self.get_logger().debug(f"🔇 SSS suppressed — efference echo match: {fingerprint[:12]}…")
             return None
 
-        # 5. duplicate debounce — same payload within debounce window, intercept silently
+        # 5. duplicate debounce — same payload from the same user within debounce window.
+        # Keyed on user_id — distinct senders never suppress each other.
+        # Biological analogue: sensory refractory period — organ cannot re-fire on identical
+        # stimulus within recovery window.
         now_epoch = time.monotonic()
-        if (
-            text == self._last_payload
-            and (now_epoch - self._last_payload_time) < _DEBOUNCE_WINDOW_S
-        ):
+        last_text, last_time = self._last_payload.get(sss.user_id, ("", 0.0))
+        if text == last_text and (now_epoch - last_time) < _DEBOUNCE_WINDOW_S:
             sss.state       = "intercepted"
             sss.locus       = "tic._heuristic_gate"
             sss.drop_reason = "duplicate"
@@ -515,8 +519,7 @@ class TIC(Node):
             self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")
             return None
 
-        self._last_payload      = text                                          # update debounce anchor — new unique payload accepted
-        self._last_payload_time = now_epoch
+        self._last_payload[sss.user_id] = (text, now_epoch)                    # anchor per user — distinct senders never suppress each other
 
         sss.state = "triaged"                                                   # lifecycle marker — heuristic gate cleared
         sss.locus = "tic._heuristic_gate"
