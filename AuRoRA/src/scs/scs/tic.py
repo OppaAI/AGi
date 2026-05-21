@@ -21,27 +21,27 @@ SSS GENERATED
         ▼
 [Transduction Threshold Gate] ────────────────► [Heuristic Intercept Gate]
         │                                                    │
- (fail: discard)                                   (intercept: handle locally)
-        │                                                    │
-   [DISCARDED]                                   [INTERCEPTED / DISCARDED]
-                                                             │
-                                                          (pass)
-                                                             │
-                                                             ▼
-                                                    [Sensory Buffer]
-                                                    HOLD / EXTRACT / CONSOLIDATE
-                                                    [BUFFERED]
-                                                             │
-                                                             ▼
-[SCS Processing Loop] ◄───────────────────────────── [Neural Gateway]
-        │                                           [DISPATCHED]
+ (fail: discard)                             (intercept: handle locally)
+        │                                      (efference echo: suppress)
+   [DISCARDED]                                              │
+                                                         (pass)
+                                                            │
+                                                            ▼
+                                                   [Sensory Buffer]
+                                                   HOLD / EXTRACT / CONSOLIDATE
+                                                   AFFECTIVE TAG
+                                                   [BUFFERED]
+                                                            │
+                                                            ▼
+[SCS Processing Loop] ◄────────────────────────────[Neural Gateway]
+        │                                          [DISPATCHED]
         │                (SCS response)
-        └─────────────────────────────────────────► [Sensory Buffer]
-                                                    [INTEGRATED]
-                                                             │
-                                                             ▼
-                                                    [Neural Pathway]
-                                                    [DEPLETED]
+        └────────────────────────────────────────► [Sensory Buffer]
+                                                   [INTEGRATED]
+                                                            │
+                                                            ▼
+                                                   [Neural Pathway]
+                                                   [DEPLETED]
 
 Adapters:
     CLI, Web UI, Telegram, Discord, Email, Teleops
@@ -63,15 +63,18 @@ Lifecycle:
        Intercepts signals resolvable locally without burdening the CNS —
        peripheral equivalent of a spinal reflex loop.
        Intercepts: /commands, injection patterns, system signals (SIGINT,
-       shutdown), duplicate inputs within debounce window, oversized payloads.
+       shutdown), duplicate inputs within debounce window, oversized payloads,
+       efference echoes (CNC-predicted self-generated signals).
        SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
 
     4. Sensory Buffer
        Sensory register — analogous to iconic or echoic memory. Holds the
        signal briefly while features are extracted and the SSS is finalized
-       for CNS transmission.
+       for CNS transmission. Affective tagging (salience, valence, arousal)
+       is applied here — fast amygdala-analogue pass before cortical dispatch.
        HOLD        — raw payload cached for downstream transmission
        EXTRACT     — structural primitives measured (length, density, capitals)
+       AFFECT      — valence, arousal, salience derived from content signals
        CONSOLIDATE — raw trace compiled into encoded, standardized SSS
        SSS marked BUFFERED.
 
@@ -79,6 +82,7 @@ Lifecycle:
        Consolidated SSS transmitted via Neural Gateway to SCS (Thalamic Loop)
        over the neural gateway. TIC holds the SSS in buffer awaiting
        efferent return — the interaction is not yet complete.
+       High-arousal signals are flagged fast_path=True for priority dispatch.
        SSS marked DISPATCHED.
 
     6. Efferent Return
@@ -93,26 +97,34 @@ Lifecycle:
 
 
 Topics:
+    Sub: TMS.EFFERENCE_ECHO (std_msgs/String) — CNC-published echo hashes for suppression
     Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
 
 Message schema (inbound from WebUI):
     {"text": "...", "user_id": "...", "role": "user", "source": "webui"}
 
 Message schema (outbound SSS JSON):
-    {"role": "user", "text": "...", "user_id": "...", "source": "webui", "trace_type": "pmt"}
+    {"role": "user", "text": "...", "user_id": "...", "source": "webui",
+     "trace_type": "pmt", "salience": 1.0, "valence": 0.0, "arousal": 0.0,
+     "fast_path": false}
 
 Terminology:
-    Afferent Pathway   — carries signals toward the brain (input direction)
-    Symbolic Injection — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel  — AuRoRA's term for direct symbolic input with no physical substrate
+    Afferent Pathway      — carries signals toward the brain (input direction)
+    Symbolic Injection    — text arrives pre-decoded, bypassing all sensory processing
+    Telepathy Channel     — AuRoRA's term for direct symbolic input with no physical substrate
+    Efference Copy        — CNC-published prediction of expected input; suppressed at periphery
+                            to prevent GRACE from processing her own outputs as external stimuli
+    Affective Tagging     — fast valence/arousal scoring applied before cortical dispatch;
+                            analogous to amygdala pre-processing of sensory signals
 """
 
 import asyncio                                              # event loop for websocket server — isolated from ROS2 spin
+import hashlib                                              # SHA-256 hashing for efference echo fingerprints
 import json                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                            # dedicated thread for websocket server — never blocks ROS2 spin
 import time                                                 # wall-clock timestamps for debounce window and lifecycle markers
 from datetime import datetime, timezone                     # UTC timestamps for SSS lifecycle fields
-from typing import Set                                      # active connection registry type hint
+from typing import Dict, Set                                # active connection registry and efference echo registry type hints
 
 import rclpy                                                # ROS2 Python client library — node lifecycle and spin
 import websockets                                           # async websocket server — WebUI connection layer
@@ -122,7 +134,7 @@ from std_msgs.msg import String                             # ROS2 string messag
 
 from hrs.hrm import AGi                                     # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest                        # manifest hydration — binds AuRoRA parameter server values into AGi constants
-from gms.csb import SensoryInputChannel, TraceType, SSS     # type: ignore[import-untyped] — SSS dataclass + channel/trace enums
+from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # type: ignore[import-untyped] — SSS dataclass + channel/trace enums
 
 TMS = AGi.TMS                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
@@ -134,6 +146,15 @@ _MAX_PAYLOAD_BYTES: int = 2048
 # Debounce window in seconds — duplicate payloads arriving within this window are intercepted.
 # TODO: promote to AGi.TMS.DEBOUNCE_WINDOW in hrm.py and aurora.yaml
 _DEBOUNCE_WINDOW_S: float = 1.0
+
+# Efference echo TTL in seconds — echoes older than this are pruned from the registry.
+# Short enough to prevent stale suppression; long enough to cover typical round-trip latency.
+# TODO: promote to AGi.TMS.EFFERENCE_ECHO_TTL in hrm.py and aurora.yaml
+_EFFERENCE_ECHO_TTL_S: float = 5.0
+
+# Arousal threshold above which fast_path=True is set — bypasses normal queue, alerts CNS immediately.
+# TODO: promote to AGi.TMS.FAST_PATH_AROUSAL_THRESHOLD in hrm.py and aurora.yaml
+_FAST_PATH_AROUSAL_THRESHOLD: float = 0.7
 
 # Injection pattern prefixes intercepted at the heuristic gate — peripheral reflex, never reaches CNS.
 _INJECTION_PREFIXES: tuple[str, ...] = (
@@ -147,6 +168,25 @@ _INJECTION_PREFIXES: tuple[str, ...] = (
     "[system]",                                             # bracketed system role injection
 )
 
+# Urgency markers — presence lifts arousal and triggers fast-path routing.
+# Biological analogue: subcortical threat detection before conscious awareness.
+_URGENCY_MARKERS: frozenset[str] = frozenset({
+    "help", "error", "stop", "crash", "urgent", "emergency",
+    "broken", "failed", "critical", "abort", "warning", "alert",
+})
+
+# Positive valence markers — presence lifts valence toward +1.0.
+_POSITIVE_MARKERS: frozenset[str] = frozenset({
+    "thanks", "thank", "great", "perfect", "excellent", "awesome",
+    "love", "good", "nice", "well done", "brilliant", "yes",
+})
+
+# Negative valence markers — presence pulls valence toward -1.0.
+_NEGATIVE_MARKERS: frozenset[str] = frozenset({
+    "wrong", "bad", "broken", "fail", "error", "crash", "hate",
+    "terrible", "awful", "useless", "stupid", "no", "not working",
+})
+
 
 class TIC(Node):
     """
@@ -154,14 +194,23 @@ class TIC(Node):
 
     Afferent pathway for symbolic text input.
     Accepts WebUI connections, gates and normalizes messages into SSS, publishes to sensory gateway.
-    No cognitive logic — gate, normalize, publish only.
+    No cognitive logic — gate, normalize, tag, publish only.
+
+    New in M1.5:
+        - Efference copy suppression: subscribes to TMS.EFFERENCE_ECHO; CNC-published
+          fingerprints suppress matching inbound signals before they reach CNS, preventing
+          GRACE from processing her own outputs as external stimuli.
+        - Affective tagging: _buffer() derives salience, valence, and arousal from structural
+          primitives and keyword signals. High-arousal SSS are flagged fast_path=True for
+          priority dispatch. Biological analogue: amygdala pre-tagging before cortical routing.
     """
 
     def __init__(self):
         """
         Initialize Telepathy Input Core.
 
-        Boots websocket server on a dedicated thread and opens the sensory gateway topic.
+        Boots websocket server on a dedicated thread, opens the sensory gateway topic,
+        and subscribes to the efference echo topic for self-signal suppression.
         ROS2 spin and websocket server never share a thread.
         """
         super().__init__("tic")                                                 # register this node with ROS2 as "tic"
@@ -175,9 +224,25 @@ class TIC(Node):
         self._last_payload: str = ""                                            # most recent accepted payload text — debounce comparison target
         self._last_payload_time: float = 0.0                                    # epoch time of last accepted payload — debounce window anchor
 
+        # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
+        # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
+        # Biological analogue: motor efference copy preventing self-tickling.
+        self._efference_echoes: Dict[str, float] = {}                           # fingerprint → expiry time (monotonic)
+
         # Sensory gateway — normalized SSS published here for CNC consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
             String, TMS.TEXT_SENSORY_GATEWAY, 10                                # String type | topic | QoS depth 10
+        )
+
+        # Efference echo subscriber — CNC publishes fingerprints of its own outbound responses.
+        # TIC suppresses inbound signals matching these fingerprints within the TTL window.
+        # TODO: define TMS.EFFERENCE_ECHO topic name in hrm.py and aurora.yaml
+        _efference_echo_topic = getattr(TMS, "EFFERENCE_ECHO", "tms/efference_echo")
+        self._efference_echo_sub = self.create_subscription(
+            String,
+            _efference_echo_topic,
+            self._on_efference_echo,
+            10,
         )
 
         # Boot websocket server on its own thread — never competes with ROS2 spin
@@ -194,10 +259,61 @@ class TIC(Node):
         )
 
         self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_SENSORY_GATEWAY}")
+        self.get_logger().info(f"✅ Subscribing : {_efference_echo_topic}")
         self.get_logger().info(f"✅ WebSocket   : ws://0.0.0.0:{TMS.WS_PORT}")
         self.get_logger().info("=" * 60)
         self.get_logger().info("📡 TIC ready — afferent pathway open")
         self.get_logger().info("=" * 60)
+
+    # ── efference copy ────────────────────────────────────────────────────────
+
+    def _on_efference_echo(self, msg: String) -> None:
+        """
+        Receive a CNC-published efference echo fingerprint and register it for suppression.
+        Called on the ROS2 spin thread — dict write is GIL-safe for CPython.
+
+        CNC publishes the SHA-256 fingerprint of each outbound response text immediately
+        after GCE stream completes. Any inbound SSS whose text fingerprint matches within
+        the TTL window is suppressed as a self-generated echo.
+
+        Args:
+            msg (String): JSON payload — {"fingerprint": "<sha256hex>", "ttl": <seconds>}
+        """
+        try:
+            data: dict = json.loads(msg.data)
+            fingerprint: str = data.get("fingerprint", "")
+            ttl: float = float(data.get("ttl", _EFFERENCE_ECHO_TTL_S))
+            if fingerprint:
+                expiry = time.monotonic() + ttl
+                self._efference_echoes[fingerprint] = expiry
+                self.get_logger().debug(f"🧠 Efference echo registered: {fingerprint[:12]}… TTL={ttl}s")
+        except (json.JSONDecodeError, ValueError) as e:
+            self.get_logger().warning(f"⚠️  Efference echo parse error: {e}")
+
+    def _prune_efference_echoes(self) -> None:
+        """
+        Prune expired efference echo fingerprints from the registry.
+        Called at the top of _heuristic_gate — cheap O(n) scan on a small dict.
+        """
+        now = time.monotonic()
+        expired = [fp for fp, expiry in self._efference_echoes.items() if now > expiry]
+        for fp in expired:
+            del self._efference_echoes[fp]
+
+    @staticmethod
+    def _fingerprint(text: str) -> str:
+        """
+        Compute SHA-256 fingerprint of normalized text.
+        Normalization: strip whitespace, casefold — matches CNC fingerprint logic.
+
+        Args:
+            text (str): Raw text to fingerprint.
+
+        Returns:
+            str: Hex-encoded SHA-256 digest.
+        """
+        normalized = text.strip().casefold()
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     # ── websocket server ──────────────────────────────────────────────────────
 
@@ -239,7 +355,7 @@ class TIC(Node):
                 if sss is None:
                     continue
 
-                sss = self._buffer(sss)                                         # stage 4 — hold, extract, consolidate into finalized SSS
+                sss = self._buffer(sss)                                         # stage 4 — hold, extract, affective tag, consolidate
                 self._publish_sss(sss)                                          # stage 5 — dispatch consolidated SSS to sensory gateway
 
                 # TODO: stage 6 — efferent return (await SCS response, bind to SSS interaction ID)
@@ -275,13 +391,14 @@ class TIC(Node):
 
             now = datetime.now(timezone.utc).isoformat()
             return SSS(
-                role        = payload.get("role", "user"),                      # speaker role — always "user" from WebUI
-                text        = payload.get("text", ""),                          # raw stimulus content — not yet validated
-                user_id     = payload.get("user_id", "demo"),                   # speaker identity — defaults to demo
-                source      = SensoryInputChannel.WEBUI,                        # channel tag — always WEBUI for TIC
-                trace_type  = TraceType.PMT,                                    # trace type — PMT for all conversational input
-                state       = "generated",                                      # lifecycle marker — SSS born
-                locus       = "tic._receive",                                   # processing locus — reception stage
+                role         = payload.get("role", "user"),                     # speaker role — always "user" from WebUI
+                text         = payload.get("text", ""),                         # raw stimulus content — not yet validated
+                user_id      = payload.get("user_id", "demo"),                  # speaker identity — defaults to demo
+                source       = SensoryInputChannel.WEBUI,                       # channel tag — always WEBUI for TIC
+                modality     = SensoryModality.TEXT,                            # WebUI is always text modality
+                trace_type   = TraceType.PMT,                                   # trace type — PMT for all conversational input
+                state        = "generated",                                     # lifecycle marker — SSS born
+                locus        = "tic._receive",                                  # processing locus — reception stage
                 generated_at = now,                                             # wall-clock birth time
             )
         except (json.JSONDecodeError, ValueError):                              # malformed JSON — drop at adapter boundary
@@ -303,18 +420,17 @@ class TIC(Node):
         text = sss.text.strip() if isinstance(sss.text, str) else ""           # guard against non-string payload
 
         if not text:                                                            # null, empty, or whitespace-only — below threshold
-            sss.state      = "discarded"
-            sss.locus      = "tic._transduction_gate"
+            sss.state       = "discarded"
+            sss.locus       = "tic._transduction_gate"
             sss.drop_reason = "below_threshold"
             sss.dropped_at  = datetime.now(timezone.utc).isoformat()
             self.get_logger().debug("🚫 SSS discarded — below transduction threshold")
             return None
 
-        sss.text           = text                                               # commit stripped text — normalized payload
-        sss.state          = "transduced"                                       # lifecycle marker — threshold passed
-        sss.locus          = "tic._transduction_gate"
-        sss.transduced_at  = datetime.now(timezone.utc).isoformat()
-        # TODO: sync csb.py SSS.state vocabulary — add "transduced" to state field docstring
+        sss.text          = text                                                # commit stripped text — normalized payload
+        sss.state         = "transduced"                                        # lifecycle marker — threshold passed
+        sss.locus         = "tic._transduction_gate"
+        sss.transduced_at = datetime.now(timezone.utc).isoformat()
         return sss
 
     def _heuristic_gate(self, sss: SSS) -> SSS | None:
@@ -322,7 +438,14 @@ class TIC(Node):
         Stage 3 — Heuristic Intercept Gate.
         Intercepts signals resolvable locally without burdening the CNS.
         Peripheral equivalent of a spinal reflex loop.
-        Intercepts: /commands, injection patterns, system signals, duplicates, oversized payloads.
+
+        Intercepts (in order):
+          1. Oversized payloads        — discard before any pattern matching
+          2. /commands                 — local reflex handler (TODO)
+          3. Injection patterns        — symbolic injection attempt
+          4. Efference echoes          — CNC self-generated signal suppression
+          5. Duplicate debounce        — same payload within debounce window
+
         SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
 
         Args:
@@ -335,39 +458,58 @@ class TIC(Node):
         text_lower = text.lower()
         now        = datetime.now(timezone.utc).isoformat()
 
-        # oversized payload — discard before any pattern matching
+        # prune stale efference echoes before any check — cheap housekeeping
+        self._prune_efference_echoes()
+
+        # 1. oversized payload — discard before any pattern matching
         if len(text.encode("utf-8")) > _MAX_PAYLOAD_BYTES:
-            sss.state      = "discarded"
-            sss.locus      = "tic._heuristic_gate"
+            sss.state       = "discarded"
+            sss.locus       = "tic._heuristic_gate"
             sss.drop_reason = "overload"
             sss.dropped_at  = now
             self.get_logger().warning(f"⚠️  SSS discarded — payload exceeds {_MAX_PAYLOAD_BYTES}B ceiling")
             return None
 
-        # /command intercept — local reflex, never reaches CNS
+        # 2. /command intercept — local reflex, never reaches CNS
         if text.startswith("/"):
-            sss.state  = "intercepted"
-            sss.locus  = "tic._heuristic_gate"
+            sss.state = "intercepted"
+            sss.locus = "tic._heuristic_gate"
             self.get_logger().debug(f"🛑 SSS intercepted — command signal: {text[:40]}")
             # TODO: route /commands to local command handler
             return None
 
-        # injection pattern intercept — symbolic injection attempt, blocked at periphery
+        # 3. injection pattern intercept — symbolic injection attempt, blocked at periphery
         for pattern in _INJECTION_PREFIXES:
             if text_lower.startswith(pattern):
-                sss.state  = "intercepted"
-                sss.locus  = "tic._heuristic_gate"
-                self.get_logger().warning(f"🛑 SSS intercepted — injection pattern detected: '{pattern}'")
+                sss.state       = "intercepted"
+                sss.locus       = "tic._heuristic_gate"
+                sss.drop_reason = "injection"
+                sss.dropped_at  = now
+                self.get_logger().warning(f"🛑 SSS intercepted — injection pattern: '{pattern}'")
                 return None
 
-        # duplicate debounce — same payload within debounce window, intercept silently
+        # 4. efference echo suppression — CNC predicted this input; suppress as self-generated
+        # Biological analogue: motor efference copy preventing self-tickling.
+        # CNC publishes SHA-256 fingerprints of outbound responses to TMS.EFFERENCE_ECHO.
+        # If inbound text fingerprint matches a live echo, the signal is suppressed here.
+        fingerprint = self._fingerprint(text)
+        if fingerprint in self._efference_echoes:
+            sss.state                = "intercepted"
+            sss.locus                = "tic._heuristic_gate"
+            sss.drop_reason          = "efference_echo"
+            sss.dropped_at           = now
+            sss.efference_suppressed = True
+            self.get_logger().debug(f"🔇 SSS suppressed — efference echo match: {fingerprint[:12]}…")
+            return None
+
+        # 5. duplicate debounce — same payload within debounce window, intercept silently
         now_epoch = time.monotonic()
         if (
             text == self._last_payload
             and (now_epoch - self._last_payload_time) < _DEBOUNCE_WINDOW_S
         ):
-            sss.state  = "intercepted"
-            sss.locus  = "tic._heuristic_gate"
+            sss.state       = "intercepted"
+            sss.locus       = "tic._heuristic_gate"
             sss.drop_reason = "duplicate"
             sss.dropped_at  = now
             self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")
@@ -376,18 +518,23 @@ class TIC(Node):
         self._last_payload      = text                                          # update debounce anchor — new unique payload accepted
         self._last_payload_time = now_epoch
 
-        sss.state  = "triaged"                                                  # lifecycle marker — heuristic gate cleared
-        sss.locus  = "tic._heuristic_gate"
-        # TODO: sync csb.py SSS.state vocabulary — add "triaged" and "intercepted" to state field docstring
+        sss.state = "triaged"                                                   # lifecycle marker — heuristic gate cleared
+        sss.locus = "tic._heuristic_gate"
         return sss
 
     def _buffer(self, sss: SSS) -> SSS:
         """
         Stage 4 — Sensory Buffer.
         Sensory register — analogous to iconic or echoic memory.
+
         HOLD        — raw payload cached, SSS identity stamped
         EXTRACT     — structural primitives measured (length, density, capitals)
+        AFFECT      — valence, arousal, salience derived from content signals
+                      Biological analogue: amygdala pre-tagging before cortical routing.
+                      Fast keyword scan + structural signals → affective dimensions.
+                      High-arousal signals set fast_path=True for priority CNS dispatch.
         CONSOLIDATE — SSS finalized and encoded for CNS transmission
+
         SSS marked BUFFERED.
 
         Args:
@@ -396,25 +543,57 @@ class TIC(Node):
         Returns:
             SSS: SSS marked BUFFERED, consolidated and ready for dispatch.
         """
-        # HOLD — cache raw payload, stamp buffer receipt time
+        # HOLD — stamp buffer receipt time
         sss.locus      = "tic._buffer"
-        sss.buffered_at = datetime.now(timezone.utc).isoformat()               # wall-clock buffer entry time
+        sss.buffered_at = datetime.now(timezone.utc).isoformat()
 
-        # EXTRACT — measure structural primitives for diagnostic visibility
+        # EXTRACT — measure structural primitives
         text          = sss.text
-        char_len      = len(text)                                               # total character count
-        word_count    = len(text.split())                                       # whitespace-delimited word count
+        char_len      = len(text)
+        word_count    = len(text.split())
         density       = word_count / char_len if char_len > 0 else 0.0         # lexical density — words per character
-        capital_ratio = sum(1 for c in text if c.isupper()) / char_len if char_len > 0 else 0.0  # uppercase character ratio
+        capital_ratio = sum(1 for c in text if c.isupper()) / char_len if char_len > 0 else 0.0
         self.get_logger().debug(
             f"📊 SSS primitives — len={char_len} words={word_count} "
             f"density={density:.3f} capitals={capital_ratio:.3f}"
         )
 
-        # CONSOLIDATE — SSS is now fully finalized; modality derived from source
-        sss.modality   = sss.source                                             # TODO: derive SensoryModality from SensoryInputChannel post-M1.5
-        sss.state      = "buffered"                                             # lifecycle marker — sensory buffer complete
-        # TODO: sync csb.py SSS.state vocabulary — add "buffered" to state field docstring
+        # AFFECT — derive valence, arousal, salience from fast keyword scan
+        # Biological analogue: subcortical (amygdala) affective tagging before cortical awareness.
+        # This is a coarse first pass — CNC may refine all three fields after semantic processing.
+        words_lower: set[str] = set(text.lower().split())
+
+        # arousal — urgency keyword hits + capital ratio (shouting signal)
+        urgency_hits  = len(words_lower & _URGENCY_MARKERS)
+        arousal       = min(1.0, (urgency_hits * 0.25) + (capital_ratio * 0.5))
+
+        # valence — positive vs negative keyword balance
+        positive_hits = len(words_lower & _POSITIVE_MARKERS)
+        negative_hits = len(words_lower & _NEGATIVE_MARKERS)
+        raw_valence   = (positive_hits - negative_hits) * 0.3                  # each hit shifts ±0.3
+        valence       = max(-1.0, min(1.0, raw_valence))                        # clamp to [-1.0, 1.0]
+
+        # salience — base 1.0; boosted by arousal (urgency lifts priority)
+        salience      = min(2.0, 1.0 + arousal)                                # range [1.0, 2.0] — CNC may apply further modulation
+
+        sss.arousal  = round(arousal, 3)
+        sss.valence  = round(valence, 3)
+        sss.salience = round(salience, 3)
+
+        # fast-path flag — high-arousal signals bypass normal queue at CNS
+        sss.fast_path = arousal >= _FAST_PATH_AROUSAL_THRESHOLD
+
+        if sss.fast_path:
+            self.get_logger().info(
+                f"⚡ SSS fast-path — arousal={sss.arousal} valence={sss.valence} salience={sss.salience}"
+            )
+        else:
+            self.get_logger().debug(
+                f"💭 SSS affect — arousal={sss.arousal} valence={sss.valence} salience={sss.salience}"
+            )
+
+        # CONSOLIDATE — modality already set at reception; mark buffered
+        sss.state = "buffered"
         return sss
 
     def _publish_sss(self, sss: SSS) -> None:
@@ -427,9 +606,9 @@ class TIC(Node):
             sss (SSS): SSS marked BUFFERED, ready for CNS dispatch.
         """
         try:
-            sss.state      = "dispatched"                                       # lifecycle marker — leaving TIC afferent pathway
-            sss.locus      = "tic._publish_sss"
-            sss.triggered_at = datetime.now(timezone.utc).isoformat()          # wall-clock dispatch time
+            sss.state        = "dispatched"
+            sss.locus        = "tic._publish_sss"
+            sss.triggered_at = datetime.now(timezone.utc).isoformat()
 
             signal = String()
             signal.data = json.dumps({                                          # serialize SSS fields — CNC deserializes back into SSS
@@ -439,11 +618,20 @@ class TIC(Node):
                 "source"      : sss.source.value,
                 "trace_type"  : sss.trace_type.value,
                 "state"       : sss.state,
+                "salience"    : sss.salience,                                   # affective weight — CNC uses for dispatch priority
+                "valence"     : sss.valence,                                    # affective tone — CNC may use for response modulation
+                "arousal"     : sss.arousal,                                    # activation intensity — fast_path flag derived from this
+                "fast_path"   : sss.fast_path,                                  # True = priority dispatch at CNC
                 "generated_at": sss.generated_at,
                 "triggered_at": sss.triggered_at,
             })
-            self._sensory_gateway.publish(signal)                               # emit to sensory gateway — CNC subscribes here
-            self.get_logger().debug(f"📤 SSS dispatched: {sss.text[:60]}…")
+            self._sensory_gateway.publish(signal)
+
+            if sss.fast_path:
+                self.get_logger().info(f"⚡ SSS dispatched (fast-path): {sss.text[:60]}…")
+            else:
+                self.get_logger().debug(f"📤 SSS dispatched: {sss.text[:60]}…")
+
         except Exception as e:
             self.get_logger().error(f"❌ Publish error: {e}")                   # non-fatal — publish failure must not crash the afferent pathway
 
@@ -456,7 +644,7 @@ class TIC(Node):
         self.get_logger().info("🛑 TIC shutting down…")
 
         async def _close():
-            for ws in list(self._active_connections):                           # close all active connections cleanly
+            for ws in list(self._active_connections):
                 await ws.close()
             if hasattr(self, "_ws_server"):
                 self._ws_server.close()
@@ -464,7 +652,7 @@ class TIC(Node):
 
         future = asyncio.run_coroutine_threadsafe(_close(), self._ws_loop)
         try:
-            future.result(timeout=3.0)                                          # wait up to 3 seconds — best-effort on shutdown
+            future.result(timeout=3.0)
         except Exception:
             pass
 
