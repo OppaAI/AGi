@@ -31,7 +31,7 @@ class SensoryInputChannel(Enum):
     TELEGRAM = "telegram"   # Telegram bridge — TODO: M2
     DISCORD  = "discord"    # Discord bridge — TODO: M2
     GMAIL    = "gmail"      # Gmail bridge — TODO: M2
-
+    UNKNOWN  = "unknown"    # unknown channel — should not happen
 
 class SensoryModality(Enum):
     TEXT    = "text"    # CLI, webUI, messaging bridges
@@ -39,6 +39,7 @@ class SensoryModality(Enum):
     VISION  = "vision"  # camera — OAK-D
     SPATIAL = "spatial" # LiDAR, IMU
     TOUCH   = "touch"   # tactile sensors — (TODO: M2+)
+    UNKNOWN = "unknown" # unknown modality — should not happen
 
 @dataclass
 class SSS:
@@ -52,44 +53,32 @@ class SSS:
         Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
     """
     # ── raw — filled by adapter ────────────────────────────────────
-    sss_id          : str   = ""                                    # identifier of this SSS "SSS-<source>-<induced_at>-<uuid>"
-    user_id         : str   = field(default="demo")                 # identifier of the user AuRoRA is interacting with
-    robot_id        : str   = field(default="AuRoRA")               # identifier of the AuRoRA robot itself
-    source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
-    role            : str   = field(default="user")                 # speaker role — "user" or "assistant"
-    text            : str   = field(default="")                     # text payload — CLI, webUI, bridges
-    audio           : bytes = field(default=b"")                    # audio payload — voice pipeline (TODO: M1.X-b)
-    image           : bytes = field(default=b"")                    # image payload — vision pipeline (TODO: M2+)
-
-    # ── enriched — filled by CNC ───────────────────────────────────
-    sequence        : int   = 0     # ordinal position in stimulus stream
-    modality        : SensoryModality = SensoryModality.TEXT  # "text" | "audio" | "vision" — derived from source
-    trace_type      : str   = ""    # WMC trace target — "pmt" | "vst" | "ast"
-    proc            : str   = ""    # process that enriched this SSS
-    location        : str   = ""    # physical origin — e.g. "microphone_left"
+    sss_id          : str   = ""                                        # identifier of this SSS "SSS-<source>-<induced_at>-<uuid>"
+    user_id         : str   = field(default="demo")                     # identifier of the user AuRoRA is interacting with
+    robot_id        : str   = field(default="AuRoRA")                   # identifier of the AuRoRA robot itself
+    source          : SensoryInputChannel = SensoryInputChannel.UNKNOWN # input modality — required
+    text            : str   = field(default="")                         # text payload — CLI, webUI, bridges
+    #audio           : bytes = field(default=b"")                       # audio payload — voice pipeline (TODO: M1.X-b)
+    #visual          : bytes = field(default=b"")                       # image payload — vision pipeline (TODO: M2+)
+    modality        : SensoryModality = SensoryModality.UNKNOWN         # "text" | "audio" | "vision" — derived from source
 
     # ── scoring — filled by CNC ────────────────────────────────────
-    urgency         : float = 0.0   # dispatch priority — higher preempts lower
-    confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
-    vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
+    #urgency         : float = 0.0   # dispatch priority — higher preempts lower
+    #confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
+    #vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
 
     # ── lifecycle — filled by CNC ──────────────────────────────────
-    state           : str   = ""    # SSSState — "raw" | "enriched" | "triaged" | "dispatched" | "dropped"
-    generated_at    : str   = ""    # wall-clock time of generation
-    queued_at       : str   = ""    # wall-clock time of queuing
-    fired_at        : str   = ""    # wall-clock time of transmission
+    state           : str   = ""    # lifecycle phase SSS is in — "raw" | "enriched" | "triaged" | "dispatched" | "depleted" | "dropped"
+    locus           : str   = ""    # which component is currently processing this SSS
     received_at     : str   = ""    # wall-clock time of reception
-    processed_at    : str   = ""    # wall-clock time of processing
-    completed_at    : str   = ""    # wall-clock time of completion
-    depleted_at     : str   = ""    # wall-clock time of depletion
+    generated_at    : str   = ""    # wall-clock time of generation
+    transduced_at   : str   = ""    # wall-clock time of queuing
+    triggered_at    : str   = ""    # wall-clock time of transmission
+    buffered_at     : str   = ""    # wall-clock time of reception
     dropped_at      : str   = ""    # wall-clock time of dropping
-    lifecycle       : float = 0.0   # elapsed ms from generation to depletion
     drop_reason     : str   = ""    # "below_threshold" | "duplicate" | "overload"
-
-    # ── flags — filled by adapter or CNC ──────────────────────────
-    internal        : bool  = False # true if GRACE-originated — not external environment
-    requires_response: bool = False # true if stimulus expects a reply
-    interval        : int   = 0     # ms to generate this SSS
+    depleted_at     : str   = ""    # wall-clock time of depletion
+    lifecycle       : float = 0.0   # elapsed ms from generation to depletion
 
 class TraceType(Enum):
     """Target WMC trace type for a given stimulus."""
