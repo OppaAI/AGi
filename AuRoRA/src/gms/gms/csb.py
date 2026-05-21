@@ -1,33 +1,37 @@
 # gms/gms/csb.py
 # Circuit Substrate Blueprints (CSB)
 # ===================================
+# AuRoRA · Grace Motor System (GMS)
+#
 # The genome of Grace — every circuit dataclass blueprint lives here.
 # Biological analogue: the genome — centralized structural blueprints
-# expressed by each system at runtime. No logic, no behaviour —
-# pure structure, pure definition.
+# expressed by each system at runtime.
+# No logic, no behaviour — pure structure, pure definition.
 #
-# Namespace hierarchy:
-#   module-level — all blueprints defined at top scope
-#
-# Usage:
-#   from gms.csb import PMT, SSS, WMCState
-#   pmt = PMT()
+# Dataclass hierarchy:
+#   SSS  — Sensory Stimulus Signal   — afferent input, TIC/ASR/CV → CNC
+#   CRS  — Cognitive Response Signal — efferent output, GCE → MCC
+#   PMT  — Phonological Memory Trace — WMC episode unit, SSS+CRS paired
+#   VST  — Visuospatial Trace        — WMC perceptual unit, TODO: M2
 
-from dataclasses import dataclass, field                # for generating the centralized structural blueprints
-from enum import Enum                                   # for generating the enum base for various states
+from dataclasses import dataclass, field    # centralized structural blueprints expressed by each system at runtime
+from datetime import datetime, timezone     # UTC timestamps — SSS reception time and PMT induction time
+from enum import Enum                       # enum base for channel, modality, trace type, and WMC lifecycle states
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AGi — Autonomous General Intelligence
-# Root namespace — all Grace circuit blueprints nested here.
+# Enums
 # ══════════════════════════════════════════════════════════════════════════════
 
 class SensoryInputChannel(Enum):
-    CLI      = "cli"
-    WEBUI    = "webui"
-    VOICE    = "voice"
-    TELEGRAM = "telegram"
-    DISCORD  = "discord"
-    GMAIL    = "gmail"
+    """Originating channel of an incoming sensory stimulus."""
+    CLI      = "cli"        # terminal input — developer tool
+    WEBUI    = "webui"      # browser UI — TIC websocket
+    VOICE    = "voice"      # ASR pipeline — TODO: M1.X
+    TELEGRAM = "telegram"   # Telegram bridge — TODO: M2
+    DISCORD  = "discord"    # Discord bridge — TODO: M2
+    GMAIL    = "gmail"      # Gmail bridge — TODO: M2
+
 
 class SensoryModality(Enum):
     TEXT    = "text"    # CLI, webUI, messaging bridges
@@ -88,19 +92,95 @@ class SSS:
     interval        : int   = 0     # ms to generate this SSS
 
 class TraceType(Enum):
-    PMT = "pmt"   # phonological memory trace — text/audio
-    VST = "vst"   # visuospatial trace — vision/spatial
-    AST = "ast"   # affective state trace — (TODO: M2+)
+    """Target WMC trace type for a given stimulus."""
+    PMT = "pmt"             # phonological memory trace — text / transcribed audio
+    VST = "vst"             # visuospatial trace — vision / spatial — TODO: M2
+
 
 class WMCState(Enum):
-    """
-    State of a PMT in the working memory.
-    """
-    INDUCED    = "induced"                  # User prompt received but AI response not yet generated
-    FILLED     = "filled"                   # AI response received and paired with user prompt
-    SUSTAINED  = "sustained"                # PMT is sustained in working memory
-    RECEDING   = "receding"                 # PMT is receding from working memory
-    EVICTED    = "evicted"                  # PMT is evicted from working memory
+    """Lifecycle phase of a memory trace inside the Working Memory Cortex."""
+    INDUCED   = "induced"   # SSS received — awaiting CRS pairing
+    FILLED    = "filled"    # CRS paired — complete episode
+    SUSTAINED = "sustained" # held in WMC slot
+    RECEDING  = "receding"  # approaching eviction threshold
+    EVICTED   = "evicted"   # removed from WMC — forwarded to EMC
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SSS — Sensory Stimulus Signal
+# ══════════════════════════════════════════════════════════════════════════════
+# Afferent signal: TIC / ASR / CV → CNC only.
+# Carries raw input from any sensory channel to the thalamic relay.
+# Never enters WMC directly — CNC extracts what MCC needs.
+#
+# Biological analogue: peripheral afferent signal enriched at the thalamus
+# before being forwarded to cortex. The thalamus (CNC) never lets raw
+# peripheral signals touch memory directly.
+#
+# Field responsibility:
+#   source, modality, trace_type, role, user_id, text  — set by adapter (TIC/ASR/CV)
+#   received_at                                        — set by CNC on arrival
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class SSS:
+    # ── set by adapter ────────────────────────────────────────────────────────
+    robot_id    :
+    source      : SensoryInputChannel = SensoryInputChannel.CLI  # originating channel — always set by adapter
+    modality    : SensoryModality     = SensoryModality.TEXT     # physical nature — derived from source by adapter
+    trace_type  : TraceType           = TraceType.PMT            # WMC trace target — PMT or VST
+    role        : str                 = "user"                   # speaker role — always "user" from external channels
+    user_id     : str                 = "demo"                   # speaker identity — resolved by IRU at CNC
+    text        : str                 = ""                       # text payload — CLI, WebUI, messaging bridges
+
+    # ── set by CNC on arrival ─────────────────────────────────────────────────
+    received_at : datetime            = field(                   # UTC wall-clock time CNC received this stimulus
+                      default_factory=lambda: datetime.now(timezone.utc)
+                  )
+
+    # TODO M1.X: audio : bytes = b""  — voice pipeline (ASR)
+    # TODO M2:   image : bytes = b""  — vision pipeline (OAK-D)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CRS — Cognitive Response Signal
+# ══════════════════════════════════════════════════════════════════════════════
+# Efferent signal: GCE → MCC only.
+# Grace's generated output — efference copy for memory encoding.
+# Not a sensory signal — never originates from outside Grace.
+#
+# Biological analogue: efference copy — motor cortex sends a copy of the
+# outgoing command back to sensory cortex and hippocampus so the brain can
+# distinguish self-generated output from external input, and close the
+# episode for consolidation.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class CRS:
+    # ── set by CNC after GCE stream completes ─────────────────────────────────
+    text        : str       = ""             # full generated response — assembled from GCE stream fragments
+    trace_type  : TraceType = TraceType.PMT  # always PMT for conversational output
+
+    # ── set by CNC ────────────────────────────────────────────────────────────
+    generated_at : datetime = field(         # UTC wall-clock time GCE stream completed
+                       default_factory=lambda: datetime.now(timezone.utc)
+                   )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PMT — Phonological Memory Trace
+# ══════════════════════════════════════════════════════════════════════════════
+# One complete interaction episode in working memory.
+# Pairs SSS + CRS into a single evictable unit.
+# Constructed by MCC — never by CNC or WMC directly.
+#
+# Biological analogue: a single episode held in the phonological loop,
+# tagged by the hippocampus during experience for potential consolidation
+# into long-term episodic memory.
+#
+# Lifecycle:
+#   Induction → Filling → Sustaining → Receding → Evicting → EMC
+# ══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
 class PMT:
@@ -129,7 +209,6 @@ class PMT:
     content         : str           = ""    # JSON pair — WMC chat history for LLM
     trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
     trace_type      : TraceType     = TraceType.PMT  # formatted text — for EMC embedding and reinstatement
-    chunk_count     : int           = 0     # cached token count — O(1) eviction math, no reprobe on eviction
 
     # ── scoring ───────────────────────────────────────────────────
     vector          : list[float]   = field(default_factory=list)   # semantic vector — reused at EMC binding, no re-inference
@@ -138,43 +217,54 @@ class PMT:
     novelty_factor  : float         = 1.0   # Factor 2 multiplier — inspectable at eviction boundary
     depth_score     : float         = 0.0   # Factor 3 — logged at eviction boundary
 
-    # ── flags ─────────────────────────────────────────────────────
-    anchored        : bool          = False # true if hard-gated — salience override or explicit marker
-    smc_candidate   : bool          = False # true if fact extractor flagged remainder for Dream Cycle
+    # ── flags ─────────────────────────────────────────────────────────────────
+    anchored        : bool        = False   # hard-gated — protected from WMC eviction regardless of retention score
+    cluster_id      : int         = -1      # assigned WMC semantic cluster — -1 = unassigned
+    smc_candidate   : bool        = False   # flagged for Dream Cycle semantic consolidation — TODO: SMC M2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VST — Visuospatial Trace
+# ══════════════════════════════════════════════════════════════════════════════
+# One complete perceptual snapshot in working memory.
+# Pairs sensor frame + scene interpretation into a single evictable unit.
+# Mirrors PMT structure for consistent WMC eviction logic.
+#
+# Biological analogue: a single episode held in the visuospatial sketchpad,
+# tagged by the hippocampus for potential spatial memory consolidation.
+#
+# TODO: M2 — constructed when CV/LiDAR pipeline lands.
+#            Scoring fields mirror PMT intentionally — WMC eviction logic is shared.
+# ══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
 class VST:
-    """
-    Visuospatial Trace — one complete perceptual snapshot in working memory.
-    Pairs a sensor frame with scene interpretation into a single evictable unit.
-    Lifecycle:
-        Induction → Filling → Sustaining → Receding → Evicting
-    Biological analogue: a single episode held in the visuospatial sketchpad,
-    tagged by the hippocampus during experience for potential consolidation.
-    """
-    # ── identity ──────────────────────────────────────────────────
-    sensor_id       : str | None    = None  # source sensor — 'oak_d', 'lidar', 'imu', None if fused
-    timestamp       : str           = ""    # ISO wall-clock induction time — (TODO: M1.6 replaces with ROS2 time)
-    interval        : int           = 0     # time taken to generate this VST in ms — (TODO: M1.6 replaces with ROS2 time)
-    # ── lifecycle ─────────────────────────────────────────────────
-    state           : WMCState      = WMCState.INDUCED  # WMCState value — induced/filled/sustained/receded/evicted
-    proc            : str           = ""    # process name — which process generated this VST
-    # ── content ───────────────────────────────────────────────────
-    raw_frame       : str           = ""    # raw sensor input — base64 image, point cloud ref, or IMU reading
-    interpretation  : str           = ""    # scene description — YOLO detections, depth map summary, spatial layout
-    content         : str           = ""    # JSON pair — fused frame+interpretation for LLM
-    trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
-    # ── spatial ───────────────────────────────────────────────────
-    objects         : list[dict]    = field(default_factory=list)   # detected objects — [{label, confidence, bbox, depth}]
-    spatial_map     : str           = ""    # occupancy or spatial layout summary — LiDAR derived
-    pose            : list[float]   = field(default_factory=list)   # GRACE pose at capture — [x, y, z, yaw]
-    # ── scoring ───────────────────────────────────────────────────
-    chunk_count     : int           = 0     # cached token count — O(1) eviction math, no reprobe on eviction
-    vector          : list[float]   = field(default_factory=list)   # semantic vector — reused at EMC binding, no re-inference
-    retention_score : float         = 0.0   # composite induction score — VSS eviction priority key
-    salience_score  : float         = 0.0   # Factor 1 — logged at eviction boundary
-    novelty_factor  : float         = 1.0   # Factor 2 multiplier — inspectable at eviction boundary
-    depth_score     : float         = 0.0   # Factor 3 — logged at eviction boundary
-    # ── flags ─────────────────────────────────────────────────────
-    anchored        : bool          = False # true if hard-gated — salience override or explicit marker
-    smc_candidate   : bool          = False # true if scene flagged for Dream Cycle consolidation
+    # ── identity ──────────────────────────────────────────────────────────────
+    sensor_id   : str | None  = None    # source sensor — "oak_d", "lidar", "imu", None if fused
+    robot_id    : str         = ""      # Grace instance identity — set by CNC from AGi.ROBOT_ID
+    timestamp   : datetime    = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # ── lifecycle ─────────────────────────────────────────────────────────────
+    state       : WMCState    = WMCState.INDUCED
+
+    # ── content ───────────────────────────────────────────────────────────────
+    raw_frame       : str         = ""                           # base64 image, point cloud ref, or IMU reading
+    interpretation  : str         = ""                           # YOLO detections, depth map summary, spatial layout
+    content         : str         = ""                           # JSON pair — fused frame+interpretation for LLM
+    trace           : str         = ""                           # formatted text — EMC embedding and reinstatement
+    objects         : list[dict]  = field(default_factory=list)  # [{label, confidence, bbox, depth}]
+    spatial_map     : str         = ""                           # occupancy/spatial layout summary — LiDAR derived
+    pose            : list[float] = field(default_factory=list)  # Grace pose at capture [x, y, z, yaw]
+
+    # ── scoring ───────────────────────────────────────────────────────────────
+    chunk_count     : int         = 0
+    vector          : list[float] = field(default_factory=list)
+    salience_score  : float       = 0.0
+    depth_score     : float       = 0.0
+    novelty_score   : float       = 0.0
+    retention_score : float       = 0.0
+
+    # ── flags ─────────────────────────────────────────────────────────────────
+    anchored        : bool        = False
+    cluster_id      : int         = -1
+    smc_candidate   : bool        = False                        # flagged for Dream Cycle spatial consolidation — TODO: SMC M2

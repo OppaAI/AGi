@@ -11,12 +11,14 @@ Inference routed through Generative Cognitive Engine (GCE).
 Model and endpoint configured via HRS.
 
 Architecture:
-    CNC mirrors the human thalamus — the central relay that routes signals
-    between sensory input, memory systems, and motor output.
-    It owns no memory directly; all memory operations delegate to MCC.
+    CNC mirrors the human thalamus — central relay between sensory input,
+    memory systems, and motor output. It owns no I/O directly.
+    All sensory input arrives from TIC via the sensory gateway topic.
+    All cognitive output is published to the motor gateway topic for TOC to relay.
+    All memory operations delegate to MCC — CNC never touches WMC or EMC directly.
 
     Each turn follows a fixed pipeline:
-        1. Receive text input signal via ROS2 subscription
+        1. Receive normalized SSS from TMS sensory gateway
         2. Register user turn in MCC (WMC fill + EMC eviction)
         3. Assemble unified memory context (WMC PMTs + EMC episodes)
         4. Build system prompt with date and reinstated episodic context
@@ -26,17 +28,17 @@ Architecture:
 
     Async architecture:
         ROS2 spin runs on main thread.
-        A dedicated asyncio loop runs on a background thread (cnc-asyncio).
+        A dedicated asyncio loop runs on a background thread (cnc-cognitive-cycle).
         All async operations (memory, inference) are scheduled onto this loop
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: SCS.TEXT_INPUT_GATEWAY (std_msgs/String)   — incoming text input signal
-    Pub: SCS.RESPONSE_GATEWAY   (std_msgs/String)   — streamed cognitive response
+    Sub: TMS.TEXT_SENSORY_GATEWAY   (std_msgs/String) — normalized SSS from TIC
+    Pub: TMS.TEXT_MOTOR_GATEWAY     (std_msgs/String) — CRS fragments to TOC
     Pub: SCS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
-    Pub: SCS.MEMORY_STATS_GATEWAY (std_msgs/String) — memory cortex stats after every turn
+    Pub: SCS.MEMORY_STATS_GATEWAY   (std_msgs/String) — memory cortex stats after every turn
 
-Response format (JSON on SCS.RESPONSE_GATEWAY):
+Response format (JSON on TMS.TEXT_MOTOR_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
     {"type": "delta", "content": "<fragment>"}
     {"type": "done",  "content": "<full cognitive response>"}
@@ -46,16 +48,17 @@ Terminology:
     Gamma Rhythm    — asyncio loop coordinating active cognition across memory and inference
     Neural Gateway  — persistent async HTTP connection to an external cognitive engine
     Neural Thread   — dedicated background thread hosting an async event loop
-    Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output.
+    Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output
+    CRS             — Cognitive Response Signal — Grace's generated output, efference copy for memory encoding
 """
 
 # System components
-import asyncio                                             # dedicated event loop for async memory and inference operations — runs on cnc-asyncio thread
+import asyncio                                             # dedicated event loop for async memory and inference operations — runs on cnc-cognitive-cycle thread
 from concurrent.futures import ThreadPoolExecutor          # thread pool for offloading blocking operations from the ROS2 spin thread
 from datetime import datetime                              # for injecting current date into system prompt each turn
 import httpx                                               # async HTTP client for GCE streaming — OpenAI-compatible SSE
 import json                                                # for serializing ROS2 message payloads and parsing GCE SSE chunks
-import threading                                           # for cnc-asyncio background thread hosting the event loop
+import threading                                           # for cnc-cognitive-cycle background thread hosting the event loop
 
 # ROS2 components
 import rclpy                                               # ROS2 Python client library — node lifecycle and spin
@@ -65,22 +68,25 @@ from std_msgs.msg import String                            # ROS2 string message
 
 # AGi components
 from hrs.hrm import AGi                                    # homeostatic regulation manifest namespace
-from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + + user type enum— binds AuRoRA parameter server values into AGi constants at node init
+from hrs.hru import hydrate_manifest, UserAccessLevel      # manifest hydration + user type enum — binds AuRoRA parameter server values into AGi constants at node init
 from scs.mcc import MemoryCoordinationCore                 # memory coordinator — CNC never touches WMC or EMC directly
-from gms.csb import SensoryInputChannel, TraceType, SSS       # type: ignore[import-untyped] neural input channel— input gateway for all neural stimuli (text, speech, etc.)
+from gms.csb import SensoryInputChannel, TraceType, SSS, CRS  # type: ignore[import-untyped] — SSS/CRS dataclasses + channel/trace enums
 from scs.iru import IdentityRecognitionUnit                # identity recognition unit — identify user and establish session identity and user context
 from scs.ppu import PersonalProgressionUnit                # Personal Provisioning Unit — session identity and user context loader
 
+TMS = AGi.TMS                                              # module-level alias — TMS-level constants (topic names, websocket config)
 SCS = AGi.SCS                                              # module-level alias — SCS-level constants (topic names, cortical capacity)
 GCE = AGi.SCS.GCE                                          # module-level alias — GCE constants (model, endpoint, inference parameters)
+
 
 class CNC(Node):
     """
     Central Neural Core — ROS2 node.
 
-    Subscribes to text input, routes inference through GCE with streaming,
-    publishes response chunks to the cognitive response topic.
+    Subscribes to normalized SSS from TIC, routes inference through GCE with streaming,
+    publishes CRS fragments to motor gateway for TOC relay.
     Memory is managed entirely through MCC.
+    CNC owns no I/O — it only thinks.
     """
 
     def __init__(self):
@@ -93,17 +99,15 @@ class CNC(Node):
             - Generative Cognitive Engine (GCE) — persistent connection for inference of generative cognition
             - Memory Coordination Cortex (MCC) — short-term and long-term memory management
             - Neural threads — dedicated asyncio loops for parallel operations
-            - Neural gateways — ROS2 topics for text input and cognitive output
-
-
+            - Neural gateways — ROS2 topics for sensory input and motor output
         """
         super().__init__("cnc")                                             # register this node with ROS2 as "cnc"
-        self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
-        self.get_logger().info("🧠 CNC — Central Neural Core starting…")    # boot announcement — stdout and /rosout
-        self.get_logger().info("=" * 60)                                    # visual separator — stdout and /rosout
+        self.get_logger().info("=" * 60)
+        self.get_logger().info("🧠 CNC — Central Neural Core starting…")
+        self.get_logger().info("=" * 60)
 
         self._gce_inference_packet: dict = {                                # setup inference parameters of GCE
-            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS 
+            "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS
             "messages"           : "",                                      # placeholder for input prompt
             "num_ctx"            : GCE.CONTEXT_WINDOW,                      # override Ollama default 2048 — allocate full model context
             "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
@@ -122,7 +126,7 @@ class CNC(Node):
         self._iru = IdentityRecognitionUnit(logger=self.get_logger())       # boot identity recognition — loads user profile
         self._iru.recognize_user(user_id=self._active_user)                 # recognize active user — loads relational context
         self._access_level: UserAccessLevel = self._iru.user_profile.access_level  # access classification — governs recall scope
-        
+
         self._ppu = PersonalProgressionUnit(logger=self.get_logger())       # boot personal progression — loads Grace's persona
         self._ppu.provision_cognition(user_profile=self._iru.user_profile)  # assemble system prompt — persona + user context
 
@@ -140,299 +144,307 @@ class CNC(Node):
 
         # Initialize MCC for memory management
         self.mcc: MemoryCoordinationCore = MemoryCoordinationCore(          # boot memory coordination — WMC + EMC, embedding model loads here
-            logger=self.get_logger(),                                       # logger for memory coordination operations
-            executor=self._cognitive_executor,                              # thread pool for memory coordination operations
+            logger=self.get_logger(),
+            executor=self._cognitive_executor,
         )
 
         # Initialize neural thread for parallel operations
         self._cognitive_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # asyncio event loop for active cognition — isolated from ROS2 spin thread
         self._gamma_rhythm: threading.Thread = threading.Thread(            # dedicated OS thread driving the cognitive cycle
-            target=self._cognitive_cycle.run_forever,                       # runs indefinitely — processes coroutines as they arrive
-            name="cnc-cognitive-cycle",                                     # named for thread dump debugging
+            target=self._cognitive_cycle.run_forever,
+            name="cnc-cognitive-cycle",
             daemon=True,                                                    # dies with main process — clean shutdown
         )
         self._gamma_rhythm.start()                                          # ignite gamma rhythm — cognitive cycle now active
 
-        # Initialize neural gateway for text input, generative cognitive output and MCC stats
-        self._text_input_stimulus: rclpy.subscription.Subscription = self.create_subscription(  # ROS2 subscriber — fires on every incoming message
-            String, SCS.TEXT_INPUT_GATEWAY, self._receive_text_input, 10                        # String type | topic | callback | QoS depth 10
-        )
-        self._cognitive_response: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends cognitive output to the specified topic
-            String, SCS.RESPONSE_GATEWAY, 10                                         # String type | topic | QoS depth 10
-        )
-        self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher( # ROS2 publisher — sends memory context to the specified topic
-            String, SCS.MEMORY_CONTEXT_GATEWAY, 10                                        # String type | topic | QoS depth 10
-        )
-        self._memory_stats_feedback: rclpy.publisher.Publisher = self.create_publisher(    # ROS2 publisher — sends memory stats to the specified topic
-            String, SCS.MEMORY_STATS_GATEWAY, 10                                           # String type | topic | QoS depth 10
+        # Sensory gateway — normalized SSS arrives here from TIC
+        self._sensory_input: rclpy.subscription.Subscription = self.create_subscription(
+            String, TMS.TEXT_SENSORY_GATEWAY, self._receive_stimulus, 10   # String type | topic | callback | QoS depth 10
         )
 
-        # Initialize attentional gate — True while processing a turn, drops incoming stimuli
-        self._attention_gate: bool = False                                  # attentional gate — True while processing a turn, drops incoming stimuli
-        self._pending_stimulus: str | None = None                           # single-slot busy queue — holds one stimulus while CNC is processing
+        # Motor gateway — CRS fragments published here for TOC to relay to WebUI
+        self._motor_output: rclpy.publisher.Publisher = self.create_publisher(
+            String, TMS.TEXT_MOTOR_GATEWAY, 10                             # String type | topic | QoS depth 10
+        )
+
+        # Debug and monitoring gateways
+        self._memory_context_feedback: rclpy.publisher.Publisher = self.create_publisher(
+            String, SCS.MEMORY_CONTEXT_GATEWAY, 10                         # full GCE input context — debug topic
+        )
+        self._memory_stats_feedback: rclpy.publisher.Publisher = self.create_publisher(
+            String, SCS.MEMORY_STATS_GATEWAY, 10                           # memory cortex stats — monitoring topic
+        )
+
+        # Initialize attentional gate — True while processing a turn, queues incoming stimuli
+        self._attention_gate: bool = False                                  # attentional gate — True while processing, False when ready
+        self._pending_stimulus: SSS | None = None                          # single-slot busy queue — holds one SSS while CNC is processing
+
         asyncio.run_coroutine_threadsafe(                                   # submit GCE priming to cognitive cycle — fire and forget, doesn't block init
-            self._prime_gce(), self._cognitive_cycle                        # schedules across thread boundary — safe from ROS2 main thread
+            self._prime_gce(), self._cognitive_cycle
         )
 
-        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")                   # confirm GCE endpoint
-        self.get_logger().info(f"✅ Model       : {self._gce_inference_packet['model']}")   # confirm GCE model
-        self.get_logger().info(f"✅ Subscribed  : {SCS.TEXT_INPUT_GATEWAY}")                # confirm input topic
-        self.get_logger().info(f"✅ Publishing  : {SCS.RESPONSE_GATEWAY}")                  # confirm output topic
-        self.get_logger().info("=" * 60)                                                     # visual separator
-        self.get_logger().info("🌸 GRACE is ready")                                         # boot complete
-        self.get_logger().info("=" * 60)                                                     # visual separator
-   
-    def _receive_text_input(self, msg: String) -> None:
-        """
-        Receive an incoming text input signal and schedule cognitive processing.
-        Queues one input signal if cognitive engine is already processing a previous user input.
-        Single-slot, latest-wins semantics: if queue is occupied, newest stimulus overwrites pending.
-        
-        Args:
-            msg (String): ROS2 string message carrying the incoming text input signal
-        """
-        try:                                                                                                    # attempt to parse against NeuralStimulus contract
-            raw_input: dict = json.loads(msg.data.strip())                                                      # deserialize JSON payload — all input sources send JSON
-            if not isinstance(raw_input, dict) or not raw_input.get("text"):                                    # malformed or missing text field — reject at boundary
-                return                                                                                          # abort early
-            ui_input: SSS = SSS(                                                                          # parse against typed contract — enforces field presence
-                role    = raw_input.get("role", "user"),                                                      # speaker role — "user" or "assistant"
-                text    = raw_input["text"].strip(),                                                            # user message content
-                user_id = raw_input.get("user_id", "demo"),                                                     # speaker identity — defaults to demo if omitted
-                source  = SensoryInputChannel(raw_input .get("source", SensoryInputChannel.CLI.value)),           # input modality — defaults to CLI if omitted
-                trace_type = TraceType.PMT                                                                      # set the trace type to PMT — permanent phonological memory trace
-            )
-        except (json.JSONDecodeError, ValueError):                                                              # malformed JSON or invalid NeuralInputChannel value — reject at boundary
-            return                                                                                              # abort early — no plain string fallback, contract enforced
+        self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")
+        self.get_logger().info(f"✅ Model       : {self._gce_inference_packet['model']}")
+        self.get_logger().info(f"✅ Subscribed  : {TMS.TEXT_SENSORY_GATEWAY}")
+        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_MOTOR_GATEWAY}")
+        self.get_logger().info("=" * 60)
+        self.get_logger().info("🌸 GRACE is ready")
+        self.get_logger().info("=" * 60)
 
-        if self._attention_gate:                                                                                # cognitive cycle busy — queue or overwrite pending stimulus
-            if self._pending_stimulus is not None:                                                              # slot occupied — latest stimulus wins, previous discarded
-                self.get_logger().warning("⚠️  Cognitive Engine queue overwritten — previous stimulus dropped") # log the queue is full and dropping preceding user input
-            self._pending_stimulus = ui_input.text                                                              # overwrite with latest — most recent intent takes priority
-            self.get_logger().info("⏳ Cognitive Engine is busy — stimulus queued")                             # log the cognitive cycle congestion
-            return                                                                                              # stimulus queued — cognitive cycle will drain on turn completion
-            
-        self._attention_gate = True                                                                             # close gate before scheduling — prevents TOCTOU
-        asyncio.run_coroutine_threadsafe(                                                                       # schedule cognitive pipeline — crosses thread boundary safely
-            self._process_stimulus(ui_input), self._cognitive_cycle                                        # submit to gamma rhythm — never blocks ROS2 spin
+    def _receive_stimulus(self, msg: String) -> None:
+        """
+        Receive a normalized SSS from the TMS sensory gateway and schedule cognitive processing.
+        Queues one SSS if cognitive cycle is already processing a previous stimulus.
+        Single-slot, latest-wins semantics: newest stimulus overwrites pending if queue is occupied.
+
+        Args:
+            msg (String): ROS2 string message carrying serialized SSS JSON from TIC.
+        """
+        try:
+            payload: dict = json.loads(msg.data.strip())                                        # deserialize SSS JSON — TIC guarantees valid structure
+            if not isinstance(payload, dict) or not payload.get("text"):                        # malformed or empty — reject at boundary
+                return
+
+            sss: SSS = SSS(                                                                     # reconstruct typed SSS from serialized fields
+                role       = payload.get("role", "user"),
+                text       = payload["text"].strip(),
+                user_id    = payload.get("user_id", "demo"),
+                source     = SensoryInputChannel(payload.get("source", SensoryInputChannel.WEBUI.value)),
+                trace_type = TraceType(payload.get("trace_type", TraceType.PMT.value)),
+            )
+        except (json.JSONDecodeError, ValueError):
+            return                                                                               # malformed SSS — drop at boundary, TIC should not send this
+
+        if self._attention_gate:                                                                 # cognitive cycle busy — queue or overwrite
+            if self._pending_stimulus is not None:
+                self.get_logger().warning("⚠️  Cognitive Engine queue overwritten — previous stimulus dropped")
+            self._pending_stimulus = sss                                                        # overwrite with latest — most recent intent takes priority
+            self.get_logger().info("⏳ Cognitive Engine busy — stimulus queued")
+            return
+
+        self._attention_gate = True                                                             # close gate before scheduling — prevents TOCTOU
+        asyncio.run_coroutine_threadsafe(
+            self._process_stimulus(sss), self._cognitive_cycle                                  # submit to gamma rhythm — never blocks ROS2 spin
         )
 
     async def _process_stimulus(self, stimulus: SSS) -> None:
         """
         Process one full stimulus-response cycle.
-    
-        Registers the user prompt in memory, assembles the full memory context
-        (WMC PMTs + recalled EMC episodes), builds the system prompt with episodic
-        context injected, streams inference through GCE, registers the assistant
-        response in memory, then reports memory stats.
-        """
-        cognitive_response: str = ""                                                              # accumulates GCE response chunks — empty until inference completes
 
-        try:                                                                                      # wrap full pipeline — any failure publishes error and resets attention gate
+        Registers the user SSS in memory, assembles the full memory context
+        (WMC PMTs + recalled EMC episodes), builds the system prompt with episodic
+        context injected, streams inference through GCE, registers the CRS in memory,
+        then reports memory stats.
+
+        Args:
+            stimulus (SSS): Normalized sensory stimulus from TIC.
+        """
+        cognitive_response: str = ""                                                            # accumulates GCE response chunks — empty until inference completes
+
+        try:
             # 1. Register user turn in memory
-            await self.mcc.register_memory(stimulus)                                              # induce user turn into WMC — evicted PMTs bound to EMC asynchronously
+            await self.mcc.register_interaction_stimulus(stimulus)                              # park SSS in open episode slot — awaiting CRS pairing
 
             # 2. Assemble memory context
-            memory_context: list[dict] = await self.mcc.assemble_memory_context(                  # assemble full memory context — EMC episodes + WMC PMTs
-                user_id=self._active_user if self._access_level == UserAccessLevel.GUEST else None,
-                user_prompt=stimulus.text,
+            memory_context: list[dict] = await self.mcc.assemble_memory_context(
+                user_id    = self._active_user if self._access_level == UserAccessLevel.GUEST else None,
+                user_prompt = stimulus.text,
             )
 
             # 3. Separate system and conversation parts
-            long_term_memory: list[dict] = [m for m in memory_context if m["role"] == "system"]   # extract system blocks
-            short_term_memory: list[dict]  = [m for m in memory_context if m["role"] != "system"] # extract conversation turns
+            long_term_memory: list[dict]  = [m for m in memory_context if m["role"] == "system"]   # episodic context blocks
+            short_term_memory: list[dict] = [m for m in memory_context if m["role"] != "system"]   # WMC conversation turns
 
-            # 4. Assemble system prompt with date and inject user preferences into system prompt
-            active_cognition: str = self._ppu.active_cognition.format(                            # loads system prompt from PPU - which loads it from the persona YAML
-                date=datetime.now().strftime("%Y-%m-%d")                                          # inject current date in ISO-8601 format
+            # 4. Assemble system prompt — persona + date + episodic context
+            active_cognition: str = self._ppu.active_cognition.format(
+                date=datetime.now().strftime("%Y-%m-%d")                                        # inject current date in ISO-8601 format
             )
 
-            if long_term_memory:                                                                  # episodic context available — append to system prompt
-                system_content: str = active_cognition + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)  # fuse personality + episodic context
+            if long_term_memory:                                                                # episodic context available — fuse with persona
+                system_content: str = active_cognition + "\n\n" + "\n\n".join(m["content"] for m in long_term_memory)
             else:
-                system_content: str = active_cognition                                            # no episodic context — personality prompt only
+                system_content: str = active_cognition                                          # no episodic context — persona prompt only
 
             # 5. Build final message list
-            messages: list[dict] = [{"role": "system", "content": system_content}]                # system prompt — always first
-            messages.extend(short_term_memory)                                                    # inject WMC PMTs — chronological conversation history
-            messages.append({"role": "user", "content": stimulus.text})                             # append current user prompt — last message before inference
-            
-            context_signal = String()                                                             # create ROS2 String message
-            context_signal.data = json.dumps({"messages": messages})                              # serialize payload to JSON string
-            self._memory_context_feedback.publish(context_signal)                                 # publish to memory context reporting topic
+            messages: list[dict] = [{"role": "system", "content": system_content}]             # system prompt — always first
+            messages.extend(short_term_memory)                                                  # WMC PMTs — chronological conversation history
+            messages.append({"role": "user", "content": stimulus.text})                         # current stimulus — last message before inference
+
+            context_signal = String()
+            context_signal.data = json.dumps({"messages": messages})
+            self._memory_context_feedback.publish(context_signal)                               # publish full context — debug topic
 
             # 6. Stream from GCE
-            self.get_logger().debug(f"📤 GCE messages: {messages}")                               # debug — full message context before inference
-            cognitive_response = await self._stream_gce(messages)                                 # stream GCE response — publishes chunks as they arrive
+            self.get_logger().debug(f"📤 GCE messages: {messages}")
+            cognitive_response = await self._stream_gce(messages)                               # stream GCE response — CRS fragments published to motor gateway as they arrive
 
-            # 7. Register assistant turn in memory
-            if cognitive_response:                                                                # only register non-empty responses — empty means GCE failed
-                await self.mcc.register_memory(SSS(                                                   # assistant response as a PMT for permanent memory storage    
-                    role    = "assistant",
-                    user_id = None,
-                    text    = cognitive_response,
-                    source  = SensoryInputChannel.CLI,
+            # 7. Register interaction — pair SSS + CRS into complete episode for memory
+            if cognitive_response:
+                crs = CRS(                                                                      # CRS — Grace's cognitive output, not a sensory signal
+                    text       = cognitive_response,
                     trace_type = TraceType.PMT,
-                ))
+                )
+                await self.mcc.register_interaction_response(crs)                              # complete episode: pair open SSS + CRS → PMT → WMC
 
             # 8. Report memory stats
-            stats = self.mcc.report_memory_stats()                                                # log WMC and EMC health after every turn
-            stats_signal = String()                                                               # create ROS2 String message
-            stats_signal.data = json.dumps(stats)                                                 # serialize payload to JSON string
-            self._memory_stats_feedback.publish(stats_signal)                                     # publish to memory stats reporting topic
-            
-        except Exception as e:                                                                    # unhandled failure in cognitive pipeline
-            self.get_logger().error(f"❌ CNC handle error: {e}")                                  # log failure with reason
-            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)})                  # surface error to caller
+            stats = self.mcc.report_memory_stats()
+            stats_signal = String()
+            stats_signal.data = json.dumps(stats)
+            self._memory_stats_feedback.publish(stats_signal)
 
-        finally:                                                                                  # always runs — resets attention gate regardless of success or failure
-            self._attention_gate = False                                                          # reopen attentional gate — ready for next stimulus
-            if self._pending_stimulus:                                                            # queued stimulus present — drain immediately
-                pending = self._pending_stimulus                                                  # snapshot before clearing — prevents TOCTOU
-                self._pending_stimulus = None                                                     # clear slot before scheduling — gate reopens clean
-                self._attention_gate = True                                                       # close gate before scheduling — queued stimulus now owns the cycle
-                asyncio.ensure_future(self._process_stimulus(pending))                            # schedule queued stimulus on the running cognitive cycle — already on the loop, no thread crossing needed
-    
+        except Exception as e:
+            self.get_logger().error(f"❌ CNC handle error: {e}")
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e)})
+
+        finally:
+            self._attention_gate = False                                                        # reopen attentional gate — ready for next stimulus
+            if self._pending_stimulus:                                                          # queued stimulus present — drain immediately
+                pending = self._pending_stimulus
+                self._pending_stimulus = None                                                   # clear slot before scheduling — gate reopens clean
+                self._attention_gate = True                                                     # close gate before scheduling — queued stimulus now owns the cycle
+                asyncio.ensure_future(self._process_stimulus(pending))                          # schedule queued stimulus on the running cognitive cycle
+
     async def _stream_gce(self, messages: list[dict]) -> str:
         """
         Generate and emit a cognitive response through the Generative Cognitive Engine.
-        Response is streamed as fragments to the cognitive output gateway as it arrives.
+        Response is streamed as CRS fragments to the motor gateway as it arrives.
 
         Args:
             messages (list[dict]): Full memory context and current user prompt for inference.
 
         Returns:
-            str: Full cognitive response for memory registration.
+            str: Full cognitive response for memory registration as CRS.
         """
+        cognitive_response: str = ""
+        leading_fragment: bool = True
+        self._gce_inference_packet["messages"] = messages
 
-        cognitive_response: str = ""                                        # accumulates response fragments into full response
-        leading_fragment: bool = True                                       # tracks first fragment — triggers start event type
-        self._gce_inference_packet["messages"] = messages                   # full memory context + current user prompt
-        try:                                                                # attempt to forward request to GCE and stream response fragments
-            async with self._gce_gateway.stream(                            # open streaming HTTP connection to GCE
-                "POST",                                                     # POST request method for SSE streaming
-                "/v1/chat/completions",                                     # SSE endpoint — matches OpenAI-compatible API
-                json=self._gce_inference_packet,                            # JSON body with inference parameters
-            ) as response:                                                  # asynchronous response stream
+        try:
+            async with self._gce_gateway.stream(
+                "POST",
+                "/v1/chat/completions",
+                json=self._gce_inference_packet,
+            ) as response:
 
-                if response.status_code != 200:                             # non-200 — GCE rejected the request
-                    anomaly: str = f"GCE HTTP {response.status_code}"       # build error message with status code
-                    self.get_logger().error(f"❌ {anomaly}")                # log failure with reason
-                    self._emit_response({"type": GCE.STREAM_ANOMALY, "content": anomaly})  # surface HTTP error to caller
+                if response.status_code != 200:
+                    anomaly: str = f"GCE HTTP {response.status_code}"
+                    self.get_logger().error(f"❌ {anomaly}")
+                    self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": anomaly})
                     return ""
 
-                async for line in response.aiter_lines():                   # iterate SSE stream line by line
-                    if not line or not line.startswith("data:"):            # skip empty lines and non-data SSE events
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data:"):
                         continue
 
-                    fragment_data: str = line[len("data:"):].strip()        # strip "data:" prefix — extract JSON payload
-                    if fragment_data == "[DONE]":                           # SSE stream complete signal
+                    fragment_data: str = line[len("data:"):].strip()
+                    if fragment_data == "[DONE]":
                         break
 
-                    try:                                                    # attempt to parse SSE fragment
-                        fragment: dict = json.loads(fragment_data)          # parse SSE fragment — each fragment is a JSON object
-                    except json.JSONDecodeError:                            # malformed JSON — skip this fragment
-                        continue                                            # skip and continue stream
+                    try:
+                        fragment: dict = json.loads(fragment_data)
+                    except json.JSONDecodeError:
+                        continue
 
-                    fragment_content: str = (                               # extract delta from SSE fragment
-                        fragment.get("choices", [{}])[0]                    # first choice in the choices list
-                        .get(GCE.STREAM_PROPAGATING, {})                    # token "delta" from fragment
-                        .get("content", "")                                 # text content — empty string if no content in this fragment
+                    fragment_content: str = (
+                        fragment.get("choices", [{}])[0]
+                        .get(GCE.STREAM_PROPAGATING, {})
+                        .get("content", "")
                     )
-                    if not fragment_content:                                # no content in this fragment — skip
-                        continue                                            # skip and continue stream
+                    if not fragment_content:
+                        continue
 
-                    cognitive_response += fragment_content                  # accumulate fragment into full response
+                    cognitive_response += fragment_content
 
-                    if leading_fragment:                                    # first fragment — signal stream start to caller
-                        self._emit_response({"type": GCE.STREAM_LEADING, "content": fragment_content})  # publish "start" event
-                        leading_fragment = False                            # clear flag after first fragment
-                    else:                                                   # subsequent fragments — signal token arrival
-                        self._emit_response({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # subsequent fragments — stream "delta" to caller
+                    if leading_fragment:
+                        self._emit_crs({"type": GCE.STREAM_LEADING, "content": fragment_content})  # first fragment — start event
+                        leading_fragment = False
+                    else:
+                        self._emit_crs({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # subsequent fragments — delta event
 
-            if cognitive_response:                                                            # response assembled — signal completion
-                self._emit_response({"type": GCE.STREAM_TRAILING, "content": cognitive_response}) # publish "done" event
-                self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")       # log completion with response length
-            else:                                                                             # no response assembled — publish "error" event
-                self._emit_response({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE"})  # GCE returned nothing
+            if cognitive_response:
+                self._emit_crs({"type": GCE.STREAM_TRAILING, "content": cognitive_response})   # stream complete — done event
+                self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")
+            else:
+                self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE"})
 
-        except httpx.TimeoutException:                                      # GCE exceeded timeout — model may still be loading
-            err = "GCE timeout — model may still be loading"                # timeout error message
-            self.get_logger().error(f"❌ {err}")                            # log timeout error with reason
-            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": err}) # publish timeout "error" to caller
+        except httpx.TimeoutException:
+            err = "GCE timeout — model may still be loading"
+            self.get_logger().error(f"❌ {err}")
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": err})
 
-        except Exception as e:                                               # unhandled stream errors
-            self.get_logger().error(f"❌ Stream error: {e}")                # log unexpected error
-            self._emit_response({"type": GCE.STREAM_ANOMALY, "content": str(e)})     # publish "error" to caller
+        except Exception as e:
+            self.get_logger().error(f"❌ Stream error: {e}")
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e)})
 
-        return cognitive_response                                           # return accumulated response
+        return cognitive_response
 
     async def _prime_gce(self) -> None:
         """
         Prime GCE — activate the cognitive engine and pin it for the session.
         Fire and forget — called once at boot, non-blocking.
         """
-        try:                                                                # attempt to preload GCE model into memory
-            inference_packet: dict = {                                      # minimal inference request — triggers model load into VRAM
-                "model"    : GCE.COGNITIVE_ENGINE,                          # GCE model to prime
-                "messages" : [{"role": "user", "content": "hi"}],           # minimal prompt — just enough to trigger model load
-                "max_tokens": 1,                                            # single token response — minimizes priming cost
-                "stream"   : False,                                         # no streaming needed for priming
+        try:
+            inference_packet: dict = {
+                "model"     : GCE.COGNITIVE_ENGINE,
+                "messages"  : [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+                "stream"    : False,
             }
-            await self._gce_gateway.post("/v1/chat/completions", json=inference_packet)  # submit priming request to GCE
-            self.get_logger().info("✅ GCE primed successfully — activated into memory")  # log the successful activation of GCE
+            await self._gce_gateway.post("/v1/chat/completions", json=inference_packet)
+            self.get_logger().info("✅ GCE primed successfully — activated into memory")
         except Exception as e:
-            self.get_logger().warning(f"⚠️ GCE priming failed: {e}")         # non-fatal — model loads on first real request
-            
-    def _emit_response(self, response_packet: dict) -> None:
+            self.get_logger().warning(f"⚠️ GCE priming failed: {e}")              # non-fatal — model loads on first real request
+
+    def _emit_crs(self, response_packet: dict) -> None:
         """
-        Emit a cognitive response fragment to the ROS2 output topic.
-    
+        Emit a CRS fragment to the motor gateway topic for TOC relay.
+
         Args:
-            response_packet (dict): Response payload — type and content fields.
+            response_packet (dict): CRS payload — type and content fields.
         """
-        try:                                                                      # attempt to serialize and publish response packet
-            raw_signal: String = String()                                         # create ROS2 String message
-            raw_signal.data = json.dumps(response_packet)                         # serialize payload to JSON string
-            self._cognitive_response.publish(raw_signal)                          # publish to cognitive response topic
-        except Exception as e:                                                  
-            self.get_logger().error(f"❌ Publish error: {e}")                     # non-fatal — publishing failure must not crash the cognitive cycle
-   
+        try:
+            signal = String()
+            signal.data = json.dumps(response_packet)
+            self._motor_output.publish(signal)                                  # publish to motor gateway — TOC picks up and relays to WebUI
+        except Exception as e:
+            self.get_logger().error(f"❌ CRS emit error: {e}")                  # non-fatal — publish failure must not crash the cognitive cycle
+
     def destroy_node(self) -> None:
         """
         Gracefully shut down CNC — close all cognitive subsystems in reverse boot order.
         """
-        self.get_logger().info("🛑 CNC shutting down…")                            # announce shutdown sequence — stdout and /rosout
-        self.mcc.close()                                                            # close memory coordination — EMC encoding cycle stops
+        self.get_logger().info("🛑 CNC shutting down…")
+        self.mcc.close()
 
-        future = asyncio.run_coroutine_threadsafe(                                  # schedule HTTP client close on cognitive cycle
-            self._gce_gateway.aclose(), self._cognitive_cycle                       # async close — releases TCP connections
+        future = asyncio.run_coroutine_threadsafe(
+            self._gce_gateway.aclose(), self._cognitive_cycle
         )
-        try:                                                                        # attempt clean close — best-effort on shutdown
-            future.result(timeout=3.0)                                              # wait up to 3 seconds for clean close
+        try:
+            future.result(timeout=3.0)
         except Exception:
-            pass                                                                    # ignore — process is ending, clean close is best-effort
+            pass
 
-        self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)      # signal cognitive cycle to stop
-        self._gamma_rhythm.join(timeout=3.0)                                        # wait for gamma rhythm thread to exit
-        self._cognitive_executor.shutdown(wait=True)                                # drain thread pool — wait for pending tasks
+        self._cognitive_cycle.call_soon_threadsafe(self._cognitive_cycle.stop)
+        self._gamma_rhythm.join(timeout=3.0)
+        self._cognitive_executor.shutdown(wait=True)
+        super().destroy_node()
+        self.get_logger().info("✅ CNC shutdown complete")
 
-        super().destroy_node()                                                      # ROS2 node cleanup
-        self.get_logger().info("✅ CNC shutdown complete")                          # log the shutdown sequence complete
 
 def main(args=None):
-    rclpy.init(args=args)                                        # initialize ROS2 context
-    node = CNC()                                                 # instantiate CNC node — boots all subsystems
-    executor = MultiThreadedExecutor()                           # concurrent callback execution
-    executor.add_node(node)                                      # register CNC with executor
+    rclpy.init(args=args)
+    node = CNC()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        executor.spin()                                          # block until shutdown — processes ROS2 callbacks
-    except KeyboardInterrupt:                                    # user press Ctrl-C interrupt
-        node.get_logger().info("👋 Shutdown requested")          # log the graceful shutdown request
-    finally:                                                     # always runs — ensure clean shutdown regardless of interrupt
-        executor.shutdown()                                      # stop executor
-        node.destroy_node()                                      # clean shutdown sequence
-        rclpy.shutdown()                                         # release ROS2 context
+        executor.spin()
+    except KeyboardInterrupt:
+        node.get_logger().info("👋 Shutdown requested")
+    finally:
+        executor.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
