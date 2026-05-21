@@ -1,22 +1,35 @@
 """
 Telepathy Input Core (TIC)
 ==========================
-System: Telepathy Managment System (TMS)
+System: Telepathy Management System (TMS)
 
-Welcome to my Telepathy Input Core (TIC)!
 This module is my afferent pathway where the user communicates with me remotely, such as
 WebUI, messaging apps such as Telegram, Discord, (maybe Slack), email, and teleops, etc.
-Raw user input and command received through these remote apps/UI, us normalized into a
-standard format of Sensory Stimulus Signal (SSS), and then stage into sensory buffer.
+Raw user input and command received through these remote apps/UI, is normalized into a
+standard format of Sensory Stimulus Signal (SSS), and then staged into sensory buffer.
 While at the same time this SSS is published via neural gateway to my Semantic Cognitive
-System (SCS) and other dedicated systems, which will produce conscious or unconscious response,
+System (SCS) and other dedicated systems, which will produce a conscious or unconscious response,
 and published back to the sensory buffer to bind with the SSS for a complete interaction.
-This interaction is then pass via neural pathway to SCS for further process and memory management.
+This interaction is then passed via neural pathway to SCS for further processing and memory management.
+
+Life Cycle:
+    An unpaired SSS (user turn) enters the Sensory Buffer and waits.
+    TIC simultaneously publishes it via Neural Gateway to CNC.
+    CNC produces a CRS (cognitive response), returned via Neural Gateway.
+    The SSS and CRS bind in the Sensory Buffer into a complete interaction.
+    The bound pair proceeds via Neural Pathway to SCS for memory management.
+
+    Remote UI  →  TIC  →  Sensory Buffer (SSS, unpaired)  →  Sensory Buffer (bound)  →  SCS
+                                  ↓                                    ↑
+                            Neural Gateway                       Neural Gateway
+                            SSS (user turn)                      CRS (my turn)
+                                  ↓                                    ↑
+                                 CNC          ──────────────────►    TOC
 
 Life Cycle:
 
-  User input     →   SSS (user turn)   →   SSS (user turn)     +   SSS (my turn)   →   SSS (complete)
-Remote apps/UI              TIC             Sensory Buffer         Sensory Buffer      Neural Pathway
+  User input     →   SSS (user turn)   →   SSS (user turn)     +   SSS (my turn)   →   SSS (interaction)
+Remote apps/UI              TIC             Sensory Buffer         Sensory Buffer       Neural Pathway
                                                  ↓                       ↑
                                             SSS (user turn)        SSS (my turn)
                                             Neural Pathway         Neural Pathway
