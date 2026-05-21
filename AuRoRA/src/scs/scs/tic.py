@@ -3,7 +3,7 @@ Telepathy Input Core (TIC)
 ==========================
 System: Telepathy Management System (TMS)
 
-This module is my afferent pathway for remote human communication. It receives raw input from
+This module is the afferent pathway for remote human communication. It receives raw input from
 peripheral interfaces (WebUI, messaging apps, email, etc.), gates and normalizes it into a
 structured Sensory Stimulus Signal (SSS), and transmits it to the CNS via the Neural Gateway.
 Biological analogue: Peripheral Nervous System (PNS)— transduction at the sensory organ,
@@ -109,11 +109,11 @@ Message schema (outbound SSS JSON):
      "fast_path": false}
 
 Terminology:
-    Afferent Pathway      — carries signals toward the brain (input direction)
+    Afferent Pathway      — carries signals toward the Semantic Cognitive System (SCS) (input direction)
     Symbolic Injection    — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel     — AuRoRA's term for direct symbolic input with no physical substrate
+    Telepathy Channel     — The term for direct symbolic input with no physical substrate
     Efference Copy        — CNC-published prediction of expected input; suppressed at periphery
-                            to prevent GRACE from processing her own outputs as external stimuli
+                            to avoid processing own outputs as external stimuli
     Affective Tagging     — fast valence/arousal scoring applied before cortical dispatch;
                             analogous to amygdala pre-processing of sensory signals
 """
