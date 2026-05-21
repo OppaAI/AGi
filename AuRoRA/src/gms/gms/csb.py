@@ -41,50 +41,10 @@ class SensoryModality(Enum):
     TOUCH   = "touch"   # tactile sensors — (TODO: M2+)
     UNKNOWN = "unknown" # unknown modality — should not happen
 
-@dataclass
-class SSS:
-    """
-    Sensory Stimulus Signal — one complete sensory stimulus package.
-    Travels the full pre-WM pipeline as a single object.
-    Adapters fill raw fields. CNC enriches in-place before forwarding to MCC.
-    Biological analogue: afferent signal — transduced at periphery,
-    enriched at thalamus, never enters WM directly.
-    Lifecycle:
-        Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
-    """
-    # ── raw — filled by periphery ──────────────────────────────────
-    sss_id          : str   = ""                                        # identifier of this SSS "SSS-<source>-<induced_at>-<uuid>"
-    user_id         : str   = field(default="demo")                     # identifier of the user AuRoRA is interacting with
-    robot_id        : str   = field(default="AuRoRA")                   # identifier of the AuRoRA robot itself
-    source          : SensoryInputChannel = SensoryInputChannel.UNKNOWN # input modality — required
-    text            : str   = field(default="")                         # text payload — CLI, webUI, bridges
-    #audio           : bytes = field(default=b"")                       # audio payload — voice pipeline (TODO: M1.X-b)
-    #visual          : bytes = field(default=b"")                       # image payload — vision pipeline (TODO: M2+)
-    modality        : SensoryModality = SensoryModality.UNKNOWN         # "text" | "audio" | "vision" — derived from source
-
-    # ── scoring — filled by CNC ────────────────────────────────────
-    #urgency         : float = 0.0   # dispatch priority — higher preempts lower
-    #confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
-    #vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
-
-    # ── lifecycle — filled at each phase ────────────────────────────
-    state           : str   = ""    # lifecycle phase SSS is in — "raw" | "enriched" | "triaged" | "dispatched" | "depleted" | "dropped"
-    locus           : str   = ""    # which component is currently processing this SSS
-    received_at     : str   = ""    # wall-clock time of reception
-    generated_at    : str   = ""    # wall-clock time of generation
-    transduced_at   : str   = ""    # wall-clock time of queuing
-    triggered_at    : str   = ""    # wall-clock time of transmission
-    buffered_at     : str   = ""    # wall-clock time of reception
-    dropped_at      : str   = ""    # wall-clock time of dropping
-    drop_reason     : str   = ""    # "below_threshold" | "duplicate" | "overload"
-    depleted_at     : str   = ""    # wall-clock time of depletion
-    lifecycle       : float = 0.0   # elapsed ms from generation to depletion
-
 class TraceType(Enum):
     """Target WMC trace type for a given stimulus."""
     PMT = "pmt"             # phonological memory trace — text / transcribed audio
     VST = "vst"             # visuospatial trace — vision / spatial — TODO: M2
-
 
 class WMCState(Enum):
     """Lifecycle phase of a memory trace inside the Working Memory Cortex."""
@@ -109,26 +69,62 @@ class WMCState(Enum):
 # Field responsibility:
 #   source, modality, trace_type, role, user_id, text  — set by adapter (TIC/ASR/CV)
 #   received_at                                        — set by CNC on arrival
+#   salience, valence, arousal                         — set by TIC._buffer(), refined by CNC
+#   efference_suppressed                               — set by TIC._heuristic_gate()
 # ══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
 class SSS:
-    # ── set by adapter ────────────────────────────────────────────────────────
-    robot_id    :
-    source      : SensoryInputChannel = SensoryInputChannel.CLI  # originating channel — always set by adapter
-    modality    : SensoryModality     = SensoryModality.TEXT     # physical nature — derived from source by adapter
-    trace_type  : TraceType           = TraceType.PMT            # WMC trace target — PMT or VST
-    role        : str                 = "user"                   # speaker role — always "user" from external channels
-    user_id     : str                 = "demo"                   # speaker identity — resolved by IRU at CNC
-    text        : str                 = ""                       # text payload — CLI, WebUI, messaging bridges
+    """
+    Sensory Stimulus Signal — one complete sensory stimulus package.
+    Travels the full pre-WM pipeline as a single object.
+    Adapters fill raw fields. CNC enriches in-place before forwarding to MCC.
+    Biological analogue: afferent signal — transduced at periphery,
+    enriched at thalamus, never enters WM directly.
 
-    # ── set by CNC on arrival ─────────────────────────────────────────────────
-    received_at : datetime            = field(                   # UTC wall-clock time CNC received this stimulus
-                      default_factory=lambda: datetime.now(timezone.utc)
-                  )
+    Lifecycle states:
+        generated → transduced → triaged → buffered → dispatched → depleted | discarded
+    """
 
+    # ── identity — set by adapter ─────────────────────────────────────────────
+    sss_id      : str                 = ""                           # "SSS-<source>-<generated_at>-<uuid>"
+    robot_id    : str                 = "AuRoRA"                     # Grace instance identity — set by adapter
+    user_id     : str                 = "demo"                       # speaker identity — resolved by IRU at CNC
+    role        : str                 = "user"                       # speaker role — always "user" from external channels
+
+    # ── sensory — set by adapter ──────────────────────────────────────────────
+    source      : SensoryInputChannel = SensoryInputChannel.UNKNOWN  # originating channel — always set by adapter
+    modality    : SensoryModality     = SensoryModality.UNKNOWN      # physical nature — derived from source by adapter
+    trace_type  : TraceType           = TraceType.PMT                # WMC trace target — PMT or VST
+    text        : str                 = ""                           # text payload — CLI, WebUI, messaging bridges
     # TODO M1.X: audio : bytes = b""  — voice pipeline (ASR)
     # TODO M2:   image : bytes = b""  — vision pipeline (OAK-D)
+
+    # ── affective scoring — set by TIC._buffer(), refined by CNC ─────────────
+    # Biological analogue: amygdala pre-tags signals with valence/arousal before
+    # cortical processing. High-arousal signals route through a fast pathway.
+    salience    : float               = 1.0    # dispatch priority weight — higher = more urgent; habituated signals decay toward 0.0
+    valence     : float               = 0.0    # affective tone — negative (threat/error) to positive (praise/success); range [-1.0, 1.0]
+    arousal     : float               = 0.0    # activation intensity — calm to urgent; range [0.0, 1.0]
+    fast_path   : bool                = False  # True = bypass normal queue, alert CNS immediately (high arousal threshold)
+
+    # ── efference copy — set by TIC._heuristic_gate() ────────────────────────
+    # Biological analogue: motor efference copy — brain suppresses predicted
+    # sensory consequences of self-generated actions to prevent self-tickling.
+    efference_suppressed : bool       = False  # True = signal matched a CNC-published efference echo; suppressed at periphery
+
+    # ── lifecycle — set at each pipeline stage ────────────────────────────────
+    state           : str             = ""     # "generated" | "transduced" | "triaged" | "buffered" | "dispatched" | "depleted" | "discarded"
+    locus           : str             = ""     # which component is currently processing this SSS
+    generated_at    : str             = ""     # wall-clock time of SSS instantiation (adapter boundary)
+    transduced_at   : str             = ""     # wall-clock time of transduction gate pass
+    buffered_at     : str             = ""     # wall-clock time of sensory buffer entry
+    triggered_at    : str             = ""     # wall-clock time of CNS dispatch
+    received_at     : str             = ""     # wall-clock time of CNC receipt
+    depleted_at     : str             = ""     # wall-clock time of full lifecycle completion
+    dropped_at      : str             = ""     # wall-clock time of discard (any gate)
+    drop_reason     : str             = ""     # "below_threshold" | "duplicate" | "overload" | "efference_echo" | "injection"
+    lifecycle_ms    : float           = 0.0    # elapsed ms from generation to depletion
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -185,9 +181,9 @@ class PMT:
     # ── identity ──────────────────────────────────────────────────
     trace_id        : str           = ""    # identifier of this PMT "PMT-<source>-<induced_at>-<uuid>
     user_id         : str | None    = None  # identifier of the user AuRoRA is interacting with
-    robot_id        : str | None    = None  # identifier of the AuRoRA robot iteself
+    robot_id        : str | None    = None  # identifier of the AuRoRA robot itself
     source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
-    
+
     # ── lifecycle ─────────────────────────────────────────────────
     state           : WMCState      = WMCState.INDUCED    # WMCState value — induced/filled/sustained/receded/evicted
     proc            : str           = ""    # process name — which process generated this PMT
@@ -197,7 +193,7 @@ class PMT:
     ai_response     : str           = ""    # raw AI response — empty until pairing complete
     content         : str           = ""    # JSON pair — WMC chat history for LLM
     trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
-    trace_type      : TraceType     = TraceType.PMT  # formatted text — for EMC embedding and reinstatement
+    trace_type      : TraceType     = TraceType.PMT  # trace classification — PMT for conversational episodes
 
     # ── scoring ───────────────────────────────────────────────────
     vector          : list[float]   = field(default_factory=list)   # semantic vector — reused at EMC binding, no re-inference
@@ -207,9 +203,9 @@ class PMT:
     depth_score     : float         = 0.0   # Factor 3 — logged at eviction boundary
 
     # ── flags ─────────────────────────────────────────────────────────────────
-    anchored        : bool        = False   # hard-gated — protected from WMC eviction regardless of retention score
-    cluster_id      : int         = -1      # assigned WMC semantic cluster — -1 = unassigned
-    smc_candidate   : bool        = False   # flagged for Dream Cycle semantic consolidation — TODO: SMC M2
+    anchored        : bool          = False # hard-gated — protected from WMC eviction regardless of retention score
+    cluster_id      : int           = -1    # assigned WMC semantic cluster — -1 = unassigned
+    smc_candidate   : bool          = False # flagged for Dream Cycle semantic consolidation — TODO: SMC M2
 
 
 # ══════════════════════════════════════════════════════════════════════════════
