@@ -52,7 +52,7 @@ class SSS:
     Lifecycle:
         Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
     """
-    # ── raw — filled by adapter ────────────────────────────────────
+    # ── raw — filled by periphery ──────────────────────────────────
     sss_id          : str   = ""                                        # identifier of this SSS "SSS-<source>-<induced_at>-<uuid>"
     user_id         : str   = field(default="demo")                     # identifier of the user AuRoRA is interacting with
     robot_id        : str   = field(default="AuRoRA")                   # identifier of the AuRoRA robot itself
@@ -67,7 +67,7 @@ class SSS:
     #confidence      : float = 0.0   # sensor confidence — 0.0 to 1.0
     #vector          : list[float] = field(default_factory=list)     # pre-computed embedding if available
 
-    # ── lifecycle — filled by CNC ──────────────────────────────────
+    # ── lifecycle — filled at each phase ────────────────────────────
     state           : str   = ""    # lifecycle phase SSS is in — "raw" | "enriched" | "triaged" | "dispatched" | "depleted" | "dropped"
     locus           : str   = ""    # which component is currently processing this SSS
     received_at     : str   = ""    # wall-clock time of reception

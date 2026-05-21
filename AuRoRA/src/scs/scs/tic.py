@@ -3,54 +3,97 @@ Telepathy Input Core (TIC)
 ==========================
 System: Telepathy Management System (TMS)
 
-This module is my afferent pathway where the user communicates with me remotely, such as
-WebUI, messaging apps such as Telegram, Discord, (maybe Slack), email, and teleops, etc.
-Raw user input and command received through these remote apps/UI, is normalized into a
-standard format of Sensory Stimulus Signal (SSS), and then staged into sensory buffer.
-While at the same time this SSS is published via neural gateway to my Semantic Cognitive
-System (SCS) and other dedicated systems, which will produce a conscious or unconscious response,
-and published back to the sensory buffer to bind with the SSS for a complete interaction.
-This interaction is then passed via neural pathway to SCS for further processing and memory management.
+This module is my afferent pathway for remote human communication. It receives raw input from
+peripheral interfaces (WebUI, messaging apps, email, etc.), gates and normalizes it into a
+structured Sensory Stimulus Signal (SSS), and transmits it to the CNS via the Neural Gateway.
+Biological analogue: Peripheral Nervous System (PNS)— transduction at the sensory organ,
+local reflex handling, and afferent transmission to the thalamus.
 
-Life Cycle:
-    An unpaired SSS (user turn) enters the Sensory Buffer and waits.
-    TIC simultaneously publishes it via Neural Gateway to CNC.
-    CNC produces a CRS (cognitive response), returned via Neural Gateway.
-    The SSS and CRS bind in the Sensory Buffer into a complete interaction.
-    The bound pair proceeds via Neural Pathway to SCS for memory management.
-
-    Remote UI  →  TIC  →  Sensory Buffer (SSS, unpaired)  →  Sensory Buffer (bound)  →  SCS
-                                  ↓                                    ↑
-                            Neural Gateway                       Neural Gateway
-                            SSS (user turn)                      CRS (my turn)
-                                  ↓                                    ↑
-                                 CNC          ──────────────────►    TOC
-
-Life Cycle:
-
-  User input     →   SSS (user turn)   →   SSS (user turn)     +   SSS (my turn)   →   SSS (interaction)
-Remote apps/UI              TIC             Sensory Buffer         Sensory Buffer       Neural Pathway
-                                                 ↓                       ↑
-                                            SSS (user turn)        SSS (my turn)
-                                            Neural Pathway         Neural Pathway
-                                            
 Architecture:
-    TIC mirrors the afferent sensory pathway — carries signals toward the brain.
-    Text input has no physical sensory organ; it arrives pre-decoded, pre-linguistic.
-    TIC is the thinnest possible adapter: validate, normalize, publish. No cognition.
+    The TIC operates as a linear, unidirectional pipeline. Signals enter from decoupled 
+    physical adapters, pass through structural filtration checkpoints, materialize inside 
+    the buffer, and are cast onto the CNS neural bus.
 
-    In biological terms this is the closest AuRoRA has to "telepathy" —
-    pure symbolic thought injected directly past all sensory processing layers.
-    TIC acknowledges this honestly: it does not pretend to be a sensory organ.
+[Remote Adapter]
+SSS GENERATED
+[RECEIVED]
+        │
+        ▼
+[Transduction Threshold Gate] ────────────────► [Heuristic Intercept Gate]
+        │                                                    │
+ (fail: discard)                                   (intercept: handle locally)
+        │                                                    │
+   [DISCARDED]                                   [INTERCEPTED / DISCARDED]
+                                                             │
+                                                          (pass)
+                                                             │
+                                                             ▼
+                                                    [Sensory Buffer]
+                                                    HOLD / EXTRACT / CONSOLIDATE
+                                                    [BUFFERED]
+                                                             │
+                                                             ▼
+[SCS Processing Loop] ◄───────────────────────────── [Neural Gateway]
+        │                                           [DISPATCHED]
+        │                (SCS response)
+        └─────────────────────────────────────────► [Sensory Buffer]
+                                                    [INTEGRATED]
+                                                             │
+                                                             ▼
+                                                    [Neural Pathway]
+                                                    [DEPLETED]
 
-    TIC owns no state. Every SSS it emits is independently formed from the raw input.
-    If TIC goes down, CNC and TOC are unaffected — sensory input simply stops arriving.
+Adapters:
+    CLI, Web UI, Telegram, Discord, Email, Teleops
 
-    WebSocket server runs on a dedicated thread — never blocks ROS2 spin.
-    Incoming messages are validated at the boundary — malformed input is dropped silently.
+Lifecycle:
+    1. Reception
+       Raw input arrives through a peripheral adapter. SSS is instantiated
+       and normalized into structured schema, with raw information populated — 
+       the moment external stimulus becomes an internal neural event.
+       SSS marked GENERATED.
+
+    2. Transduction Threshold Gate
+       Determines whether the physical signal meets the minimum threshold
+       to propagate. Failures are immediately discarded.
+       Rejects: null/None, empty strings, whitespace-only, corrupted bytes.
+       SSS marked TRANSDUCED on pass, DISCARDED on failure.
+
+    3. Heuristic Intercept Gate
+       Intercepts signals resolvable locally without burdening the CNS —
+       peripheral equivalent of a spinal reflex loop.
+       Intercepts: /commands, injection patterns, system signals (SIGINT,
+       shutdown), duplicate inputs within debounce window, oversized payloads.
+       SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
+
+    4. Sensory Buffer
+       Sensory register — analogous to iconic or echoic memory. Holds the
+       signal briefly while features are extracted and the SSS is finalized
+       for CNS transmission.
+       HOLD        — raw payload cached for downstream transmission
+       EXTRACT     — structural primitives measured (length, density, capitals)
+       CONSOLIDATE — raw trace compiled into encoded, standardized SSS
+       SSS marked BUFFERED.
+
+    5. SCS Transmission
+       Consolidated SSS transmitted via Neural Gateway to SCS (Thalamic Loop)
+       over the neural gateway. TIC holds the SSS in buffer awaiting
+       efferent return — the interaction is not yet complete.
+       SSS marked DISPATCHED.
+
+    6. Efferent Return
+       Response generated from SCS returns via Neural Gateway and is bound to
+       the originating SSS interaction ID, forming a complete interaction pair.
+       SSS marked INTEGRATED.
+
+    7. Interaction Dispatch
+       Completed interaction pair transmitted via Neural Gateway for memory
+       consolidation downstream. TIC's lifecycle ends here — SSS fully depleted.
+       SSS marked DEPLETED.
+
 
 Topics:
-    Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for CNC
+    Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
 
 Message schema (inbound from WebUI):
     {"text": "...", "user_id": "...", "role": "user", "source": "webui"}
