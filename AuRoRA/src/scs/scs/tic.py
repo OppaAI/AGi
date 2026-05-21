@@ -122,23 +122,25 @@ Terminology:
                                     analogous to amygdala pre-processing of sensory signals
 """
 
-import asyncio                                                              # event loop for websocket server — isolated from ROS2 spin
+# System libraries
+import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
 import hashlib                                                              # SHA-256 hashing for efference echo fingerprints
 import json                                                                 # serialize/deserialize message payloads at both boundaries
-import threading                                                            # dedicated thread for websocket server — never blocks ROS2 spin
+import threading                                                            # owns the websocket server thread — keeps asyncio loop off the ROS2 spin thread
 import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
 from datetime import datetime, timezone                                     # UTC timestamps for SSS lifecycle fields
-from typing import Dict, Set                                                # active connection registry and efference echo registry type hints
 
+# Third-party libraries
 import rclpy                                                                # ROS2 Python client library — node lifecycle and spin
-import websockets                                                           # async websocket server — WebUI connection layer
-import websockets.exceptions                                                # websocket-specific exceptions for clean disconnect handling
 from rclpy.node import Node                                                 # base class for all ROS2 nodes
 from std_msgs.msg import String                                             # ROS2 string message type for topic I/O
+import websockets                                                           # async websocket server — WebUI connection layer
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # clean disconnect vs unexpected drop — handled separately in _handle_connection
 
+# AGi Libraries
 from hrs.hrm import AGi                                                     # homeostatic regulation manifest namespace
-from hrs.hru import hydrate_manifest                                        # manifest hydration — binds AuRoRA parameter server values into AGi constants
-from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # type: ignore[import-untyped] — SSS dataclass + channel/trace enums
+from hrs.hru import hydrate_manifest                                        # binds AuRoRA parameter server values into AGi constants at boot
+from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # SSS dataclass + channel/trace enums
 
 TMS = AGi.TMS                                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
