@@ -48,15 +48,16 @@ class SSS:
         Raw → Enriched → Triaged → Dispatched → Depleted | Dropped
     """
     # ── raw — filled by adapter ────────────────────────────────────
+    sss_id          : str   = ""                                    # identifier of this SSS "SSS-<source>-<induced_at>-<uuid>"
+    user_id         : str   = field(default="demo")                 # identifier of the user AuRoRA is interacting with
+    robot_id        : str   = field(default="AuRoRA")               # identifier of the AuRoRA robot itself
     source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
-    user_id         : str   = field(default="demo")                 # speaker identity
     role            : str   = field(default="user")                 # speaker role — "user" or "assistant"
     text            : str   = field(default="")                     # text payload — CLI, webUI, bridges
     audio           : bytes = field(default=b"")                    # audio payload — voice pipeline (TODO: M1.X-b)
     image           : bytes = field(default=b"")                    # image payload — vision pipeline (TODO: M2+)
 
     # ── enriched — filled by CNC ───────────────────────────────────
-    sss_id          : str   = ""    # unique signal ID — e.g. "sss_a1b2c3"
     sequence        : int   = 0     # ordinal position in stimulus stream
     modality        : SensoryModality = SensoryModality.TEXT  # "text" | "audio" | "vision" — derived from source
     trace_type      : str   = ""    # WMC trace target — "pmt" | "vst" | "ast"
@@ -113,10 +114,11 @@ class PMT:
     """
 
     # ── identity ──────────────────────────────────────────────────
-    user_id         : str | None    = None  # speaker identity — None for assistant-originated
-    timestamp       : float           = 0.0    # ISO wall-clock induction time — (TODO: M1.6 replaces with ROS2 time)
-    interval        : int           = 0     # time taken to generate this PMT in ms — (TODO: M1.6 replaces with ROS2 time)
-
+    trace_id        : str           = ""    # identifier of this PMT "PMT-<source>-<induced_at>-<uuid>
+    user_id         : str | None    = None  # identifier of the user AuRoRA is interacting with
+    robot_id        : str | None    = None  # identifier of the AuRoRA robot iteself
+    source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
+    
     # ── lifecycle ─────────────────────────────────────────────────
     state           : WMCState      = WMCState.INDUCED    # WMCState value — induced/filled/sustained/receded/evicted
     proc            : str           = ""    # process name — which process generated this PMT
@@ -127,9 +129,9 @@ class PMT:
     content         : str           = ""    # JSON pair — WMC chat history for LLM
     trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
     trace_type      : TraceType     = TraceType.PMT  # formatted text — for EMC embedding and reinstatement
+    chunk_count     : int           = 0     # cached token count — O(1) eviction math, no reprobe on eviction
 
     # ── scoring ───────────────────────────────────────────────────
-    chunk_count     : int           = 0     # cached token count — O(1) eviction math, no reprobe on eviction
     vector          : list[float]   = field(default_factory=list)   # semantic vector — reused at EMC binding, no re-inference
     retention_score : float         = 0.0   # composite induction score — WMC eviction priority key
     salience_score  : float         = 0.0   # Factor 1 — logged at eviction boundary

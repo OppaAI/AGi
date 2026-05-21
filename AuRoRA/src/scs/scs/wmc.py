@@ -61,15 +61,21 @@ import math                            # for exponential recency decay — half-
 from collections import deque          # for PMT slot — O(1) append and popleft on eviction
 from datetime import datetime, timezone  # for PMT timestamps and UTC-aware age calculations
 import json                            # for structured PMT storage — serialization and recall
+from typing import Unpack, TypeAlias # for type hints
 
 # AGi components
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
 from hrs.hrm import AGi                # homeostatic regulation manifest namespace — system-wide constants
-from gms.csb import SSS, PMT, VST, TraceType, WMCState  # type: ignore[import-untyped] PMT and WMCState classes — phonological and visuospatial memory traces
+from gms.csb import SSS, PMT, VST, TraceType, WMCState  # PMT and WMCState classes — phonological and visuospatial memory traces
 
 SCS = AGi.SCS                          # SCS parameter namespace alias — keeps constant references concise
 WMC = SCS.WMC                          # WMC parameter namespace alias — keeps WMC constant references concise
 
+class PMT_ASU(TypedDict, total=False):
+    cluster_id: int
+    retention_score: float
+    
+    
 
 class WorkingMemoryCortex:
     """
@@ -154,35 +160,30 @@ class WorkingMemoryCortex:
             return None                                             # VST deferred — skip silently
         return self._pair_trace(sss)
     
-    def _construct_memory_trace(self, stimulus: SSS, content: str = "", trace: str = "") -> PMT | VST:
+    def _plant_memory_trace(self, stimulus: SSS) -> PMT | VST:
         """
-        Working Memory Cycle -> Phase 1 - Induction -> 1.1 - Semantic Encoding -> 1.1.2 - Construct Memory Trace 
+        Memory Trace Life Cycle
+            Phase 1 - Induction
+                1.1 - Semantic Encoding
+                    1.1.1 - Plant Memory Trace
         
-        Construct a memory trace from an incoming sensory stimulus passed from MCC,
-        capturing relevant information across two sequential stages.
-            
-        Construction goes through 2 stages:
-        The stage is determined from the presence/absence of the active memory trace.
-        Stage 1: Staged construction — active memory trace is being initialized and constructed;
-                                       captures all the necessary information from the received stimulus.
-        Stage 2: Committed construction — active memory trace is already constructed; 
-                                          captures additional memory content from AI response;
-                                          passed to next for verification of completeness and correctness.
-   
-        Life cycle: 
-        Stage 1: Stimulus (from MCC) -> (activates) -> Phonological Memory Trace (PMT) (for text/transcibed text)
-                                                    -> Visuospatial Memory Trace (VST) (for vision/spatial related)
-        Stage 2: Active PMT/VST (incomplete) -> (completes) -> Primed PMT/VST
+        Plant a memory trace from an incoming sensory stimulus passed from MCC,
+        seeding the trace with the stimulus-related information and baselines for the trace.
+        
+        Life cycle:
+        SSS (from MCC) -> PMT (text/transcribed stimulus)
+                       -> VST (vision/spatial stimulus)
+
+        Biological analogue: planting a memory trace mirrors sensory memory induction —
+        the automatic, pre-attentive imprinting of a stimulus into the phonological loop
+        (for language) or visuospatial sketchpad (for vision/spatial), before any
+        cognitive processing or meaning-making occurs.
         
         Incoming substrate(s):
-            stimulus    : SSS — Incoming sensory stimulus signal passed from SIU -> CNC -> MCC
-            content     : str — Stimulus information to be filled into memory trace
-                                (empty in Phase 1, used in Phase 2 only; in JSON format)
-            trace       : str — Stimulus information to be filled into memory trace
-                                (empty in Phase 1, used in Phase 2 only; in plain text specialized format)
+            stimulus: SSS — Incoming sensory stimulus signal passed from SIU -> CNC -> MCC
     
         Outgoing substrate(s):
-            PMT / VST         — Staged (Phase 1) / Finalized (Phase 2) version of memory trace with stimulus information
+            PMT / VST     — memory trace seeded with stimulus information, state set to INDUCED
 
         TODO: VST is planned for vision/spatial sensors in future milestones
         """
@@ -229,12 +230,24 @@ class WorkingMemoryCortex:
     def _pair_trace(self, sss: SSS) -> PMT | None:
         """
         All staging and promotion decisions for PMT encoding.
-    
+            Planting goes through 2 stages:
+        Stage 1: Staged planting — active memory trace is being initialized and constructed;
+                                       planting all the necessary information from the received stimulus.
+        Stage 2: Committed planting — active memory trace is already constructed; 
+                                          planting additional memory content from AI response;
+                                          passed to next for verification of completeness and correctness.
+
         Handles:
             Double user   — append to staged PMT, return None
             Normal user   — full fill, stage, return None
             Orphan asst   — full fill with placeholder, then update fill, promote
             Normal asst   — update fill on staged PMT, promote, return PMT
+
+                        content     : str — Stimulus information to be filled into memory trace
+                                (empty in Phase 1, used in Phase 2 only; in JSON format)
+            trace       : str — Stimulus information to be filled into memory trace
+                                (empty in Phase 1, used in Phase 2 only; in plain text specialized format)
+
     
         Derives content and trace — passes to _populate_trace as args.
         Never touches PMT fields directly.
