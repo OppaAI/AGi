@@ -1,11 +1,26 @@
 """
-TIC — Telepathy Input Core
-============================
-AuRoRA · Telepathy Management System (TMS)
+Telepathy Input Core (TIC)
+==========================
+System: Telepathy Managment System (TMS)
 
-ROS2 node — afferent pathway for symbolic text input.
-Receives raw text from WebUI, normalizes into SSS, publishes to sensory gateway.
+Welcome to my Telepathy Input Core (TIC)!
+This module is my afferent pathway where the user communicates with me remotely, such as
+WebUI, messaging apps such as Telegram, Discord, (maybe Slack), email, and teleops, etc.
+Raw user input and command received through these remote apps/UI, us normalized into a
+standard format of Sensory Stimulus Signal (SSS), and then stage into sensory buffer.
+While at the same time this SSS is published via neural gateway to my Semantic Cognitive
+System (SCS) and other dedicated systems, which will produce conscious or unconscious response,
+and published back to the sensory buffer to bind with the SSS for a complete interaction.
+This interaction is then pass via neural pathway to SCS for further process and memory management.
 
+Life Cycle:
+
+  User input     →   SSS (user turn)   →   SSS (user turn)     +   SSS (my turn)   →   SSS (complete)
+Remote apps/UI              TIC             Sensory Buffer         Sensory Buffer      Neural Pathway
+                                                 ↓                       ↑
+                                            SSS (user turn)        SSS (my turn)
+                                            Neural Pathway         Neural Pathway
+                                            
 Architecture:
     TIC mirrors the afferent sensory pathway — carries signals toward the brain.
     Text input has no physical sensory organ; it arrives pre-decoded, pre-linguistic.
@@ -24,10 +39,10 @@ Architecture:
 Topics:
     Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for CNC
 
-Message contract (inbound from WebUI):
+Message schema (inbound from WebUI):
     {"text": "...", "user_id": "...", "role": "user", "source": "webui"}
 
-Message contract (outbound SSS JSON):
+Message schema (outbound SSS JSON):
     {"role": "user", "text": "...", "user_id": "...", "source": "webui", "trace_type": "pmt"}
 
 Terminology:
