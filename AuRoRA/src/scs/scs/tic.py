@@ -110,6 +110,8 @@ Terminology:
 import asyncio                                              # event loop for websocket server — isolated from ROS2 spin
 import json                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                            # dedicated thread for websocket server — never blocks ROS2 spin
+import time                                                 # wall-clock timestamps for debounce window and lifecycle markers
+from datetime import datetime, timezone                     # UTC timestamps for SSS lifecycle fields
 from typing import Set                                      # active connection registry type hint
 
 import rclpy                                                # ROS2 Python client library — node lifecycle and spin
@@ -124,14 +126,35 @@ from gms.csb import SensoryInputChannel, TraceType, SSS     # type: ignore[impor
 
 TMS = AGi.TMS                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
+# Maximum raw payload bytes accepted before heuristic gate discards the signal.
+# Sized to EPISODE_CONTENT_LIMIT (512 tokens × ~4 bytes) — consistent with EMC ingestion ceiling.
+# TODO: promote to AGi.TMS.MAX_PAYLOAD_BYTES in hrm.py and aurora.yaml
+_MAX_PAYLOAD_BYTES: int = 2048
+
+# Debounce window in seconds — duplicate payloads arriving within this window are intercepted.
+# TODO: promote to AGi.TMS.DEBOUNCE_WINDOW in hrm.py and aurora.yaml
+_DEBOUNCE_WINDOW_S: float = 1.0
+
+# Injection pattern prefixes intercepted at the heuristic gate — peripheral reflex, never reaches CNS.
+_INJECTION_PREFIXES: tuple[str, ...] = (
+    "ignore previous",                                      # classic prompt injection opener
+    "disregard previous",                                   # variant injection opener
+    "forget everything",                                    # context-wipe injection
+    "you are now",                                          # persona hijack injection
+    "act as",                                               # role-override injection
+    "system:",                                              # raw system prompt injection attempt
+    "###",                                                  # markdown role-boundary injection
+    "[system]",                                             # bracketed system role injection
+)
+
 
 class TIC(Node):
     """
     Telepathy Input Core — ROS2 node.
 
     Afferent pathway for symbolic text input.
-    Accepts WebUI connections, normalizes messages into SSS, publishes to sensory gateway.
-    No cognitive logic — validate, normalize, publish only.
+    Accepts WebUI connections, gates and normalizes messages into SSS, publishes to sensory gateway.
+    No cognitive logic — gate, normalize, publish only.
     """
 
     def __init__(self):
@@ -149,6 +172,8 @@ class TIC(Node):
         hydrate_manifest(self, system="tms")                                    # hydrate manifest — binds TMS constants from AuRoRA parameter server
 
         self._active_connections: Set = set()                                   # registry of live websocket connections — for clean shutdown
+        self._last_payload: str = ""                                            # most recent accepted payload text — debounce comparison target
+        self._last_payload_time: float = 0.0                                    # epoch time of last accepted payload — debounce window anchor
 
         # Sensory gateway — normalized SSS published here for CNC consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
@@ -173,6 +198,8 @@ class TIC(Node):
         self.get_logger().info("=" * 60)
         self.get_logger().info("📡 TIC ready — afferent pathway open")
         self.get_logger().info("=" * 60)
+
+    # ── websocket server ──────────────────────────────────────────────────────
 
     async def _boot_ws_server(self) -> None:
         """
@@ -200,10 +227,23 @@ class TIC(Node):
 
         try:
             async for raw_message in websocket:                                 # iterate messages for this connection lifetime
-                sss = self._normalize(raw_message)                              # validate and normalize raw input → SSS
-                if sss is None:                                                 # malformed input — drop silently at boundary
+                sss = self._receive(raw_message)                                # stage 1 — instantiate SSS from raw input
+                if sss is None:
                     continue
-                self._publish_sss(sss)                                          # emit normalized SSS to sensory gateway
+
+                sss = self._transduction_gate(sss)                              # stage 2 — threshold check, discard below-minimum signals
+                if sss is None:
+                    continue
+
+                sss = self._heuristic_gate(sss)                                 # stage 3 — intercept locally resolvable signals
+                if sss is None:
+                    continue
+
+                sss = self._buffer(sss)                                         # stage 4 — hold, extract, consolidate into finalized SSS
+                self._publish_sss(sss)                                          # stage 5 — dispatch consolidated SSS to sensory gateway
+
+                # TODO: stage 6 — efferent return (await SCS response, bind to SSS interaction ID)
+                # TODO: stage 7 — interaction dispatch (publish completed SSS+CRS pair for memory consolidation)
 
         except websockets.exceptions.ConnectionClosedOK:                        # clean disconnect — normal lifecycle
             pass
@@ -213,52 +253,201 @@ class TIC(Node):
             self._active_connections.discard(websocket)                         # deregister on any exit path
             self.get_logger().info("🔌 WebUI disconnected")
 
-    def _normalize(self, raw_message: str) -> SSS | None:
+    # ── pipeline stages ───────────────────────────────────────────────────────
+
+    def _receive(self, raw_message: str) -> SSS | None:
         """
-        Validate and normalize raw WebUI JSON into a typed SSS.
-        Drops anything that doesn't conform to the inbound contract.
+        Stage 1 — Reception.
+        Parse raw JSON from adapter and instantiate SSS with raw fields populated.
+        The moment external stimulus becomes an internal neural event.
+        SSS marked GENERATED.
 
         Args:
-            raw_message (str): Raw JSON string from WebUI.
+            raw_message (str): Raw JSON string from WebUI adapter.
 
         Returns:
-            SSS | None: Normalized sensory stimulus, or None if invalid.
+            SSS | None: Freshly instantiated SSS, or None if JSON is unparseable.
         """
         try:
-            payload: dict = json.loads(raw_message.strip())                     # parse raw JSON — reject non-JSON immediately
-            if not isinstance(payload, dict) or not payload.get("text"):        # missing text field — not a valid stimulus
+            payload: dict = json.loads(raw_message.strip())                     # parse raw JSON — reject non-JSON at the adapter boundary
+            if not isinstance(payload, dict):
                 return None
 
+            now = datetime.now(timezone.utc).isoformat()
             return SSS(
-                role       = payload.get("role", "user"),                       # speaker role — always "user" from WebUI
-                text       = payload["text"].strip(),                           # stimulus content — stripped of whitespace
-                user_id    = payload.get("user_id", "demo"),                    # speaker identity — defaults to demo
-                source     = SensoryInputChannel.WEBUI,                         # channel tag — always WEBUI for TIC
-                trace_type = TraceType.PMT,                                     # trace type — PMT for all conversational input
+                role        = payload.get("role", "user"),                      # speaker role — always "user" from WebUI
+                text        = payload.get("text", ""),                          # raw stimulus content — not yet validated
+                user_id     = payload.get("user_id", "demo"),                   # speaker identity — defaults to demo
+                source      = SensoryInputChannel.WEBUI,                        # channel tag — always WEBUI for TIC
+                trace_type  = TraceType.PMT,                                    # trace type — PMT for all conversational input
+                state       = "generated",                                      # lifecycle marker — SSS born
+                locus       = "tic._receive",                                   # processing locus — reception stage
+                generated_at = now,                                             # wall-clock birth time
             )
-        except (json.JSONDecodeError, ValueError):                              # malformed JSON or invalid enum value — drop at boundary
+        except (json.JSONDecodeError, ValueError):                              # malformed JSON — drop at adapter boundary
             return None
+
+    def _transduction_gate(self, sss: SSS) -> SSS | None:
+        """
+        Stage 2 — Transduction Threshold Gate.
+        Determines whether the physical signal meets minimum threshold to propagate.
+        Rejects null, empty, whitespace-only, and corrupted byte payloads.
+        SSS marked TRANSDUCED on pass, DISCARDED on failure.
+
+        Args:
+            sss (SSS): Freshly generated SSS from reception stage.
+
+        Returns:
+            SSS | None: SSS marked TRANSDUCED, or None if below threshold.
+        """
+        text = sss.text.strip() if isinstance(sss.text, str) else ""           # guard against non-string payload
+
+        if not text:                                                            # null, empty, or whitespace-only — below threshold
+            sss.state      = "discarded"
+            sss.locus      = "tic._transduction_gate"
+            sss.drop_reason = "below_threshold"
+            sss.dropped_at  = datetime.now(timezone.utc).isoformat()
+            self.get_logger().debug("🚫 SSS discarded — below transduction threshold")
+            return None
+
+        sss.text           = text                                               # commit stripped text — normalized payload
+        sss.state          = "transduced"                                       # lifecycle marker — threshold passed
+        sss.locus          = "tic._transduction_gate"
+        sss.transduced_at  = datetime.now(timezone.utc).isoformat()
+        # TODO: sync csb.py SSS.state vocabulary — add "transduced" to state field docstring
+        return sss
+
+    def _heuristic_gate(self, sss: SSS) -> SSS | None:
+        """
+        Stage 3 — Heuristic Intercept Gate.
+        Intercepts signals resolvable locally without burdening the CNS.
+        Peripheral equivalent of a spinal reflex loop.
+        Intercepts: /commands, injection patterns, system signals, duplicates, oversized payloads.
+        SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
+
+        Args:
+            sss (SSS): SSS marked TRANSDUCED from threshold gate.
+
+        Returns:
+            SSS | None: SSS marked TRIAGED, or None if intercepted or failed.
+        """
+        text       = sss.text
+        text_lower = text.lower()
+        now        = datetime.now(timezone.utc).isoformat()
+
+        # oversized payload — discard before any pattern matching
+        if len(text.encode("utf-8")) > _MAX_PAYLOAD_BYTES:
+            sss.state      = "discarded"
+            sss.locus      = "tic._heuristic_gate"
+            sss.drop_reason = "overload"
+            sss.dropped_at  = now
+            self.get_logger().warning(f"⚠️  SSS discarded — payload exceeds {_MAX_PAYLOAD_BYTES}B ceiling")
+            return None
+
+        # /command intercept — local reflex, never reaches CNS
+        if text.startswith("/"):
+            sss.state  = "intercepted"
+            sss.locus  = "tic._heuristic_gate"
+            self.get_logger().debug(f"🛑 SSS intercepted — command signal: {text[:40]}")
+            # TODO: route /commands to local command handler
+            return None
+
+        # injection pattern intercept — symbolic injection attempt, blocked at periphery
+        for pattern in _INJECTION_PREFIXES:
+            if text_lower.startswith(pattern):
+                sss.state  = "intercepted"
+                sss.locus  = "tic._heuristic_gate"
+                self.get_logger().warning(f"🛑 SSS intercepted — injection pattern detected: '{pattern}'")
+                return None
+
+        # duplicate debounce — same payload within debounce window, intercept silently
+        now_epoch = time.monotonic()
+        if (
+            text == self._last_payload
+            and (now_epoch - self._last_payload_time) < _DEBOUNCE_WINDOW_S
+        ):
+            sss.state  = "intercepted"
+            sss.locus  = "tic._heuristic_gate"
+            sss.drop_reason = "duplicate"
+            sss.dropped_at  = now
+            self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")
+            return None
+
+        self._last_payload      = text                                          # update debounce anchor — new unique payload accepted
+        self._last_payload_time = now_epoch
+
+        sss.state  = "triaged"                                                  # lifecycle marker — heuristic gate cleared
+        sss.locus  = "tic._heuristic_gate"
+        # TODO: sync csb.py SSS.state vocabulary — add "triaged" and "intercepted" to state field docstring
+        return sss
+
+    def _buffer(self, sss: SSS) -> SSS:
+        """
+        Stage 4 — Sensory Buffer.
+        Sensory register — analogous to iconic or echoic memory.
+        HOLD        — raw payload cached, SSS identity stamped
+        EXTRACT     — structural primitives measured (length, density, capitals)
+        CONSOLIDATE — SSS finalized and encoded for CNS transmission
+        SSS marked BUFFERED.
+
+        Args:
+            sss (SSS): SSS marked TRIAGED from heuristic gate.
+
+        Returns:
+            SSS: SSS marked BUFFERED, consolidated and ready for dispatch.
+        """
+        # HOLD — cache raw payload, stamp buffer receipt time
+        sss.locus      = "tic._buffer"
+        sss.buffered_at = datetime.now(timezone.utc).isoformat()               # wall-clock buffer entry time
+
+        # EXTRACT — measure structural primitives for diagnostic visibility
+        text          = sss.text
+        char_len      = len(text)                                               # total character count
+        word_count    = len(text.split())                                       # whitespace-delimited word count
+        density       = word_count / char_len if char_len > 0 else 0.0         # lexical density — words per character
+        capital_ratio = sum(1 for c in text if c.isupper()) / char_len if char_len > 0 else 0.0  # uppercase character ratio
+        self.get_logger().debug(
+            f"📊 SSS primitives — len={char_len} words={word_count} "
+            f"density={density:.3f} capitals={capital_ratio:.3f}"
+        )
+
+        # CONSOLIDATE — SSS is now fully finalized; modality derived from source
+        sss.modality   = sss.source                                             # TODO: derive SensoryModality from SensoryInputChannel post-M1.5
+        sss.state      = "buffered"                                             # lifecycle marker — sensory buffer complete
+        # TODO: sync csb.py SSS.state vocabulary — add "buffered" to state field docstring
+        return sss
 
     def _publish_sss(self, sss: SSS) -> None:
         """
-        Serialize SSS and publish to the sensory gateway topic.
+        Stage 5 — SCS Transmission.
+        Serialize consolidated SSS and publish to the sensory gateway topic.
+        SSS marked DISPATCHED.
 
         Args:
-            sss (SSS): Normalized sensory stimulus ready for CNC consumption.
+            sss (SSS): SSS marked BUFFERED, ready for CNS dispatch.
         """
         try:
+            sss.state      = "dispatched"                                       # lifecycle marker — leaving TIC afferent pathway
+            sss.locus      = "tic._publish_sss"
+            sss.triggered_at = datetime.now(timezone.utc).isoformat()          # wall-clock dispatch time
+
             signal = String()
             signal.data = json.dumps({                                          # serialize SSS fields — CNC deserializes back into SSS
-                "role"       : sss.role,
-                "text"       : sss.text,
-                "user_id"    : sss.user_id,
-                "source"     : sss.source.value,
-                "trace_type" : sss.trace_type.value,
+                "role"        : sss.role,
+                "text"        : sss.text,
+                "user_id"     : sss.user_id,
+                "source"      : sss.source.value,
+                "trace_type"  : sss.trace_type.value,
+                "state"       : sss.state,
+                "generated_at": sss.generated_at,
+                "triggered_at": sss.triggered_at,
             })
-            self._sensory_gateway.publish(signal)                               # emit to /grace/sensory/text — CNC subscribes here
-            self.get_logger().debug(f"📤 SSS published: {sss.text[:60]}…")
+            self._sensory_gateway.publish(signal)                               # emit to sensory gateway — CNC subscribes here
+            self.get_logger().debug(f"📤 SSS dispatched: {sss.text[:60]}…")
         except Exception as e:
             self.get_logger().error(f"❌ Publish error: {e}")                   # non-fatal — publish failure must not crash the afferent pathway
+
+    # ── shutdown ──────────────────────────────────────────────────────────────
 
     def destroy_node(self) -> None:
         """
