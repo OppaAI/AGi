@@ -122,25 +122,25 @@ Terminology:
                                     analogous to amygdala pre-processing of sensory signals
 """
 
-import asyncio                                              # event loop for websocket server — isolated from ROS2 spin
-import hashlib                                              # SHA-256 hashing for efference echo fingerprints
-import json                                                 # serialize/deserialize message payloads at both boundaries
-import threading                                            # dedicated thread for websocket server — never blocks ROS2 spin
-import time                                                 # wall-clock timestamps for debounce window and lifecycle markers
-from datetime import datetime, timezone                     # UTC timestamps for SSS lifecycle fields
-from typing import Dict, Set                                # active connection registry and efference echo registry type hints
+import asyncio                                                              # event loop for websocket server — isolated from ROS2 spin
+import hashlib                                                              # SHA-256 hashing for efference echo fingerprints
+import json                                                                 # serialize/deserialize message payloads at both boundaries
+import threading                                                            # dedicated thread for websocket server — never blocks ROS2 spin
+import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
+from datetime import datetime, timezone                                     # UTC timestamps for SSS lifecycle fields
+from typing import Dict, Set                                                # active connection registry and efference echo registry type hints
 
-import rclpy                                                # ROS2 Python client library — node lifecycle and spin
-import websockets                                           # async websocket server — WebUI connection layer
-import websockets.exceptions                                # websocket-specific exceptions for clean disconnect handling
-from rclpy.node import Node                                 # base class for all ROS2 nodes
-from std_msgs.msg import String                             # ROS2 string message type for topic I/O
+import rclpy                                                                # ROS2 Python client library — node lifecycle and spin
+import websockets                                                           # async websocket server — WebUI connection layer
+import websockets.exceptions                                                # websocket-specific exceptions for clean disconnect handling
+from rclpy.node import Node                                                 # base class for all ROS2 nodes
+from std_msgs.msg import String                                             # ROS2 string message type for topic I/O
 
-from hrs.hrm import AGi                                     # homeostatic regulation manifest namespace
-from hrs.hru import hydrate_manifest                        # manifest hydration — binds AuRoRA parameter server values into AGi constants
+from hrs.hrm import AGi                                                     # homeostatic regulation manifest namespace
+from hrs.hru import hydrate_manifest                                        # manifest hydration — binds AuRoRA parameter server values into AGi constants
 from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # type: ignore[import-untyped] — SSS dataclass + channel/trace enums
 
-TMS = AGi.TMS                                               # module-level alias — TMS-level constants (topic names, websocket config)
+TMS = AGi.TMS                                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
 # Maximum raw payload bytes accepted before heuristic gate discards the signal.
 # Sized to EPISODE_CONTENT_LIMIT (512 tokens × ~4 bytes) — consistent with EMC ingestion ceiling.
