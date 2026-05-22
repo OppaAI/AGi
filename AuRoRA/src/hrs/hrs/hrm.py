@@ -131,12 +131,12 @@ class AGi:                                                              # Amazin
         @classmethod
         def GLOBAL_CHUNK_LIMIT(cls) -> int:
             """[DERIVED] Total usable token budget — CORTICAL_CAPACITY minus all reserves."""
-            return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE        # [DERIVED] total usable token budget
+            return cls.CORTICAL_CAPACITY - cls.COGNITIVE_RESERVE - cls.EMC.RECALL_RESERVE       # [DERIVED] total usable token budget
 
         # Config file registry — single source of truth for all YAML filenames
-        AURORA_SETPOINTS : str = "aurora.yaml"                          # [STATIC] robot-wide settings
-        USER_PROFILES    : str = "users.yaml"                           # [STATIC] all user profiles + per-user extrinsic settings
-        PERSONA_PROFILES : str = "persona.yaml"                         # [STATIC] directory containing persona YAML files
+        AURORA_SETPOINTS : str = "aurora.yaml"                                                  # [STATIC] robot-wide settings
+        USER_PROFILES    : str = "users.yaml"                                                   # [STATIC] all user profiles + per-user extrinsic settings
+        PERSONA_PROFILES : str = "persona.yaml"                                                 # [STATIC] directory containing persona YAML files
 
         TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
         RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
