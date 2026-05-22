@@ -194,6 +194,35 @@ _NEGATIVE_MARKERS: frozenset[str] = frozenset({
     "terrible", "awful", "useless", "stupid", "no", "not working",
 })
 
+# [STATIC] Injection pattern prefixes — peripheral reflex, never reaches CNS
+INJECTION_PREFIXES: tuple[str, ...] = (
+    "ignore previous",
+    "disregard previous",
+    "forget everything",
+    "you are now",
+    "act as",
+    "system:",
+    "###",
+    "[system]",
+)
+
+# [STATIC] Urgency markers — presence lifts arousal and triggers fast-path routing
+URGENCY_MARKERS: frozenset[str] = frozenset({
+    "help", "error", "stop", "crash", "crashed", "urgent", "emergency",
+    "broken", "failed", "critical", "abort", "warning", "alert",
+})
+
+# [STATIC] Positive valence markers — presence lifts valence toward +1.0
+POSITIVE_MARKERS: frozenset[str] = frozenset({
+    "thanks", "thank", "great", "perfect", "excellent", "awesome",
+    "love", "good", "nice", "well done", "brilliant", "yes",
+})
+
+# [STATIC] Negative valence markers — presence pulls valence toward -1.0
+NEGATIVE_MARKERS: frozenset[str] = frozenset({
+    "wrong", "bad", "broken", "fail", "error", "crash", "hate",
+    "terrible", "awful", "useless", "stupid", "no", "not working",
+})
 
 class TIC(Node):
     """
