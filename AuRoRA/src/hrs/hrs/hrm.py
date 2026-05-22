@@ -49,8 +49,11 @@ class RRR:
     ROBOT_ENTITY                    : str = "agi"        # [STATIC] ROS namespace + YAML key for the robot entity
     
     # Reticular Activation System
-    RETICULAR_ACTIVATING_COMPARTMENT: str = "ras"        # [STATIC] ROS namespace + YAML key for the Reticular Activating Compartment
+    RETICULAR_ACTIVATING_SYSTEM     : str = "ras"        # [STATIC] ROS namespace + YAML key for the Reticular Activating System
 
+    # Telepathy Management System
+    TELEPATHY_MANAGEMENT_SYSTEM     : str = "tms"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
+    
     # Semantic Cognitive System
     SEMANTIC_COGNITIVE_SYSTEM       : str = "scs"        # [STATIC] ROS namespace + YAML key for the Semantic Cognitive System
     CENTRAL_NEURAL_CORE             : str = "cnc"        # [STATIC] ROS namespace + YAML key for the Central Neural Core
@@ -75,7 +78,18 @@ class AGi:                                                              # Amazin
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
     ROBOT_ID: str         = "AuRoRA-ZERO-Prototype                      # (TODO) [STATIC] robot ID to be stored in encrypted file
-
+    
+    class TMS:                                                          # Telepathy Management System
+        HTTP_PORT                  : int   = 8848                       # [STATIC] WebUI — HTTP static file server
+        WS_PORT                    : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
+        WS_OUTPUT_PORT             : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
+        TEXT_SENSORY_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_input"    # [STATIC] ROS topic — SSS inbound to CNC
+        TEXT_MOTOR_GATEWAY         : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_output"   # [STATIC] ROS topic — CRS outbound from CNC
+        MAX_PAYLOAD_BYTES          : int   = 2048                       # [STATIC] heuristic gate ceiling — oversized payloads discarded
+        DEBOUNCE_WINDOW_S          : float = 1.0                        # [STATIC] duplicate suppression window per user
+        EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] efference echo fingerprint expiry
+        FAST_PATH_AROUSAL_THRESHOLD: float = 0.7                        # [INTRINSIC] arousal ceiling for priority CNS dispatch
+    
     class SCS:                                      # Semantic Cognitive System
         CORTICAL_CAPACITY: int  = 24576                                 # [INTRINSIC] total token budget for the active LLM context window
         COGNITIVE_RESERVE: int  = 2048                                  # [INTRINSIC] tokens reserved for system prompt and identity injection
