@@ -77,7 +77,7 @@ class AGi:                                                              # Amazin
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
-    ROBOT_ID: str         = "AuRoRA-ZERO-Prototype                      # (TODO) [STATIC] robot ID to be stored in encrypted file
+    ROBOT_ID: str         = "AuRoRA-ZERO-Prototype"                     # (TODO) [STATIC] robot ID to be stored in encrypted file
     
     class TMS:                                                          # Telepathy Management System
         HTTP_PORT                  : int   = 8848                       # [STATIC] WebUI — HTTP static file server
