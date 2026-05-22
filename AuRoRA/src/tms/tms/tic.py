@@ -174,7 +174,7 @@ class TelepathyInputCore(Node):
 
         # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
         # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
-        self._last_payload: dict[str, tuple[str, float]] = {}
+        self._refractory_anchor: dict[str, tuple[str, float]] = {}                   # user_id → (last_text, monotonic_time) — debounce anchor per sender
 
         # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
         # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
@@ -459,7 +459,7 @@ class TelepathyInputCore(Node):
         # Biological analogue: sensory refractory period — organ cannot re-fire on identical
         # stimulus within recovery window.
         now_epoch = time.monotonic()
-        last_text, last_time = self._last_payload.get(sss.user_id, ("", 0.0))
+        last_text, last_time = self._refractory_anchor.get(sss.user_id, ("", 0.0))
         if text == last_text and (now_epoch - last_time) < _DEBOUNCE_WINDOW_S:
             sss.state       = "intercepted"
             sss.locus       = "tic._heuristic_gate"
@@ -468,7 +468,7 @@ class TelepathyInputCore(Node):
             self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")
             return None
 
-        self._last_payload[sss.user_id] = (text, now_epoch)                    # anchor per user — distinct senders never suppress each other
+        self._refractory_anchor[sss.user_id] = (text, now_epoch)                    # anchor per user — distinct senders never suppress each other
 
         sss.state = "triaged"                                                   # lifecycle marker — heuristic gate cleared
         sss.locus = "tic._heuristic_gate"
