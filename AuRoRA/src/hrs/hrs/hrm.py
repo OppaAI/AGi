@@ -90,8 +90,7 @@ class AGi:                                                              # Amazin
         EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] efference echo fingerprint expiry
         FAST_PATH_AROUSAL_THRESHOLD: float = 0.7                        # [INTRINSIC] arousal ceiling for priority CNS dispatch
         
-        # [STATIC] Injection pattern prefixes — peripheral reflex, never reaches CNS
-        INJECTION_PREFIXES: tuple[str, ...] = (
+        INJECTION_PREFIXES: tuple[str, ...] = (                         # [STATIC] Injection pattern prefixes — peripheral reflex, never reaches CNS
             "ignore previous",
             "disregard previous",
             "forget everything",
@@ -102,20 +101,17 @@ class AGi:                                                              # Amazin
             "[system]",    
         )
         
-        # [STATIC] Urgency markers — presence lifts arousal and triggers fast-path routing
-        URGENCY_MARKERS: frozenset[str] = frozenset({
+        URGENCY_MARKERS: frozenset[str] = frozenset({                   # [STATIC] Urgency markers — presence lifts arousal and triggers fast-path routing
             "help", "error", "stop", "crash", "crashed", "urgent", "emergency",
             "broken", "failed", "critical", "abort", "warning", "alert",
         })
         
-        # [STATIC] Positive valence markers — presence lifts valence toward +1.0
-        POSITIVE_MARKERS: frozenset[str] = frozenset({
+        POSITIVE_MARKERS: frozenset[str] = frozenset({                  # [STATIC] Positive valence markers — presence lifts valence toward +1.0
             "thanks", "thank", "great", "perfect", "excellent", "awesome",
             "love", "good", "nice", "well done", "brilliant", "yes",
         })
         
-        # [STATIC] Negative valence markers — presence pulls valence toward -1.0
-        NEGATIVE_MARKERS: frozenset[str] = frozenset({
+        NEGATIVE_MARKERS: frozenset[str] = frozenset({                  # [STATIC] Negative valence markers — presence pulls valence toward -1.0
             "wrong", "bad", "broken", "fail", "error", "crash", "hate",
             "terrible", "awful", "useless", "stupid", "no", "not working",
         })
