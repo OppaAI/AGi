@@ -146,7 +146,7 @@ TMS = AGi.TMS                                                               # mo
 
 class TelepathyInputCore(Node):
     """
-    Telepathy Input Core — ROS2 node.
+    Telepathy Input Core — Robot system node.
 
     Afferent pathway for telepathy symbolic stimulus.
     Transduces incoming telepathy signals into SSS, gates through threshold and heuristic filters,
@@ -160,17 +160,17 @@ class TelepathyInputCore(Node):
         Initialize Telepathy Input Core.
 
         Opens the neural gateway, arms the efference echo channel via the neural gateway.
-        and ignites the WebSocket adapter on a dedicated afferent thread.
-        ROS2 spin and WebSocket adapter never share a thread.
+        and ignites the WebSocket server on a dedicated afferent thread.
+        Robot system spin and WebSocket server never share a thread.
         """
-        super().__init__("tic")                                                 # register this node with ROS2 as "tic"
-        self.get_logger().info("=" * 60)
-        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")
-        self.get_logger().info("=" * 60)
+        super().__init__("tic")                                                 # register this core with robot system as "tic"
+        self.get_logger().info("=" * 60)                                        # log heading title border
+        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")       # log the initialization of TIS
+        self.get_logger().info("=" * 60)                                        # log heading title border
 
-        hydrate_manifest(self, system="tms")                                    # hydrate manifest — binds TMS constants from AuRoRA parameter server
-
-        self._active_connections: set = set()                                   # registry of live websocket connections — for clean shutdown
+        hydrate_manifest(self, system="tms")                                    # hydrate manifest — bind TMS constants from AuRoRA parameter server
+        
+        self._active_connections: set = set()                                   # live WebSocket connections — tracked for clean shutdown
 
         # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
         # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
