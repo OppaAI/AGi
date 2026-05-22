@@ -148,26 +148,20 @@ class TelepathyInputCore(Node):
     """
     Telepathy Input Core — ROS2 node.
 
-    Afferent pathway for symbolic text input.
-    Accepts WebUI connections, gates and normalizes messages into SSS, publishes to sensory gateway.
-    No cognitive logic — gate, normalize, tag, publish only.
-
-    New in M1.5:
-        - Efference copy suppression: subscribes to TMS.EFFERENCE_ECHO; CNC-published
-          fingerprints suppress matching inbound signals before they reach CNS, preventing
-          GRACE from processing her own outputs as external stimuli.
-        - Affective tagging: _buffer() derives salience, valence, and arousal from structural
-          primitives and keyword signals. High-arousal SSS are flagged fast_path=True for
-          priority dispatch. Biological analogue: amygdala pre-tagging before cortical routing.
+    Afferent pathway for telepathy symbolic stimulus.
+    Transduces incoming telepathy signals into SSS, gates through threshold and heuristic filters,
+    affectively tags, and transmits to the neural gateway for cortical processing.
+    No cognitive logic — transduce, gate, tag, transmit only.
+    Biological analogue: peripheral nervous system — sensory transduction, spinal reflex arcs, afferent projection to thalamus.
     """
 
     def __init__(self):
         """
         Initialize Telepathy Input Core.
 
-        Boots websocket server on a dedicated thread, opens the sensory gateway topic,
-        and subscribes to the efference echo topic for self-signal suppression.
-        ROS2 spin and websocket server never share a thread.
+        Opens the neural gateway, arms the efference echo channel via the neural gateway.
+        and ignites the WebSocket adapter on a dedicated afferent thread.
+        ROS2 spin and WebSocket adapter never share a thread.
         """
         super().__init__("tic")                                                 # register this node with ROS2 as "tic"
         self.get_logger().info("=" * 60)
