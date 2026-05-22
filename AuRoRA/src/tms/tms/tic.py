@@ -178,7 +178,7 @@ _INJECTION_PREFIXES: tuple[str, ...] = (
 # Urgency markers — presence lifts arousal and triggers fast-path routing.
 # Biological analogue: subcortical threat detection before conscious awareness.
 _URGENCY_MARKERS: frozenset[str] = frozenset({
-    "help", "error", "stop", "crash", "urgent", "emergency",
+    "help", "error", "stop", "crash", "crashed", "urgent", "emergency",
     "broken", "failed", "critical", "abort", "warning", "alert",
 })
 
@@ -227,16 +227,16 @@ class TIC(Node):
 
         hydrate_manifest(self, system="tms")                                    # hydrate manifest — binds TMS constants from AuRoRA parameter server
 
-        self._active_connections: Set = set()                                   # registry of live websocket connections — for clean shutdown
+        self._active_connections: set = set()                                   # registry of live websocket connections — for clean shutdown
 
         # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
         # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
-        self._last_payload: Dict[str, tuple[str, float]] = {}
+        self._last_payload: dict[str, tuple[str, float]] = {}
 
         # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
         # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
         # Biological analogue: motor efference copy preventing self-tickling.
-        self._efference_echoes: Dict[str, float] = {}                           # fingerprint → expiry time (monotonic)
+        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry time (monotonic)
 
         # Sensory gateway — normalized SSS published here for CNC consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
@@ -370,9 +370,9 @@ class TIC(Node):
                 # TODO: stage 6 — efferent return (await SCS response, bind to SSS interaction ID)
                 # TODO: stage 7 — interaction dispatch (publish completed SSS+CRS pair for memory consolidation)
 
-        except websockets.exceptions.ConnectionClosedOK:                        # clean disconnect — normal lifecycle
+        except ConnectionClosedOK:                        # clean disconnect — normal lifecycle
             pass
-        except websockets.exceptions.ConnectionClosedError as e:                # unexpected disconnect — log but don't crash
+        except ConnectionClosedError as e:                # unexpected disconnect — log but don't crash
             self.get_logger().warning(f"⚠️  WebUI disconnected unexpectedly: {e}")
         finally:
             self._active_connections.discard(websocket)                         # deregister on any exit path

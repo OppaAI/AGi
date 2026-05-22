@@ -1,3 +1,4 @@
+
 """
 test_tic_unit.py
 ================
@@ -21,14 +22,14 @@ Coverage targets (all pipeline stages):
     _prune_efference_echoes — stale echo expiry
 """
 
-import hashlib
 import json
 import sys
 import time
 import types
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
+from gms.csb import SSS, SensoryInputChannel, SensoryModality, TraceType
 
 # ── dependency stubs ──────────────────────────────────────────────────────────
 # Must be registered before any import of tic.py touches them.
@@ -125,8 +126,7 @@ def _make_grace_stubs():
     gms = types.ModuleType("gms")
     csb = types.ModuleType("gms.csb")
 
-    from dataclasses import dataclass, field
-    from typing import Optional
+    from dataclasses import dataclass
 
     class SensoryInputChannel:
         WEBUI = MagicMock(value="webui")
@@ -178,9 +178,6 @@ _make_grace_stubs()
 
 # ── now safe to import ────────────────────────────────────────────────────────
 # Patch asyncio and threading so TIC.__init__ doesn't try to boot a real server.
-import asyncio
-import threading
-
 with (
     patch("asyncio.new_event_loop", return_value=MagicMock()),
     patch("threading.Thread", return_value=MagicMock()),
@@ -390,10 +387,8 @@ class TestHeuristicGate:
     # ── debounce ──────────────────────────────────────────────────────────
 
     def test_drops_duplicate_within_window(self):
-        sss1 = _make_sss("same message")
-        sss2 = _make_sss("same message")
-        assert self.tic._heuristic_gate(sss1) is not None   # first pass
-        assert self.tic._heuristic_gate(sss2) is None       # duplicate within window
+        assert self.tic._heuristic_gate(_make_sss("same message")) is not None   # first pass
+        assert self.tic._heuristic_gate(_make_sss("same message")) is None       # duplicate within window
 
     def test_passes_duplicate_after_window(self):
         text = "repeat"
@@ -665,7 +660,6 @@ class TestPipelineIntegration:
         self.tic = _make_tic()
 
     def _run_pipeline(self, text: str, user_id: str = "integration_user"):
-        from gms.csb import SSS, SensoryInputChannel, SensoryModality, TraceType
         raw = json.dumps({"text": text, "user_id": user_id, "role": "user", "source": "webui"})
         sss = self.tic._receive(raw)
         if sss is None:
@@ -709,6 +703,5 @@ class TestPipelineIntegration:
         assert result is None
 
     def test_malformed_json_returns_none(self):
-        from gms.csb import SSS, SensoryInputChannel, SensoryModality, TraceType
         sss = self.tic._receive("{not valid json")
         assert sss is None
