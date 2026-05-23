@@ -3,9 +3,10 @@ Telepathy Input Core (TIC)
 ==========================
 System: Telepathy Management System (TMS)
 
-This module is the afferent pathway for remote human communication. It receives raw input from
-peripheral interfaces (WebUI, messaging apps, email, etc.), gates and normalizes it into a
-structured Sensory Stimulus Signal (SSS), and transmits it to the CNS via the Neural Gateway.
+This module is the afferent pathway for remote telepathic communication. It receives raw input 
+from peripheral interfaces (WebUI, messaging apps, email, etc.), gates and normalizes it into a
+structured Sensory Stimulus Signal (SSS), and transmits the SSS to the CNS via the Neural Gateway.
+
 Biological analogue: Peripheral Nervous System (PNS) — transduction at the sensory organ,
 local reflex handling, and afferent transmission to the thalamus.
 
@@ -114,12 +115,12 @@ Terminology:
                                     and finally serialized for dispatch to Semantic Cognitive System (SCS).
                                     Defined in genomic substrates blueprint.
     Afferent Pathway              — carries signals toward the Semantic Cognitive System (SCS) (input direction)
-    Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel             — The term for direct symbolic input with no physical substrate
-    Efference Copy                — CNC-published prediction of expected input; suppressed at periphery
-                                    to avoid processing own outputs as external stimuli
     Affective Tagging             — fast valence/arousal scoring applied before cortical dispatch;
                                     analogous to amygdala pre-processing of sensory signals
+    Efference Copy                — CNC-published prediction of expected input; suppressed at periphery
+                                    to avoid processing own outputs as external stimuli
+    Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing
+    Telepathy Channel             — The term for direct symbolic input with no physical substrate
 """
 
 # System libraries
@@ -159,63 +160,58 @@ class TelepathyInputCore(Node):
         """
         Initialize Telepathy Input Core.
 
-        Opens the neural gateway, arms the efference echo channel via the neural gateway.
-        and ignites the WebSocket server on a dedicated afferent thread.
-        Robot system spin and WebSocket server never share a thread.
+        Opens the neural gateways, ignites the teloreceptor channel via a dedicated
+        afferent thread, and arms the efference echo receptor channel.
+        Robot system operation cycle and teloreceptor never share a thread.
         """
-        super().__init__("tic")                                                 # register this core with robot system as "tic"
+        super().__init__("tic")                                                 # register this core with robot system
         self.get_logger().info("=" * 60)                                        # log heading title border
-        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")       # log the initialization of TIS
+        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")       # log the initialization of TIC
         self.get_logger().info("=" * 60)                                        # log heading title border
 
-        hydrate_manifest(self, system="tms")                                    # hydrate manifest — bind TMS constants from AuRoRA parameter server
-        
-        self._active_connections: set = set()                                   # live WebSocket connections — tracked for clean shutdown
+        hydrate_manifest(self, system="tms")                                    # hydrate manifest constants from parameter server
 
-        # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
-        # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
-        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # user_id → (last_text, monotonic_time) — refractory period per sender
+        self._active_connections: set = set()                                   # live WebSocket connections to teloreceptor to track for clean shutdown
 
-        # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
-        # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
+        # Refractory anchor keyed on user_id — prevents cross-user signal suppression.
+        # Maps user_id → (previous user text, time of last user text). Distinct senders never suppress each other.
+        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # user_id → (previous_user_text, monotonic_time) — refractory period per sender
+
+        # Efference echo registry — CNC publishes fingerprints of outbound responses here
+        # TIC suppresses any inbound signal whose fingerprint matches within the expiry window
         # Biological analogue: motor efference copy preventing self-tickling.
-        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry epoch — efference echo suppression registry
+        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry epoch of suppressed efference echo
 
-        # Sensory gateway — normalized SSS published here for CNC consumption
+        # Sensory gateway — normalized SSS published here for SCS consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
-            String, TMS.TEXT_SENSORY_GATEWAY, 10                                # String type | topic | QoS depth 10
+            String, TMS.TEXT_SENSORY_GATEWAY, 10                                # neural gateway to publish normalized SSS to SCS
         )
 
         # Efference echo subscriber — CNC publishes fingerprints of its own outbound responses.
         # TIC suppresses inbound signals matching these fingerprints within the TTL window.
-        # TODO: define TMS.EFFERENCE_ECHO topic name in hrm.py and aurora.yaml
-        _efference_echo_topic = getattr(TMS, "EFFERENCE_ECHO", "tms/efference_echo")
-        self._efference_echo_sub = self.create_subscription(
-            String,
-            _efference_echo_topic,
-            self._on_efference_echo,
-            10,
+        self._efference_echo_receptor: rclpy.subscription.Subscription = self.create_subscription(  # efference echo receptor — subscribes to CNC outbound response fingerprints
+            String, TMS.EFFERENCE_ECHO_GATEWAY, self._on_efference_echo, 10,   
         )
 
         # Boot websocket server on its own thread — never competes with ROS2 spin
-        self._ws_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()     # isolated event loop — owns the websocket server lifetime
-        self._ws_thread: threading.Thread = threading.Thread(
-            target=self._ws_loop.run_forever,
-            name="tic-ws-server",
+        self._ws_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()     # isolated event loop — owns WebSocket server lifetime
+        self._ws_thread: threading.Thread = threading.Thread(                   # dedicated thread for WebSocket server
+            target=self._ws_loop.run_forever,                                   # run the asyncio event loop on its own thread — keeps it off the ROS2 spin thread
+            name="tic-afferent",                                                # thread name for debuggers and profilers
             daemon=True,                                                        # dies with main process — clean shutdown
         )
-        self._ws_thread.start()                                                 # ignite websocket thread
+        self._ws_thread.start()                                                 # ignite afferent thread
 
         asyncio.run_coroutine_threadsafe(                                       # schedule server boot on ws loop — crosses thread boundary safely
             self._boot_ws_server(), self._ws_loop
         )
 
-        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_SENSORY_GATEWAY}")
-        self.get_logger().info(f"✅ Subscribing : {_efference_echo_topic}")
-        self.get_logger().info(f"✅ WebSocket   : ws://0.0.0.0:{TMS.WS_PORT}")
-        self.get_logger().info("=" * 60)
-        self.get_logger().info("📡 TIC ready — afferent pathway open")
-        self.get_logger().info("=" * 60)
+        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_SENSORY_GATEWAY}") # ROS2 topic for SSS published to SCS
+        self.get_logger().info(f"✅ Subscribing : {TMS.EFFERENCE_ECHO_GATEWAY}") # ROS2 topic for efference echoes
+        self.get_logger().info(f"✅ WebSocket   : ws://{TMS.WS_HOST}:{TMS.WS_PORT}")  # WebSocket server for WebUI connection
+        self.get_logger().info("=" * 60)                                        # log heading title border
+        self.get_logger().info("📡 TIC ready — afferent pathway open")          # log ready status
+        self.get_logger().info("=" * 60)                                        # log heading title border
 
     # ── efference copy ────────────────────────────────────────────────────────
 
@@ -234,7 +230,7 @@ class TelepathyInputCore(Node):
         try:
             data: dict = json.loads(msg.data)
             fingerprint: str = data.get("fingerprint", "")
-            ttl: float = float(data.get("ttl", _EFFERENCE_ECHO_TTL_S))
+            ttl: float = float(data.get("ttl", TMS.EFFERENCE_ECHO_TTL_S))
             if fingerprint:
                 expiry = time.monotonic() + ttl
                 self._efference_echoes[fingerprint] = expiry
@@ -516,12 +512,12 @@ class TelepathyInputCore(Node):
         words_lower: set[str] = set(text.lower().split())
 
         # arousal — urgency keyword hits + capital ratio (shouting signal)
-        urgency_hits  = len(words_lower & _URGENCY_MARKERS)
+        urgency_hits  = len(words_lower & TMS.URGENCY_MARKERS)
         arousal       = min(1.0, (urgency_hits * 0.25) + (capital_ratio * 0.5))
 
         # valence — positive vs negative keyword balance
-        positive_hits = len(words_lower & _POSITIVE_MARKERS)
-        negative_hits = len(words_lower & _NEGATIVE_MARKERS)
+        positive_hits = len(words_lower & TMS.POSITIVE_MARKERS)
+        negative_hits = len(words_lower & TMS.NEGATIVE_MARKERS)
         raw_valence   = (positive_hits - negative_hits) * 0.3                  # each hit shifts ±0.3
         valence       = max(-1.0, min(1.0, raw_valence))                        # clamp to [-1.0, 1.0]
 
@@ -533,7 +529,7 @@ class TelepathyInputCore(Node):
         sss.salience = round(salience, 3)
 
         # fast-path flag — high-arousal signals bypass normal queue at CNS
-        sss.fast_path = arousal >= _FAST_PATH_AROUSAL_THRESHOLD
+        sss.fast_path = arousal >= TMS._FAST_PATH_AROUSAL_THRESHOLD
 
         if sss.fast_path:
             self.get_logger().info(
@@ -593,37 +589,37 @@ class TelepathyInputCore(Node):
         """
         Gracefully shut down TIC — close websocket server and all active connections.
         """
-        self.get_logger().info("🛑 TIC shutting down…")
+        self.get_logger().info("🛑 TIC shutting down…")                             # log shutdown of TIC
 
-        async def _close():
-            for ws in list(self._active_connections):
-                await ws.close()
-            if hasattr(self, "_ws_server"):
-                self._ws_server.close()
-                await self._ws_server.wait_closed()
+        async def _close():                                                         # define a coroutine to close the websocket server
+            for ws in list(self._active_connections):                               # iterate over a copy of the active connections
+                await ws.close()                                                    # close each connection asynchronously
+            if hasattr(self, "_ws_server"):                                         # if the websocket server exists
+                self._ws_server.close()                                             # close the websocket server
+                await self._ws_server.wait_closed()                                 # wait for the websocket server to close
 
-        future = asyncio.run_coroutine_threadsafe(_close(), self._ws_loop)
-        try:
-            future.result(timeout=3.0)
-        except Exception:
-            pass
+        future = asyncio.run_coroutine_threadsafe(_close(), self._ws_loop)          # run the close coroutine in the websocket loop
+        try:                                                                        # try to close the websocket server
+            future.result(timeout=3.0)                                              # wait for the close coroutine to complete with a timeout of 3.0 seconds
+        except Exception:                                                           # handle exceptions
+            pass                                                                    # ignore any exceptions raised by the close coroutine
 
-        self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)
-        self._ws_thread.join(timeout=3.0)
-        super().destroy_node()
+        self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)                      # stop the event loop
+        self._ws_thread.join(timeout=3.0)                                           # wait for the thread to finish
+        super().destroy_node()                                                      # destroy the ROS2 node
         self.get_logger().info("✅ TIC shutdown complete")
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = TIC()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        node.get_logger().info("👋 Shutdown requested")
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+def main(args=None):                                            # entry point for ROS2 node
+    rclpy.init(args=args)                                       # register node with ROS2
+    node = TelepathyInputCore()                                 # instantiate Telepathy Input Core node
+    try:                                                        # attempts to spin the node until Ctrl-C is pressed
+        rclpy.spin(node)                                        # keep node alive - blocking
+    except KeyboardInterrupt:                                   # catch Ctrl-C and shutdown gracefully
+        node.get_logger().info("👋 Shutdown requested")         # log shutdown of TIC
+    finally:                                                    # execute cleanup regardless of whether an exception was raised
+        node.destroy_node()                                     # cleanup and unregister from ROS2
+        rclpy.shutdown()                                        # unregister from ROS2 and shut down
 
 
 if __name__ == "__main__":
