@@ -174,12 +174,12 @@ class TelepathyInputCore(Node):
 
         # Debounce anchor keyed on user_id — prevents cross-user signal suppression.
         # Maps user_id → (last_text, monotonic_time). Distinct senders never suppress each other.
-        self._refractory_anchor: dict[str, tuple[str, float]] = {}                   # user_id → (last_text, monotonic_time) — debounce anchor per sender
+        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # user_id → (last_text, monotonic_time) — refractory period per sender
 
         # Efference echo registry — maps SHA-256 fingerprint → expiry epoch (monotonic).
         # CNC publishes expected output fingerprints here; TIC suppresses matching inbound signals.
         # Biological analogue: motor efference copy preventing self-tickling.
-        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry time (monotonic)
+        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry epoch — efference echo suppression registry
 
         # Sensory gateway — normalized SSS published here for CNC consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
