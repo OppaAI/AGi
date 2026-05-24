@@ -82,7 +82,7 @@ Lifecycle:
     5. SCS Transmission
        Consolidated SSS transmitted via Neural Gateway to SCS (Thalamic Loop)
        over the neural gateway. TIC holds the SSS in buffer awaiting
-       efferent return — the interaction is not yet complete.
+       response return — the interaction is not yet complete.
        High-arousal signals are flagged fast_path=True for priority dispatch.
        SSS marked DISPATCHED.
 
@@ -114,13 +114,15 @@ Terminology:
                                     receiving, mutated at each pipeline stage via state/locus fields,
                                     and finally serialized for dispatch to Semantic Cognitive System (SCS).
                                     Defined in genomic substrates blueprint.
-    Afferent Pathway              — carries signals toward the Semantic Cognitive System (SCS) (input direction)
     Affective Tagging             — fast valence/arousal scoring applied before cortical dispatch;
                                     analogous to amygdala pre-processing of sensory signals
-    Efference Copy                — CNC-published prediction of expected input; suppressed at periphery
-                                    to avoid processing own outputs as external stimuli
-    Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing
-    Telepathy Channel             — The term for direct symbolic input with no physical substrate
+    Neural Gateway                — pathway for transmitting neural signals between subsystems.
+    Response Echo                 — CNC-published prediction of expected output; suppressed at periphery
+                                    to avoid processing own outputs as external stimuli.
+    Stimulus Gateway              — pathway for carrying signals from sensory systems to SCS.
+    Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing.
+    Telepathy Channel             — The term for direct symbolic input with no physical substrate.
+    Teloreceptor Channel          — Websocket server connection for receiving symbolic input (WebUI).
 """
 
 # System libraries
@@ -161,59 +163,48 @@ class TelepathyInputCore(Node):
         Initialize Telepathy Input Core.
 
         Opens the neural gateways, ignites the teloreceptor channel via a dedicated
-        afferent thread, and arms the efference echo receptor channel.
+        peripheral thread, and arms the response echo receptor channel.
         Robot system operation cycle and teloreceptor never share a thread.
         """
-        super().__init__("tic")                                                 # register this core with robot system
-        self.get_logger().info("=" * 60)                                        # log heading title border
-        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")       # log the initialization of TIC
-        self.get_logger().info("=" * 60)                                        # log heading title border
+        super().__init__("tic")                                                         # register this core with robot system
+        self.get_logger().info("=" * 60)                                                # log heading title border
+        self.get_logger().info("📡 TIC — Telepathy Input Core starting…")               # log the initialization of TIC
+        self.get_logger().info("=" * 60)                                                # log heading title border
 
-        hydrate_manifest(self, system="tms")                                    # hydrate manifest constants from parameter server
+        hydrate_manifest(self, system="tms")                                            # hydrate manifest constants from parameter server
 
-        self._active_connections: set = set()                                   # live connections to teloreceptor to track for clean shutdown
-
-        # Refractory anchor keyed on user_id — prevents cross-user signal suppression.
-        # Maps user_id → (previous user text, time of last user text). Distinct senders never suppress each other.
-        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # to supress user repeating the exact same message within the refractory period
-
-        # Efference echo registry — CNC publishes fingerprints of outbound responses here
-        # TIC suppresses any inbound signal whose fingerprint matches within the expiry window
-        # Biological analogue: motor efference copy preventing self-tickling.
-        self._efference_echoes: dict[str, float] = {}                           # to supress system echoing its own responses
-
-        # Sensory gateway — normalized SSS published here for SCS consumption
-        self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
-            String, TMS.TEXT_SENSORY_GATEWAY, 10                                # neural gateway to publish normalized SSS to SCS
+        # Neural Gateways infrastructure to communicate with other subsystems.
+        self._stimulus_gateway: rclpy.publisher.Publisher = self.create_publisher(      # neural gateway to publish normalized SSS to SCS
+            String, TMS.TEXT_STIMULUS_GATEWAY, 10,
+        )
+        self._response_echo_receptor: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
+            String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
 
-        # Efference echo subscriber — CNC publishes fingerprints of its own outbound responses.
-        # TIC suppresses inbound signals matching these fingerprints within the TTL window.
-        self._efference_echo_receptor: rclpy.subscription.Subscription = self.create_subscription(  # efference echo receptor — subscribes to CNC outbound response fingerprints
-            String, TMS.EFFERENCE_ECHO_GATEWAY, self._on_efference_echo, 10,   
+        # Runtime states for processing stimuli.
+        self._active_connections: set = set()                                           # live connections to teloreceptor to track for clean shutdown
+        self._refractory_anchor: dict[str, tuple[str, float]] = {}                      # to supress user repeating the exact same message within the refractory period
+        self._response_echoes: dict[str, tuple[str, float]] = {}                        # to supress system echoing its own responses over a short period of time per user
+
+        # Ignite teloreceptor channel on its own neural thread — never competes with main robot system.
+        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor channel
+        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor channel
+            target=self._teloreceptor_cycle.run_forever,                                # run the parallel neural cycle on its own thread — keeps it off the ROS2 spin thread
+            name="tic-teloreceptor",                                                    # set the neural thread name for profilers
+            daemon=True,                                                                # this thread dies with the main system — enables clean shutdown
+        )
+        self._teloreceptor_thread.start()                                               # ignite teloreceptor neural thread
+
+        asyncio.run_coroutine_threadsafe(                                               # schedule server boot on ws loop — crosses thread boundary safely
+            self._ignite_teloreceptor_channel(), self._teloreceptor_cycle
         )
 
-        # Boot websocket server on its own thread — never competes with ROS2 spin
-        self._ws_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()     # isolated event loop — owns WebSocket server lifetime
-        self._ws_thread: threading.Thread = threading.Thread(                   # dedicated thread for WebSocket server
-            target=self._ws_loop.run_forever,                                   # run the asyncio event loop on its own thread — keeps it off the ROS2 spin thread
-            name="tic-afferent",                                                # thread name for debuggers and profilers
-            daemon=True,                                                        # dies with main process — clean shutdown
-        )
-        self._ws_thread.start()                                                 # ignite afferent thread
-
-        asyncio.run_coroutine_threadsafe(                                       # schedule server boot on ws loop — crosses thread boundary safely
-            self._boot_ws_server(), self._ws_loop
-        )
-
-        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_SENSORY_GATEWAY}") # ROS2 topic for SSS published to SCS
-        self.get_logger().info(f"✅ Subscribing : {TMS.EFFERENCE_ECHO_GATEWAY}") # ROS2 topic for efference echoes
-        self.get_logger().info(f"✅ WebSocket   : ws://{TMS.WS_HOST}:{TMS.WS_PORT}")  # WebSocket server for WebUI connection
-        self.get_logger().info("=" * 60)                                        # log heading title border
-        self.get_logger().info("📡 TIC ready — afferent pathway open")          # log ready status
-        self.get_logger().info("=" * 60)                                        # log heading title border
-
-    # ── efference copy ────────────────────────────────────────────────────────
+        self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")      # ROS2 topic for SSS published to SCS
+        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.EFFERENCE_ECHO_GATEWAY}")    # ROS2 topic for efference echoes
+        self.get_logger().info(f"✅ Teloreceptor          : ws://{TMS.WS_HOST}:{TMS.WS_TELORECEPTOR_PORT}")    # WebSocket server for WebUI connection
+        self.get_logger().info("=" * 60)                                                # log heading title border
+        self.get_logger().info("📡 TIC ready — peripheral pathway open")                # log ready status
+        self.get_logger().info("=" * 60)                                                # log heading title border
 
     def _on_efference_echo(self, msg: String) -> None:
         """
@@ -265,7 +256,7 @@ class TelepathyInputCore(Node):
 
     # ── websocket server ──────────────────────────────────────────────────────
 
-    async def _boot_ws_server(self) -> None:
+    async def _ignite_teloreceptor_channel(self) -> None:
         """
         Boot the websocket server and hold it for the node lifetime.
         Runs entirely on the tic-ws-server thread — never touches ROS2.
@@ -273,9 +264,9 @@ class TelepathyInputCore(Node):
         self._ws_server = await websockets.serve(                               # open websocket server — accepts connections from WebUI
             self._handle_connection,
             "0.0.0.0",
-            TMS.WS_PORT,
+            TMS.WS_TELORECEPTOR_PORT,
         )
-        self.get_logger().info(f"✅ WebSocket server live on port {TMS.WS_PORT}")
+        self.get_logger().info(f"✅ Teloreceptor channel live on port {TMS.WS_TELORECEPTOR_PORT}")
         await self._ws_server.wait_closed()                                     # hold server open until explicitly closed
 
     async def _handle_connection(self, websocket) -> None:
@@ -306,7 +297,7 @@ class TelepathyInputCore(Node):
                 sss = self._buffer(sss)                                         # stage 4 — hold, extract, affective tag, consolidate
                 self._publish_sss(sss)                                          # stage 5 — dispatch consolidated SSS to sensory gateway
 
-                # TODO: stage 6 — efferent return (await SCS response, bind to SSS interaction ID)
+                # TODO: stage 6 — response return (await SCS response, bind to SSS interaction ID)
                 # TODO: stage 7 — interaction dispatch (publish completed SSS+CRS pair for memory consolidation)
 
         except ConnectionClosedOK:                        # clean disconnect — normal lifecycle
@@ -573,7 +564,7 @@ class TelepathyInputCore(Node):
                 "generated_at": sss.generated_at,
                 "triggered_at": sss.triggered_at,
             })
-            self._sensory_gateway.publish(signal)
+            self._stimulus_gateway.publish(signal)
 
             if sss.fast_path:
                 self.get_logger().info(f"⚡ SSS dispatched (fast-path): {sss.text[:60]}…")
@@ -581,7 +572,7 @@ class TelepathyInputCore(Node):
                 self.get_logger().debug(f"📤 SSS dispatched: {sss.text[:60]}…")
 
         except Exception as e:
-            self.get_logger().error(f"❌ Publish error: {e}")                   # non-fatal — publish failure must not crash the afferent pathway
+            self.get_logger().error(f"❌ Publish error: {e}")                   # non-fatal — publish failure must not crash the peripheral pathway
 
     # ── shutdown ──────────────────────────────────────────────────────────────
 

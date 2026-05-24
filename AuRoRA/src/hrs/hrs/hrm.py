@@ -83,12 +83,12 @@ class AGi:                                                              # Amazin
         HTTP_PORT                  : int   = 8848                       # [STATIC] WebUI — HTTP static file server
         WS_PORT                    : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
         WS_OUTPUT_PORT             : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
-        TEXT_SENSORY_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_sensory"   # [STATIC] ROS topic — SSS inbound to CNC
-        TEXT_MOTOR_GATEWAY         : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_motor"     # [STATIC] ROS topic — CRS outbound from CNC
-        EFFERENCE_ECHO_GATEWAY     : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/efference_echo" # [STATIC] ROS topic — CNC outbound efference echoes
+        TEXT_STIMULUS_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
+        TEXT_RESPONSE_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
+        RESPONSE_ECHO_GATEWAY     : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
         MAX_PAYLOAD_BYTES          : int   = 2048                       # [STATIC] heuristic gate ceiling — oversized payloads discarded
         DEBOUNCE_WINDOW_S          : float = 1.0                        # [STATIC] duplicate suppression window per user
-        EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] efference echo fingerprint expiry
+        EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] response echo fingerprint expiry
         FAST_PATH_AROUSAL_THRESHOLD: float = 0.7                        # [INTRINSIC] arousal ceiling for priority CNS dispatch
         
         INJECTION_PREFIXES: tuple[str, ...] = (                         # [STATIC] Injection pattern prefixes — peripheral reflex, never reaches CNS
