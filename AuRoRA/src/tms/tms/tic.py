@@ -171,16 +171,16 @@ class TelepathyInputCore(Node):
 
         hydrate_manifest(self, system="tms")                                    # hydrate manifest constants from parameter server
 
-        self._active_connections: set = set()                                   # live WebSocket connections to teloreceptor to track for clean shutdown
+        self._active_connections: set = set()                                   # live connections to teloreceptor to track for clean shutdown
 
         # Refractory anchor keyed on user_id — prevents cross-user signal suppression.
         # Maps user_id → (previous user text, time of last user text). Distinct senders never suppress each other.
-        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # user_id → (previous_user_text, monotonic_time) — refractory period per sender
+        self._refractory_anchor: dict[str, tuple[str, float]] = {}              # to supress user repeating the exact same message within the refractory period
 
         # Efference echo registry — CNC publishes fingerprints of outbound responses here
         # TIC suppresses any inbound signal whose fingerprint matches within the expiry window
         # Biological analogue: motor efference copy preventing self-tickling.
-        self._efference_echoes: dict[str, float] = {}                           # fingerprint → expiry epoch of suppressed efference echo
+        self._efference_echoes: dict[str, float] = {}                           # to supress system echoing its own responses
 
         # Sensory gateway — normalized SSS published here for SCS consumption
         self._sensory_gateway: rclpy.publisher.Publisher = self.create_publisher(
