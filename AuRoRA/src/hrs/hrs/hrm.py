@@ -88,8 +88,8 @@ class AGi:                                                              # Amazin
         TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
         RESPONSE_ECHO_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
         MAX_PAYLOAD_BYTES          : int   = 2048                       # [STATIC] heuristic gate ceiling — oversized payloads discarded
-        DEBOUNCE_WINDOW_S          : float = 1.0                        # [STATIC] duplicate suppression window per user
-        EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] response echo fingerprint expiry
+        REFRACTORY_PEROID          : float = 1.0                        # [STATIC] duplicate suppression window per user
+        RESPONSE_ECHO_DURACTION    : float = 5.0                        # [STATIC] response echo imprint expiry
         FAST_PATH_AROUSAL_THRESHOLD: float = 0.7                        # [INTRINSIC] arousal ceiling for priority CNS dispatch
         
         INJECTION_PREFIXES: tuple[str, ...] = (                         # [STATIC] Injection pattern prefixes — peripheral reflex, never reaches CNS
