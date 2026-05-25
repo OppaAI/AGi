@@ -177,6 +177,10 @@ class TelepathyInputCore(Node):
         self._stimulus_gateway: rclpy.publisher.Publisher = self.create_publisher(      # neural gateway to publish normalized SSS to SCS
             String, TMS.TEXT_STIMULUS_GATEWAY, 10,
         )
+        
+        # CNC publishes the SHA-256 fingerprint of each outbound response text immediately
+        # after GCE stream completes. Any inbound SSS whose text fingerprint matches within
+        # the TTL window is suppressed as a self-generated echo.
         self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
@@ -206,17 +210,13 @@ class TelepathyInputCore(Node):
         self.get_logger().info("📡 TIC ready — peripheral pathway open")                                              # log ready status
         self.get_logger().info("=" * 60)                                                                               # log heading title border
 
-    def _on_efference_echo(self, msg: String) -> None:
+    def _on_response_echo(self, msg: String) -> None:
         """
-        Receive a CNC-published efference echo fingerprint and register it for suppression.
-        Called on the ROS2 spin thread — dict write is GIL-safe for CPython.
-
-        CNC publishes the SHA-256 fingerprint of each outbound response text immediately
-        after GCE stream completes. Any inbound SSS whose text fingerprint matches within
-        the TTL window is suppressed as a self-generated echo.
+        Register a CNC-published response echo fingerprint for inbound signal suppression.
+        ROS2 subscription callback — runs on the spin thread; dict write is GIL-safe for CPython.
 
         Args:
-            msg (String): JSON payload — {"fingerprint": "<sha256hex>", "ttl": <seconds>}
+            msg (String): payload in JSON schema — {"fingerprint": "<sha256hex>", "ttl": <seconds>}
         """
         try:
             data: dict = json.loads(msg.data)
