@@ -178,8 +178,8 @@ class TelepathyInputCore(Node):
             String, TMS.TEXT_STIMULUS_GATEWAY, 10,
         )
         
-        # CNC publishes the SHA-256 fingerprint of each outbound response text immediately
-        # after GCE stream completes. Any inbound SSS whose text fingerprint matches within
+        # CNC publishes the SHA-256 imrpint of each outbound response text immediately
+        # after GCE stream completes. Any inbound SSS whose text imprint matches within
         # the TTL window is suppressed as a self-generated echo.
         self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
@@ -210,28 +210,28 @@ class TelepathyInputCore(Node):
         self.get_logger().info("📡 TIC ready — peripheral pathway open")                                              # log ready status
         self.get_logger().info("=" * 60)                                                                               # log heading title border
 
-    def _on_response_echo(self, msg: String) -> None:
+    def _on_response_echo(self, response_echo: String) -> None:
         """
-        Register a CNC-published response echo fingerprint for inbound signal suppression.
+        Register a CNC-published response echo imprint for inbound signal suppression.
         ROS2 subscription callback — runs on the spin thread; dict write is GIL-safe for CPython.
 
         Args:
-            msg (String): payload in JSON schema — {"fingerprint": "<sha256hex>", "ttl": <seconds>}
+            response_echo (String): response echo in JSON schema — {"imprint": "<sha256hex>", "ttl": <seconds>}
         """
         try:
-            data: dict = json.loads(msg.data)
-            fingerprint: str = data.get("fingerprint", "")
+            data: dict = json.loads(response_echo.data)
+            imprint: str = data.get("imprint", "")
             ttl: float = float(data.get("ttl", TMS.EFFERENCE_ECHO_TTL_S))
-            if fingerprint:
+            if imprint:
                 expiry = time.monotonic() + ttl
-                self._efference_echoes[fingerprint] = expiry
-                self.get_logger().debug(f"🧠 Efference echo registered: {fingerprint[:12]}… TTL={ttl}s")
+                self._efference_echoes[imprint] = expiry
+                self.get_logger().debug(f"🧠 Efference echo registered: {imprint[:12]}… TTL={ttl}s")
         except (json.JSONDecodeError, ValueError) as e:
             self.get_logger().warning(f"⚠️  Efference echo parse error: {e}")
 
     def _prune_efference_echoes(self) -> None:
         """
-        Prune expired efference echo fingerprints from the registry.
+        Prune expired efference echo imprints from the registry.
         Called at the top of _heuristic_gate — cheap O(n) scan on a small dict.
         """
         now = time.monotonic()
@@ -240,13 +240,13 @@ class TelepathyInputCore(Node):
             del self._efference_echoes[fp]
 
     @staticmethod
-    def _fingerprint(text: str) -> str:
+    def _imprint(text: str) -> str:
         """
-        Compute SHA-256 fingerprint of normalized text.
-        Normalization: strip whitespace, casefold — matches CNC fingerprint logic.
+        Compute SHA-256 imprint of normalized text.
+        Normalization: strip whitespace, casefold — matches CNC imprint logic.
 
         Args:
-            text (str): Raw text to fingerprint.
+            text (str): Raw text to imprint.
 
         Returns:
             str: Hex-encoded SHA-256 digest.
@@ -427,16 +427,16 @@ class TelepathyInputCore(Node):
 
         # 4. efference echo suppression — CNC predicted this input; suppress as self-generated
         # Biological analogue: motor efference copy preventing self-tickling.
-        # CNC publishes SHA-256 fingerprints of outbound responses to TMS.EFFERENCE_ECHO.
-        # If inbound text fingerprint matches a live echo, the signal is suppressed here.
-        fingerprint = self._fingerprint(text)
-        if fingerprint in self._efference_echoes:
+        # CNC publishes SHA-256 imprints of outbound responses to TMS.EFFERENCE_ECHO.
+        # If inbound text imprint matches a live echo, the signal is suppressed here.
+        imprint = self._imprint(text)
+        if imprint in self._efference_echoes:
             sss.state                = "intercepted"
             sss.locus                = "tic._heuristic_gate"
             sss.drop_reason          = "efference_echo"
             sss.dropped_at           = now
             sss.efference_suppressed = True
-            self.get_logger().debug(f"🔇 SSS suppressed — efference echo match: {fingerprint[:12]}…")
+            self.get_logger().debug(f"🔇 SSS suppressed — efference echo match: {imprint[:12]}…")
             return None
 
         # 5. duplicate debounce — same payload from the same user within debounce window.
