@@ -221,13 +221,13 @@ class TelepathyInputCore(Node):
         try:                                                                                                        # attempt to interpret response echo
             echo: dict = json.loads(response_echo.data)                                                             # deserialize echo imprint payload
             imprint: str = echo.get("imprint", "")                                                                  # SHA-256 hex digest of CNC outbound response
-            echo_duration: float = float(echo.get("duration", TMS.RESPONSE_ECHO_DURACTION))                         # suppression window — falls back to module default
-            if imprint:
-                echo_expiry = time.monotonic() + duration                                                           # absolute expiry time on monotonic clock
-                self._response_echoes[imprint] = echo_expiry
-                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={duration}s")
-        except (json.JSONDecodeError, ValueError) as e:
-            self.get_logger().warning(f"⚠️  Response echo parse error: {e}")
+            echo_duration: float = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                          # suppression window — falls back to module default
+            if imprint:                                                                                             # if echo contains an imprint
+                echo_expiry = time.monotonic() + echo_duration                                                      # absolute expiry time on monotonic clock
+                self._response_echoes[imprint] = echo_expiry                                                        # register the imprint and expiry duration
+                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={duration}s")       # log registry of the imprint and expiry duration
+        except (json.JSONDecodeError, ValueError) as e:                                                             # if response echo schema mismatch
+            self.get_logger().warning(f"⚠️  Response echo parse error: {e}")                                        # log response echo parsing error
 
     def _prune_efference_echoes(self) -> None:
         """
