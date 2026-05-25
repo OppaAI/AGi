@@ -200,7 +200,7 @@ class TelepathyInputCore(Node):
         )
 
         self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")      # ROS2 topic for SSS published to SCS
-        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.EFFERENCE_ECHO_GATEWAY}")    # ROS2 topic for efference echoes
+        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")    # ROS2 topic for efference echoes
         self.get_logger().info(f"✅ Teloreceptor          : ws://{TMS.WS_HOST}:{TMS.WS_TELORECEPTOR_PORT}")    # WebSocket server for WebUI connection
         self.get_logger().info("=" * 60)                                                # log heading title border
         self.get_logger().info("📡 TIC ready — peripheral pathway open")                # log ready status
