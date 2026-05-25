@@ -80,12 +80,12 @@ class AGi:                                                              # Amazin
     ROBOT_ID: str         = "AuRoRA-ZERO-Prototype"                     # (TODO) [STATIC] robot ID to be stored in encrypted file
     
     class TMS:                                                          # Telepathy Management System
-        INFOGATEWAY_PORTAL          : int   = 8848                      # [STATIC] WebUI — HTTP static file server
-        TELORECEPTOR_PORTAL         : int   = 8850                      # [STATIC] WebSocket server port — TIC input adapter
-        TELOEFFECTOR_PORTAL         : int   = 8851                      # [STATIC] WebSocket server port — TOC output adapter
-        TEXT_STIMULUS_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
-        TEXT_RESPONSE_GATEWAY       : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
-        RESPONSE_ECHO_GATEWAY     : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
+        INFOGATEWAY_PORTAL         : int   = 8848                      # [STATIC] WebUI — HTTP static file server
+        TELORECEPTOR_PORTAL        : int   = 8850                      # [STATIC] WebSocket server port — TIC input adapter
+        TELOEFFECTOR_PORTAL        : int   = 8851                      # [STATIC] WebSocket server port — TOC output adapter
+        TEXT_STIMULUS_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
+        TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
+        RESPONSE_ECHO_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
         MAX_PAYLOAD_BYTES          : int   = 2048                       # [STATIC] heuristic gate ceiling — oversized payloads discarded
         DEBOUNCE_WINDOW_S          : float = 1.0                        # [STATIC] duplicate suppression window per user
         EFFERENCE_ECHO_TTL_S       : float = 5.0                        # [STATIC] response echo fingerprint expiry
