@@ -174,25 +174,25 @@ class TelepathyInputCore(Node):
         hydrate_manifest(self, system="tms")                                            # hydrate manifest constants from parameter server
 
         # Neural Gateways infrastructure to communicate with other subsystems.
-        self._stimulus_gateway: rclpy.publisher.Publisher = self.create_publisher(      # neural gateway to publish normalized SSS to SCS
+        self._stimulus_gateway = self.create_publisher(                                 # neural gateway to publish normalized SSS to SCS
             String, TMS.TEXT_STIMULUS_GATEWAY, 10,
         )
         
         # CNC publishes the SHA-256 imrpint of each outbound response text immediately
         # after GCE stream completes. Any inbound SSS whose text imprint matches within
         # the TTL window is suppressed as a self-generated echo.
-        self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response imprints
+        self._response_echo_gateway = self.create_subscription(                         # response echo receptor — subscribes to CNC outbound response imprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
 
         # Runtime states for processing stimuli.
-        self._active_connections: set = set()                                           # live connections to teloreceptor to track for clean shutdown
-        self._refractory_anchor: dict[str, tuple[str, float]] = {}                      # to supress user repeating the exact same message within the refractory period
-        self._response_echoes: dict[str, tuple[str, float]] = {}                        # to supress system echoing its own responses over a short period of time per user
+        self._active_connections = set()                                                # live connections to teloreceptor to track for clean shutdown
+        self._refractory_anchor = {}                                                    # to supress user repeating the exact same message within the refractory period
+        self._response_echoes = {}                                                      # to supress system echoing its own responses over a short period of time per user
 
         # Open teloreceptor portal on its own neural thread — never competes with main robot system.
-        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor
-        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor
+        self._teloreceptor_cycle = asyncio.new_event_loop()                             # isolated cycle to run teloreceptor
+        self._teloreceptor_thread = threading.Thread(                                   # dedicated neural thread for teloreceptor
             target=self._teloreceptor_cycle.run_forever,                                # run the parallel neural cycle on its own thread — keeps it off the ROS2 spin thread
             name="tic-teloreceptor",                                                    # set the neural thread name for profilers
             daemon=True,                                                                # this thread dies with the main system — enables clean shutdown
@@ -213,31 +213,31 @@ class TelepathyInputCore(Node):
     def _on_response_echo(self, response_echo: String) -> None:
         """
         Register a CNC-published response echo imprint for inbound signal suppression.
-        ROS2 subscription callback — runs on the spin thread; dict write is GIL-safe for CPython.
+        Technical Note: ROS2 subscription callback — runs on the spin thread; dict write is GIL-safe for CPython.
 
         Args:
             response_echo (String): response echo in JSON schema — {"imprint": "<sha256hex>", "duration": <seconds>}
         """
         try:                                                                                                        # attempt to interpret response echo
-            echo: dict = json.loads(response_echo.data)                                                             # deserialize echo imprint payload
-            imprint: str = echo.get("imprint", "")                                                                  # SHA-256 hex digest of CNC outbound response
-            echo_duration: float = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                          # suppression window — falls back to module default
+            echo = json.loads(response_echo.data)                                                                   # deserialize echo imprint payload
+            imprint = echo.get("imprint", "")                                                                       # SHA-256 hex digest of CNC outbound response
+            echo_duration = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                                  # suppression window — falls back to module default
             if imprint:                                                                                             # if echo contains an imprint
                 echo_expiry = time.monotonic() + echo_duration                                                      # absolute expiry time on monotonic clock
-                self._response_echoes[imprint] = echo_expiry                                                        # register the imprint and expiry duration
+                self._response_echoes[imprint] = echo_expiry                                                        # register imprint with expiry duration
                 self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={duration}s")       # log registry of the imprint and expiry duration
-        except (json.JSONDecodeError, ValueError) as e:                                                             # if response echo schema mismatch
-            self.get_logger().warning(f"⚠️  Response echo parse error: {e}")                                        # log response echo parsing error
+        except (json.JSONDecodeError, ValueError) as e:                                                             # malformed response echo payload
+            self.get_logger().warning(f"⚠️  Response echo parse error: {e}")                                        # log parsing error and continue
 
-    def _prune_efference_echoes(self) -> None:
+    def _prune_response_echoes(self) -> None:
         """
-        Prune expired efference echo imprints from the registry.
-        Called at the top of _heuristic_gate — cheap O(n) scan on a small dict.
+        Prune expired response echo imprints from the registry.
+        Technical Note: Called at the top of _heuristic_gate — O(n) scan, acceptable on a small dict.
         """
-        now = time.monotonic()
-        expired = [fp for fp, expiry in self._efference_echoes.items() if now > expiry]
-        for fp in expired:
-            del self._efference_echoes[fp]
+        current_time = time.monotonic()                                                                        # current monotonic time — compared against imprint expiry
+        expired = [imprint for imprint, echo_expiry in self._response_echoes.items() if now > echo_expiry]     # collect stale imprints
+        for imprint  in expired:                                                                               # check for any expired imprints from registry
+            del self._efference_echoes[fp]                                                                     # evict expired imprint from registry
 
     @staticmethod
     def _imprint(text: str) -> str:
@@ -396,7 +396,7 @@ class TelepathyInputCore(Node):
         now        = datetime.now(timezone.utc).isoformat()
 
         # prune stale efference echoes before any check — cheap housekeeping
-        self._prune_efference_echoes()
+        self._prune_response_echoes()
 
         # 1. oversized payload — discard before any pattern matching
         if len(text.encode("utf-8")) > _MAX_PAYLOAD_BYTES:
