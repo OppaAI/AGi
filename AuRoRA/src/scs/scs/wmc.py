@@ -61,7 +61,8 @@ import math                            # for exponential recency decay — half-
 from collections import deque          # for PMT slot — O(1) append and popleft on eviction
 from datetime import datetime, timezone  # for PMT timestamps and UTC-aware age calculations
 import json                            # for structured PMT storage — serialization and recall
-from typing import Unpack, TypeAlias # for type hints
+from typing import TypeAlias, TypedDict # for type hints
+from typing_extensions import Unpack
 
 # AGi components
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
@@ -122,7 +123,7 @@ class WorkingMemoryCortex:
         self.global_chunk_limit: int = global_chunk_limit    # maximum chunks WMC can sustain before eviction
         self.pmt_slot_limit: int     = pmt_slot_limit        # maximum PMTs WMC can hold before eviction
         self.pmt_slot_buffer: int    = pmt_slot_buffer       # additional PMT buffer beyond Miller's Law limit
-        self._active_PMT: PMT | None = None                  # induced user prompt pending pairing with AI response
+        self._active_pmt: PMT | None = None                  # induced user prompt pending pairing with AI response
         self._active_vst: VST | None = None                  # induced raw frame pending pairing with interpreted turn
         self._pmt_slot: deque[PMT]   = deque()               # sustained PMT slot — single-threaded access guaranteed by CNC._busy flag
         self._sustained_chunks: int  = 0                     # running count of sustained chunks across all PMTs
@@ -160,7 +161,9 @@ class WorkingMemoryCortex:
             return None                                             # VST deferred — skip silently
         return self._pair_trace(sss)
     
-    def _plant_memory_trace(self, stimulus: SSS) -> PMT | VST:
+    def _plant_memory_trace(self, sss: SSS,
+                         content: str = "",
+                         trace: str = "") -> PMT:
         """
         Memory Trace Life Cycle
             Phase 1 - Induction
@@ -190,15 +193,15 @@ class WorkingMemoryCortex:
         if self._active_pmt is None:                                               # no active PMT present — 
             return PMT(                                                            # return the constructed PNT
                 # Memory trace identifier
-                trace_id        =                                                  # identifier of this PMT "PMT-<source>-<induced_at>
+                trace_id        = "",                                                 # identifier of this PMT "PMT-<source>-<induced_at>
                 user_id         = sss.user_id,                                     # identifier of the user AuRoRA is interacting with
-                robot_id        =                                                  # identifier of the AuRoRA robot iteself
-                source          =                                                  # origin of the sensory stimulus
+                robot_id        = "",                                                 # identifier of the AuRoRA robot iteself
+                source          = "",                                                 # origin of the sensory stimulus
                 
                 # Memory trace lifecycle
                 state           = WMCState.INDUCED,                                # state: which phrase PMT is in (ie. induced to working memory)
-                status          = "Staged"                                         # status of the PMT 
-                induced_at      = sss.generated_at,                                # initial time of PMT induced
+                #status          = "Staged",                                        # status of the PMT 
+                #induced_at      = sss.generated_at,                                # initial time of PMT induced
                 #filled_at       =                                                 # time when PMT filled into PMT slot
                 #sustained_interval =                                              # interval how long memory trace is sustained in PMT slot
                 #evicted_at      =                                                 # time of PMT being evicted from PMT slot
@@ -208,7 +211,7 @@ class WorkingMemoryCortex:
                 # Memory content
                 content         = content,                                         # empty on user turn — derived on pairing
                 trace           = trace,                                           # partial on user turn — completed on pairing
-                chunk_count     = 0,                                               # filled on pairing — full pair needed
+                #chunk_count     = 0,                                               # filled on pairing — full pair needed
             
                 # Retention-decision scores
                 #vector          = sss.vector,                                      # 
@@ -268,7 +271,7 @@ class WorkingMemoryCortex:
                 self.logger.warning("WMC: second user SSS — appended to staged PMT")
                 return None                                                         # still incomplete — pair not ready
     
-            self._active_pmt = self._populate_trace(                               # full fill — new PMT shell
+            self._active_pmt = self._plant_memory_trace(                               # full fill — new PMT shell
                 sss,
                 trace = f'{sss.user_id} said: "{sss.text}"',                        # partial trace — assistant turn appends
             )
@@ -278,7 +281,7 @@ class WorkingMemoryCortex:
         elif sss.role == "assistant":
             if self._active_pmt is None:                                           # orphan — no staged user turn
                 self.logger.warning("WMC: assistant SSS without staged PMT — recovering")
-                self._active_pmt = self._populate_trace(                           # full fill with placeholder identity
+                self._active_pmt = self._plant_memory_trace(                           # full fill with placeholder identity
                     sss,
                     trace = "[context missing]",                                    # placeholder — user turn was lost
                 )
@@ -290,7 +293,7 @@ class WorkingMemoryCortex:
                 "assistant" : sss.text,
             })
             trace        = f'{staged_trace}\nYou replied: "{sss.text}"'             # complete trace — append assistant turn
-            completed    = self._populate_trace(                                    # update fill — changed fields only
+            completed    = self._plant_memory_trace(                                    # update fill — changed fields only
                 sss,
                 content = content,
                 trace   = trace,
@@ -403,7 +406,7 @@ class WorkingMemoryCortex:
         Returns:
             float — retention score in [0.0, 1.0], cached on pmt.retention_score
         """
-        decay               = self._recency_decay(pmt.timestamp)
+        decay               = self._recency_decay(pmt.generated_at)
         score               = pmt.salience_score * decay * depth     # multiplicative — all three must hold
         pmt.retention_score = round(score, 6)                        # cache on PMT — no reprobe on eviction
         return pmt.retention_score
@@ -487,7 +490,7 @@ class WorkingMemoryCortex:
         if not admitted:
             self.logger.debug(
                 f"WMC gate: event boundary — PMT rejected "
-                f"(sim={sim:.3f} < threshold={_EVENT_BOUNDARY_THRESHOLD})"
+                f"(sim={sim:.3f} < threshold={self._EVENT_BOUNDARY_THRESHOLD})"
             )
         return admitted
      
@@ -531,7 +534,7 @@ class WorkingMemoryCortex:
             anchor_cluster_id = 0                                           # reserved id — never auto-assigned
             if anchor_cluster_id not in self._cluster_registry:
                 self._cluster_registry[anchor_cluster_id] = []
-                self._cluster_ages[anchor_cluster_id]     = pmt.timestamp
+                self._cluster_ages[anchor_cluster_id]     = pmt.generated_at
             if pmt.vector:
                 self._cluster_registry[anchor_cluster_id].append(pmt.vector)
             pmt.cluster_id = anchor_cluster_id
@@ -564,7 +567,7 @@ class WorkingMemoryCortex:
             assigned_id           = self._next_cluster_id
             self._next_cluster_id += 1                                      # monotonic — never reused
             self._cluster_registry[assigned_id] = []
-            self._cluster_ages[assigned_id]     = pmt.timestamp
+            self._cluster_ages[assigned_id]     = pmt.generated_at
             self.logger.debug(f"WMC cluster: new cluster opened → id={assigned_id}")
      
         # ── Cluster overflow guard ─────────────────────────────────────────────
@@ -811,7 +814,7 @@ class WorkingMemoryCortex:
         forgotten_pmt_schema: list[PMT] = list(self._pmt_slot)      # snapshot before wipe — safe under CNC._busy
         self._pmt_slot.clear()                                       # evict all sustaining PMTs
         self._active_pmt    = None                                  # discard any incomplete induced PMT
-        self._induced_vst    = None                                  # discard any incomplete induced VST
+        self._active_vst    = None                                  # discard any incomplete induced VST
         self._sustained_chunks = 0                                   # reset sustained chunk count
         self._dynamic_anchor = None                                  # clear anchor — slot is empty
         self.logger.info(                                            # log the forgetting of the PMT schema from working memory

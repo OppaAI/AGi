@@ -17,8 +17,8 @@ Developer tool — two modes:
                                are alive, normalizing, and routing correctly.
 
 Topics (direct mode):
-    Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — SSS JSON direct to CNC
-    Sub: TMS.TEXT_MOTOR_GATEWAY   (std_msgs/String) — CRS JSON direct from CNC
+    Pub: TMS.TEXT_STIMULUS_GATEWAY (std_msgs/String) — SSS JSON direct to CNC
+    Sub: TMS.TEXT_RESPONSE_GATEWAY   (std_msgs/String) — CRS JSON direct from CNC
 
 Websockets (relay mode):
     TX:  ws://localhost:8764  — TIC input websocket
@@ -63,8 +63,8 @@ STREAM_TRAILING    = GCE.STREAM_TRAILING
 STREAM_ANOMALY     = GCE.STREAM_ANOMALY
 
 # ── Topic aliases (direct mode) ────────────────────────────────────────────────
-TOPIC_INPUT    = TMS.TEXT_SENSORY_GATEWAY        # publish SSS direct to CNC
-TOPIC_RESPONSE = TMS.TEXT_MOTOR_GATEWAY          # subscribe CRS direct from CNC
+TOPIC_INPUT    = TMS.TEXT_STIMULUS_GATEWAY        # publish SSS direct to CNC
+TOPIC_RESPONSE = TMS.TEXT_RESPONSE_GATEWAY          # subscribe CRS direct from CNC
 
 # ── Relay mode websocket ports ─────────────────────────────────────────────────
 WS_TIC = f"ws://localhost:{TMS.WS_PORT}"         # TIC input websocket

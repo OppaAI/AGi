@@ -152,7 +152,7 @@ class GatewayMap:
     @property
     def ras_gateway(self) -> Path:
         """Open the gateway to the components of Reticular Activating System (RAS)."""
-        return self.entity_root / RRR.RETICULAR_ACTIVATING_COMPARTMENT           # path to access files related to RAS (ie. ~/.agi/ras)
+        return self.entity_root / RRR.RETICULAR_ACTIVATING_SYSTEM           # path to access files related to RAS (ie. ~/.agi/ras)
 
     @property
     def aurora_setpoints(self) -> Path:

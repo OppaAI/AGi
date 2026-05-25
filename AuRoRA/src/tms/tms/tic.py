@@ -98,7 +98,7 @@ Lifecycle:
 
 Topics:
     Sub: TMS.EFFERENCE_ECHO (std_msgs/String) — CNC-published echo hashes for suppression
-    Pub: TMS.TEXT_SENSORY_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
+    Pub: TMS.TEXT_RESPONSE_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
 
 Message schema (inbound from WebUI):
     {"text": "...", "user_id": "...", "role": "user", "source": "webui"}

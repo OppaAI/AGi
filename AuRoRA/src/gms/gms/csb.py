@@ -194,6 +194,7 @@ class PMT:
     content         : str           = ""    # JSON pair — WMC chat history for LLM
     trace           : str           = ""    # formatted text — for EMC embedding and reinstatement
     trace_type      : TraceType     = TraceType.PMT  # trace classification — PMT for conversational episodes
+    generated_at    : datetime      = field(default_factory=lambda: datetime.now(timezone.utc))   # UTC timestamp — set by CNC when PMT is inducted
 
     # ── scoring ───────────────────────────────────────────────────
     vector          : list[float]   = field(default_factory=list)   # semantic vector — reused at EMC binding, no re-inference

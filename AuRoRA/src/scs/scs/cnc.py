@@ -33,12 +33,12 @@ Architecture:
         via run_coroutine_threadsafe — ROS2 callbacks never block.
 
 Topics:
-    Sub: TMS.TEXT_SENSORY_GATEWAY   (std_msgs/String) — normalized SSS from TIC
-    Pub: TMS.TEXT_MOTOR_GATEWAY     (std_msgs/String) — CRS fragments to TOC
+    Sub: TMS.TEXT_STIMULUS_GATEWAY  (std_msgs/String) — normalized SSS from TIC
+    Pub: TMS.TEXT_RESPONSE_GATEWAY  (std_msgs/String) — CRS fragments to TOC
     Pub: SCS.MEMORY_CONTEXT_GATEWAY (std_msgs/String) — full GCE input context for debug
     Pub: SCS.MEMORY_STATS_GATEWAY   (std_msgs/String) — memory cortex stats after every turn
 
-Response format (JSON on TMS.TEXT_MOTOR_GATEWAY):
+Response format (JSON on TMS.TEXT_RESPONSE_GATEWAY):
     {"type": "start", "content": "<first fragment>"}
     {"type": "delta", "content": "<fragment>"}
     {"type": "done",  "content": "<full cognitive response>"}
@@ -159,12 +159,12 @@ class CNC(Node):
 
         # Sensory gateway — normalized SSS arrives here from TIC
         self._sensory_input: rclpy.subscription.Subscription = self.create_subscription(
-            String, TMS.TEXT_SENSORY_GATEWAY, self._receive_stimulus, 10   # String type | topic | callback | QoS depth 10
+            String, TMS.TEXT_STIMULUS_GATEWAY, self._receive_stimulus, 10   # String type | topic | callback | QoS depth 10
         )
 
         # Motor gateway — CRS fragments published here for TOC to relay to WebUI
         self._motor_output: rclpy.publisher.Publisher = self.create_publisher(
-            String, TMS.TEXT_MOTOR_GATEWAY, 10                             # String type | topic | QoS depth 10
+            String, TMS.TEXT_RESPONSE_GATEWAY, 10                           # String type | topic | QoS depth 10
         )
 
         # Debug and monitoring gateways
@@ -185,8 +185,8 @@ class CNC(Node):
 
         self.get_logger().info(f"✅ Endpoint    : {GCE.NEURAL_ENDPOINT}")
         self.get_logger().info(f"✅ Model       : {self._gce_inference_packet['model']}")
-        self.get_logger().info(f"✅ Subscribed  : {TMS.TEXT_SENSORY_GATEWAY}")
-        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_MOTOR_GATEWAY}")
+        self.get_logger().info(f"✅ Subscribed  : {TMS.TEXT_STIMULUS_GATEWAY}")
+        self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_RESPONSE_GATEWAY}")
         self.get_logger().info("=" * 60)
         self.get_logger().info("🌸 GRACE is ready")
         self.get_logger().info("=" * 60)
@@ -243,7 +243,7 @@ class CNC(Node):
 
         try:
             # 1. Register user turn in memory
-            await self.mcc.register_interaction_stimulus(stimulus)                              # park SSS in open episode slot — awaiting CRS pairing
+            await self.mcc.register_memory(stimulus)                              # park SSS in open episode slot — awaiting CRS pairing
 
             # 2. Assemble memory context
             memory_context: list[dict] = await self.mcc.assemble_memory_context(
@@ -284,7 +284,16 @@ class CNC(Node):
                     text       = cognitive_response,
                     trace_type = TraceType.PMT,
                 )
-                await self.mcc.register_interaction_response(crs)                              # complete episode: pair open SSS + CRS → PMT → WMC
+                crs_sss = SSS(                                                                 # wrap CRS into SSS — MCC speaks SSS only, CNC owns the translation
+                    role         = "assistant",
+                    text         = crs.text,
+                    trace_type   = crs.trace_type,
+                    user_id      = stimulus.user_id,                                           # carry forward from paired stimulus
+                    source       = stimulus.source,                                            # carry forward from paired stimulus
+                    generated_at = crs.generated_at,
+                )
+                await self.mcc.register_memory(crs_sss)                                     # complete episode: pair open SSS + CRS → PMT → WMC
+
 
             # 8. Report memory stats
             stats = self.mcc.report_memory_stats()
