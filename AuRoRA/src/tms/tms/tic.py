@@ -121,8 +121,8 @@ Terminology:
                                     to avoid processing own outputs as external stimuli.
     Stimulus Gateway              — pathway for carrying signals from sensory systems to SCS.
     Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing.
-    Telepathy Channel             — The term for direct symbolic input with no physical substrate.
-    Teloreceptor Channel          — Websocket server connection for receiving symbolic input (WebUI).
+    Telepathy Gateway             — The term for direct symbolic input with no physical substrate.
+    Teloreceptor Domain           — Websocket server connection for receiving symbolic input (WebUI).
 """
 
 # System libraries
@@ -162,8 +162,8 @@ class TelepathyInputCore(Node):
         """
         Initialize Telepathy Input Core.
 
-        Opens the neural gateways, ignites the teloreceptor channel via a dedicated
-        peripheral thread, and arms the response echo receptor channel.
+        Opens the neural gateways, ignites the teloreceptor domain via a dedicated
+        peripheral thread, and arms the response echo gateway.
         Robot system operation cycle and teloreceptor never share a thread.
         """
         super().__init__("tic")                                                         # register this core with robot system
@@ -177,7 +177,7 @@ class TelepathyInputCore(Node):
         self._stimulus_gateway: rclpy.publisher.Publisher = self.create_publisher(      # neural gateway to publish normalized SSS to SCS
             String, TMS.TEXT_STIMULUS_GATEWAY, 10,
         )
-        self._response_echo_receptor: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
+        self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
 
@@ -186,25 +186,25 @@ class TelepathyInputCore(Node):
         self._refractory_anchor: dict[str, tuple[str, float]] = {}                      # to supress user repeating the exact same message within the refractory period
         self._response_echoes: dict[str, tuple[str, float]] = {}                        # to supress system echoing its own responses over a short period of time per user
 
-        # Ignite teloreceptor channel on its own neural thread — never competes with main robot system.
-        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor channel
-        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor channel
+        # Ignite teloreceptor domain on its own neural thread — never competes with main robot system.
+        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor domain
+        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor domain
             target=self._teloreceptor_cycle.run_forever,                                # run the parallel neural cycle on its own thread — keeps it off the ROS2 spin thread
             name="tic-teloreceptor",                                                    # set the neural thread name for profilers
             daemon=True,                                                                # this thread dies with the main system — enables clean shutdown
         )
         self._teloreceptor_thread.start()                                               # ignite teloreceptor neural thread
 
-        asyncio.run_coroutine_threadsafe(                                               # schedule server boot on ws loop — crosses thread boundary safely
-            self._ignite_teloreceptor_channel(), self._teloreceptor_cycle
+        asyncio.run_coroutine_threadsafe(                                               # schedule server boot on websocket loop — crosses thread boundary safely
+            self._ignite_teloreceptor_domain(), self._teloreceptor_cycle
         )
 
-        self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")      # ROS2 topic for SSS published to SCS
-        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")    # ROS2 topic for efference echoes
-        self.get_logger().info(f"✅ Teloreceptor          : ws://{TMS.WS_HOST}:{TMS.WS_TELORECEPTOR_PORT}")    # WebSocket server for WebUI connection
-        self.get_logger().info("=" * 60)                                                # log heading title border
-        self.get_logger().info("📡 TIC ready — peripheral pathway open")                # log ready status
-        self.get_logger().info("=" * 60)                                                # log heading title border
+        self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")                     # ROS2 topic for SSS published to SCS
+        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")                     # ROS2 topic for efference echoes
+        self.get_logger().info(f"✅ Teloreceptor Domain   : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELORECEPTOR_PORTAL}")    # WebSocket server for WebUI connection
+        self.get_logger().info("=" * 60)                                                                       # log heading title border
+        self.get_logger().info("📡 TIC ready — peripheral pathway open")                                      # log ready status
+        self.get_logger().info("=" * 60)                                                                       # log heading title border
 
     def _on_efference_echo(self, msg: String) -> None:
         """
@@ -256,7 +256,7 @@ class TelepathyInputCore(Node):
 
     # ── websocket server ──────────────────────────────────────────────────────
 
-    async def _ignite_teloreceptor_channel(self) -> None:
+    async def _ignite_teloreceptor_domain(self) -> None:
         """
         Boot the websocket server and hold it for the node lifetime.
         Runs entirely on the tic-ws-server thread — never touches ROS2.
@@ -266,7 +266,7 @@ class TelepathyInputCore(Node):
             "0.0.0.0",
             TMS.WS_TELORECEPTOR_PORT,
         )
-        self.get_logger().info(f"✅ Teloreceptor channel live on port {TMS.WS_TELORECEPTOR_PORT}")
+        self.get_logger().info(f"✅ Teloreceptor domain live on portal {TMS.TELORECEPTOR_PORTAL}")
         await self._ws_server.wait_closed()                                     # hold server open until explicitly closed
 
     async def _handle_connection(self, websocket) -> None:
