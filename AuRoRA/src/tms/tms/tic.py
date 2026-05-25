@@ -127,7 +127,7 @@ Terminology:
 
 # System libraries
 import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
-import hashlib                                                              # SHA-256 hashing for efference echo fingerprints
+import hashlib                                                              # SHA-256 hashing for response echo imprints
 import json                                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                                            # owns the websocket server thread — keeps asyncio loop off the ROS2 spin thread
 import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
@@ -181,7 +181,7 @@ class TelepathyInputCore(Node):
         # CNC publishes the SHA-256 imrpint of each outbound response text immediately
         # after GCE stream completes. Any inbound SSS whose text imprint matches within
         # the TTL window is suppressed as a self-generated echo.
-        self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response fingerprints
+        self._response_echo_gateway: rclpy.subscription.Subscription = self.create_subscription(  # response echo receptor — subscribes to CNC outbound response imprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
 
@@ -216,18 +216,18 @@ class TelepathyInputCore(Node):
         ROS2 subscription callback — runs on the spin thread; dict write is GIL-safe for CPython.
 
         Args:
-            response_echo (String): response echo in JSON schema — {"imprint": "<sha256hex>", "ttl": <seconds>}
+            response_echo (String): response echo in JSON schema — {"imprint": "<sha256hex>", "duration": <seconds>}
         """
-        try:
-            data: dict = json.loads(response_echo.data)
-            imprint: str = data.get("imprint", "")
-            ttl: float = float(data.get("ttl", TMS.EFFERENCE_ECHO_TTL_S))
+        try:                                                                                                        # attempt to interpret response echo
+            echo: dict = json.loads(response_echo.data)                                                             # deserialize echo imprint payload
+            imprint: str = echo.get("imprint", "")                                                                  # SHA-256 hex digest of CNC outbound response
+            echo_duration: float = float(echo.get("duration", TMS.RESPONSE_ECHO_DURACTION))                         # suppression window — falls back to module default
             if imprint:
-                expiry = time.monotonic() + ttl
-                self._efference_echoes[imprint] = expiry
-                self.get_logger().debug(f"🧠 Efference echo registered: {imprint[:12]}… TTL={ttl}s")
+                echo_expiry = time.monotonic() + duration                                                           # absolute expiry time on monotonic clock
+                self._response_echoes[imprint] = echo_expiry
+                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={duration}s")
         except (json.JSONDecodeError, ValueError) as e:
-            self.get_logger().warning(f"⚠️  Efference echo parse error: {e}")
+            self.get_logger().warning(f"⚠️  Response echo parse error: {e}")
 
     def _prune_efference_echoes(self) -> None:
         """
