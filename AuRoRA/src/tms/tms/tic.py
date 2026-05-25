@@ -122,7 +122,7 @@ Terminology:
     Stimulus Gateway              — pathway for carrying signals from sensory systems to SCS.
     Symbolic Injection            — text arrives pre-decoded, bypassing all sensory processing.
     Telepathy Gateway             — The term for direct symbolic input with no physical substrate.
-    Teloreceptor Domain           — Websocket server connection for receiving symbolic input (WebUI).
+    Teloreceptor Portal           — Websocket server connection for receiving symbolic input (WebUI).
 """
 
 # System libraries
@@ -162,7 +162,7 @@ class TelepathyInputCore(Node):
         """
         Initialize Telepathy Input Core.
 
-        Opens the neural gateways, ignites the teloreceptor domain via a dedicated
+        Establishes the neural gateways, connects to the telepathy portal via a dedicated
         peripheral thread, and arms the response echo gateway.
         Robot system operation cycle and teloreceptor never share a thread.
         """
@@ -186,9 +186,9 @@ class TelepathyInputCore(Node):
         self._refractory_anchor: dict[str, tuple[str, float]] = {}                      # to supress user repeating the exact same message within the refractory period
         self._response_echoes: dict[str, tuple[str, float]] = {}                        # to supress system echoing its own responses over a short period of time per user
 
-        # Ignite teloreceptor domain on its own neural thread — never competes with main robot system.
-        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor domain
-        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor domain
+        # Open teloreceptor portal on its own neural thread — never competes with main robot system.
+        self._teloreceptor_cycle: asyncio.AbstractEventLoop = asyncio.new_event_loop()  # isolated cycle to run teloreceptor
+        self._teloreceptor_thread: threading.Thread = threading.Thread(                 # dedicated neural thread for teloreceptor
             target=self._teloreceptor_cycle.run_forever,                                # run the parallel neural cycle on its own thread — keeps it off the ROS2 spin thread
             name="tic-teloreceptor",                                                    # set the neural thread name for profilers
             daemon=True,                                                                # this thread dies with the main system — enables clean shutdown
@@ -196,15 +196,15 @@ class TelepathyInputCore(Node):
         self._teloreceptor_thread.start()                                               # ignite teloreceptor neural thread
 
         asyncio.run_coroutine_threadsafe(                                               # schedule server boot on websocket loop — crosses thread boundary safely
-            self._ignite_teloreceptor_domain(), self._teloreceptor_cycle
+            self._ignite_telepathy_domain(), self._teloreceptor_cycle
         )
 
-        self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")                     # ROS2 topic for SSS published to SCS
-        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")                     # ROS2 topic for efference echoes
-        self.get_logger().info(f"✅ Teloreceptor Domain   : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELORECEPTOR_PORTAL}")    # WebSocket server for WebUI connection
-        self.get_logger().info("=" * 60)                                                                       # log heading title border
-        self.get_logger().info("📡 TIC ready — peripheral pathway open")                                      # log ready status
-        self.get_logger().info("=" * 60)                                                                       # log heading title border
+        self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")                             # ROS2 topic for SSS published to SCS
+        self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")                             # ROS2 topic for efference echoes
+        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELORECEPTOR_PORTAL}")  # WebSocket server for WebUI connection
+        self.get_logger().info("=" * 60)                                                                               # log heading title border
+        self.get_logger().info("📡 TIC ready — peripheral pathway open")                                              # log ready status
+        self.get_logger().info("=" * 60)                                                                               # log heading title border
 
     def _on_efference_echo(self, msg: String) -> None:
         """
@@ -254,20 +254,18 @@ class TelepathyInputCore(Node):
         normalized = text.strip().casefold()
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
-    # ── websocket server ──────────────────────────────────────────────────────
-
-    async def _ignite_teloreceptor_domain(self) -> None:
+    async def _ignite_telepathy_domain(self) -> None:
         """
-        Boot the websocket server and hold it for the node lifetime.
-        Runs entirely on the tic-ws-server thread — never touches ROS2.
+        Ignites the telepathy gateway and hold it for the lifetime of the core module.
+        Runs entirely on the tic-teleoreceptpr thread — never touches main robot system.
         """
-        self._ws_server = await websockets.serve(                               # open websocket server — accepts connections from WebUI
+        self._telephathy_domain = await websockets.serve(                               # open websocket server — accepts connections from WebUI
             self._handle_connection,
-            "0.0.0.0",
-            TMS.WS_TELORECEPTOR_PORT,
+            TMS.TELEPATHY_GATEWAY,
+            TMS.TELORECEPTOR_PORTAL,
         )
-        self.get_logger().info(f"✅ Teloreceptor domain live on portal {TMS.TELORECEPTOR_PORTAL}")
-        await self._ws_server.wait_closed()                                     # hold server open until explicitly closed
+        self.get_logger().info(f"✅ Telepathy Domain live on portal {TMS.TELORECEPTOR_PORTAL}")
+        await self._telephathy_domain.wait_closed()                                     # hold server open until explicitly closed
 
     async def _handle_connection(self, websocket) -> None:
         """
@@ -586,17 +584,17 @@ class TelepathyInputCore(Node):
             for ws in list(self._active_connections):                               # iterate over a copy of the active connections
                 await ws.close()                                                    # close each connection asynchronously
             if hasattr(self, "_ws_server"):                                         # if the websocket server exists
-                self._ws_server.close()                                             # close the websocket server
-                await self._ws_server.wait_closed()                                 # wait for the websocket server to close
+                self._telephathy_domain.close()                                             # close the websocket server
+                await self._telephathy_domain.wait_closed()                                 # wait for the websocket server to close
 
-        future = asyncio.run_coroutine_threadsafe(_close(), self._ws_loop)          # run the close coroutine in the websocket loop
+        future = asyncio.run_coroutine_threadsafe(_close(), self._teloreceptor_cycle)          # run the close coroutine in the websocket loop
         try:                                                                        # try to close the websocket server
             future.result(timeout=3.0)                                              # wait for the close coroutine to complete with a timeout of 3.0 seconds
         except Exception:                                                           # handle exceptions
             pass                                                                    # ignore any exceptions raised by the close coroutine
 
-        self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)                      # stop the event loop
-        self._ws_thread.join(timeout=3.0)                                           # wait for the thread to finish
+        self._teloreceptor_cycle.call_soon_threadsafe(self._teloreceptor_cycle.stop)                      # stop the event loop
+        self._teloreceptor_thread.join(timeout=3.0)                                           # wait for the thread to finish
         super().destroy_node()                                                      # destroy the ROS2 node
         self.get_logger().info("✅ TIC shutdown complete")
 
