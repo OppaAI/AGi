@@ -291,11 +291,11 @@ class TelepathyInputCore(Node):
                 if sss is None:                                                 # if no valid stimulus,
                     continue                                                    # skip the loop and wait for next stimulus
 
-                sss = self._transduction_gate(sss)                              # stage 2 — threshold check, discard below-minimum signals
+                sss = self._apply_transduction_gate(sss)                        # stage 2 — threshold check, discard below-minimum signals
                 if sss is None:                                                 # if stimulus dropped by transduction gate,
                     continue                                                    # skip the loop and wait for next stimulus
 
-                sss = self._heuristic_gate(sss)                                 # stage 3 — intercept locally resolvable signals
+                sss = self._apply_heuristic_gate(sss)                           # stage 3 — intercept locally resolvable signals
                 if sss is None:                                                 # if stimulus dropped by heuristic gate,
                     continue                                                    # skip the loop and wait for next stimulus
 
@@ -333,53 +333,55 @@ class TelepathyInputCore(Node):
         try:
             stimulus = json.loads(raw_stimulus.strip())                         # parse raw JSON — reject non-JSON at the adapter boundary
             if not isinstance(stimulus, dict):                                  # non-dict JSON (array, string, etc.) — reject at boundary
-                return None                                                     # return None if JSON is unparseable
+                self.get_logger().debug(f"🚫 Stimulus rejected — invalid schema: {type(stimulus).__name__}")  # log the invalid stimulus
+                return None                                                     # stop processing this stimulus
 
-            current_time = datetime.now(timezone.utc).isoformat()               # get current time
+            generated_at = datetime.now(timezone.utc).isoformat()               # UTC birth timestamp — moment stimulus enters neural system
             return SSS(
-                role         = stimulus.get("role", "user"),                    # speaker role — always "user" from WebUI
-                text         = stimulus.get("text", ""),                        # raw stimulus content — not yet validated
-                user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo
-                source       = SensoryInputChannel.WEBUI,                       # channel tag — always WEBUI for TIC
-                modality     = SensoryModality.TEXT,                            # WebUI is always text modality
-                trace_type   = TraceType.PMT,                                   # trace type — PMT for all conversational input
-                state        = "generated",                                     # lifecycle marker — SSS born
-                locus        = "tic._receive",                                  # processing locus — reception stage
-                generated_at = current_time,                                    # wall-clock birth time
+                role         = stimulus.get("role", "user"),                    # speaker role — always "user" from UI
+                content      = stimulus.get("content", ""),                     # raw stimulus content — not yet validated
+                user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo if not provided
+                source       = SensoryInputChannel(stimulus.get("source", SensoryInputChannel.UI.value)),   # adapter-stamped channel identity
+                modality     = SensoryModality(stimulus.get("modality", SensoryModality.TEXT.value)),       # trace type — PMT for all conversational input
+                trace_type   = TraceType(stimulus.get("trace_type", TraceType.PMT.value)),                  # adapter-stamped trace type
+                state        = "GENERATED",                                     # lifecycle marker — SSS born
+                locus        = "TIC:RECEPTION",                                 # processing locus — reception stage
+                generated_at = generated_at,                                    # UTC birth timestamp — moment stimulus enters neural system
             )
-        except (json.JSONDecodeError, ValueError):                              # malformed JSON — drop at adapter boundary
-            return None
+        except (json.JSONDecodeError, ValueError) as e:                         # malformed JSON — drop at adapter boundary, never crash pipeline
+            self.get_logger().debug(f"🚫 Stimulus rejected — malformed JSON: {e}")  # log the malformed JSON
+            return None                                                         # stop processing this stimulus
 
-    def _transduction_gate(self, sss: SSS) -> SSS | None:
+    def _apply_transduction_gate(self, stimulus: SSS) -> SSS | None:
         """
         Stage 2 — Transduction Threshold Gate.
-        Determines whether the physical signal meets minimum threshold to propagate.
+        Gate the stimulus — determine whether it meets minimum threshold to propagate.
         Rejects null, empty, whitespace-only, and corrupted byte payloads.
         SSS marked TRANSDUCED on pass, DISCARDED on failure.
 
         Args:
-            sss (SSS): Freshly generated SSS from reception stage.
+            stimulus (SSS): Freshly generated SSS from reception stage.
 
         Returns:
             SSS | None: SSS marked TRANSDUCED, or None if below threshold.
         """
-        text = sss.text.strip() if isinstance(sss.text, str) else ""           # guard against non-string payload
+        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""  # guard against non-string payload
 
-        if not text:                                                            # null, empty, or whitespace-only — below threshold
-            sss.state       = "discarded"
-            sss.locus       = "tic._transduction_gate"
-            sss.drop_reason = "below_threshold"
-            sss.dropped_at  = datetime.now(timezone.utc).isoformat()
+        if not content:                                                                  # null, empty, or whitespace-only — below threshold
+            stimulus.state       = "DISCARDED"
+            stimulus.locus       = "TIC:TRANSDUCTION"
+            stimulus.drop_reason = "below_threshold"
+            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()
             self.get_logger().debug("🚫 SSS discarded — below transduction threshold")
             return None
 
-        sss.text          = text                                                # commit stripped text — normalized payload
-        sss.state         = "transduced"                                        # lifecycle marker — threshold passed
-        sss.locus         = "tic._transduction_gate"
-        sss.transduced_at = datetime.now(timezone.utc).isoformat()
-        return sss
+        stimulus.content       = content                                               # commit stripped content — normalized payload
+        stimulus.state         = "transduced"                                        # lifecycle marker — threshold passed
+        stimulus.locus         = "tic._transduction_gate"
+        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()
+        return stimulus
 
-    def _heuristic_gate(self, sss: SSS) -> SSS | None:
+    def _apply_heuristic_gate(self, sss: SSS) -> SSS | None:
         """
         Stage 3 — Heuristic Intercept Gate.
         Intercepts signals resolvable locally without burdening the CNS.

@@ -25,13 +25,13 @@ from enum import Enum                       # enum base for channel, modality, t
 
 class SensoryInputChannel(Enum):
     """Originating channel of an incoming sensory stimulus."""
-    CLI      = "cli"        # terminal input — developer tool
-    WEBUI    = "webui"      # browser UI — TIC websocket
-    VOICE    = "voice"      # ASR pipeline — TODO: M1.X
-    TELEGRAM = "telegram"   # Telegram bridge — TODO: M2
-    DISCORD  = "discord"    # Discord bridge — TODO: M2
-    GMAIL    = "gmail"      # Gmail bridge — TODO: M2
-    UNKNOWN  = "unknown"    # unknown channel — should not happen
+    UI         = "ui"           # WebSocket — WebUI, CLI, any symbolic text client
+    TELEGRAM   = "telegram"     # Telegram bridge — TODO: M2
+    DISCORD    = "discord"      # Discord bridge — TODO: M2
+    GMAIL      = "gmail"        # Gmail bridge — TODO: M2
+    MICROPHONE = "microphone"   # voice input — TODO: M1.X
+    CAMERA     = "camera"       # visual input — TODO: M2
+    UNKNOWN    = "unknown"      # unrecognized adapter — sentinel
 
 class SensoryModality(Enum):
     TEXT    = "text"    # CLI, webUI, messaging bridges
@@ -96,7 +96,7 @@ class SSS:
     source      : SensoryInputChannel = SensoryInputChannel.UNKNOWN  # originating channel — always set by adapter
     modality    : SensoryModality     = SensoryModality.UNKNOWN      # physical nature — derived from source by adapter
     trace_type  : TraceType           = TraceType.PMT                # WMC trace target — PMT or VST
-    text        : str                 = ""                           # text payload — CLI, WebUI, messaging bridges
+    content     : str                 = ""                           # content payload — CLI, WebUI, messaging bridges
     # TODO M1.X: audio : bytes = b""  — voice pipeline (ASR)
     # TODO M2:   image : bytes = b""  — vision pipeline (OAK-D)
 
