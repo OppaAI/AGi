@@ -321,8 +321,8 @@ class TelepathyInputCore(Node):
         SSS marked as GENERATED.
 
         Life Cycle:
-                Stimulus        ->    SSS (GENERATED)
-            Telepathy Domain               TIC
+              Raw Stimulus        ->    SSS (GENERATED)
+            Telepathy Domain                 TIC
 
         Args:
             raw_stimulus (str): Raw stimulus in JSON schema received from telepathy domain.
@@ -358,49 +358,53 @@ class TelepathyInputCore(Node):
         Gate the stimulus — determine whether it meets minimum threshold to propagate.
         Rejects null, empty, whitespace-only, and corrupted byte payloads.
         SSS marked TRANSDUCED on pass, DISCARDED on failure.
-
+        
+        Life Cycle:
+                SSS (GENERATED)    ->    SSS (TRANSDUCED) / SSS (DISCARDED)
+                      TIC                              TIC
+                    
         Args:
-            stimulus (SSS): Freshly generated SSS from reception stage.
+            stimulus (SSS): Freshly generated stimulus from reception stage.
 
         Returns:
-            SSS | None: SSS marked TRANSDUCED, or None if below threshold.
+            SSS | None: Stimulus marked TRANSDUCED, or None if below threshold.
         """
-        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""  # guard against non-string payload — normalize to empty string
+        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""      # guard against non-string payload — normalize to empty string
 
-        if not content:                                                                  # null, empty, whitespace-only — below threshold
-            stimulus.state       = "DISCARDED"                                           # lifecycle marker — signal dies here
-            stimulus.locus       = "TIC:TRANSDUCTION"                                    # processing locus — transduction stage
-            stimulus.drop_reason = "BELOW_THRESHOLD"                                     # discard reason — signal too weak to propagate
-            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()                # UTC timestamp — moment of discard
-            self.get_logger().debug("🚫 SSS discarded — below transduction threshold")   # Log the discard of SSS
-            return None                                                                  # stop processing this stimulus
+        if not content:                                                                      # null, empty, whitespace-only — below threshold
+            stimulus.state       = "DISCARDED"                                               # lifecycle marker — signal dies here
+            stimulus.locus       = "TIC:TRANSDUCTION"                                        # processing locus — transduction stage
+            stimulus.drop_reason = "BELOW_THRESHOLD"                                         # discard reason — signal too weak to propagate
+            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()                    # UTC timestamp — moment of discard
+            self.get_logger().debug("🚫 Stimulus discarded — below transduction threshold")  # Log the discard of SSS
+            return None                                                                      # stop processing this stimulus
 
-        stimulus.content       = content                                                 # commit stripped content — normalized payload
-        stimulus.state         = "TRANDUCED"                                             # lifecycle marker — threshold passed
-        stimulus.locus         = "TIC:TRANSDUCTION"                                      # processing locus — transduction stage
-        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()                  # UTC timestamp — moment of transduction
-        return stimulus                                                                  # propagate SSS to heuristic gate
+        stimulus.content       = content                                                     # commit stripped content — normalized payload
+        stimulus.state         = "TRANDUCED"                                                 # lifecycle marker — threshold passed
+        stimulus.locus         = "TIC:TRANSDUCTION"                                          # processing locus — transduction stage
+        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()                      # UTC timestamp — moment of transduction
+        return stimulus                                                                      # propagate SSS to heuristic gate
 
-    def _apply_heuristic_gate(self, sss: SSS) -> SSS | None:
+    def _apply_heuristic_gate(self, stimulus: SSS) -> SSS | None:
         """
         Stage 3 — Heuristic Intercept Gate.
-        Intercepts signals resolvable locally without burdening the CNS.
+        Intercept signals resolvable locally without burdening the CNS.
         Peripheral equivalent of a spinal reflex loop.
-
-        Intercepts (in order):
-          1. Oversized payloads        — discard before any pattern matching
-          2. /commands                 — local reflex handler (TODO)
-          3. Injection patterns        — symbolic injection attempt
-          4. Efference echoes          — CNC self-generated signal suppression
-          5. Duplicate debounce        — same payload from same user within debounce window
-
         SSS marked TRIAGED on pass, INTERCEPTED on intercept, DISCARDED on failure.
-
+        Life Cycle:
+                SSS (TRANSDUCED)    ->    SSS (TRIAGED) / SSS (INTERCEPTED) / SSS (DISCARDED)
+                      TIC                                    TIC
+        Intercepts (in order):
+            1. Oversized payload     — discard before any pattern matching
+            2. /commands             — local reflex handler (TODO)
+            3. Injection patterns    — symbolic injection attempt
+            4. Response echo         — CNC self-generated signal suppression
+            5. Refractory period     — duplicate stimulus within refractory window
+        
         Args:
-            sss (SSS): SSS marked TRANSDUCED from threshold gate.
-
+            stimulus (SSS): Stimulus marked TRANSDUCED from transduction gate.
         Returns:
-            SSS | None: SSS marked TRIAGED, or None if intercepted or failed.
+            SSS | None: Stimulus marked TRIAGED, or None if intercepted or discarded.
         """
         text       = sss.text
         text_lower = text.lower()
