@@ -15,7 +15,10 @@ Architecture:
     physical adapters, pass through structural filtration checkpoints, materialize inside 
     the buffer, and are cast onto the CNS neural bus.
 
-[Remote Adapter]
+[Telepathy Domain]
+Stimulus (Raw user input)
+        │
+        ▼
 SSS GENERATED
 [RECEIVED]
         │
@@ -126,6 +129,7 @@ Terminology:
 """
 
 # System libraries
+import websockets
 import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
 import hashlib                                                              # SHA-256 hashing for response echo imprints
 import json                                                                 # serialize/deserialize message payloads at both boundaries
@@ -221,11 +225,11 @@ class TelepathyInputCore(Node):
         try:                                                                                                        # attempt to interpret response echo
             echo = json.loads(response_echo.data)                                                                   # deserialize echo imprint payload
             imprint = echo.get("imprint", "")                                                                       # SHA-256 hex digest of CNC outbound response
-            echo_duration = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                                  # suppression window — falls back to module default
+            echo_duration = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                                 # suppression window — falls back to module default
             if imprint:                                                                                             # if echo contains an imprint
                 echo_expiry = time.monotonic() + echo_duration                                                      # absolute expiry time on monotonic clock
                 self._response_echoes[imprint] = echo_expiry                                                        # register imprint with expiry duration
-                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={duration}s")       # log registry of the imprint and expiry duration
+                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={echo_duration}s")  # log registry of the imprint and expiry duration
         except (json.JSONDecodeError, ValueError) as e:                                                             # malformed response echo payload
             self.get_logger().warning(f"⚠️  Response echo parse error: {e}")                                        # log parsing error and continue
 
@@ -234,10 +238,10 @@ class TelepathyInputCore(Node):
         Prune expired response echo imprints from the registry.
         Technical Note: Called at the top of _heuristic_gate — O(n) scan, acceptable on a small dict.
         """
-        current_time = time.monotonic()                                                                            # current monotonic time — compared against imprint expiry
-        echo_expired = [imprint for imprint, echo_expiry in self._response_echoes.items() if now > echo_expiry]    # collect stale imprints
-        for imprint in expired:                                                                                    # check for any expired imprints from registry
-            del self._response_echoes[imprint]                                                                     # evict expired imprint from registry
+        current_time = time.monotonic()                                                                                     # current monotonic time — compared against imprint expiry
+        echo_expired = [imprint for imprint, echo_expiry in self._response_echoes.items() if current_time > echo_expiry]    # collect stale imprints
+        for imprint in echo_expired:                                                                                        # check for any expired imprints from registry
+            del self._response_echoes[imprint]                                                                              # evict expired imprint from registry
 
     @staticmethod
     def _derive_imprint(content: str) -> str:
@@ -283,7 +287,7 @@ class TelepathyInputCore(Node):
 
         try:                                                                    # attempt to connect telepathy domain
             async for raw_stimulus in peripheral_link:                          # iterate stimulus stream for this link lifetime
-                sss = self._receive(raw_stimulus)                                # stage 1 — instantiate SSS from raw stimulus
+                sss = self._receive_stimulus(raw_stimulus)                      # stage 1 — instantiate SSS from raw stimulus
                 if sss is None:                                                 # if no valid stimulus,
                     continue                                                    # skip the loop and wait for next stimulus
 
@@ -301,45 +305,47 @@ class TelepathyInputCore(Node):
                 # TODO: stage 6 — response return (await SCS response, bind to SSS interaction ID)
                 # TODO: stage 7 — interaction dispatch (publish completed SSS+CRS pair for memory consolidation)
 
-        except ConnectionClosedOK:                        # clean disconnect — normal lifecycle
+        except ConnectionClosedOK:                                              # clean disconnect — normal lifecycle
             pass
-        except ConnectionClosedError as e:                # unexpected disconnect — log but don't crash
-            self.get_logger().warning(f"⚠️  WebUI disconnected unexpectedly: {e}")
+        except ConnectionClosedError as e:                                      # unexpected disconnect — log but don't crash
+            self.get_logger().warning(f"⚠️  Peripheral link disconnected unexpectedly: {e}")  # log the unexpected disconnect of peripheral link
         finally:
-            self._active_connections.discard(websocket)                         # deregister on any exit path
-            self.get_logger().info("🔌 WebUI disconnected")
+            self._active_connections.discard(peripheral_link)                   # deregister on any exit path
+            self.get_logger().info("🔌 Peripheral link closed")                 # log the close of the peripheral link
 
-    # ── pipeline stages ───────────────────────────────────────────────────────
-
-    def _receive(self, raw_message: str) -> SSS | None:
+    def _receive_stimulus(self, raw_stimulus: str) -> SSS | None:
         """
         Stage 1 — Reception.
-        Parse raw JSON from adapter and instantiate SSS with raw fields populated.
+        Receive raw stimulus from telepathy domain and instantiate Sensory Stimulus Signals (SSS) with filled info.
         The moment external stimulus becomes an internal neural event.
-        SSS marked GENERATED.
+        SSS marked as GENERATED.
+
+        Life Cycle:
+                Stimulus        ->    SSS (GENERATED)
+            Telepathy Domain               TIC
 
         Args:
-            raw_message (str): Raw JSON string from WebUI adapter.
+            raw_stimulus (str): Raw stimulus in JSON schema received from telepathy domain.
 
         Returns:
             SSS | None: Freshly instantiated SSS, or None if JSON is unparseable.
         """
         try:
-            payload: dict = json.loads(raw_message.strip())                     # parse raw JSON — reject non-JSON at the adapter boundary
-            if not isinstance(payload, dict):
-                return None
+            stimulus = json.loads(raw_stimulus.strip())                         # parse raw JSON — reject non-JSON at the adapter boundary
+            if not isinstance(stimulus, dict):                                  # non-dict JSON (array, string, etc.) — reject at boundary
+                return None                                                     # return None if JSON is unparseable
 
-            now = datetime.now(timezone.utc).isoformat()
+            current_time = datetime.now(timezone.utc).isoformat()               # get current time
             return SSS(
-                role         = payload.get("role", "user"),                     # speaker role — always "user" from WebUI
-                text         = payload.get("text", ""),                         # raw stimulus content — not yet validated
-                user_id      = payload.get("user_id", "demo"),                  # speaker identity — defaults to demo
+                role         = stimulus.get("role", "user"),                    # speaker role — always "user" from WebUI
+                text         = stimulus.get("text", ""),                        # raw stimulus content — not yet validated
+                user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo
                 source       = SensoryInputChannel.WEBUI,                       # channel tag — always WEBUI for TIC
                 modality     = SensoryModality.TEXT,                            # WebUI is always text modality
                 trace_type   = TraceType.PMT,                                   # trace type — PMT for all conversational input
                 state        = "generated",                                     # lifecycle marker — SSS born
                 locus        = "tic._receive",                                  # processing locus — reception stage
-                generated_at = now,                                             # wall-clock birth time
+                generated_at = current_time,                                    # wall-clock birth time
             )
         except (json.JSONDecodeError, ValueError):                              # malformed JSON — drop at adapter boundary
             return None
