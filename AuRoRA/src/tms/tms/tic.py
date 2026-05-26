@@ -234,63 +234,66 @@ class TelepathyInputCore(Node):
         Prune expired response echo imprints from the registry.
         Technical Note: Called at the top of _heuristic_gate — O(n) scan, acceptable on a small dict.
         """
-        current_time = time.monotonic()                                                                        # current monotonic time — compared against imprint expiry
-        expired = [imprint for imprint, echo_expiry in self._response_echoes.items() if now > echo_expiry]     # collect stale imprints
-        for imprint  in expired:                                                                               # check for any expired imprints from registry
-            del self._efference_echoes[fp]                                                                     # evict expired imprint from registry
+        current_time = time.monotonic()                                                                            # current monotonic time — compared against imprint expiry
+        echo_expired = [imprint for imprint, echo_expiry in self._response_echoes.items() if now > echo_expiry]    # collect stale imprints
+        for imprint in expired:                                                                                    # check for any expired imprints from registry
+            del self._response_echoes[imprint]                                                                     # evict expired imprint from registry
 
     @staticmethod
-    def _imprint(text: str) -> str:
+    def _derive_imprint(content: str) -> str:
         """
-        Compute SHA-256 imprint of normalized text.
-        Normalization: strip whitespace, casefold — matches CNC imprint logic.
+        Derive an encoded imprint (SHA-256 hex) from normalized stimulus content.
+        Normalization: strip whitespace, casefold — must match CNC imprint logic exactly.
+        Technical note: casefold normalizes case — "Hello" and "hello" derive the same imprint intentionally.
 
         Args:
-            text (str): Raw text to imprint.
+            content (str): stimulus content to derive an imprint.
 
         Returns:
-            str: Hex-encoded SHA-256 digest.
+            str: encoded imprint with SHA-256 hex digest.
         """
-        normalized = text.strip().casefold()
-        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        normalized_content = content.strip().casefold()                                # normalize — strip whitespace, casefold for case-invariant matching
+        return hashlib.sha256(normalized_content.encode("utf-8")).hexdigest()          # derive SHA-256 imprint — hex digest of normalized stimulus
 
     async def _ignite_telepathy_domain(self) -> None:
         """
-        Ignites the telepathy gateway and hold it for the lifetime of the core module.
-        Runs entirely on the tic-teleoreceptpr thread — never touches main robot system.
+        Ignite the teloreceptor and hold it open for the node lifetime.
+        Runs entirely on the teloreceptor thread — never touches the robot system cycle.
+        Technical note: blocks on wait_closed() — keeps the coroutine alive until explicit shutdown.
         """
-        self._telephathy_domain = await websockets.serve(                               # open websocket server — accepts connections from WebUI
-            self._handle_connection,
-            TMS.TELEPATHY_GATEWAY,
-            TMS.TELORECEPTOR_PORTAL,
+        self._telepathy_domain = await websockets.serve(                                            # open websocket server — accepts connections from WebUI
+            self._on_teloreceptor_link,                                                             # callback — fires on each new peripheral link
+            TMS.TELEPATHY_GATEWAY,                                                                  # bind address — network interface for incoming stimulus
+            TMS.TELORECEPTOR_PORTAL,                                                                # port — teloreceptor input channel
         )
-        self.get_logger().info(f"✅ Telepathy Domain live on portal {TMS.TELORECEPTOR_PORTAL}")
-        await self._telephathy_domain.wait_closed()                                     # hold server open until explicitly closed
+        self.get_logger().info(f"✅ Telepathy Domain live on portal {TMS.TELORECEPTOR_PORTAL}")     # log live connection of telepathy domain
+        await self._telepathy_domain.wait_closed()                                                  # suspend coroutine — telepathy domain stays active for node lifetime
 
-    async def _handle_connection(self, websocket) -> None:
+    async def _on_teloreceptor_link(self, peripheral_link: websockets.ServerConnection) -> None:
         """
-        Handle one WebUI connection for its full lifetime.
-        Each connection gets its own coroutine — connections are independent.
-
+        Manage one peripheral link for its full lifetime.
+        Each link opens an independent afferent channel — concurrent links never interfere.
+        Technical note: async for loop blocks until the link closes — coroutine lives for link lifetime.
+        
         Args:
-            websocket: Active websocket connection from WebUI.
+            peripheral_link (websockets.ServerConnection): Active WebSocket connection from a peripheral adapter.
         """
-        self._active_connections.add(websocket)                                 # register connection — tracked for clean shutdown
-        self.get_logger().info("🔗 WebUI connected")
+        self._active_connections.add(peripheral_link)                           # register link — tracked for clean shutdown
+        self.get_logger().info("🔗 Peripheral link established")                # log the connection of peripheral link
 
-        try:
-            async for raw_message in websocket:                                 # iterate messages for this connection lifetime
-                sss = self._receive(raw_message)                                # stage 1 — instantiate SSS from raw input
-                if sss is None:
-                    continue
+        try:                                                                    # attempt to connect telepathy domain
+            async for raw_stimulus in peripheral_link:                          # iterate stimulus stream for this link lifetime
+                sss = self._receive(raw_stimulus)                                # stage 1 — instantiate SSS from raw stimulus
+                if sss is None:                                                 # if no valid stimulus,
+                    continue                                                    # skip the loop and wait for next stimulus
 
                 sss = self._transduction_gate(sss)                              # stage 2 — threshold check, discard below-minimum signals
-                if sss is None:
-                    continue
+                if sss is None:                                                 # if stimulus dropped by transduction gate,
+                    continue                                                    # skip the loop and wait for next stimulus
 
                 sss = self._heuristic_gate(sss)                                 # stage 3 — intercept locally resolvable signals
-                if sss is None:
-                    continue
+                if sss is None:                                                 # if stimulus dropped by heuristic gate,
+                    continue                                                    # skip the loop and wait for next stimulus
 
                 sss = self._buffer(sss)                                         # stage 4 — hold, extract, affective tag, consolidate
                 self._publish_sss(sss)                                          # stage 5 — dispatch consolidated SSS to sensory gateway
@@ -429,7 +432,7 @@ class TelepathyInputCore(Node):
         # Biological analogue: motor efference copy preventing self-tickling.
         # CNC publishes SHA-256 imprints of outbound responses to TMS.EFFERENCE_ECHO.
         # If inbound text imprint matches a live echo, the signal is suppressed here.
-        imprint = self._imprint(text)
+        imprint = self._derive_imprint(text)
         if imprint in self._efference_echoes:
             sss.state                = "intercepted"
             sss.locus                = "tic._heuristic_gate"
@@ -584,8 +587,8 @@ class TelepathyInputCore(Node):
             for ws in list(self._active_connections):                               # iterate over a copy of the active connections
                 await ws.close()                                                    # close each connection asynchronously
             if hasattr(self, "_ws_server"):                                         # if the websocket server exists
-                self._telephathy_domain.close()                                             # close the websocket server
-                await self._telephathy_domain.wait_closed()                                 # wait for the websocket server to close
+                self._telepathy_domain.close()                                             # close the websocket server
+                await self._telepathy_domain.wait_closed()                                 # wait for the websocket server to close
 
         future = asyncio.run_coroutine_threadsafe(_close(), self._teloreceptor_cycle)          # run the close coroutine in the websocket loop
         try:                                                                        # try to close the websocket server
