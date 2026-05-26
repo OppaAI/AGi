@@ -341,9 +341,9 @@ class TelepathyInputCore(Node):
                 role         = stimulus.get("role", "user"),                    # speaker role — always "user" from UI
                 content      = stimulus.get("content", ""),                     # raw stimulus content — not yet validated
                 user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo if not provided
-                source       = SensoryInputChannel(stimulus.get("source", SensoryInputChannel.UI.value)),   # adapter-stamped channel identity
-                modality     = SensoryModality(stimulus.get("modality", SensoryModality.TEXT.value)),       # trace type — PMT for all conversational input
-                trace_type   = TraceType(stimulus.get("trace_type", TraceType.PMT.value)),                  # adapter-stamped trace type
+                source       = SensoryInputChannel.UI.value,                    # adapter-stamped channel identity
+                modality     = SensoryModality.TEXT.value,                      # trace type — PMT for all conversational input (TODO: M1.X - to add modality check when implement image input)
+                trace_type   = TraceType.PMT.value,                             # adapter-stamped trace type (TODO: M1.X - to add VST when implement image input)
                 state        = "GENERATED",                                     # lifecycle marker — SSS born
                 locus        = "TIC:RECEPTION",                                 # processing locus — reception stage
                 generated_at = generated_at,                                    # UTC birth timestamp — moment stimulus enters neural system
@@ -365,21 +365,21 @@ class TelepathyInputCore(Node):
         Returns:
             SSS | None: SSS marked TRANSDUCED, or None if below threshold.
         """
-        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""  # guard against non-string payload
+        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""  # guard against non-string payload — normalize to empty string
 
-        if not content:                                                                  # null, empty, or whitespace-only — below threshold
-            stimulus.state       = "DISCARDED"
-            stimulus.locus       = "TIC:TRANSDUCTION"
-            stimulus.drop_reason = "below_threshold"
-            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()
-            self.get_logger().debug("🚫 SSS discarded — below transduction threshold")
-            return None
+        if not content:                                                                  # null, empty, whitespace-only — below threshold
+            stimulus.state       = "DISCARDED"                                           # lifecycle marker — signal dies here
+            stimulus.locus       = "TIC:TRANSDUCTION"                                    # processing locus — transduction stage
+            stimulus.drop_reason = "BELOW_THRESHOLD"                                     # discard reason — signal too weak to propagate
+            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()                # UTC timestamp — moment of discard
+            self.get_logger().debug("🚫 SSS discarded — below transduction threshold")   # Log the discard of SSS
+            return None                                                                  # stop processing this stimulus
 
-        stimulus.content       = content                                               # commit stripped content — normalized payload
-        stimulus.state         = "transduced"                                        # lifecycle marker — threshold passed
-        stimulus.locus         = "tic._transduction_gate"
-        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()
-        return stimulus
+        stimulus.content       = content                                                 # commit stripped content — normalized payload
+        stimulus.state         = "TRANDUCED"                                             # lifecycle marker — threshold passed
+        stimulus.locus         = "TIC:TRANSDUCTION"                                      # processing locus — transduction stage
+        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()                  # UTC timestamp — moment of transduction
+        return stimulus                                                                  # propagate SSS to heuristic gate
 
     def _apply_heuristic_gate(self, sss: SSS) -> SSS | None:
         """
