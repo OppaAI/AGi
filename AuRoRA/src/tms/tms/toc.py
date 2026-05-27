@@ -60,20 +60,20 @@ Terminology:
     Teleeffector Portal            — WebSocket port — efferent output channel (TOC side).
 """
 
-import asyncio                                              # for running telepathy domain on a dedicated neural thread, isolated from robot system cycle
-import json                                                 # serialize/deserialize payloads at both boundaries
-import threading                                            # owns the telepathy domain thread — keeps asyncio loop off the robot system cycle
+import asyncio                                                                # for running telepathy domain on a dedicated neural thread, isolated from robot system cycle
+import json                                                                   # serialize/deserialize payloads at both boundaries
+import threading                                                              # owns the telepathy domain thread — keeps asyncio loop off the robot system cycle
 
-import rclpy                                                # ROS2 Python client library — node lifecycle and spin
-from rclpy.node import Node                                 # base class for all ROS2 nodes
-from std_msgs.msg import String                             # ROS2 string message type for topic I/O
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK  # clean disconnect vs unexpected drop — handled separately in _on_peripheral_link
-from websockets.server import ServerConnection              # type hint for peripheral link parameter
+import rclpy                                                                  # ROS2 Python client library — node lifecycle and spin
+from rclpy.node import Node                                                   # base class for all ROS2 nodes
+from std_msgs.msg import String                                               # ROS2 string message type for topic I/O
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK   # clean disconnect vs unexpected drop — handled separately in _on_peripheral_link
+from websockets.server import ServerConnection                                # type hint for peripheral link parameter
 
-from hrs.hrm import AGi                                     # homeostatic regulation manifest namespace
-from hrs.hru import hydrate_manifest                        # binds AuRoRA parameter server values into AGi constants at boot
+from hrs.hrm import AGi                                                       # homeostatic regulation manifest namespace
+from hrs.hru import hydrate_manifest                                          # binds AuRoRA parameter server values into AGi constants at boot
 
-TMS = AGi.TMS                                               # module-level alias — TMS-level constants (topic names, websocket config)
+TMS = AGi.TMS                                                                 # module-level alias — TMS-level constants (topic names, websocket config)
 
 class TOC(Node):
     """
@@ -126,18 +126,18 @@ class TOC(Node):
         self.get_logger().info("📣 TOC ready — efferent pathway open")
         self.get_logger().info("=" * 60)
 
-    async def _boot_ws_server(self) -> None:
+    async def _ignite_telepathy_domain(self) -> None:
         """
         Boot the websocket server and hold it for the node lifetime.
-        Runs entirely on the toc-ws-server thread — never touches ROS2.
+        Runs entirely on the toc-teleeffector thread — never touches ROS2.
         """
-        self._ws_server = await websockets.serve(                               # open websocket server — WebUI connects here to receive responses
+        self._telepathy_domain = await websockets.serve(                               # open websocket server — WebUI connects here to receive responses
             self._handle_connection,
-            "0.0.0.0",
-            TMS.WS_OUTPUT_PORT,
+            TMS.TELEPATHY_GATEWAY,
+            TMS.TELEEFFCTOR_PORTAL,
         )
-        self.get_logger().info(f"✅ WebSocket server live on port {TMS.WS_OUTPUT_PORT}")
-        await self._ws_server.wait_closed()                                     # hold server open until explicitly closed
+        self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFCTOR_PORTAL}")
+        await self._telepathy_domain.wait_closed()                                     # hold server open until explicitly closed
 
     async def _handle_connection(self, websocket) -> None:
         """
