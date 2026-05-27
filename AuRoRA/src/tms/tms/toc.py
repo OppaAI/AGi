@@ -77,7 +77,7 @@ TMS = AGi.TMS                                                                 # 
 
 class TOC(Node):
     """
-    Telepathy Output Core — Robot system node.
+    Telepathy Output Core — Robot system neural node.
     
     Core for directing efferent traffic for telepathy responses from Cognitive Engine.
     Receives continous stream of CRS fragments via the motor gateway, relays the stream to all active peripheral effectors.
@@ -121,25 +121,25 @@ class TOC(Node):
         )
 
         self.get_logger().info(f"✅ Response Gateway      : {TMS.TEXT_RESPONSE_GATEWAY}")    # TODO: Add custom logger msg for activated module
-        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELEEFFCTOR_PORTAL}")
+        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELEEFFECTOR_PORTAL}")
         self.get_logger().info("=" * 60)
         self.get_logger().info("📣 TOC ready — efferent pathway open")
         self.get_logger().info("=" * 60)
 
     async def _ignite_telepathy_domain(self) -> None:
         """
-        Boot the websocket server and hold it for the node lifetime.
-        Runs entirely on the toc-teleeffector thread — never touches ROS2.
+        Ignites telepathy domain and retain the connection open for the neural node lifetime.
+        Runs entirely on the teleeffector thread — never touches the main robot system cycle.
         """
-        self._telepathy_domain = await websockets.serve(                               # open websocket server — WebUI connects here to receive responses
-            self._handle_connection,
-            TMS.TELEPATHY_GATEWAY,
-            TMS.TELEEFFCTOR_PORTAL,
+        self._telepathy_domain = await websockets.serve(                        # open the telepathy domain for connect to communicate with user
+            self._on_peripheral_connected,                                      # fire on each incoming peripheral connection
+            TMS.TELEPATHY_GATEWAY,                                              # gateway to telepathy domain
+            TMS.TELEEFFECTOR_PORTAL,                                            # portal to enter the gateway
         )
-        self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFCTOR_PORTAL}")
-        await self._telepathy_domain.wait_closed()                                     # hold server open until explicitly closed
+        self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFECTOR_PORTAL}")  # TODO: Add custom logger msg for activated module 
+        await self._telepathy_domain.wait_closed()                              # keep telepathy domain open for neural node lifetime
 
-    async def _handle_connection(self, websocket) -> None:
+    async def _on_peripheral_connected(self, websocket) -> None:
         """
         Handle one WebUI output connection for its full lifetime.
         Connection is registered as a broadcast target — receives all CRS fragments.
