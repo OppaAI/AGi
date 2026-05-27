@@ -91,7 +91,7 @@ class TOC(Node):
         """
         Initialize Telepathy Output Core.
 
-        Ignites telepathy domain on a dedicated thread and opens the response gateway reception.
+        Ignites telepathy domain on a dedicated thread and opens the cognitive response signal (CRS) reception.
         Main robot system and telepathy domain never share same neural thread.
         """
         super().__init__("toc")                                                 # register this core module to robot system
@@ -99,13 +99,13 @@ class TOC(Node):
         self.get_logger().info("📣 TOC — Telepathy Output Core starting…")
         self.get_logger().info("=" * 60)
 
-        hydrate_manifest(self, system="tms")                                    # hydrate system manifest with 
+        hydrate_manifest(self, system="tms")                                    # hydrate system manifest with declared paramemters
 
-        self._active_connections: Set = set()                                   # registry of live websocket connections — broadcast target
+        self._active_connections = set()                                        # establish connections with telepathy domain for broadcast to targets
 
-        # Motor gateway subscription — CRS fragments arrive here from CNC
-        self._motor_gateway: rclpy.subscription.Subscription = self.create_subscription(
-            String, TMS.TEXT_MOTOR_GATEWAY, self._receive_crs, 10              # String type | topic | callback | QoS depth 10
+        # Cognitive response signal reception — streams of CRS fragments arrive here from CNC
+        self._crs_receptor = self.create_subscription(                          # Open the gateway to receive the streams of CRS fragments
+            String, TMS.TEXT_RESPONSE_GATEWAY, self._on_crs_received, 10        # signal type | neural gateway | action | buffer depth 10
         )
 
         # Boot websocket server on its own thread — never competes with ROS2 spin
