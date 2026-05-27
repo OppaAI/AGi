@@ -108,21 +108,21 @@ class TOC(Node):
             String, TMS.TEXT_RESPONSE_GATEWAY, self._on_crs_received, 10        # signal type | neural gateway | action | buffer depth 10
         )
 
-        # Boot websocket server on its own thread — never competes with ROS2 spin
-        self._ws_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()     # isolated event loop — owns the websocket server lifetime
-        self._ws_thread: threading.Thread = threading.Thread(
-            target=self._ws_loop.run_forever,
-            name="toc-ws-server",
+        # Ignite telepathy domain on its dedicated thread — never shares with main robot system processes
+        self._teloeffector_cycle = asyncio.new_event_loop()                     # isolated event loop — owns the websocket server lifetime
+        self._teloeffector_thread: threading.Thread = threading.Thread(
+            target=self._teloeffector_cycle.run_forever,
+            name="toc-teloeffector",
             daemon=True,                                                        # dies with main process — clean shutdown
         )
-        self._ws_thread.start()                                                 # ignite websocket thread
+        self._teloeffector_thread.start()                                       # ignite websocket thread
 
         asyncio.run_coroutine_threadsafe(                                       # schedule server boot on ws loop — crosses thread boundary safely
-            self._boot_ws_server(), self._ws_loop
+            self._ignite_telepathy_domain(), self._teloeffector_cycle
         )
 
-        self.get_logger().info(f"✅ Subscribed  : {TMS.TEXT_MOTOR_GATEWAY}")
-        self.get_logger().info(f"✅ WebSocket   : ws://0.0.0.0:{TMS.WS_OUTPUT_PORT}")
+        self.get_logger().info(f"✅ Response Gateway      : {TMS.TEXT_RESPONSE_GATEWAY}")    # TODO: Add custom logger msg for activated module
+        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELOEFFCTOR_PORTAL}")
         self.get_logger().info("=" * 60)
         self.get_logger().info("📣 TOC ready — efferent pathway open")
         self.get_logger().info("=" * 60)
