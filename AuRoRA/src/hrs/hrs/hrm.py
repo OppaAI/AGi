@@ -83,7 +83,7 @@ class AGi:                                                              # Amazin
         TELEPATHY_GATEWAY          : init  = "0.0.0.0"                  # [STATIC] bind address — all interfaces
         TELEPATHY_PORTAL           : int   = 8848                       # [STATIC] WebUI — HTTP static file server
         TELORECEPTOR_PORTAL        : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
-        TELEEFFCTOR_PORTAL        : int   = 8851                        # [STATIC] WebSocket server port — TOC output adapter
+        TELEEFFCTOR_PORTAL         : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
         TEXT_STIMULUS_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
         TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
         RESPONSE_ECHO_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
