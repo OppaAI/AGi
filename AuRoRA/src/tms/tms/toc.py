@@ -57,7 +57,7 @@ Terminology:
     Motor Gateway                  — ROS2 topic carrying CRS fragments from CNC to TOC.
     Peripheral Link                — active WebSocket connection from a peripheral adapter.
     Telepathy Domain               — WebSocket server — efferent channel for symbolic output.
-    Teloreceptor Portal            — WebSocket port — efferent output channel (TOC side).
+    Teleeffector Portal            — WebSocket port — efferent output channel (TOC side).
 """
 
 import asyncio                                              # for running telepathy domain on a dedicated neural thread, isolated from robot system cycle
@@ -101,28 +101,27 @@ class TOC(Node):
 
         hydrate_manifest(self, system="tms")                                    # hydrate system manifest with declared paramemters
 
-        self._active_connections = set()                                        # establish connections with telepathy domain for broadcast to targets
+        self._active_connections = set()                                        # registry of active peripheral links to broadcast targets
 
-        # Cognitive response signal reception — streams of CRS fragments arrive here from CNC
         self._crs_receptor = self.create_subscription(                          # Open the gateway to receive the streams of CRS fragments
             String, TMS.TEXT_RESPONSE_GATEWAY, self._on_crs_received, 10        # signal type | neural gateway | action | buffer depth 10
         )
 
         # Ignite telepathy domain on its dedicated thread — never shares with main robot system processes
-        self._teloeffector_cycle = asyncio.new_event_loop()                     # isolated event loop — owns the websocket server lifetime
-        self._teloeffector_thread: threading.Thread = threading.Thread(
-            target=self._teloeffector_cycle.run_forever,
-            name="toc-teloeffector",
-            daemon=True,                                                        # dies with main process — clean shutdown
+        self._teleeffector_cycle = asyncio.new_event_loop()                     # isolate teleeffector cycle to connect to telepathy domain lifetime
+        self._teleeffector_thread = threading.Thread(                           # assign a dedicate neural thread to execute the teleeffector cycle
+            target=self._teleeffector_cycle.run_forever,                        # keep teleeffector cycle running
+            name="toc-teleeffector",                                            # name of teleeffector cycle
+            daemon=True,                                                        # dies with main processes so no orphan thread on shutdown
         )
-        self._teloeffector_thread.start()                                       # ignite websocket thread
+        self._teleeffector_thread.start()                                       # ignite teleeffector thread
 
-        asyncio.run_coroutine_threadsafe(                                       # schedule server boot on ws loop — crosses thread boundary safely
-            self._ignite_telepathy_domain(), self._teloeffector_cycle
+        asyncio.run_coroutine_threadsafe(                                       # schedule ignition of telepathy domain on teleeffector cycle to allow safe neural thread boundary crossing
+            self._ignite_telepathy_domain(), self._teleeffector_cycle
         )
 
         self.get_logger().info(f"✅ Response Gateway      : {TMS.TEXT_RESPONSE_GATEWAY}")    # TODO: Add custom logger msg for activated module
-        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELOEFFCTOR_PORTAL}")
+        self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELEEFFCTOR_PORTAL}")
         self.get_logger().info("=" * 60)
         self.get_logger().info("📣 TOC ready — efferent pathway open")
         self.get_logger().info("=" * 60)
