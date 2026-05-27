@@ -141,8 +141,8 @@ class TOC(Node):
 
     async def _on_peripheral_connected(self, websocket) -> None:
         """
-        Handle one WebUI output connection for its full lifetime.
-        Connection is registered as a broadcast target — receives all CRS fragments.
+        Handle one peripheral output connection for its full lifetime.
+        Connection is registered as a broadcast target that receives all CRS fragments.
 
         Args:
             websocket: Active websocket connection from WebUI.
