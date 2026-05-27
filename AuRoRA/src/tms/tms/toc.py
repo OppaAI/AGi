@@ -136,7 +136,7 @@ class TOC(Node):
             TMS.TELEPATHY_GATEWAY,                                              # gateway to telepathy domain
             TMS.TELEEFFECTOR_PORTAL,                                            # portal to enter the gateway
         )
-        self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFECTOR_PORTAL}")  # TODO: Add custom logger msg for activated module 
+        self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFECTOR_PORTAL}")  # TODO: log the connection to telepathy domain
         await self._telepathy_domain.wait_closed()                              # keep telepathy domain open for neural node lifetime
 
     async def _on_peripheral_connected(self, websocket) -> None:
@@ -148,7 +148,7 @@ class TOC(Node):
             websocket: Active websocket connection from WebUI.
         """
         self._active_connections.add(websocket)                                 # register as broadcast target
-        self.get_logger().info("🔗 WebUI output connected")
+        self.get_logger().info("🔗 Telepathy output connected")                 # TODO: log the connection to telepathy gateway
 
         try:
             await websocket.wait_closed()                                       # hold open — TOC pushes, WebUI doesn't send here
