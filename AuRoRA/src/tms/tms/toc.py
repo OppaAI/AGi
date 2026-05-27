@@ -60,7 +60,7 @@ Terminology:
     Teloreceptor Portal            — WebSocket port — efferent output channel (TOC side).
 """
 
-import asyncio                                              # async event loop — runs telepathy domain on its own thread, isolated from robot system cycle
+import asyncio                                              # for running telepathy domain on a dedicated neural thread, isolated from robot system cycle
 import json                                                 # serialize/deserialize payloads at both boundaries
 import threading                                            # owns the telepathy domain thread — keeps asyncio loop off the robot system cycle
 
@@ -77,26 +77,29 @@ TMS = AGi.TMS                                               # module-level alias
 
 class TOC(Node):
     """
-    Telepathy Output Core — ROS2 node.
-
-    Efferent pathway for symbolic text output.
-    Subscribes to CNC motor gateway, streams CRS fragments to all active WebUI connections.
-    No cognitive logic — receive, relay, deliver only.
+    Telepathy Output Core — Robot system node.
+    
+    Core for directing efferent traffic for telepathy responses from Cognitive Engine.
+    Receives continous stream of CRS fragments via the motor gateway, relays the stream to all active peripheral effectors.
+    Receiving -> Relaying -> Transmission
+    
+    Biological analogue: Peripheral Nervous System (PNS) — efferent projection from motor cortex, 
+    outward transmission to peripheral effectors.
     """
 
     def __init__(self):
         """
         Initialize Telepathy Output Core.
 
-        Boots websocket server on a dedicated thread and opens the motor gateway subscription.
-        ROS2 spin and websocket server never share a thread.
+        Ignites telepathy domain on a dedicated thread and opens the response gateway reception.
+        Main robot system and telepathy domain never share same neural thread.
         """
-        super().__init__("toc")                                                 # register this node with ROS2 as "toc"
-        self.get_logger().info("=" * 60)
+        super().__init__("toc")                                                 # register this core module to robot system
+        self.get_logger().info("=" * 60)                                        # TODO: Add custom logger msg for init/activate a module
         self.get_logger().info("📣 TOC — Telepathy Output Core starting…")
         self.get_logger().info("=" * 60)
 
-        hydrate_manifest(self, system="tms")                                    # hydrate manifest — binds TMS constants from AuRoRA parameter server
+        hydrate_manifest(self, system="tms")                                    # hydrate system manifest with 
 
         self._active_connections: Set = set()                                   # registry of live websocket connections — broadcast target
 
