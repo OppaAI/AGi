@@ -406,12 +406,10 @@ class TelepathyInputCore(Node):
         Returns:
             SSS | None: Stimulus marked TRIAGED, or None if intercepted or discarded.
         """
-        text       = sss.text
-        text_lower = text.lower()
-        now        = datetime.now(timezone.utc).isoformat()
+        content        = stimulus.text                                                            # normalized stimulus content from transduction stage
+        current_time   = datetime.now(timezone.utc).isoformat()                                   # UTC timestamp — moment of intercept/discard
 
-        # prune stale efference echoes before any check — cheap housekeeping
-        self._prune_response_echoes()
+        self._prune_response_echoes()                                                             # evict stale echo imprints before any check — cheap housekeeping
 
         # 1. oversized payload — discard before any pattern matching
         if len(text.encode("utf-8")) > _MAX_PAYLOAD_BYTES:
@@ -432,7 +430,7 @@ class TelepathyInputCore(Node):
 
         # 3. injection pattern intercept — symbolic injection attempt, blocked at periphery
         for pattern in _INJECTION_PREFIXES:
-            if text_lower.startswith(pattern):
+            if content.lower().startswith(pattern):
                 sss.state       = "intercepted"
                 sss.locus       = "tic._heuristic_gate"
                 sss.drop_reason = "injection"
