@@ -83,7 +83,7 @@ class AGi:                                                              # Amazin
         TELEPATHY_GATEWAY          : str   = "0.0.0.0"                  # [STATIC] bind address — all interfaces
         TELEPATHY_PORTAL           : int   = 8848                       # [STATIC] WebUI — HTTP static file server
         TELORECEPTOR_PORTAL        : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
-        TELOEFFECTOR_PORTAL        : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
+        TELEEFFCTOR_PORTAL         : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
         TEXT_STIMULUS_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
         TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
         RESPONSE_ECHO_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
@@ -136,8 +136,6 @@ class AGi:                                                              # Amazin
         USER_PROFILES    : str = "users.yaml"                                                   # [STATIC] all user profiles + per-user extrinsic settings
         PERSONA_PROFILES : str = "persona.yaml"                                                 # [STATIC] directory containing persona YAML files
 
-        TEXT_INPUT_GATEWAY: str     = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/text_input"            # [STATIC] ROS topic — inbound user text
-        RESPONSE_GATEWAY: str       = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/response"              # [STATIC] ROS topic — outbound LLM response
         MEMORY_CONTEXT_GATEWAY: str = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_context"        # [STATIC] ROS topic — reinstated memory context injected into prompt
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
        
