@@ -80,7 +80,7 @@ class AGi:                                                              # Amazin
     ROBOT_ID: str         = "AuRoRA-ZERO-Prototype"                     # (TODO) [STATIC] robot ID to be stored in encrypted file
     
     class TMS:                                                          # Telepathy Management System
-        TELEPATHY_GATEWAY          : init  = "0.0.0.0"                  # [STATIC] bind address — all interfaces
+        TELEPATHY_GATEWAY          : str   = "0.0.0.0"                  # [STATIC] bind address — all interfaces
         TELEPATHY_PORTAL           : int   = 8848                       # [STATIC] WebUI — HTTP static file server
         TELORECEPTOR_PORTAL        : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
         TELOEFFECTOR_PORTAL        : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter

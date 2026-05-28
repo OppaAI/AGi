@@ -129,6 +129,11 @@ Terminology:
 """
 
 # System libraries
+from launch.substitutions import text_substitution
+from launch.substitutions import text_substitution
+from launch.substitutions import text_substitution
+from launch.substitutions import text_substitution
+from launch.substitutions import text_substitution
 import websockets
 import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
 import hashlib                                                              # SHA-256 hashing for response echo imprints
@@ -352,7 +357,7 @@ class TelepathyInputCore(Node):
             self.get_logger().debug(f"🚫 Stimulus rejected — malformed JSON: {e}")  # log the malformed JSON
             return None                                                         # stop processing this stimulus
 
-    def _apply_transduction_gate(self, stimulus: SSS) -> SSS | None:
+    def _apply_transduction_gate(self, sss: SSS) -> SSS | None:
         """
         Stage 2 — Transduction Threshold Gate.
         Gate the stimulus — determine whether it meets minimum threshold to propagate.
@@ -369,23 +374,23 @@ class TelepathyInputCore(Node):
         Returns:
             SSS | None: Stimulus marked TRANSDUCED, or None if below threshold.
         """
-        content = stimulus.content.strip() if isinstance(stimulus.content, str) else ""      # guard against non-string payload — normalize to empty string
+        content = sss.content.strip() if isinstance(sss.content, str) else ""               # guard against non-string payload — normalize to empty string
 
-        if not content:                                                                      # null, empty, whitespace-only — below threshold
-            stimulus.state       = "DISCARDED"                                               # lifecycle marker — signal dies here
-            stimulus.locus       = "TIC:TRANSDUCTION"                                        # processing locus — transduction stage
-            stimulus.drop_reason = "BELOW_THRESHOLD"                                         # discard reason — signal too weak to propagate
-            stimulus.dropped_at  = datetime.now(timezone.utc).isoformat()                    # UTC timestamp — moment of discard
-            self.get_logger().debug("🚫 Stimulus discarded — below transduction threshold")  # Log the discard of SSS
-            return None                                                                      # stop processing this stimulus
+        if not content:                                                                     # null, empty, whitespace-only — below threshold
+            sss.state       = "DISCARDED"                                                   # lifecycle marker — signal dies here
+            sss.locus       = "TIC:TRANSDUCTION"                                            # processing locus — transduction stage
+            sss.drop_reason = "BELOW_THRESHOLD"                                             # discard reason — signal too weak to propagate
+            sss.dropped_at  = datetime.now(timezone.utc).isoformat()                        # UTC timestamp — moment of discard
+            self.get_logger().debug("🚫 Stimulus discarded — below transduction threshold") # Log the discard of SSS
+            return None                                                                     # stop processing this stimulus
 
-        stimulus.content       = content                                                     # commit stripped content — normalized payload
-        stimulus.state         = "TRANDUCED"                                                 # lifecycle marker — threshold passed
-        stimulus.locus         = "TIC:TRANSDUCTION"                                          # processing locus — transduction stage
-        stimulus.transduced_at = datetime.now(timezone.utc).isoformat()                      # UTC timestamp — moment of transduction
-        return stimulus                                                                      # propagate SSS to heuristic gate
+        sss.content       = content                                                         # commit stripped content — normalized payload
+        sss.state         = "TRANSDUCED"                                                    # lifecycle marker — threshold passed
+        sss.locus         = "TIC:TRANSDUCTION"                                              # processing locus — transduction stage
+        sss.transduced_at = datetime.now(timezone.utc).isoformat()                          # UTC timestamp — moment of transduction
+        return sss                                                                          # propagate SSS to heuristic gate
 
-    def _apply_heuristic_gate(self, stimulus: SSS) -> SSS | None:
+    def _apply_heuristic_gate(self, sss: SSS) -> SSS | None:
         """
         Stage 3 — Heuristic Intercept Gate.
         Intercept signals resolvable locally without burdening the CNS.
@@ -406,71 +411,73 @@ class TelepathyInputCore(Node):
         Returns:
             SSS | None: Stimulus marked TRIAGED, or None if intercepted or discarded.
         """
-        content        = stimulus.text                                                            # normalized stimulus content from transduction stage
-        current_time   = datetime.now(timezone.utc).isoformat()                                   # UTC timestamp — moment of intercept/discard
+        content        = sss.content                                                        # normalized stimulus content from transduction stage
+        current_time   = datetime.now(timezone.utc).isoformat()                             # UTC timestamp — moment of intercept/discard
 
-        self._prune_response_echoes()                                                             # evict stale echo imprints before any check — cheap housekeeping
+        self._prune_response_echoes()                                                       # evict stale echo imprints before any check — cheap housekeeping
 
         # 1. oversized payload — discard before any pattern matching
-        if len(text.encode("utf-8")) > _MAX_PAYLOAD_BYTES:
-            sss.state       = "discarded"
-            sss.locus       = "tic._heuristic_gate"
-            sss.drop_reason = "overload"
-            sss.dropped_at  = now
-            self.get_logger().warning(f"⚠️  SSS discarded — payload exceeds {_MAX_PAYLOAD_BYTES}B ceiling")
-            return None
+        if len(content.encode("utf-8")) > TMS.MAX_PAYLOAD_BYTES:                            # oversized — discard before pattern matching
+            sss.state       = "DISCARDED"                                                   # lifecycle marker — signal dies here
+            sss.locus       = "TIC:HEURISTIC"                                               # processing locus — heuristic stage
+            sss.drop_reason = "OVERSIZE"                                                    # discard reason — signal too large to process
+            sss.dropped_at  = datetime.now(timezone.utc).isoformat()                         # UTC timestamp — moment of discard
+            self.get_logger().warning(f"⚠️  SSS discarded — payload exceeds {TMS.MAX_PAYLOAD_BYTES}B ceiling")  # log the discard of SSS
+            return None                                                                     # stop processing this stimulus
 
         # 2. /command intercept — local reflex, never reaches CNS
-        if text.startswith("/"):
-            sss.state = "intercepted"
-            sss.locus = "tic._heuristic_gate"
-            self.get_logger().debug(f"🛑 SSS intercepted — command signal: {text[:40]}")
+        if content.startswith("/"):                                                         # command — block before pattern matching
+            sss.state       = "INTERCEPTED"                                                 # lifecycle marker — signal dies here
+            sss.locus       = "TIC:HEURISTIC"                                               # processing locus — heuristic stage
+            sss.drop_reason = "COMMAND"                                                     # discard reason — command signal
+            sss.dropped_at  = datetime.now(timezone.utc).isoformat()                        # UTC timestamp — moment of discard
+            self.get_logger().debug(f"🛑 SSS intercepted — command signal: {content[:40]}") # log the intercept of SSS
             # TODO: route /commands to local command handler
-            return None
+            return None                                                                     # stop processing this stimulus
 
         # 3. injection pattern intercept — symbolic injection attempt, blocked at periphery
-        for pattern in _INJECTION_PREFIXES:
-            if content.lower().startswith(pattern):
-                sss.state       = "intercepted"
-                sss.locus       = "tic._heuristic_gate"
-                sss.drop_reason = "injection"
-                sss.dropped_at  = now
-                self.get_logger().warning(f"🛑 SSS intercepted — injection pattern: '{pattern}'")
-                return None
+        for pattern in TMS.INJECTION_PATTERNS:                                              # scan known injection openers — peripheral reflex, never reaches CNS
+            if content.lower().startswith(pattern):                                         # matches an injection opener
+                sss.state       = "INTERCEPTED"                                             # lifecycle marker — signal dies here
+                sss.locus       = "TIC:HEURISTIC"                                           # processing locus — heuristic stage
+                sss.drop_reason = "INJECTION"                                               # discard reason — injection attempt
+                sss.dropped_at  = datetime.now(timezone.utc).isoformat()                    # UTC timestamp — moment of discard
+                self.get_logger().warning(f"🛑 SSS intercepted — injection pattern: '{pattern}'")  # log the intercept of SSS
+                return None                                                                 # stop processing this stimulus
 
-        # 4. efference echo suppression — CNC predicted this input; suppress as self-generated
+        # 4. response echo suppression — CNC predicted this input; suppress as self-generated
         # Biological analogue: motor efference copy preventing self-tickling.
-        # CNC publishes SHA-256 imprints of outbound responses to TMS.EFFERENCE_ECHO.
+        # CNC publishes SHA-256 imprints of outbound responses to TMS.RESPONSE_ECHO.
         # If inbound text imprint matches a live echo, the signal is suppressed here.
-        imprint = self._derive_imprint(text)
-        if imprint in self._efference_echoes:
-            sss.state                = "intercepted"
-            sss.locus                = "tic._heuristic_gate"
-            sss.drop_reason          = "efference_echo"
-            sss.dropped_at           = now
-            sss.efference_suppressed = True
-            self.get_logger().debug(f"🔇 SSS suppressed — efference echo match: {imprint[:12]}…")
-            return None
+        imprint = self._derive_imprint(content)                                             # derive imprint from normalized content
+        if imprint in self._response_echoes:                                                # imprint matches live echo — self-generated signal
+            sss.state               = "INTERCEPTED"                                         # lifecycle marker — signal dies here
+            sss.locus               = "TIC:HEURISTIC"                                       # processing locus — heuristic stage
+            sss.drop_reason         = "RESPONSE_ECHO"                                       # discard reason — response echo
+            sss.dropped_at          = datetime.now(timezone.utc).isoformat()                # UTC timestamp — moment of discard
+            sss.echo_suppressed     = True                                                  # flag — suppressed as self-generated response echo
+            self.get_logger().debug(f"🔇 SSS suppressed — response echo match: {imprint[:12]}…") # log the echo suppression of SSS
+            return None                                                                     # stop processing this stimulus
 
         # 5. duplicate debounce — same payload from the same user within debounce window.
         # Keyed on user_id — distinct senders never suppress each other.
         # Biological analogue: sensory refractory period — organ cannot re-fire on identical
         # stimulus within recovery window.
-        now_epoch = time.monotonic()
-        last_text, last_time = self._refractory_anchor.get(sss.user_id, ("", 0.0))
-        if text == last_text and (now_epoch - last_time) < _DEBOUNCE_WINDOW_S:
-            sss.state       = "intercepted"
-            sss.locus       = "tic._heuristic_gate"
-            sss.drop_reason = "duplicate"
-            sss.dropped_at  = now
-            self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")
-            return None
+        timestamp = time.monotonic()                                                                # monotonic timestamp for refractory period
+        refractory_content, refractory_time = self._refractory_anchor.get(sss.user_id, ("", 0.0))   # retrieve last stimulus anchor for this sender
+        if content == refractory_content and (timestamp - refractory_time) < TMS.REFRACTORY_PEROID: # same content within refractory window
+            sss.state               = "INTERCEPTED"                                                 # lifecycle marker — signal dies here
+            sss.locus               = "TIC:HEURISTIC"                                               # processing locus — heuristic stage
+            sss.drop_reason         = "DUPLICATE"                                                   # discard reason — duplicate
+            sss.dropped_at          = datetime.now(timezone.utc).isoformat()                        # UTC timestamp — moment of discard
+            self.get_logger().debug("🔁 SSS intercepted — duplicate within debounce window")        # log the duplicate SSS
+            return None                                                                             # stop processing this stimulus
 
-        self._refractory_anchor[sss.user_id] = (text, now_epoch)                    # anchor per user — distinct senders never suppress each other
+        self._refractory_anchor[sss.user_id] = (content, timestamp)                                 # update anchor — only on pass, never on suppress
 
-        sss.state = "triaged"                                                   # lifecycle marker — heuristic gate cleared
-        sss.locus = "tic._heuristic_gate"
-        return sss
+        sss.state = "TRIAGED"                                                                       # lifecycle marker — heuristic gate cleared
+        sss.locus = "TIC:HEURISTIC"                                                                 # processing locus — heuristic stage
+        return sss                                                                                  # propagate SSS to sensory buffer
 
     def _buffer(self, sss: SSS) -> SSS:
         """

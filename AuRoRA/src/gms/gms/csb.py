@@ -111,7 +111,7 @@ class SSS:
     # ── efference copy — set by TIC._heuristic_gate() ────────────────────────
     # Biological analogue: motor efference copy — brain suppresses predicted
     # sensory consequences of self-generated actions to prevent self-tickling.
-    efference_suppressed : bool       = False  # True = signal matched a CNC-published efference echo; suppressed at periphery
+    echo_suppressed : bool            = False  # True = signal matched a CNC-published efference echo; suppressed at periphery
 
     # ── lifecycle — set at each pipeline stage ────────────────────────────────
     state           : str             = ""     # "generated" | "transduced" | "triaged" | "buffered" | "dispatched" | "depleted" | "discarded"
