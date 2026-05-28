@@ -139,26 +139,26 @@ class TOC(Node):
         self.get_logger().info(f"✅ Telepathy Domain live on port {TMS.TELEEFFECTOR_PORTAL}")  # TODO: log the connection to telepathy domain
         await self._telepathy_domain.wait_closed()                              # keep telepathy domain open for neural node lifetime
 
-    async def _on_peripheral_connected(self, websocket) -> None:
+    async def _on_peripheral_connected(self, peripheral_link: ServerConnection) -> None:
         """
-        Handle one peripheral output connection for its full lifetime.
+        Handle one peripheral link for its full lifetime.
         Connection is registered as a broadcast target that receives all CRS fragments.
 
         Args:
-            websocket: Active websocket connection from WebUI.
+            peripheral_link: Active connection from a peripheral adapter to the telepathy domain.
         """
-        self._active_connections.add(websocket)                                 # register as broadcast target
-        self.get_logger().info("🔗 Telepathy output connected")                 # TODO: log the connection to telepathy gateway
+        self._active_connections.add(websocket)                                                 # register as broadcast target
+        self.get_logger().info("🔗 Telepathy output connected")                                 # TODO: log the connection to telepathy gateway
 
-        try:
-            await websocket.wait_closed()                                       # hold open — TOC pushes, WebUI doesn't send here
-        except websockets.exceptions.ConnectionClosedOK:
-            pass
-        except websockets.exceptions.ConnectionClosedError as e:
-            self.get_logger().warning(f"⚠️  WebUI output disconnected unexpectedly: {e}")
-        finally:
-            self._active_connections.discard(websocket)                         # deregister on any exit path
-            self.get_logger().info("🔌 WebUI output disconnected")
+        try:                                                                                    # attempt to connect to telepathy domain
+            await websocket.wait_closed()                                                       # hold open — TOC pushes, WebUI doesn't send here
+        except websockets.exceptions.ConnectionClosedOK:                                        # 
+            pass                                                                                # no action needed
+        except websockets.exceptions.ConnectionClosedError as e:                                # if error causing connection closed,
+            self.get_logger().warning(f"⚠️  Telepathy Domain disconnected unexpectedly: {e}")   # TODO: log the error 
+        finally:                                                                                # on every closing path
+            self._active_connections.discard(websocket)                                         # unregister the connection
+            self.get_logger().info("🔌 Telepathy Domain disconnected")                          #
 
     def _receive_crs(self, msg: String) -> None:
         """
