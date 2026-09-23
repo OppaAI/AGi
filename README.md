@@ -1,3 +1,7 @@
+_Currently paused this project to make my AI wAIfu._  
+_Here is that repo: https://github.com/OppaAI/Aiko-chan_
+
+
 # AGi — Amazing Grace infrastructure
  
 **AuRoRA** · Autonomous Rover Robotics Assistant 
