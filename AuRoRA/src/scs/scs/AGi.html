@@ -1,0 +1,3188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Chat with Grace ✨</title>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Cyberpunk Circuit Background */
+        .cyber-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a1a 100%);
+            overflow: hidden;
+        }
+        
+        .circuit-grid {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: grid-move 20s linear infinite;
+        }
+        
+        @keyframes grid-move {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(50px, 50px) rotate(0deg); }
+        }
+        
+        #matrixCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.4;
+            z-index: 1;
+        }
+        
+        .circuit-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+            animation: node-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes node-pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.5); }
+        }
+        
+        .data-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            height: 1px;
+            opacity: 0.4;
+            animation: data-flow 3s linear infinite;
+        }
+        
+        @keyframes data-flow {
+            0% { transform: translateX(-100%); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateX(100vw); opacity: 0; }
+        }
+        
+        .circuit-symbol {
+            position: absolute;
+            color: #00ff88;
+            font-family: monospace;
+            font-size: 14px;
+            opacity: 0.2;
+            animation: symbol-float 10s ease-in-out infinite;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        @keyframes symbol-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.1; }
+            50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
+        }
+        
+        .pink-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 105, 180, 0.15) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: glow-pulse 4s ease-in-out infinite;
+        }
+        
+        @keyframes glow-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+        
+        .container {
+            position: relative;
+            z-index: 10;
+            max-width: 600px;
+            width: 100%;
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: 
+                0 10px 40px rgba(255, 105, 180, 0.2),
+                0 0 0 1px rgba(0, 255, 136, 0.3),
+                inset 0 0 30px rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #ff69b4;
+            font-size: 2.5em;
+            font-weight: 800;
+            text-shadow: 
+                0 0 10px rgba(255, 105, 180, 0.5),
+                0 0 20px rgba(255, 105, 180, 0.3);
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #00ff88;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+        
+        .robot-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+            position: relative;
+            padding: 0 20px;
+        }
+        
+        .robot {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            animation: float 3s ease-in-out infinite;
+            cursor: default;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .robot.petting {
+            animation: wiggle 0.5s ease-in-out infinite;
+        }
+        
+        .robot.poking {
+            animation: shake 0.3s ease-in-out;
+        }
+        
+        .pet-zone {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            width: 160px;
+            height: 140px;
+            cursor: grab;
+            z-index: 15;
+            border-radius: 50%;
+        }
+        
+        .pet-zone:active {
+            cursor: grabbing;
+        }
+        
+        /* CHEEK POKE ZONES - LEFT AND RIGHT */
+        .cheek-poke-zone {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            z-index: 16;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .cheek-poke-zone.left {
+            top: 85px;
+            left: 15px;
+        }
+        
+        .cheek-poke-zone.right {
+            top: 85px;
+            right: 15px;
+        }
+        
+        .cheek-poke-zone:hover {
+            background: rgba(255, 107, 107, 0.2);
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+        }
+        
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg) scale(1.05); }
+            50% { transform: rotate(3deg) scale(1.05); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-2deg); }
+            75% { transform: translateX(5px) rotate(2deg); }
+        }
+        
+        .pet-heart {
+            position: absolute;
+            font-size: 24px;
+            pointer-events: none;
+            animation: pet-heart-float 1.5s ease-out forwards;
+            z-index: 100;
+        }
+        
+        @keyframes pet-heart-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(0.5) rotate(0deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(1.5) rotate(360deg);
+            }
+        }
+        
+        .poke-mark {
+            position: absolute;
+            font-size: 20px;
+            pointer-events: none;
+            animation: poke-float 1s ease-out forwards;
+            z-index: 100;
+        }
+        
+        @keyframes poke-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.5);
+            }
+        }
+        
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 105, 180, 0.4);
+            transform: scale(0);
+            animation: ripple-effect 0.6s ease-out;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        .ripple.poke {
+            background: rgba(255, 107, 107, 0.4);
+        }
+        
+        @keyframes ripple-effect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+        
+        .robot-head {
+            width: 140px;
+            height: 120px;
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            top: 20px;
+            left: 30px;
+            box-shadow: 
+                0 8px 20px rgba(255, 105, 180, 0.3),
+                0 0 30px rgba(255, 105, 180, 0.2),
+                inset -5px -5px 15px rgba(0,0,0,0.1),
+                inset 5px 5px 15px rgba(255,255,255,0.3);
+            z-index: 10;
+            transition: all 0.5s ease;
+        }
+        
+        /* ALL EMOTIONS NOW PINK - Different expressions only */
+        .robot-head.happy {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+        }
+        
+        /* SAD - Now pink but with sad expression */
+        .robot-head.sad {
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
+            animation: float-slow 4s ease-in-out infinite;
+        }
+        
+        /* ANGRY - Now pink but with angry expression */
+        .robot-head.angry {
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            animation: shake 0.5s ease-in-out infinite;
+        }
+        
+        /* SURPRISED - Now pink instead of yellow */
+        .robot-head.surprised {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            animation: bounce-quick 0.8s ease-in-out infinite;
+        }
+        
+        .robot-head.thinking {
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
+        }
+        
+        .robot-head.loving {
+            background: linear-gradient(145deg, #ff99cc, #ff66b2);
+            animation: pulse-heart 1s ease-in-out infinite;
+        }
+        
+        .robot-head.petted {
+            background: linear-gradient(145deg, #ffb6c1, #ff1493);
+            animation: petted-glow 1s ease-in-out infinite;
+        }
+        
+        /* POKED - Pink with hurt expression */
+        .robot-head.poked {
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            animation: poked-wince 0.5s ease-in-out;
+        }
+        
+        @keyframes poked-wince {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-3deg); }
+            75% { transform: translateX(5px) rotate(3deg); }
+        }
+        
+        @keyframes petted-glow {
+            0%, 100% { 
+                box-shadow: 
+                    0 8px 20px rgba(255, 105, 180, 0.3),
+                    0 0 30px rgba(255, 20, 147, 0.4),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
+            50% { 
+                box-shadow: 
+                    0 8px 20px rgba(255, 105, 180, 0.5),
+                    0 0 50px rgba(255, 20, 147, 0.6),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
+        }
+        
+        @keyframes float-slow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        @keyframes bounce-quick {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+        
+        @keyframes pulse-heart {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        
+        .antenna-left, .antenna-right {
+            width: 12px;
+            height: 40px;
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
+            position: absolute;
+            top: -25px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .antenna-left {
+            left: 30px;
+            transform: rotate(-15deg);
+        }
+        
+        .antenna-right {
+            right: 30px;
+            transform: rotate(15deg);
+        }
+        
+        /* SAD - droopy antennas */
+        .robot-head.sad .antenna-left,
+        .robot-head.sad .antenna-right {
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
+            transform: rotate(-25deg) translateY(5px);
+        }
+        
+        .robot-head.sad .antenna-right {
+            transform: rotate(25deg) translateY(5px);
+        }
+        
+        /* ANGRY - antennas shaking */
+        .robot-head.angry .antenna-left,
+        .robot-head.angry .antenna-right {
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            animation: antenna-shake 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-shake {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
+        }
+        
+        .robot-head.angry .antenna-right {
+            animation: antenna-shake-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-shake-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
+        }
+        
+        .robot-head.petted .antenna-left,
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-wiggle {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
+        }
+        
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes antenna-wiggle-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
+        }
+        
+        /* POKED - antennas droop */
+        .robot-head.poked .antenna-left,
+        .robot-head.poked .antenna-right {
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            transform: rotate(-30deg) translateY(8px);
+            transition: all 0.3s ease;
+        }
+        
+        .robot-head.poked .antenna-right {
+            transform: rotate(30deg) translateY(8px);
+        }
+        
+        .antenna-ball {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle at 30% 30%, #fff, #ff69b4);
+            border-radius: 50%;
+            position: absolute;
+            top: -10px;
+            left: -4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: blink-ball 2s infinite;
+        }
+        
+        @keyframes blink-ball {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.9); }
+        }
+        
+        .face {
+            position: absolute;
+            top: 35px;
+            left: 20px;
+            width: 100px;
+            height: 60px;
+        }
+        
+        .eyes {
+            display: flex;
+            justify-content: space-between;
+            width: 80px;
+            margin: 0 auto;
+        }
+        
+        .eye {
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .eye::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(145deg, #4a4a4a, #2a2a2a);
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .eye::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+        
+        /* HAPPY - smiling eyes */
+        .eye.happy::after {
+            height: 10px;
+            border-radius: 0 0 15px 15px;
+            top: 10px;
+        }
+        
+        .eye.happy::before {
+            opacity: 0;
+        }
+        
+        /* SAD - looking down, teary */
+        .eye.sad::after {
+            transform: translateY(3px) scale(0.9);
+        }
+        
+        .eye.sad::before {
+            transform: translateY(3px) scale(0.9);
+            opacity: 0.5;
+        }
+        
+        /* ANGRY - narrowed eyes */
+        .eye.angry::after {
+            transform: translateY(-2px) scale(0.9);
+            height: 12px;
+            border-radius: 50% 50% 40% 40%;
+        }
+        
+        .eye.angry::before {
+            opacity: 0;
+        }
+        
+        /* SURPRISED - wide eyes */
+        .eye.surprised::after {
+            transform: scale(0.6);
+        }
+        
+        .eye.surprised::before {
+            transform: scale(0.6);
+            opacity: 0.8;
+        }
+        
+        /* LOVE - heart shaped pupils */
+        .eye.love::after {
+            transform: scale(0.8) translateY(-2px);
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+        
+        /* POKED - squeezed shut */
+        .eye.poked::after {
+            height: 3px;
+            border-radius: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .eye.poked::before {
+            opacity: 0;
+        }
+        
+        .eye.blink {
+            animation: blink-anim 0.2s ease;
+        }
+        
+        @keyframes blink-anim {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+        
+        .eye.look-left::after, .eye.look-left::before {
+            transform: translateX(-3px);
+        }
+        
+        .eye.look-right::after, .eye.look-right::before {
+            transform: translateX(3px);
+        }
+        
+        .eye.look-up::after, .eye.look-up::before {
+            transform: translateY(-3px);
+        }
+        
+        .cheeks {
+            display: flex;
+            justify-content: space-between;
+            width: 100px;
+            margin-top: 5px;
+        }
+        
+        .cheek {
+            width: 20px;
+            height: 12px;
+            background: rgba(255, 105, 180, 0.4);
+            border-radius: 50%;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+        
+        /* SAD - pale cheeks */
+        .robot-head.sad .cheek {
+            background: rgba(255, 105, 180, 0.2);
+            opacity: 0.4;
+        }
+        
+        /* ANGRY - flushed cheeks */
+        .robot-head.angry .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 0.9;
+        }
+        
+        /* LOVING/PETTED - blushing hard */
+        .robot-head.loving .cheek,
+        .robot-head.petted .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 1;
+            animation: blush 1s ease-in-out infinite;
+        }
+        
+        /* POKED - red mark on cheek */
+        .robot-head.poked .cheek {
+            background: rgba(255, 107, 107, 0.8);
+            opacity: 1;
+            transform: scale(1.2);
+        }
+        
+        @keyframes blush {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+        }
+        
+        .mouth {
+            width: 40px;
+            height: 20px;
+            border: 3px solid #4a4a4a;
+            border-top: none;
+            border-radius: 0 0 40px 40px;
+            margin: 8px auto 0;
+            position: relative;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+        
+        /* HAPPY - big smile */
+        .mouth.smile {
+            height: 25px;
+            border-radius: 0 0 50px 50px;
+            background: #ff69b4;
+            border: none;
+        }
+        
+        /* SAD - frown */
+        .mouth.sad {
+            width: 30px;
+            height: 15px;
+            border-radius: 50% 50% 0 0;
+            border: 3px solid #4a4a4a;
+            border-bottom: none;
+            background: transparent;
+            margin-top: 12px;
+            transform: rotate(180deg);
+        }
+        
+        /* ANGRY - gritted teeth line */
+        .mouth.angry {
+            width: 35px;
+            height: 8px;
+            border-radius: 4px;
+            background: #4a4a4a;
+            transform: rotate(-5deg);
+            margin-top: 18px;
+            border: none;
+        }
+        
+        /* SURPRISED - O shape */
+        .mouth.surprised {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #ff69b4;
+            border: 3px solid #4a4a4a;
+            margin-top: 8px;
+        }
+        
+        /* LOVE - heart mouth */
+        .mouth.love {
+            width: 25px;
+            height: 20px;
+            background: #ff69b4;
+            border: none;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform: rotate(-45deg);
+            margin-top: 10px;
+        }
+        
+        /* PETTED - big grin */
+        .mouth.petted {
+            width: 35px;
+            height: 20px;
+            border-radius: 0 0 50px 50px;
+            background: #ff1493;
+            border: none;
+            animation: mouth-happy 0.5s ease-in-out infinite;
+        }
+        
+        /* POKED - wavy mouth */
+        .mouth.poked {
+            width: 30px;
+            height: 10px;
+            border: none;
+            border-bottom: 3px solid #4a4a4a;
+            border-radius: 50%;
+            margin-top: 15px;
+            animation: mouth-wince 0.5s ease-in-out;
+        }
+        
+        @keyframes mouth-happy {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.2); }
+        }
+        
+        @keyframes mouth-wince {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(0.8) translateY(-2px); }
+        }
+        
+        .robot-body {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            border-radius: 40px 40px 30px 30px;
+            position: absolute;
+            bottom: 0;
+            left: 50px;
+            box-shadow: 
+                0 5px 15px rgba(0,0,0,0.1),
+                inset -3px -3px 10px rgba(0,0,0,0.05);
+            z-index: 5;
+            transition: all 0.5s ease;
+        }
+        
+        /* All body colors now pink */
+        .robot-head.sad ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
+        }
+        
+        .robot-head.angry ~ .robot-body {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+        }
+        
+        .robot-head.thinking ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
+        }
+        
+        .robot-head.petted ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            animation: body-wiggle 0.5s ease-in-out infinite;
+        }
+        
+        .robot-head.poked ~ .robot-body {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            animation: body-flinch 0.5s ease-in-out;
+        }
+        
+        @keyframes body-wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
+        }
+        
+        @keyframes body-flinch {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.95); }
+        }
+        
+        .heart {
+            position: absolute;
+            top: 40px;
+            left: 43px;
+            width: 14px;
+            height: 12px;
+            background: #ff69b4;
+            transform: rotate(-45deg);
+            animation: heartbeat 1.5s ease-in-out infinite;
+            transition: all 0.3s ease;
+        }
+        
+        .heart::before,
+        .heart::after {
+            content: '';
+            width: 14px;
+            height: 12px;
+            position: absolute;
+            background: #ff69b4;
+            border-radius: 50%;
+        }
+        
+        .heart::before {
+            top: -7px;
+            left: 0;
+        }
+        
+        .heart::after {
+            left: 7px;
+            top: 0;
+        }
+        
+        @keyframes heartbeat {
+            0%, 100% { transform: rotate(-45deg) scale(1); }
+            50% { transform: rotate(-45deg) scale(1.1); }
+        }
+        
+        /* All heart colors pink */
+        .robot-head.sad .heart {
+            background: #ff69b4;
+            animation: heartbeat-slow 2s ease-in-out infinite;
+        }
+        
+        .robot-head.sad .heart::before,
+        .robot-head.sad .heart::after {
+            background: #ff69b4;
+        }
+        
+        @keyframes heartbeat-slow {
+            0%, 100% { transform: rotate(-45deg) scale(0.9); }
+            50% { transform: rotate(-45deg) scale(1); }
+        }
+        
+        .robot-head.loving .heart,
+        .robot-head.petted .heart {
+            background: #ff1493;
+            animation: heartbeat-fast 0.6s ease-in-out infinite;
+        }
+        
+        .robot-head.loving .heart::before,
+        .robot-head.loving .heart::after,
+        .robot-head.petted .heart::before,
+        .robot-head.petted .heart::after {
+            background: #ff1493;
+        }
+        
+        @keyframes heartbeat-fast {
+            0%, 100% { transform: rotate(-45deg) scale(1.2); }
+            50% { transform: rotate(-45deg) scale(1.5); }
+        }
+        
+        .arm-left, .arm-right {
+            width: 30px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
+            position: absolute;
+            top: 80px;
+            border-radius: 15px;
+            z-index: 4;
+            transition: all 0.3s ease;
+        }
+        
+        .arm-left {
+            left: 10px;
+            transform-origin: top center;
+            animation: wave-left 4s ease-in-out infinite;
+        }
+        
+        .arm-right {
+            right: 10px;
+            transform-origin: top center;
+            animation: wave-right 4s ease-in-out infinite;
+        }
+        
+        /* SAD - arms down */
+        .robot-head.sad .arm-left,
+        .robot-head.sad .arm-right {
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
+            animation: none;
+            transform: rotate(20deg) translateY(10px);
+        }
+        
+        .robot-head.sad .arm-right {
+            transform: rotate(-20deg) translateY(10px);
+        }
+        
+        /* ANGRY - fists shaking */
+        .robot-head.angry .arm-left,
+        .robot-head.angry .arm-right {
+            background: linear-gradient(to bottom, #ff69b4, #ff1493);
+            animation: shake-fists 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-30deg); }
+        }
+        
+        .robot-head.angry .arm-right {
+            animation: shake-fists-right 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes shake-fists-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(30deg); }
+        }
+        
+        /* LOVING - reaching out */
+        .robot-head.loving .arm-left {
+            animation: reach-out-left 2s ease-in-out infinite;
+        }
+        
+        .robot-head.loving .arm-right {
+            animation: reach-out-right 2s ease-in-out infinite;
+        }
+        
+        /* PETTED - happy wave */
+        .robot-head.petted .arm-left {
+            animation: happy-wave-left 0.5s ease-in-out infinite;
+        }
+        
+        .robot-head.petted .arm-right {
+            animation: happy-wave-right 0.5s ease-in-out infinite;
+        }
+        
+        /* POKED - covering cheeks */
+        .robot-head.poked .arm-left,
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks 0.5s ease-in-out;
+        }
+        
+        @keyframes cover-cheeks {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(45deg) translateX(10px); }
+        }
+        
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks-right 0.5s ease-in-out;
+        }
+        
+        @keyframes cover-cheeks-right {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-45deg) translateX(-10px); }
+        }
+        
+        @keyframes happy-wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg); }
+        }
+        
+        @keyframes happy-wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg); }
+        }
+        
+        @keyframes reach-out-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg) translateX(-5px); }
+        }
+        
+        @keyframes reach-out-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg) translateX(5px); }
+        }
+        
+        @keyframes wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(20deg); }
+        }
+        
+        @keyframes wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(-20deg); }
+        }
+        
+        .speech-bubble {
+            position: absolute;
+            top: -60px;
+            right: -80px;
+            background: rgba(10, 10, 20, 0.95);
+            padding: 15px 20px;
+            border-radius: 20px;
+            box-shadow: 
+                0 5px 15px rgba(0,0,0,0.3),
+                0 0 20px rgba(0, 255, 136, 0.2);
+            font-size: 0.9em;
+            color: #00ff88;
+            max-width: 150px;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 20px;
+            height: 20px;
+            background: rgba(10, 10, 20, 0.95);
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            border-right: 1px solid rgba(0, 255, 136, 0.3);
+            transform: rotate(45deg);
+        }
+        
+        .speech-bubble.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .speech-bubble.speaking {
+            animation: bounce 0.5s ease infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: scale(1) translateY(0); }
+            to { transform: scale(1.05) translateY(-5px); }
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 105, 180, 0.1);
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 700;
+            color: #00ff88;
+            margin: 0 auto 20px;
+            display: block;
+            width: fit-content;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff6b9d;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        
+        /* IMAGE PREVIEW AREA */
+        .image-preview-area {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            position: relative;
+            display: none;
+            animation: slide-in 0.3s ease;
+        }
+        
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .image-preview-area.show {
+            display: block;
+        }
+        
+        .image-preview-area img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto 10px;
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.2);
+        }
+        
+        .image-preview-area input {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 15px;
+            color: #00ff88;
+            outline: none;
+            font-family: 'Nunito', sans-serif;
+            font-size: 0.95em;
+        }
+        
+        .image-preview-area input:focus {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+        
+        .image-preview-area input::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+        
+        .remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 107, 107, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            color: white;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        
+        .remove-btn:hover {
+            background: rgba(255, 107, 107, 1);
+            transform: scale(1.1) rotate(90deg);
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        /* RL FEEDBACK TEXT */
+        .rl-feedback-text {
+            text-align: center;
+            color: rgba(0, 255, 136, 0.7);
+            font-size: 0.85em;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .rl-feedback-text .thumb-up {
+            color: #ff69b4;
+        }
+        
+        .rl-feedback-text .thumb-down {
+            color: #ff6b6b;
+        }
+        
+        #userInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            transition: all 0.3s ease;
+            background: rgba(10, 10, 20, 0.8);
+            color: #00ff88;
+            box-shadow: inset 0 0 10px rgba(0, 255, 136, 0.05);
+        }
+        
+        #userInput:focus {
+            border-color: #ff69b4;
+            box-shadow: 
+                0 0 0 4px rgba(255, 105, 180, 0.2),
+                inset 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+        
+        #userInput::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+        
+        /* SINGLE + BUTTON FOR IMAGE/CAMERA */
+        .plus-btn {
+            padding: 15px 20px;
+            background: linear-gradient(145deg, #00ff88, #00cc6a);
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+            border: none;
+            min-width: 55px;
+            position: relative;
+        }
+        
+        .plus-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+        }
+        
+        .plus-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Dropdown menu for + button */
+        .plus-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        
+        .plus-menu.show {
+            transform: translateX(-50%) scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .plus-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            color: #00ff88;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+        
+        .plus-menu-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+            color: #ff69b4;
+        }
+        
+        .plus-menu-item span {
+            font-size: 1.3em;
+        }
+        
+        /* GLOBE BUTTON FOR WEB SEARCH */
+        .globe-btn {
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1.3em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 55px;
+        }
+        
+        .globe-btn:hover {
+            transform: scale(1.1);
+            border-color: #ff69b4;
+        }
+        
+        .globe-btn.active {
+            color: #00ff88;
+            text-shadow: 0 0 15px #00ff88, 0 0 30px #00ff88;
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            animation: globe-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes globe-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
+        }
+        
+        .send-btn {
+            padding: 15px 30px;
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 
+                0 4px 15px rgba(255, 20, 147, 0.3),
+                0 0 10px rgba(255, 105, 180, 0.2);
+            font-family: 'Nunito', sans-serif;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 6px 20px rgba(255, 20, 147, 0.4),
+                0 0 20px rgba(255, 105, 180, 0.3);
+        }
+        
+        .send-btn:active {
+            transform: translateY(0);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .chat-container {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.6);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 18px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: pop-in 0.3s ease;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        @keyframes pop-in {
+            0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        .message.user {
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+            text-align: right;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+        
+        .message.grace {
+            background: rgba(255, 105, 180, 0.1);
+            color: #ff69b4;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+            min-height: 44px;
+            border: 1px solid rgba(255, 105, 180, 0.2);
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.1);
+        }
+        
+        .message-label {
+            font-size: 0.75em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            opacity: 0.7;
+        }
+        
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #ff69b4;
+            margin-left: 2px;
+            animation: blink-cursor 0.8s infinite;
+            vertical-align: middle;
+        }
+        
+        @keyframes blink-cursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 10px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 136, 0.3);
+            border-radius: 10px;
+        }
+        
+        .float-hearts {
+            position: fixed;
+            font-size: 24px;
+            animation: float-up 4s ease-in infinite;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        @keyframes float-up {
+            0% {
+                opacity: 0;
+                transform: translateY(100vh) rotate(0deg);
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) rotate(360deg);
+            }
+        }
+        
+        .speaking-waves {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+        }
+        
+        .speaking-waves.active {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .wave {
+            width: 4px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 2px;
+            animation: wave-anim 0.5s ease-in-out infinite;
+            box-shadow: 0 0 10px #00ff88;
+        }
+        
+        .wave:nth-child(2) { animation-delay: 0.1s; }
+        .wave:nth-child(3) { animation-delay: 0.2s; }
+        
+        @keyframes wave-anim {
+            0%, 100% { height: 10px; }
+            50% { height: 25px; }
+        }
+        
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 0;
+        }
+        
+        .typing-indicator.active {
+            display: flex;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: typing-bounce 1.4s ease-in-out infinite;
+            box-shadow: 0 0 5px #00ff88;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing-bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        
+        .emotion-indicator {
+            position: absolute;
+            top: -90px;
+            right: -60px;
+            font-size: 2em;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            text-shadow: 0 0 20px rgba(255, 105, 180, 0.5);
+        }
+        
+        .emotion-indicator.show {
+            opacity: 1;
+            transform: scale(1);
+            animation: emotion-pop 0.5s ease;
+        }
+        
+        @keyframes emotion-pop {
+            0% { transform: scale(0) rotate(-180deg); }
+            50% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+        
+        .pet-counter {
+            position: absolute;
+            top: -30px;
+            left: -60px;
+            background: rgba(255, 105, 180, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+        }
+        
+        .pet-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* POKE COUNTER - Same style but red */
+        .poke-counter {
+            position: absolute;
+            top: -30px;
+            right: -60px;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+        
+        .poke-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* THUMB UP/DOWN ANIMATION STYLES */
+        .thumb-animation {
+            position: absolute;
+            font-size: 2em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transform: scale(0);
+            animation: thumb-pop 1s ease-out forwards;
+        }
+        
+        .thumb-animation.up {
+            color: #ff69b4;
+            text-shadow: 0 0 20px #ff69b4, 0 0 40px #ff69b4;
+        }
+        
+        .thumb-animation.down {
+            color: #ff6b6b;
+            text-shadow: 0 0 20px #ff6b6b, 0 0 40px #ff6b6b;
+        }
+        
+        @keyframes thumb-pop {
+            0% {
+                opacity: 0;
+                transform: scale(0) translateY(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: scale(1.3) translateY(-20px) rotate(10deg);
+            }
+            40% {
+                transform: scale(1.1) translateY(-30px) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: scale(1.2) translateY(-40px) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8) translateY(-80px);
+            }
+        }
+        
+        /* RL REWARD VISUAL FEEDBACK */
+        .reward-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            text-shadow: 0 0 30px currentColor;
+        }
+        
+        .reward-feedback.show {
+            animation: reward-pop 1s ease-out forwards;
+        }
+        
+        .reward-feedback.positive {
+            color: #ff69b4;
+        }
+        
+        .reward-feedback.negative {
+            color: #ff6b6b;
+        }
+        
+        @keyframes reward-pop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3) rotate(10deg);
+            }
+            40% {
+                transform: translate(-50%, -50%) scale(1.1) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8) translateY(-100px);
+            }
+        }
+    
+        /* MODERN CHAT INPUT */
+        .chat-input-wrapper {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .chat-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            padding: 5px;
+            flex: 1;
+        }
+
+        .chat-input-container:focus-within {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+
+        .input-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            padding: 0;
+        }
+
+        .plus-btn {
+            color: #00ff88;
+            font-size: 1.4em;
+            font-weight: 400;
+            line-height: 1;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .plus-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(1.1);
+            border-color: rgba(0, 255, 136, 0.5);
+        }
+
+        .globe-btn {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .globe-btn:hover {
+            background: rgba(255, 105, 180, 0.1);
+            transform: scale(1.1);
+        }
+
+        .globe-btn.active {
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.15);
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 10px 5px;
+            border: none;
+            background: transparent;
+            color: #00ff88;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            min-width: 0;
+        }
+
+        #userInput::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        .plus-menu {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 10px;
+            transform: scale(0);
+            transform-origin: bottom left;
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 100;
+        }
+
+        .plus-menu.show {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* MOBILE - Status with connection indicator */
+        @media screen and (max-width: 768px) {
+            html, body {
+                height: 100%;
+                overflow: hidden;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                height: 100vh;
+                max-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                padding: 5px 10px;
+                padding-bottom: 60px; /* Space for fixed input */
+                box-sizing: border-box;
+            }
+
+            .robot-container { display: none !important; }
+
+            /* Title at very top */
+            h1 {
+                font-size: 1em !important;
+                margin: 0 0 5px 0 !important;
+                padding: 0;
+                flex-shrink: 0;
+            }
+
+            /* Hide subtitle */
+            .subtitle { display: none !important; }
+
+            /* Status with emotion (left) and connection (right) */
+            .mini-status {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 5px 12px;
+                margin: 0 auto 5px;
+                color: #ff69b4;
+                background: rgba(10, 10, 20, 0.9);
+                border-radius: 15px;
+                border: 1px solid rgba(0, 255, 136, 0.3);
+                max-width: 95%;
+                font-size: 0.85em;
+                flex-shrink: 0;
+            }
+
+            .mini-status .status-left {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .mini-status .status-emoji { 
+                font-size: 1.2em; 
+            }
+
+            .mini-status .status-right {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 0.8em;
+            }
+
+            .mini-status .conn-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #00ff88;
+                box-shadow: 0 0 6px #00ff88;
+                flex-shrink: 0;
+            }
+
+            .mini-status.offline .conn-dot {
+                background: #ff6b6b;
+                box-shadow: 0 0 6px #ff6b6b;
+            }
+
+            .mini-status.offline {
+                border-color: rgba(255, 107, 107, 0.3);
+            }
+
+            /* Chat fills space */
+            .chat-container {
+                flex: 1;
+                overflow-y: auto;
+                margin: 0;
+                padding: 5px;
+                min-height: 0;
+            }
+
+            /* Fixed input at very bottom */
+            .chat-input-wrapper {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 5px 10px;
+                padding-bottom: max(5px, env(safe-area-inset-bottom));
+                background: rgba(10, 10, 20, 0.98);
+                border-top: 1px solid rgba(0, 255, 136, 0.2);
+                z-index: 1000;
+                box-sizing: border-box;
+                margin: 0;
+            }
+
+            .chat-input-row { 
+                gap: 6px; 
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .chat-input-container { 
+                padding: 3px 5px; 
+                gap: 4px; 
+                flex: 1;
+                min-width: 0;
+                border-radius: 20px;
+            }
+
+            .input-btn { 
+                width: 34px; 
+                height: 34px; 
+                min-width: 34px;
+                min-height: 34px;
+            }
+
+            .plus-btn { 
+                font-size: 1.2em; 
+                background: rgba(0, 255, 136, 0.15);
+                border: 1px solid rgba(0, 255, 136, 0.4);
+            }
+
+            .globe-btn { 
+                font-size: 0.95em; 
+            }
+
+            #userInput {
+                padding: 6px 4px;
+                font-size: 16px;
+                min-width: 0;
+            }
+
+            /* Send button with centered arrow */
+            .send-btn {
+                width: 38px;
+                height: 38px;
+                min-width: 38px;
+                min-height: 38px;
+                padding: 0;
+                border-radius: 50%;
+                font-size: 0;
+                position: relative;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .send-btn::after {
+                content: "↑";
+                font-size: 18px;
+                color: white;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -55%);
+                line-height: 1;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Hide RL feedback */
+            .rl-feedback-text { display: none !important; }
+        }
+
+        .mini-status { display: none; }
+</style>
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+    <div class="cyber-bg" id="cyberBg">
+        <div class="circuit-grid"></div>
+        <canvas id="matrixCanvas"></canvas>
+        <div class="pink-glow"></div>
+    </div>
+    
+    <!-- RL Reward Feedback Overlay -->
+    <div class="reward-feedback" id="rewardFeedback"></div>
+    
+    <div class="container">
+        <h1>✨ Chat with Grace ✨</h1>
+        <p class="subtitle">Your Cute AI Companion 💕</p>
+
+        <div class="mini-status" id="miniStatus">
+            <div class="status-left">
+                <span class="status-emoji" id="statusEmoji">🤖</span>
+                <span id="miniStatusText">Grace is here!</span>
+            </div>
+            <div class="status-right">
+                <span class="conn-dot" id="connDot"></span>
+                <span id="connText">Online</span>
+            </div>
+        </div>
+        
+        <div class="status-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+        
+        <div class="robot-container">
+            <div class="robot" id="robot">
+                <div class="pet-zone" id="petZone"></div>
+                
+                <!-- CHEEK POKE ZONES FOR NEGATIVE FEEDBACK -->
+                <div class="cheek-poke-zone left" id="pokeZoneLeft" title="Poke for bad response"></div>
+                <div class="cheek-poke-zone right" id="pokeZoneRight" title="Poke for bad response"></div>
+                
+                <div class="pet-counter" id="petCounter">Reward: 0</div>
+                <div class="poke-counter" id="pokeCounter">Penalties: 0</div>
+                <div class="emotion-indicator" id="emotionIndicator">😊</div>
+                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+                
+                <div class="speaking-waves" id="speakingWaves">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+                
+                <div class="robot-head" id="robotHead">
+                    <div class="antenna-left">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    <div class="antenna-right">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    
+                    <div class="face">
+                        <div class="eyes">
+                            <div class="eye" id="leftEye"></div>
+                            <div class="eye" id="rightEye"></div>
+                        </div>
+                        <div class="cheeks">
+                            <div class="cheek" id="leftCheek"></div>
+                            <div class="cheek" id="rightCheek"></div>
+                        </div>
+                        <div class="mouth" id="mouth"></div>
+                    </div>
+                </div>
+                
+                <div class="robot-body">
+                    <div class="heart"></div>
+                </div>
+                
+                <div class="arm-left"></div>
+                <div class="arm-right"></div>
+            </div>
+        </div>
+        
+        <!-- IMAGE PREVIEW AREA -->
+        <div class="image-preview-area" id="imagePreviewArea">
+            <button class="remove-btn" onclick="removeImage()">✕</button>
+            <img id="previewImg" alt="Preview">
+            <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
+        </div>
+        
+        <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
+        <!-- MODERN CHAT INPUT -->
+        <div class="chat-input-wrapper">
+            <div class="chat-input-row">
+                <div class="chat-input-container">
+                    <button class="input-btn plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">+</button>
+                    <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+                    <button class="input-btn globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">🌐</button>
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+            </div>
+            <div class="plus-menu" id="plusMenu">
+                <label class="plus-menu-item">
+                    <span>📁</span>
+                    <span>Upload Image</span>
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+                <label class="plus-menu-item">
+                    <span>📷</span>
+                    <span>Take Photo</span>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+            </div>
+        </div><!-- RL FEEDBACK INSTRUCTION TEXT -->
+        <div class="rl-feedback-text">
+            <span class="thumb-up">👍</span> Pet head for good response
+            <span style="color: rgba(0,255,136,0.4);">|</span>
+            <span class="thumb-down">👈</span> Poke cheeks for bad response
+        </div>
+        
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+
+    <script>
+        // Matrix Rain
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initDrops();
+        }
+        
+        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@#$%^&*';
+        const charArray = chars.split('');
+        
+        const fontSize = 16;
+        let columns = 0;
+        let drops = [];
+        
+        function initDrops() {
+            columns = Math.floor(canvas.width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -50;
+            }
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.06)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff88';
+            ctx.font = fontSize + 'px monospace';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#00ff88';
+            
+            for (let i = 0; i < drops.length; i++) {
+                const text = charArray[Math.floor(Math.random() * charArray.length)];
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+                
+                ctx.fillText(text, x, y);
+                
+                if (y > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+        
+        function drawMatrixHeads() {
+            for (let i = 0; i < drops.length; i++) {
+                if (Math.random() > 0.98) {
+                    const text = charArray[Math.floor(Math.random() * charArray.length)];
+                    const x = i * fontSize;
+                    const y = (drops[i] - 1) * fontSize;
+                    
+                    ctx.fillStyle = '#ccffcc';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00ff88';
+                    ctx.fillText(text, x, y);
+                }
+            }
+            ctx.shadowBlur = 0;
+        }
+        
+        setInterval(() => {
+            drawMatrix();
+            drawMatrixHeads();
+        }, 33);
+        
+        // Circuit elements
+        function createCircuitElements() {
+            const bg = document.getElementById('cyberBg');
+            
+            for (let i = 0; i < 20; i++) {
+                const node = document.createElement('div');
+                node.className = 'circuit-node';
+                node.style.left = Math.random() * 100 + '%';
+                node.style.top = Math.random() * 100 + '%';
+                node.style.animationDelay = Math.random() * 2 + 's';
+                bg.appendChild(node);
+            }
+            
+            for (let i = 0; i < 10; i++) {
+                const line = document.createElement('div');
+                line.className = 'data-line';
+                line.style.top = Math.random() * 100 + '%';
+                line.style.width = (100 + Math.random() * 200) + 'px';
+                line.style.animationDelay = Math.random() * 3 + 's';
+                line.style.animationDuration = (2 + Math.random() * 2) + 's';
+                bg.appendChild(line);
+            }
+            
+            const symbols = ['◈', '◉', '◆', '▣', '◊', '⚡', '◐', '◑', '◒', '◓', '▶', '◀', '▼', '▲'];
+            for (let i = 0; i < 15; i++) {
+                const symbol = document.createElement('div');
+                symbol.className = 'circuit-symbol';
+                symbol.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                symbol.style.left = Math.random() * 100 + '%';
+                symbol.style.top = Math.random() * 100 + '%';
+                symbol.style.animationDelay = Math.random() * 10 + 's';
+                symbol.style.animationDuration = (8 + Math.random() * 6) + 's';
+                bg.appendChild(symbol);
+            }
+        }
+        createCircuitElements();
+        
+        // Show thumb up/down animation with number
+        function showThumbAnimation(type, count, event) {
+            const thumb = document.createElement('div');
+            thumb.className = `thumb-animation ${type}`;
+            thumb.innerHTML = type === 'up' ? `👍 +${count}` : `👎 -${count}`;
+            
+            // Position near the click/touch
+            const rect = robot.getBoundingClientRect();
+            const x = event && event.clientX ? event.clientX - rect.left : rect.width / 2;
+            const y = event && event.clientY ? event.clientY - rect.top : rect.height / 2;
+            
+            // Add some randomness to position
+            const randomX = (Math.random() - 0.5) * 60;
+            thumb.style.left = (x + randomX) + 'px';
+            thumb.style.top = (y - 20) + 'px';
+            
+            robot.appendChild(thumb);
+            setTimeout(() => thumb.remove(), 1000);
+        }
+
+        // Robot elements
+        const robot = document.getElementById('robot');
+        const petZone = document.getElementById('petZone');
+        const pokeZoneLeft = document.getElementById('pokeZoneLeft');
+        const pokeZoneRight = document.getElementById('pokeZoneRight');
+        const robotHead = document.getElementById('robotHead');
+        const leftEye = document.getElementById('leftEye');
+        const rightEye = document.getElementById('rightEye');
+        const mouth = document.getElementById('mouth');
+        const speechBubble = document.getElementById('speechBubble');
+        const speakingWaves = document.getElementById('speakingWaves');
+        const emotionIndicator = document.getElementById('emotionIndicator');
+        const petCounter = document.getElementById('petCounter');
+        const pokeCounter = document.getElementById('pokeCounter');
+        const chatContainer = document.getElementById('chatContainer');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const plusMenu = document.getElementById('plusMenu');
+        const globeBtn = document.getElementById('globeBtn');
+        const rewardFeedback = document.getElementById('rewardFeedback');
+        
+        // Image elements
+        const imagePreviewArea = document.getElementById('imagePreviewArea');
+        const previewImg = document.getElementById('previewImg');
+        const imagePrompt = document.getElementById('imagePrompt');
+        let currentImage = null;
+        let imageInputTopic = null;
+        
+        // State variables
+        let isSpeaking = false;
+        let isStreaming = false;
+        let idleInterval;
+        let blinkInterval;
+        let currentStreamMessage = null;
+        let streamBuffer = '';
+        let currentEmotion = 'happy';
+        let petCount = 0;
+        let pokeCount = 0;
+        let isBeingPetted = false;
+        let isBeingPoked = false;
+        let petTimeout;
+        let pokeTimeout;
+        let ros = null;
+        let isROSConnected = false;
+        let webSearchEnabled = false;
+        
+        // RL Reward System
+        let latestResponseId = null;
+        let positiveRewardCount = 0;
+        let negativeRewardCount = 0;
+        let rlRewardTopic = null;
+        
+        const petResponses = [
+            "💖: Aww, that feels nice!",
+            "🥰: I love it when you pet me!",
+            "💕: You're so sweet!",
+            "✨: *happy robot noises*",
+            "💗: More please!",
+            "🤗: That tickles!",
+            "💝: You're the best!",
+            "🥺: *blushes*"
+        ];
+        
+        const pokeResponses = [
+            "😢: Ouch! That hurt...",
+            "💔: I'll try to do better...",
+            "😞: Sorry if I messed up...",
+            "🥺: *sad beep boop*",
+            "😿: Please don't be mad..."
+        ];
+        
+        const emotionMap = {
+            '😊': 'happy', '😄': 'happy', '😃': 'happy', '😁': 'happy', '😆': 'happy',
+            '🥰': 'loving', '😍': 'loving', '🥳': 'happy', '✨': 'happy', '💖': 'loving',
+            '💕': 'loving', '💗': 'loving', '💝': 'loving', '💘': 'loving',
+            '😢': 'sad', '😭': 'sad', '😔': 'sad', '😟': 'sad', '😞': 'sad',
+            '😥': 'sad', '💔': 'sad', '😿': 'sad',
+            '😠': 'angry', '😡': 'angry', '😤': 'angry', '👿': 'angry', '💢': 'angry',
+            '😮': 'surprised', '😲': 'surprised', '😯': 'surprised', '😱': 'surprised',
+            '😳': 'surprised', '🤯': 'surprised',
+            '🤔': 'thinking', '😕': 'thinking', '🧐': 'thinking', '🤨': 'thinking',
+            '❓': 'thinking', '❔': 'thinking',
+            '❤️': 'loving', '💓': 'loving', '💞': 'loving', '💟': 'loving',
+            'default': 'happy'
+        };
+        
+        // Plus menu toggle
+        function togglePlusMenu() {
+            plusMenu.classList.toggle('show');
+        }
+        
+        // Globe toggle for web search
+        function toggleWebSearch() {
+            webSearchEnabled = !webSearchEnabled;
+            
+            if (webSearchEnabled) {
+                globeBtn.classList.add('active');
+                speechBubble.textContent = '🌐 Web search enabled!';
+                setEmotion('thinking', '🌐');
+            } else {
+                globeBtn.classList.remove('active');
+                speechBubble.textContent = 'Web search disabled';
+                setEmotion('happy', '💕');
+            }
+            
+            speechBubble.classList.add('show');
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+                if (!isBeingPetted && !isBeingPoked) setEmotion('happy');
+            }, 2000);
+        }
+        
+        // RL Reward Functions
+        function generateResponseId() {
+            return 'resp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function showRewardFeedback(type, intensity) {
+            rewardFeedback.className = 'reward-feedback ' + (type > 0 ? 'positive' : 'negative');
+            rewardFeedback.textContent = type > 0 ? '👍 +' + intensity : '👎 -' + intensity;
+            rewardFeedback.classList.add('show');
+            
+            setTimeout(() => {
+                rewardFeedback.classList.remove('show');
+            }, 1000);
+        }
+        
+        function sendRLReward(rewardType, intensity, responseId) {
+            if (!isROSConnected || !rlRewardTopic) {
+                console.log('RL Reward (offline):', { type: rewardType, intensity, responseId });
+                return;
+            }
+            
+            const rewardData = {
+                response_id: responseId,
+                reward_type: rewardType, // 'positive' or 'negative'
+                intensity: intensity,    // 1, 2, 3... based on click count
+                timestamp: Date.now()
+            };
+            
+            rlRewardTopic.publish(new ROSLIB.Message({
+                data: JSON.stringify(rewardData)
+            }));
+            
+            console.log('RL Reward sent:', rewardData);
+        }
+        
+        // POKE HANDLER (replaces angry robot button)
+        function handlePoke(e) {
+            e.stopPropagation(); // Don't trigger petting
+            
+            if (isStreaming) return;
+            
+            // Allow poking even in offline mode for feedback fun
+            if (!latestResponseId) {
+                // Just show the poke animation without sending RL reward
+                console.log('Poke in offline mode - no RL reward sent');
+            }
+            
+            negativeRewardCount++;
+            pokeCount++;
+            const intensity = Math.min(negativeRewardCount, 5);
+            
+            // Visual feedback
+            showRewardFeedback(-1, intensity);
+            
+            // Update counter
+            pokeCounter.textContent = `Penalties: ${pokeCount}`;
+            pokeCounter.classList.add('show');
+            
+            // Show thumb down animation
+            showThumbAnimation('down', pokeCount, e);
+            
+            // Create poke effect
+            createPokeEffect(e);
+            
+            // Robot reaction
+            isBeingPoked = true;
+            clearTimeout(pokeTimeout);
+            
+            robot.classList.add('poking');
+            setEmotion('poked', '😢');
+            
+            // Red mark on poked cheek
+            const cheekSide = e.target.id === 'pokeZoneLeft' ? 'left' : 'right';
+            const cheek = document.getElementById(cheekSide + 'Cheek');
+            if (cheek) {
+                cheek.style.background = 'rgba(255, 107, 107, 0.9)';
+                cheek.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    cheek.style.background = '';
+                    cheek.style.transform = '';
+                }, 1000);
+            }
+            
+            // Send to ROS
+            sendRLReward('negative', intensity, latestResponseId);
+            
+            // Response
+            if (pokeCount % 2 === 0) {
+                const response = pokeResponses[Math.floor(Math.random() * pokeResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['😢', '💔', '😞', '🥺'][Math.min(intensity - 1, 3)] + ' Ouch!';
+                speechBubble.classList.add('show');
+            }
+            
+            pokeTimeout = setTimeout(() => {
+                isBeingPoked = false;
+                robot.classList.remove('poking');
+                speechBubble.classList.remove('show');
+                pokeCounter.classList.remove('show');
+                setEmotion('happy');
+            }, 2000);
+            
+            // Reset after delay
+            setTimeout(() => {
+                negativeRewardCount = 0;
+            }, 5000);
+        }
+        
+        function createPokeEffect(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            // Ripple
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple poke';
+            ripple.style.width = '15px';
+            ripple.style.height = '15px';
+            ripple.style.left = (x - 7) + 'px';
+            ripple.style.top = (y - 7) + 'px';
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+            
+            // Poke mark
+            const mark = document.createElement('div');
+            mark.className = 'poke-mark';
+            mark.innerHTML = '💢';
+            mark.style.left = (x - 10) + 'px';
+            mark.style.top = (y - 20) + 'px';
+            robot.appendChild(mark);
+            setTimeout(() => mark.remove(), 1000);
+        }
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.plus-btn') && !e.target.closest('.plus-menu')) {
+                plusMenu.classList.remove('show');
+            }
+        });
+        
+        // Image handling
+        function handleImageSelect(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+            
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image too large! Please select an image under 5MB');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                currentImage = event.target.result
+                previewImg.src = currentImage;
+                imagePreviewArea.classList.add('show');
+                imagePrompt.focus();
+                plusMenu.classList.remove('show');
+                
+                setTimeout(() => imagePrompt.focus(), 100);
+            };
+            
+            reader.onerror = function() {
+                alert('Error reading image file');
+            };
+            
+            reader.readAsDataURL(file);
+        }
+        
+        function removeImage() {
+            currentImage = null;
+            imagePreviewArea.classList.remove('show');
+            document.getElementById('imageInput').value = '';
+            document.getElementById('cameraInput').value = '';
+            imagePrompt.value = '';
+        }
+        
+        // ROS Initialization
+        function initROS() {
+            try {
+                const serverHost = window.location.hostname;
+                const rosPort = 9090;
+                const rosUrl = `ws://${serverHost}:${rosPort}`;
+                
+                console.log(`🤖 Connecting to ROS at: ${rosUrl}`);
+                statusText.textContent = `Connecting to ${serverHost}...`;
+                
+                ros = new ROSLIB.Ros({ url: rosUrl });
+                
+                ros.on('connection', () => {
+                    isROSConnected = true;
+                    statusDot.classList.add('connected');
+                    statusText.textContent = 'Connected! 💖';
+                    speechBubble.textContent = 'Connected! 💕';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 2000);
+                    startIdleAnimations();
+                });
+                
+                ros.on('error', (error) => {
+                    console.error('ROS connection error:', error);
+                    statusText.textContent = 'Offline Mode';
+                    statusDot.classList.remove('connected');
+                    speechBubble.textContent = 'Hello! 💕';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    startIdleAnimations();
+                });
+                
+                ros.on('close', () => {
+                    isROSConnected = false;
+                    statusDot.classList.remove('connected');
+                    statusText.textContent = 'Reconnecting...';
+                    stopIdleAnimations();
+                    
+                    setTimeout(() => {
+                        console.log('🔄 Attempting reconnect...');
+                        initROS();
+                    }, 5000);
+                });
+                
+                const cnsTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/neural_input',
+                    messageType: 'std_msgs/String'
+                });
+                
+                imageInputTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/image_input',
+                    messageType: 'std_msgs/String'
+                });
+                
+                rlRewardTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/cns/rl_reward',
+                    messageType: 'std_msgs/String'
+                });
+                
+                const gceResponseTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/gce/response',
+                    messageType: 'std_msgs/String'
+                });
+                
+                gceResponseTopic.subscribe((msg) => {
+                    try {
+                        const data = JSON.parse(msg.data);
+                        if (data.type === 'start') {
+                            detectAndSetEmotion(data.content);
+                            startStreaming(data.content);
+                        } else if (data.type === 'delta') {
+                            appendToStream(data.content);
+                        } else if (data.type === 'done') {
+                            finishStreaming();
+                            latestResponseId = generateResponseId();
+                            positiveRewardCount = 0;
+                            negativeRewardCount = 0;
+                            pokeCount = 0;
+                            console.log('New response ID:', latestResponseId);
+                        } else if (data.type === 'error') {
+                            if (currentStreamMessage) finishStreaming();
+                            setEmotion('sad');
+                            createMessageElement('grace', data.content);
+                        }
+                    } catch (e) {
+                        if (!isStreaming) {
+                            detectAndSetEmotion(msg.data);
+                            startStreaming(msg.data);
+                        } else {
+                            appendToStream(msg.data);
+                        }
+                    }
+                });
+                
+                window.cnsTopic = cnsTopic;
+                window.imageInputTopic = imageInputTopic;
+                window.rlRewardTopic = rlRewardTopic;
+                
+            } catch (e) {
+                console.log('ROS not available, running in offline mode:', e);
+                statusText.textContent = 'Offline Mode';
+                startIdleAnimations();
+            }
+        }
+        
+        initROS();
+        
+        // Petting (positive reward)
+        petZone.addEventListener('click', handlePet);
+        petZone.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handlePet(e);
+        });
+        
+        // Poking (negative reward) - both cheeks
+        pokeZoneLeft.addEventListener('click', handlePoke);
+        pokeZoneRight.addEventListener('click', handlePoke);
+        pokeZoneLeft.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePoke(e);
+        });
+        pokeZoneRight.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePoke(e);
+        });
+        
+        function handlePet(e) {
+            if (isStreaming) return;
+            
+            if (latestResponseId) {
+                positiveRewardCount++;
+                const intensity = Math.min(positiveRewardCount, 5);
+                showRewardFeedback(1, intensity);
+                sendRLReward('positive', intensity, latestResponseId);
+            }
+            
+            petCount++;
+            isBeingPetted = true;
+            clearTimeout(petTimeout);
+            
+            // Show thumb up animation
+            showThumbAnimation('up', petCount, e);
+
+            createRipple(e);
+            
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => createPetHeart(e, i), i * 100);
+            }
+            
+            petCounter.textContent = `Reward: ${petCount}`;
+            petCounter.classList.add('show');
+            
+            setEmotion('petted', '💖');
+            
+            if (petCount % 3 === 0) {
+                const response = petResponses[Math.floor(Math.random() * petResponses.length)];
+                speechBubble.textContent = response;
+                speechBubble.classList.add('show');
+                createMessageElement('grace', response);
+            } else {
+                speechBubble.textContent = ['💖', '💕', '💗', '🥰', '💝'][Math.floor(Math.random() * 5)];
+                speechBubble.classList.add('show');
+            }
+            
+            robot.classList.add('petting');
+            
+            petTimeout = setTimeout(() => {
+                isBeingPetted = false;
+                robot.classList.remove('petting');
+                speechBubble.classList.remove('show');
+                petCounter.classList.remove('show');
+                setEmotion('happy');
+            }, 2000);
+        }
+        
+        function createRipple(e) {
+            const rect = robot.getBoundingClientRect();
+            const x = e.clientX ? e.clientX - rect.left : rect.width / 2;
+            const y = e.clientY ? e.clientY - rect.top : rect.height / 2;
+            
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.width = '20px';
+            ripple.style.height = '20px';
+            ripple.style.left = (x - 10) + 'px';
+            ripple.style.top = (y - 10) + 'px';
+            
+            robot.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
+        
+        function createPetHeart(e, index) {
+            const rect = robot.getBoundingClientRect();
+            const heart = document.createElement('div');
+            heart.className = 'pet-heart';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            
+            const offsetX = e.clientX ? (e.clientX - rect.left) : rect.width / 2;
+            const offsetY = e.clientY ? (e.clientY - rect.top) : rect.height / 2;
+            
+            heart.style.left = (offsetX + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.top = (offsetY + (Math.random() - 0.5) * 40) + 'px';
+            heart.style.animationDelay = (index * 0.1) + 's';
+            
+            robot.appendChild(heart);
+            setTimeout(() => heart.remove(), 1500);
+        }
+        
+        // Emotion detection
+        function detectAndSetEmotion(text) {
+            const emojiRegex = /(\p{Emoji})/u;
+            const match = text.match(emojiRegex);
+            
+            if (match) {
+                const emoji = match[1];
+                const emotion = emotionMap[emoji] || 'happy';
+                setEmotion(emotion, emoji);
+            } else {
+                setEmotion('happy');
+            }
+        }
+        
+        // Set emotion
+        function setEmotion(emotion, emoji = null) {
+            if (isBeingPetted && emotion !== 'petted') return;
+            if (isBeingPoked && emotion !== 'poked') return;
+            
+            currentEmotion = emotion;
+            
+            robotHead.classList.remove('happy', 'sad', 'angry', 'surprised', 'thinking', 'loving', 'petted', 'poked');
+            leftEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'poked', 'look-left', 'look-right', 'look-up');
+            rightEye.classList.remove('happy', 'sad', 'angry', 'surprised', 'love', 'poked', 'look-left', 'look-right', 'look-up');
+            mouth.classList.remove('smile', 'open', 'o-shape', 'line', 'sad', 'angry', 'love', 'petted', 'surprised', 'poked');
+            
+            robotHead.classList.add(emotion);
+            
+            if (emoji) {
+                emotionIndicator.textContent = emoji;
+                emotionIndicator.classList.add('show');
+                setTimeout(() => emotionIndicator.classList.remove('show'), 2000);
+            }
+            
+            switch(emotion) {
+                case 'happy':
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('smile');
+                    break;
+                case 'sad':
+                    leftEye.classList.add('sad');
+                    rightEye.classList.add('sad');
+                    mouth.classList.add('sad');
+                    break;
+                case 'angry':
+                    leftEye.classList.add('angry');
+                    rightEye.classList.add('angry');
+                    mouth.classList.add('angry');
+                    break;
+                case 'surprised':
+                    leftEye.classList.add('surprised');
+                    rightEye.classList.add('surprised');
+                    mouth.classList.add('surprised');
+                    break;
+                case 'thinking':
+                    leftEye.classList.add('look-up');
+                    rightEye.classList.add('look-up');
+                    mouth.classList.add('line');
+                    break;
+                case 'loving':
+                    leftEye.classList.add('love');
+                    rightEye.classList.add('love');
+                    mouth.classList.add('love');
+                    break;
+                case 'petted':
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('petted');
+                    break;
+                case 'poked':
+                    leftEye.classList.add('poked');
+                    rightEye.classList.add('poked');
+                    mouth.classList.add('poked');
+                    break;
+                default:
+                    leftEye.classList.add('happy');
+                    rightEye.classList.add('happy');
+                    mouth.classList.add('smile');
+            }
+        }
+        
+        // Streaming
+        function startStreaming(firstChunk) {
+            if (isStreaming) return;
+            
+            isStreaming = true;
+            isSpeaking = true;
+            streamBuffer = firstChunk;
+            
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            
+            speechBubble.textContent = 'Thinking... 💭';
+            speechBubble.classList.add('show');
+            
+            currentStreamMessage = createMessageElement('grace', '');
+            const contentDiv = currentStreamMessage.querySelector('.message-content');
+            
+            contentDiv.textContent = streamBuffer;
+            
+            const cursor = document.createElement('span');
+            cursor.className = 'streaming-cursor';
+            contentDiv.appendChild(cursor);
+            
+            startSpeakingAnimation();
+            
+            if (streamBuffer.length > 15) {
+                const preview = streamBuffer.substring(0, 20);
+                speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
+            }
+        }
+        
+        function appendToStream(delta) {
+            if (!isStreaming || !currentStreamMessage) return;
+            
+            streamBuffer += delta;
+            
+            const contentDiv = currentStreamMessage.querySelector('.message-content');
+            const cursor = contentDiv.querySelector('.streaming-cursor');
+            
+            contentDiv.textContent = streamBuffer;
+            
+            if (cursor) {
+                contentDiv.appendChild(cursor);
+            } else {
+                const newCursor = document.createElement('span');
+                newCursor.className = 'streaming-cursor';
+                contentDiv.appendChild(newCursor);
+            }
+            
+            if (streamBuffer.length % 10 === 0 && streamBuffer.length > 15) {
+                const preview = streamBuffer.substring(0, 20);
+                speechBubble.textContent = preview + (streamBuffer.length > 20 ? '...' : '');
+            }
+            
+            if (streamBuffer.length % 5 === 0) {
+                randomizeMouth();
+            }
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        function finishStreaming() {
+            isStreaming = false;
+            isSpeaking = false;
+            
+            if (currentStreamMessage) {
+                const cursor = currentStreamMessage.querySelector('.streaming-cursor');
+                if (cursor) cursor.remove();
+            }
+            
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+            
+            stopSpeakingAnimation();
+            
+            speechBubble.textContent = 'Done! 💕';
+            setTimeout(() => {
+                speechBubble.classList.remove('show');
+            }, 1500);
+            
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            currentStreamMessage = null;
+            streamBuffer = '';
+        }
+        
+        function createMessageElement(sender, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = sender === 'user' ? 'You 💙' : 'Grace 💕';
+            
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.textContent = text;
+            
+            msgDiv.appendChild(label);
+            msgDiv.appendChild(content);
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return msgDiv;
+        }
+        
+        function randomizeMouth() {
+            const mouths = ['open', 'o-shape', 'smile'];
+            const random = mouths[Math.floor(Math.random() * mouths.length)];
+            mouth.className = 'mouth ' + random;
+        }
+        
+        function startSpeakingAnimation() {
+            speechBubble.classList.add('show', 'speaking');
+            speakingWaves.classList.add('active');
+        }
+        
+        function stopSpeakingAnimation() {
+            speechBubble.classList.remove('show', 'speaking');
+            speakingWaves.classList.remove('active');
+            setEmotion(currentEmotion);
+        }
+        
+        // Idle animations
+        function startIdleAnimations() {
+            idleInterval = setInterval(() => {
+                if (!isSpeaking && !isStreaming && !isBeingPetted && !isBeingPoked) {
+                    const expressions = ['happy', 'look-left', 'look-right', 'look-up', 'normal'];
+                    const randomExp = expressions[Math.floor(Math.random() * expressions.length)];
+                    if (randomExp !== 'normal') {
+                        leftEye.classList.add(randomExp);
+                        rightEye.classList.add(randomExp);
+                    }
+                    setTimeout(() => {
+                        leftEye.classList.remove('look-left', 'look-right', 'look-up');
+                        rightEye.classList.remove('look-left', 'look-right', 'look-up');
+                    }, 1000);
+                }
+            }, 3000);
+            
+            blinkInterval = setInterval(() => {
+                if (!isSpeaking && !isStreaming && !isBeingPetted && !isBeingPoked) {
+                    blink();
+                }
+            }, 4000);
+        }
+        
+        function stopIdleAnimations() {
+            clearInterval(idleInterval);
+            clearInterval(blinkInterval);
+        }
+        
+        function blink() {
+            leftEye.classList.add('blink');
+            rightEye.classList.add('blink');
+            setTimeout(() => {
+                leftEye.classList.remove('blink');
+                rightEye.classList.remove('blink');
+            }, 200);
+        }
+        
+        // Compress image before sending
+        function compressImage(dataUrl, callback) {
+            const img = new Image();
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
+                
+                const MAX_SIZE = 1024;
+                if (width > height) {
+                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                } else {
+                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                
+                const compressed = canvas.toDataURL('image/jpeg', 0.7);
+                console.log(`Compressed: ${dataUrl.length} → ${compressed.length}`);
+                callback(compressed);
+            };
+            img.src = dataUrl;
+        }
+
+        // Send message
+        function sendSignal() {
+            const val = userInput.value.trim();
+            if (isStreaming) return;
+
+            if (currentImage) {
+                const promptText = imagePrompt.value.trim() || "What's in this image?";
+                
+                if (!isROSConnected || !window.imageInputTopic) {
+                    speechBubble.textContent = 'Not connected! Check ROS...';
+                    speechBubble.classList.add('show');
+                    setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    return;
+                }
+
+                compressImage(currentImage, function(compressed) {
+                    const base64 = compressed.split(',')[1];
+                    
+                    if (base64.length > 900000) {
+                        speechBubble.textContent = 'Image too large! Try smaller.';
+                        speechBubble.classList.add('show');
+                        setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                        return;
+                    }
+
+                    createMessageElement('user', `📷 ${promptText}`);
+                    
+                    const imageData = {
+                        prompt: promptText,
+                        image_base64: base64,
+                        web_search: webSearchEnabled
+                    };
+
+                    try {
+                        window.imageInputTopic.publish(new ROSLIB.Message({ 
+                            data: JSON.stringify(imageData) 
+                        }));
+                        console.log('✅ Image sent:', base64.length, 'chars');
+                        setEmotion('thinking', '🤔');
+                        removeImage();
+                        createFloatingHeart();
+                    } catch (e) {
+                        console.error('❌ Send failed:', e);
+                    }
+                });
+        
+            } else if (val) {
+                createMessageElement('user', val);
+                
+                if (isROSConnected && window.cnsTopic) {
+                    const messageData = {
+                        text: val,
+                        web_search: webSearchEnabled
+                    };
+                    
+                    window.cnsTopic.publish(new ROSLIB.Message({ 
+                        data: JSON.stringify(messageData)
+                    }));
+                    
+                    console.log('💬 Sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
+                } else {
+                    setTimeout(() => {
+                        const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
+                        detectAndSetEmotion(offlineResponse);
+                        createMessageElement('grace', offlineResponse);
+                    }, 500);
+                }
+                
+                setEmotion('surprised', '✨');
+                setTimeout(() => setEmotion('happy'), 500);
+                
+                userInput.value = '';
+                createFloatingHeart();
+            }
+        }
+        
+        function createFloatingHeart() {
+            const heart = document.createElement('div');
+            heart.className = 'float-hearts';
+            heart.innerHTML = ['💖', '💕', '💗', '💝', '💘'][Math.floor(Math.random() * 5)];
+            heart.style.left = Math.random() * window.innerWidth + 'px';
+            heart.style.animationDuration = (3 + Math.random() * 2) + 's';
+            document.body.appendChild(heart);
+            
+            setTimeout(() => heart.remove(), 5000);
+        }
+        
+        // Event listeners
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendSignal();
+        });
+        
+        imagePrompt.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendSignal();
+        });
+        
+        // Initial state
+        setEmotion('happy');
+        
+        // Test functions
+        window.testEmotion = function(emotion) {
+            const testEmojis = {
+                'happy': '😊',
+                'sad': '😢',
+                'angry': '😠',
+                'surprised': '😮',
+                'thinking': '🤔',
+                'loving': '❤️',
+                'petted': '💖',
+                'poked': '😢'
+            };
+            setEmotion(emotion, testEmojis[emotion]);
+        };
+        
+        window.testPet = function() {
+            const fakeEvent = { clientX: null, clientY: null };
+            handlePet(fakeEvent);
+        };
+        
+        window.testPoke = function() {
+            const fakeEvent = { clientX: null, clientY: null, target: { id: 'pokeZoneLeft' } };
+            handlePoke(fakeEvent);
+        };
+        
+        window.toggleWebSearch = toggleWebSearch;
+    </script>
+</body>
+</html>
+
+        
+        // Test functions
+        window.testEmotion = function(emotion) {
+            const testEmojis = {
+                'happy': '😊',
+                'sad': '😢',
+                'angry': '😠',
+                'surprised': '😮',
+                'thinking': '🤔',
+                'loving': '❤️',
+                'petted': '💖',
+                'poked': '😢'
+            };
+            setEmotion(emotion, testEmojis[emotion]);
+        };
+        
+        window.testPet = function() {
+            const fakeEvent = { clientX: null, clientY: null };
+            handlePet(fakeEvent);
+        };
+        
+        window.testPoke = function() {
+            const fakeEvent = { clientX: null, clientY: null, target: { id: 'pokeZoneLeft' } };
+            handlePoke(fakeEvent);
+        };
+        
+        window.toggleWebSearch = toggleWebSearch;
+    </script>
+</body>
+</html>

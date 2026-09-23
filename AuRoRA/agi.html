@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grace · Operator Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+  <style>
+    /* ─── Grace's Lavender Dark Theme ─── */
+    :root {
+      --bg-deep: #0b0a0f;
+      --bg-panel: rgba(139, 92, 246, 0.06);
+      --glass-border: rgba(167, 139, 250, 0.15);
+      --glass-highlight: rgba(196, 181, 253, 0.08);
+      --lavender: #a78bfa;
+      --lavender-soft: #c4b5fd;
+      --lavender-glow: rgba(167, 139, 250, 0.3);
+      --violet: #8b5cf6;
+      --text-primary: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent-pink: #f0abfc;
+      --danger: #f87171;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --info: #60a5fa;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+      background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(196, 181, 253, 0.05) 0%, transparent 50%);
+    }
+
+    .app {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      width: 220px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(20px);
+      border-right: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px;
+    }
+
+    .brand {
+      font-size: 1.3rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--lavender), var(--accent-pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+    }
+
+    .robot-select {
+      background: rgba(15, 15, 25, 0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      outline: none;
+      cursor: pointer;
+      margin-bottom: 24px;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .robot-select:hover,
+    .robot-select:focus {
+      border-color: var(--lavender);
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.1);
+    }
+
+    .nav-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-tab {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      background: transparent;
+    }
+
+    .nav-tab:hover {
+      background: var(--glass-highlight);
+      color: var(--lavender-soft);
+    }
+
+    .nav-tab.active {
+      background: rgba(139, 92, 246, 0.15);
+      border-color: var(--glass-border);
+      color: var(--lavender-soft);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+    }
+
+    .connection-status {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding-top: 16px;
+      border-top: 1px solid var(--glass-border);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      transition: all 0.3s;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    /* ─── Main Content ─── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .tab-content.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ─── Glass Cards ─── */
+    .glass-card {
+      background: var(--bg-panel);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .glass-card:hover {
+      border-color: rgba(167, 139, 250, 0.25);
+      box-shadow: 0 8px 32px rgba(139, 92, 246, 0.08);
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--lavender-soft);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    /* ─── Stats Bar ─── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      padding: 16px 24px;
+      background: rgba(15, 15, 25, 0.4);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--lavender-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-value.warning {
+      color: var(--warning);
+    }
+
+    .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .stat-value.success {
+      color: var(--success);
+    }
+
+    .stat-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chunk-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      margin-top: 4px;
+    }
+
+    .chunk-seg {
+      height: 100%;
+      min-width: 0;
+      transition: width 0.2s ease;
+    }
+
+    .chunk-seg.system {
+      background: rgba(248, 113, 113, 0.88);
+    }
+
+    .chunk-seg.emc {
+      background: rgba(251, 191, 36, 0.88);
+    }
+
+    .chunk-seg.wmc-user {
+      background: rgba(250, 204, 21, 0.88);
+    }
+
+    .chunk-seg.wmc-grace {
+      background: rgba(167, 139, 250, 0.88);
+    }
+
+    .chunk-seg.live-user {
+      background: rgba(96, 165, 250, 0.92);
+    }
+
+    .chunk-seg.free {
+      background: rgba(148, 163, 184, 0.22);
+    }
+
+    .chunk-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      margin-top: 6px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .chunk-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .chunk-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .chunk-dot.system {
+      background: rgba(248, 113, 113, 0.95);
+    }
+
+    .chunk-dot.emc {
+      background: rgba(251, 191, 36, 0.95);
+    }
+
+    .chunk-dot.wmc-user {
+      background: rgba(250, 204, 21, 0.95);
+    }
+
+    .chunk-dot.wmc-grace {
+      background: rgba(167, 139, 250, 0.95);
+    }
+
+    .chunk-dot.live-user {
+      background: rgba(96, 165, 250, 0.95);
+    }
+
+    .chunk-dot.free {
+      background: rgba(148, 163, 184, 0.55);
+    }
+
+    /* min/max range display — two colored spans */
+    .stat-range {
+      font-size: 0.7rem;
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      gap: 6px;
+      margin-top: 1px;
+    }
+
+    .range-min {
+      color: var(--success);
+    }
+
+    .range-max {
+      color: var(--warning);
+    }
+
+    .range-sep {
+      color: var(--text-muted);
+      opacity: 0.4;
+    }
+
+    /* ─── Debug Stream — Chat Layout ─── */
+    .debug-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      min-height: 0;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Turn Card ── */
+    .turn-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      animation: slideIn 0.2s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .turn-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 0 4px;
+    }
+
+    .turn-header-line {
+      flex: 1;
+      height: 1px;
+      background: var(--glass-border);
+    }
+
+    /* ── Bubbles ── */
+    .bubble-row {
+      display: flex;
+    }
+
+    .bubble-row.user-row {
+      justify-content: flex-end;
+    }
+
+    .bubble-row.grace-row {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      word-break: break-word;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      position: relative;
+    }
+
+    .bubble.user-bubble {
+      background: rgba(34, 211, 238, 0.12);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      border-bottom-right-radius: 4px;
+      color: #cffafe;
+    }
+
+    .bubble.grace-bubble {
+      background: rgba(167, 139, 250, 0.10);
+      border: 1px solid rgba(167, 139, 250, 0.22);
+      border-bottom-left-radius: 4px;
+      color: var(--text-primary);
+    }
+
+    .bubble.thinking-bubble {
+      background: rgba(251, 191, 36, 0.06);
+      border: 1px solid rgba(251, 191, 36, 0.18);
+      border-bottom-left-radius: 4px;
+      color: var(--warning);
+      font-style: italic;
+    }
+
+    .bubble.error-bubble {
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.25);
+      border-bottom-left-radius: 4px;
+      color: var(--danger);
+    }
+
+    .bubble-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      opacity: 0.7;
+    }
+
+    .user-bubble .bubble-label {
+      color: #22d3ee;
+    }
+
+    .grace-bubble .bubble-label {
+      color: var(--lavender-soft);
+    }
+
+    .thinking-bubble .bubble-label {
+      color: var(--warning);
+    }
+
+    .bubble-meta {
+      font-size: 0.67rem;
+      color: var(--text-muted);
+      margin-top: 5px;
+      font-style: italic;
+    }
+
+    /* streaming cursor */
+    .streaming-cursor::after {
+      content: '▍';
+      animation: blink 0.7s step-end infinite;
+      color: var(--lavender);
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
+    }
+
+    /* ── Context Inspector ── */
+    .context-inspector {
+      margin: 0 4px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+      overflow: hidden;
+      background: rgba(10, 10, 20, 0.35);
+    }
+
+    .inspector-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      background: rgba(167, 139, 250, 0.04);
+      border-bottom: 1px solid transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .inspector-toggle:hover {
+      background: rgba(167, 139, 250, 0.09);
+      color: var(--lavender-soft);
+    }
+
+    .inspector-toggle.open {
+      border-bottom-color: var(--glass-border);
+    }
+
+    .inspector-arrow {
+      font-size: 0.6rem;
+      transition: transform 0.2s;
+      opacity: 0.5;
+    }
+
+    .inspector-toggle.open .inspector-arrow {
+      transform: rotate(90deg);
+    }
+
+    .inspector-pills {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .inspector-body {
+      display: none;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .inspector-body.open {
+      display: flex;
+    }
+
+    /* ── Inspector rows ── */
+    .ctx-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      cursor: pointer;
+    }
+
+    .ctx-row:last-child {
+      border-bottom: none;
+    }
+
+    .ctx-row:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .ctx-row.system {
+      border-left: 3px solid #f87171;
+    }
+
+    .ctx-row.emc {
+      border-left: 3px solid #fb923c;
+    }
+
+    .ctx-row.wmc {
+      border-left: 3px solid #fde047;
+    }
+
+    .ctx-row.wmc-assistant {
+      border-left: 3px solid #a78bfa;
+    }
+
+    .ctx-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      white-space: nowrap;
+    }
+
+    .ctx-badge.system {
+      background: rgba(248, 113, 113, 0.18);
+      color: #fca5a5;
+    }
+
+    .ctx-badge.emc {
+      background: rgba(251, 146, 60, 0.18);
+      color: #fdba74;
+    }
+
+    .ctx-badge.wmc {
+      background: rgba(253, 224, 71, 0.15);
+      color: #fef08a;
+    }
+
+    .ctx-badge.wmc-assistant {
+      background: rgba(167, 139, 250, 0.18);
+      color: #c4b5fd;
+    }
+
+    .ctx-content {
+      flex: 1;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 2.8em;
+      overflow: hidden;
+      mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+      transition: max-height 0.25s ease, mask-image 0s 0.25s;
+    }
+
+    .ctx-content.expanded {
+      max-height: 400px;
+      overflow-y: auto;
+      mask-image: none;
+      -webkit-mask-image: none;
+      color: var(--text-primary);
+    }
+
+    .ctx-meta {
+      font-size: 0.63rem;
+      color: rgba(148, 163, 184, 0.55);
+      margin-top: 2px;
+      font-style: italic;
+    }
+
+    /* ── Pills ── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      opacity: 0.75;
+    }
+
+    .pill.system {
+      background: rgba(248, 113, 113, 0.14);
+      color: #fca5a5;
+    }
+
+    .pill.emc {
+      background: rgba(251, 146, 60, 0.14);
+      color: #fdba74;
+    }
+
+    .pill.wmc {
+      background: rgba(253, 224, 71, 0.12);
+      color: #fef08a;
+    }
+
+    .pill.grace {
+      background: rgba(167, 139, 250, 0.14);
+      color: #c4b5fd;
+    }
+
+    .pill.none {
+      background: rgba(148, 163, 184, 0.08);
+      color: var(--text-muted);
+    }
+
+    /* ── System log entries ── */
+    .sys-entry {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 5px 8px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.04);
+      border-left: 2px solid var(--text-muted);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      animation: slideIn 0.15s ease;
+    }
+
+    .sys-entry.error-entry {
+      background: rgba(248, 113, 113, 0.06);
+      border-left-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* legacy shims */
+    .stream-badge {
+      display: none;
+    }
+
+    .stream-entry {
+      display: none;
+    }
+
+    /* ─── Scrollbar ─── */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(167, 139, 250, 0.2);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(167, 139, 250, 0.35);
+    }
+
+    /* ─── Teleop ─── */
+    .teleop-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      gap: 8px;
+      justify-content: center;
+      margin-top: 40px;
+    }
+
+    .teleop-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 16px;
+      border: 1px solid var(--glass-border);
+      background: var(--bg-panel);
+      backdrop-filter: blur(10px);
+      color: var(--lavender-soft);
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .teleop-btn:hover {
+      background: rgba(139, 92, 246, 0.15);
+      border-color: var(--lavender);
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+      transform: scale(1.05);
+    }
+
+    .teleop-btn:active {
+      transform: scale(0.95);
+    }
+
+    .teleop-btn.danger {
+      background: rgba(248, 113, 113, 0.1);
+      color: var(--danger);
+      border-color: rgba(248, 113, 113, 0.3);
+      grid-column: 2;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .teleop-btn.danger:hover {
+      background: rgba(248, 113, 113, 0.2);
+      box-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+    }
+
+    .hint {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 20px;
+    }
+
+    /* ─── Health ─── */
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--lavender-soft);
+      margin-top: 8px;
+    }
+
+    .metric-unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ─── Pause indicator ─── */
+    .pause-indicator {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      background: rgba(248, 113, 113, 0.9);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: none;
+      backdrop-filter: blur(10px);
+      z-index: 100;
+    }
+
+    .pause-indicator.active {
+      display: block;
+    }
+
+    /* ─── Legend ─── */
+    .stream-legend {
+      display: flex;
+      gap: 10px;
+      padding: 8px 20px;
+      background: rgba(15, 15, 25, 0.3);
+      border-bottom: 1px solid var(--glass-border);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .legend-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+  </style>
+  <base target="_blank">
+</head>
+
+<body>
+  <div class="pause-indicator" id="pauseIndicator">⏸ Stream Paused (Scroll to resume)</div>
+
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">🌸 Grace OS</div>
+
+      <select class="robot-select" id="robotSelect">
+        <option value="ws://aurora:9090">Grace (aurora)</option>
+      </select>
+
+      <nav class="nav-tabs">
+        <div class="nav-tab active" onclick="switchTab('debug', this)">
+          <span>🔍</span> Debug
+        </div>
+        <div class="nav-tab" onclick="switchTab('chat', this)">
+          <span>💬</span> Chat Face
+        </div>
+        <div class="nav-tab" onclick="switchTab('teleop', this)">
+          <span>🎮</span> Teleop
+        </div>
+        <div class="nav-tab" onclick="switchTab('health', this)">
+          <span>❤️</span> Health
+        </div>
+      </nav>
+
+      <div class="connection-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- ═══ DEBUG TAB ═══ -->
+      <div class="tab-content active" id="tab-debug">
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+
+          <div class="stat-item">
+            <div class="stat-label">Chunk Graph</div>
+            <div class="stat-value" id="statWmcSize">—</div>
+            <div class="stat-sub" id="statWmcPct">— / — chunks</div>
+            <div class="chunk-bar" id="statChunkBar"></div>
+            <div class="chunk-legend" id="statChunkLegend"></div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">EMC Episodes</div>
+            <div class="stat-value" id="statEmcSize">—</div>
+            <div class="stat-sub" id="statEmcLast">Last: —</div>
+          </div>
+
+          <!-- Tokens/sec — now shows current + min/max range -->
+          <div class="stat-item">
+            <div class="stat-label">Tokens/sec</div>
+            <div class="stat-value" id="statTokensSec">—</div>
+            <div class="stat-sub" id="statTokensTotal">— tokens</div>
+            <div class="stat-range">
+              <span class="range-min" id="statTpsMin">↓ —</span>
+              <span class="range-sep">·</span>
+              <span class="range-max" id="statTpsMax">↑ —</span>
+            </div>
+          </div>
+
+          <!-- End-to-end timing with TTFT and generation breakdown -->
+          <div class="stat-item">
+            <div class="stat-label">End-to-end</div>
+            <div class="stat-value" id="statLatency">—</div>
+            <div class="stat-sub" id="statTimingBreakdown">TTFT: — · Gen: —</div>
+            <div class="stat-range">
+              <span class="range-min" id="statLatencyAvg">Avg: —</span>
+              <span class="range-sep">·</span>
+              <span class="range-max" id="statLatMax">↑ —</span>
+            </div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">Turn Count</div>
+            <div class="stat-value" id="statTurnCount">0</div>
+            <div class="stat-sub" id="statUptime">Up: 00:00</div>
+          </div>
+
+          <div class="stat-item">
+            <div class="stat-label">GCE Status</div>
+            <div class="stat-value success" id="statGceStatus">Ready</div>
+            <div class="stat-sub" id="statGceModel">—</div>
+          </div>
+
+        </div>
+
+        <!-- Legend -->
+        <div class="stream-legend">
+          <span class="legend-label">Legend:</span>
+          <span class="pill system" style="font-size:0.68rem;padding:2px 8px;">🔴 SYSTEM PROMPT</span>
+          <span class="pill emc" style="font-size:0.68rem;padding:2px 8px;">🟠 EMC RECALLED</span>
+          <span class="pill wmc" style="font-size:0.68rem;padding:2px 8px;">🟡 WMC PMT</span>
+          <span
+            style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.68rem;background:rgba(34,211,238,0.12);color:#67e8f9;">🔵
+            USER</span>
+          <span
+            style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.68rem;background:rgba(167,139,250,0.12);color:#c4b5fd;">🟣
+            GRACE</span>
+          <span style="font-size:0.62rem;color:var(--text-muted);margin-left:4px;">· System/WMC/EMC inside <em>Context
+              Inspector</em></span>
+        </div>
+
+        <!-- Debug Stream -->
+        <div class="debug-stream" id="debugStream">
+          <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:40px;">
+            Waiting for Grace to think...
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CHAT TAB ═══ -->
+      <div class="tab-content" id="tab-chat">
+        <div class="glass-card"
+          style="height:calc(100vh - 100px);display:flex;align-items:center;justify-content:center;flex-direction:column;">
+          <div style="font-size:4rem;margin-bottom:16px;">🤖</div>
+          <div style="color:var(--lavender-soft);font-size:1.2rem;font-weight:600;">Grace Chat Interface</div>
+          <div style="color:var(--text-muted);margin-top:8px;">Embed your existing grace.html here</div>
+          <code
+            style="margin-top:16px;background:rgba(0,0,0,0.3);padding:12px 20px;border-radius:8px;font-size:0.85rem;color:var(--lavender-soft);">
+            &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
+          </code>
+        </div>
+      </div>
+
+      <!-- ═══ TELEOP TAB ═══ -->
+      <div class="tab-content" id="tab-teleop">
+        <div class="glass-card">
+          <div class="card-title">🎮 Manual Override</div>
+          <div class="teleop-grid">
+            <div></div>
+            <button class="teleop-btn" onclick="teleop('forward')">▲</button>
+            <div></div>
+            <button class="teleop-btn" onclick="teleop('left')">◀</button>
+            <button class="teleop-btn" onclick="teleop('stop')">⏹</button>
+            <button class="teleop-btn" onclick="teleop('right')">▶</button>
+            <div></div>
+            <button class="teleop-btn" onclick="teleop('backward')">▼</button>
+            <div></div>
+          </div>
+          <div class="teleop-grid" style="margin-top:24px;">
+            <button class="teleop-btn danger" onclick="emergencyStop()">STOP</button>
+          </div>
+          <div class="hint">Keyboard: WASD to move, Space to stop, E for emergency stop</div>
+        </div>
+      </div>
+
+      <!-- ═══ HEALTH TAB ═══ -->
+      <div class="tab-content" id="tab-health">
+        <div class="metric-row">
+          <div class="glass-card">
+            <div class="card-title">🔋 Battery</div>
+            <div class="metric-value">87<span class="metric-unit">%</span></div>
+          </div>
+          <div class="glass-card">
+            <div class="card-title">🧠 CPU</div>
+            <div class="metric-value">42<span class="metric-unit">%</span></div>
+          </div>
+          <div class="glass-card">
+            <div class="card-title">🌡️ Temperature</div>
+            <div class="metric-value">62<span class="metric-unit">°C</span></div>
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="card-title">📈 System Log</div>
+          <div style="color:var(--text-muted);font-size:0.9rem;">VCS health data will appear here when implemented.
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ─── State ───────────────────────────────────────────────────────────────
+    let ros = null;
+    let currentRobot = document.getElementById('robotSelect').value;
+    let turnCount = 0;
+    let endToEndLatencies = [];   // all completed turn end-to-end latencies (seconds)
+    let tpsReadings = [];   // all completed turn tok/s values
+    let isAutoScroll = true;
+    let currentTurn = null;
+    let latestMemoryStats = null;
+    let latestChunkBreakdown = null;
+    // currentTurn shape:
+    // { id, prompt, startTime, firstTokenTime, tokenCount,
+    //   card, inspector, inspBody, graceRow, thinkingBubble,
+    //   pills, contextSlots, graceBubble, graceText, graceMeta }
+
+    // ─── Tab Switching ────────────────────────────────────────────────────────
+    function switchTab(tabName, el) {
+      document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
+      document.getElementById('tab-' + tabName).classList.add('active');
+      if (el) el.classList.add('active');
+    }
+
+    // ─── ROS2 Connection ──────────────────────────────────────────────────────
+    function connect(url) {
+      if (ros) { ros.close(); ros = null; }
+
+      document.getElementById('statusDot').classList.remove('connected');
+      document.getElementById('statusText').textContent = 'Connecting...';
+
+      ros = new ROSLIB.Ros({ url });
+
+      ros.on('connection', () => {
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').textContent = 'Connected';
+        clearStream();
+        subscribeTopics();
+      });
+
+      ros.on('error', (err) => {
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('statusText').textContent = 'Error';
+        appendSysEntry('Connection error: ' + (err.message || err), true);
+      });
+
+      ros.on('close', () => {
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('statusText').textContent = 'Disconnected';
+      });
+    }
+
+    // ─── Topic Subscriptions ──────────────────────────────────────────────────
+    function subscribeTopics() {
+
+      // /scs/text_input
+      const inputTopic = new ROSLIB.Topic({
+        ros, name: '/scs/text_input', messageType: 'std_msgs/String'
+      });
+      inputTopic.subscribe((msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          startNewTurn(data.text || data.user_prompt || msg.data, data.user_id);
+        } catch (e) {
+          startNewTurn(msg.data, null);
+        }
+      });
+
+      // /scs/response
+      const responseTopic = new ROSLIB.Topic({
+        ros, name: '/scs/response', messageType: 'std_msgs/String'
+      });
+      responseTopic.subscribe((msg) => {
+        try {
+          handleResponseChunk(JSON.parse(msg.data));
+        } catch (e) {
+          appendSysEntry('Malformed response: ' + msg.data.substring(0, 100), true);
+        }
+      });
+
+      // /scs/memory_context
+      const contextTopic = new ROSLIB.Topic({
+        ros, name: '/scs/memory_context', messageType: 'std_msgs/String'
+      });
+      contextTopic.subscribe((msg) => {
+        let data;
+        try { data = JSON.parse(msg.data); }
+        catch (e) {
+          appendSysEntry('memory_context parse fail: ' + msg.data.substring(0, 80), true);
+          return;
+        }
+
+        if (!currentTurn) startNewTurn('(context received before prompt)', null);
+
+        // Top-level EMC-only payload
+        if (data.emc || data.episodes) {
+          const eps = data.emc ?? data.episodes ?? [];
+          const lines = Array.isArray(eps)
+            ? eps.map((ep, i) => `[${i + 1}] ${typeof ep === 'string' ? ep : JSON.stringify(ep)}`).join('\n')
+            : JSON.stringify(eps).substring(0, 800);
+          addContextRow('emc', 'EMC', lines, `${Array.isArray(eps) ? eps.length : '?'} episodes recalled`);
+          return;
+        }
+
+        const messages = Array.isArray(data) ? data
+          : Array.isArray(data.messages) ? data.messages
+            : null;
+
+        if (!messages) {
+          appendSysEntry('memory_context: unknown shape — ' + JSON.stringify(data).substring(0, 120));
+          return;
+        }
+
+        const EMC_MARKERS = [
+          /\[RECALLED EPISODE/i, /\[EMC/i, /<<EMC/i, /\[EPISODIC MEMORY/i,
+          /^\s*\[\d+\]\s+\{.*"timestamp"/m,
+          /^\s*\[\d+\]\s+\w.*\d{4}-\d{2}-\d{2}/m,
+        ];
+        const isEmc = (text) => EMC_MARKERS.some(re => re.test(text));
+
+        const total = messages.length;
+        const breakdown = {
+          system: 0,
+          emc: 0,
+          wmcUser: 0,
+          wmcGrace: 0,
+          liveUser: 0,
+        };
+        messages.forEach((m, i) => {
+          const role = (m.role || 'unknown').toLowerCase();
+          const content = Array.isArray(m.content)
+            ? m.content.map(c => typeof c === 'string' ? c : (c.text ?? JSON.stringify(c))).join('\n')
+            : (m.content ?? '');
+          const slot = `${i + 1}/${total}`;
+
+          if (role === 'system') {
+            const emcIdx = content.search(/\n(?=\[RECALLED EPISODE|\[EMC|<<EMC|\[EPISODIC)/i);
+            if (emcIdx > -1) {
+              const systemContent = content.slice(0, emcIdx).trim();
+              const emcContent = content.slice(emcIdx).trim();
+              breakdown.system += estimateTokens(systemContent);
+              breakdown.emc += estimateTokens(emcContent);
+              addContextRow('system', 'SYSTEM', content.slice(0, emcIdx).trim(),
+                `System prompt · slot ${slot} · ${emcIdx} chars`);
+              addContextRow('emc', 'EMC', content.slice(emcIdx).trim(),
+                `EMC injected into system · slot ${slot}`);
+            } else {
+              breakdown.system += estimateTokens(content);
+              addContextRow('system', 'SYSTEM', content,
+                `System prompt · slot ${slot} · ${content.length} chars`);
+            }
+          } else if (role === 'assistant') {
+            breakdown.wmcGrace += estimateTokens(content);
+            addContextRow('wmc-assistant', 'WMC·GRACE', content,
+              `WMC prior Grace turn · slot ${slot} · ${content.length} chars`);
+          } else if (role === 'user') {
+            if (isEmc(content)) {
+              breakdown.emc += estimateTokens(content);
+              addContextRow('emc', 'EMC', content,
+                `EMC recalled episodes · slot ${slot} · ${content.length} chars`);
+            } else {
+              const isLivePrompt = i === total - 1 && currentTurn &&
+                content.trim() === currentTurn.prompt.trim();
+              if (!isLivePrompt) {
+                breakdown.wmcUser += estimateTokens(content);
+                addContextRow('wmc', 'WMC·USER', content,
+                  `WMC prior user turn · slot ${slot} · ${content.length} chars`);
+              } else {
+                breakdown.liveUser += estimateTokens(content);
+              }
+            }
+          } else {
+            addContextRow('wmc', `WMC·${role.toUpperCase()}`, content, `WMC [${role}] · slot ${slot}`);
+          }
+        });
+
+        latestChunkBreakdown = breakdown;
+        renderChunkGraph();
+        updateInspectorPills();
+      });
+
+      // /scs/memory_stats
+      const statsTopic = new ROSLIB.Topic({
+        ros, name: '/scs/memory_stats', messageType: 'std_msgs/String'
+      });
+      statsTopic.subscribe((msg) => {
+        try { updateStats(JSON.parse(msg.data)); } catch (e) { }
+      });
+    }
+
+    // ─── Turn Management ──────────────────────────────────────────────────────
+    function startNewTurn(prompt, userId) {
+      turnCount++;
+      document.getElementById('statTurnCount').textContent = turnCount;
+      latestChunkBreakdown = null;
+      renderChunkGraph();
+
+      const id = turnCount;
+      const streamStartTime = Date.now();
+
+      const card = document.createElement('div');
+      card.className = 'turn-card';
+      card.dataset.turnId = id;
+
+      // Turn header
+      const hdr = document.createElement('div');
+      hdr.className = 'turn-header';
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      hdr.innerHTML = `<div class="turn-header-line"></div>
+        <span>Turn #${id} · ${ts}${userId ? ' · ' + userId : ''}</span>
+        <div class="turn-header-line"></div>`;
+      card.appendChild(hdr);
+
+      // User bubble
+      const userRow = document.createElement('div');
+      userRow.className = 'bubble-row user-row';
+      const userBubble = document.createElement('div');
+      userBubble.className = 'bubble user-bubble';
+      userBubble.innerHTML = `<div class="bubble-label">👤 You</div>`;
+      const userText = document.createElement('div');
+      userText.textContent = prompt;
+      userBubble.appendChild(userText);
+      userRow.appendChild(userBubble);
+      card.appendChild(userRow);
+
+      // Context inspector
+      const inspector = document.createElement('div');
+      inspector.className = 'context-inspector';
+      const toggle = document.createElement('div');
+      toggle.className = 'inspector-toggle';
+      toggle.innerHTML = `<span class="inspector-arrow">▶</span>
+        <span style="font-weight:600;color:var(--lavender-soft);margin-right:4px;">Context Inspector</span>
+        <div class="inspector-pills"></div>
+        <span style="margin-left:auto;opacity:0.4;font-size:0.6rem;">click to expand</span>`;
+      const inspBody = document.createElement('div');
+      inspBody.className = 'inspector-body';
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('open');
+        inspBody.classList.toggle('open');
+      });
+      inspector.appendChild(toggle);
+      inspector.appendChild(inspBody);
+      card.appendChild(inspector);
+
+      // Thinking bubble
+      const graceRow = document.createElement('div');
+      graceRow.className = 'bubble-row grace-row';
+      const thinkingBubble = document.createElement('div');
+      thinkingBubble.className = 'bubble thinking-bubble';
+      thinkingBubble.innerHTML = `<div class="bubble-label">⚡ Grace</div><span>Thinking...</span>`;
+      graceRow.appendChild(thinkingBubble);
+      card.appendChild(graceRow);
+
+      const stream = document.getElementById('debugStream');
+      if (stream.children.length === 1 &&
+        !stream.children[0].classList.contains('turn-card') &&
+        !stream.children[0].classList.contains('sys-entry')) {
+        stream.innerHTML = '';
+      }
+      stream.appendChild(card);
+      if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
+
+      currentTurn = {
+        id, prompt, startTime: streamStartTime, firstTokenTime: null, tokenCount: 0,
+        card, inspector, inspBody, graceRow, thinkingBubble,
+        pills: toggle.querySelector('.inspector-pills'),
+        contextSlots: [],
+        graceBubble: null,
+        graceText: null,
+        graceMeta: null,
+      };
+    }
+
+    // ─── Context Inspector helpers ─────────────────────────────────────────────
+    function addContextRow(kind, label, content, meta) {
+      if (!currentTurn) return;
+      const row = document.createElement('div');
+      row.className = `ctx-row ${kind}`;
+
+      const badge = document.createElement('span');
+      badge.className = `ctx-badge ${kind}`;
+      badge.textContent = label;
+
+      const right = document.createElement('div');
+      right.style.cssText = 'flex:1;min-width:0;';
+
+      const contentEl = document.createElement('div');
+      contentEl.className = 'ctx-content';
+      contentEl.textContent = content;
+
+      const metaEl = document.createElement('div');
+      metaEl.className = 'ctx-meta';
+      metaEl.textContent = meta;
+
+      right.appendChild(contentEl);
+      right.appendChild(metaEl);
+      row.appendChild(badge);
+      row.appendChild(right);
+
+      row.addEventListener('click', () => contentEl.classList.toggle('expanded'));
+      currentTurn.inspBody.appendChild(row);
+      currentTurn.contextSlots.push({ kind, charCount: content.length });
+    }
+
+    function updateInspectorPills() {
+      if (!currentTurn) return;
+      const counts = { system: 0, emc: 0, wmc: 0, 'wmc-assistant': 0 };
+      currentTurn.contextSlots.forEach(s => { if (counts[s.kind] !== undefined) counts[s.kind]++; });
+
+      const pills = currentTurn.pills;
+      pills.innerHTML = '';
+      if (counts.system) pills.innerHTML += `<span class="pill system">🔴 SYS</span>`;
+      if (counts.emc) pills.innerHTML += `<span class="pill emc">🟠 EMC×${counts.emc}</span>`;
+      const wmcTotal = counts.wmc + counts['wmc-assistant'];
+      if (wmcTotal > 0) pills.innerHTML += `<span class="pill wmc">🟡 WMC×${wmcTotal}</span>`;
+      if (!currentTurn.contextSlots.length) pills.innerHTML = `<span class="pill none">no context yet</span>`;
+    }
+
+    // ─── Response Chunk Handler ───────────────────────────────────────────────
+    function handleResponseChunk(data) {
+      if (!currentTurn) return;
+
+      const now = Date.now();
+      const elapsed = (now - currentTurn.startTime) / 1000;
+
+      if (data.type === 'start' || data.type === 'delta') {
+        const chunk = data.content ?? data.text ?? '';
+        if (currentTurn.firstTokenTime === null) currentTurn.firstTokenTime = now;
+        currentTurn.tokenCount += estimateTokens(chunk);
+
+        const tps = elapsed > 0 ? (currentTurn.tokenCount / elapsed).toFixed(1) : '—';
+        document.getElementById('statTokensSec').textContent = tps;
+        document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
+
+        if (!currentTurn.graceBubble) {
+          // First delta — swap thinking → real Grace bubble
+          currentTurn.thinkingBubble.remove();
+          const graceBubble = document.createElement('div');
+          graceBubble.className = 'bubble grace-bubble streaming-cursor';
+          graceBubble.innerHTML = `<div class="bubble-label">🤖 Grace</div>`;
+          const responseText = document.createElement('div');
+          responseText.className = 'grace-text';
+          responseText.textContent = chunk;
+          graceBubble.appendChild(responseText);
+          const metaEl = document.createElement('div');
+          metaEl.className = 'bubble-meta';
+          metaEl.textContent = `Streaming... ${tps} tok/s`;
+          graceBubble.appendChild(metaEl);
+          currentTurn.graceRow.appendChild(graceBubble);
+          currentTurn.graceBubble = graceBubble;
+          currentTurn.graceText = responseText;
+          currentTurn.graceMeta = metaEl;
+        } else {
+          currentTurn.graceText.textContent += chunk;
+          currentTurn.graceMeta.textContent = `Streaming... ${tps} tok/s · ${currentTurn.tokenCount} tokens`;
+        }
+
+      } else if (data.type === 'done') {
+
+        // ── Compute timings for this turn ──
+        const endToEnd = parseFloat(((now - currentTurn.startTime) / 1000).toFixed(2));
+        const ttft = currentTurn.firstTokenTime === null
+          ? endToEnd
+          : parseFloat(((currentTurn.firstTokenTime - currentTurn.startTime) / 1000).toFixed(2));
+        const generation = currentTurn.firstTokenTime === null
+          ? 0
+          : parseFloat(((now - currentTurn.firstTokenTime) / 1000).toFixed(2));
+        endToEndLatencies.push(endToEnd);
+
+        // ── Compute tok/s for this turn ──
+        const tps = generation > 0
+          ? parseFloat((currentTurn.tokenCount / generation).toFixed(1))
+          : 0;
+        tpsReadings.push(tps);
+
+        // ── Derived stats ──
+        const avgLatency = (endToEndLatencies.reduce((a, b) => a + b, 0) / endToEndLatencies.length).toFixed(2);
+        const maxLatency = Math.max(...endToEndLatencies).toFixed(2);
+
+        const minTps = Math.min(...tpsReadings).toFixed(1);
+        const maxTps = Math.max(...tpsReadings).toFixed(1);
+
+        // ── Update DOM ──
+        document.getElementById('statLatency').textContent = `${endToEnd}s`;
+        document.getElementById('statTimingBreakdown').textContent = `TTFT: ${ttft}s · Gen: ${generation}s`;
+        document.getElementById('statLatencyAvg').textContent = `Avg: ${avgLatency}s`;
+        document.getElementById('statLatMax').textContent = `↑ ${maxLatency}s`;
+
+        document.getElementById('statTokensSec').textContent = tps.toFixed(1);
+        document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
+        document.getElementById('statTpsMin').textContent = `↓ ${minTps}`;
+        document.getElementById('statTpsMax').textContent = `↑ ${maxTps}`;
+
+        // ── Finalise Grace bubble ──
+        if (currentTurn.graceBubble) {
+          currentTurn.graceBubble.classList.remove('streaming-cursor');
+          currentTurn.graceMeta.textContent =
+            `TTFT ${ttft}s · Gen ${generation}s · E2E ${endToEnd}s · ${currentTurn.tokenCount} tokens · ${tps.toFixed(1)} tok/s`;
+        } else {
+          // done but no content
+          currentTurn.thinkingBubble.className = 'bubble grace-bubble';
+          currentTurn.thinkingBubble.querySelector('div').textContent = '✓ Grace';
+          currentTurn.thinkingBubble.querySelector('span').textContent = '(empty response)';
+        }
+
+        currentTurn = null;
+
+      } else if (data.type === 'error') {
+        if (currentTurn.graceBubble) {
+          currentTurn.graceBubble.classList.remove('streaming-cursor');
+        } else {
+          currentTurn.thinkingBubble.remove();
+        }
+        const errBubble = document.createElement('div');
+        errBubble.className = 'bubble error-bubble';
+        errBubble.innerHTML = `<div class="bubble-label">✗ Error</div>`;
+        const errText = document.createElement('div');
+        errText.textContent = data.content ?? data.message ?? 'Unknown error';
+        errBubble.appendChild(errText);
+        currentTurn.graceRow.appendChild(errBubble);
+        currentTurn = null;
+      }
+
+      if (isAutoScroll) {
+        const stream = document.getElementById('debugStream');
+        stream.scrollTop = stream.scrollHeight;
+      }
+    }
+
+    // ─── Token Estimator ──────────────────────────────────────────────────────
+    function estimateTokens(text) {
+      if (!text) return 0;
+      const cjk = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      return Math.ceil(cjk / 2 + (text.length - cjk) / 4) || 1;
+    }
+
+    function renderChunkGraph() {
+      const bar = document.getElementById('statChunkBar');
+      const legend = document.getElementById('statChunkLegend');
+      const valueEl = document.getElementById('statWmcSize');
+      const subEl = document.getElementById('statWmcPct');
+      if (!bar || !legend || !valueEl || !subEl) return;
+
+      const wmc = latestMemoryStats?.wmc || null;
+      const breakdown = latestChunkBreakdown || {
+        system: 0,
+        emc: 0,
+        wmcUser: 0,
+        wmcGrace: 0,
+        liveUser: 0,
+      };
+      const used = Object.values(breakdown).reduce((sum, count) => sum + count, 0);
+      const limit = Math.max(wmc?.global_chunk_limit || 0, used || 0);
+      const free = Math.max(0, limit - used);
+      const occupancy = limit > 0 ? ((used / limit) * 100).toFixed(1) : '0.0';
+      const hasBreakdown = latestChunkBreakdown !== null;
+
+      valueEl.textContent = hasBreakdown ? `${used}` : (wmc?.sustained_chunks ?? '—');
+      valueEl.className = 'stat-value';
+      if (limit > 0 && used / limit > 0.9) valueEl.classList.add('danger');
+      else if (limit > 0 && used / limit > 0.7) valueEl.classList.add('warning');
+
+      const pmtCount = wmc?.pmt_count;
+      if (!hasBreakdown && wmc) {
+        subEl.textContent =
+          `${wmc.chunk_occupancy}% · ${wmc.sustained_chunks}/${wmc.global_chunk_limit} chunks${typeof pmtCount === 'number' ? ` · ${pmtCount} PMTs` : ''}`;
+      } else {
+        subEl.textContent = limit > 0
+          ? `${occupancy}% · ${used}/${limit} chunks${typeof pmtCount === 'number' ? ` · ${pmtCount} PMTs` : ''}`
+          : `${used} chunks`;
+      }
+
+      const segments = [
+        { key: 'system', label: 'SYS', value: breakdown.system, className: 'system' },
+        { key: 'emc', label: 'EMC', value: breakdown.emc, className: 'emc' },
+        { key: 'wmc-user', label: 'WMC U', value: breakdown.wmcUser, className: 'wmc-user' },
+        { key: 'wmc-grace', label: 'WMC G', value: breakdown.wmcGrace, className: 'wmc-grace' },
+        { key: 'live-user', label: 'USER', value: breakdown.liveUser, className: 'live-user' },
+        { key: 'free', label: 'FREE', value: free, className: 'free' },
+      ];
+
+      if (!hasBreakdown) {
+        const fallbackUsed = wmc?.sustained_chunks || 0;
+        const fallbackLimit = wmc?.global_chunk_limit || 0;
+        const fallbackFree = Math.max(0, fallbackLimit - fallbackUsed);
+        bar.innerHTML = fallbackLimit > 0
+          ? [
+            `<span class="chunk-seg wmc-user" style="width:${(fallbackUsed / fallbackLimit) * 100}%"></span>`,
+            fallbackFree > 0 ? `<span class="chunk-seg free" style="width:${(fallbackFree / fallbackLimit) * 100}%"></span>` : '',
+          ].join('')
+          : '';
+        legend.innerHTML = [
+          fallbackUsed > 0 ? `<span class="chunk-pill"><span class="chunk-dot wmc-user"></span>WMC ${fallbackUsed}</span>` : '',
+          fallbackFree > 0 ? `<span class="chunk-pill"><span class="chunk-dot free"></span>FREE ${fallbackFree}</span>` : '',
+        ].join('');
+        return;
+      }
+
+      bar.innerHTML = segments
+        .filter(seg => limit > 0 && seg.value > 0)
+        .map(seg => `<span class="chunk-seg ${seg.className}" style="width:${(seg.value / limit) * 100}%"></span>`)
+        .join('');
+
+      legend.innerHTML = segments
+        .filter(seg => seg.value > 0)
+        .map(seg => `<span class="chunk-pill"><span class="chunk-dot ${seg.className}"></span>${seg.label} ${seg.value}</span>`)
+        .join('');
+    }
+
+    // ─── System Log ───────────────────────────────────────────────────────────
+    function appendSysEntry(msg, isError = false) {
+      const stream = document.getElementById('debugStream');
+      const el = document.createElement('div');
+      el.className = 'sys-entry' + (isError ? ' error-entry' : '');
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      el.innerHTML = `<span style="color:var(--text-muted);font-size:0.65rem;flex-shrink:0;">${ts}</span>
+        <span>${msg}</span>`;
+      stream.appendChild(el);
+      if (isAutoScroll) stream.scrollTop = stream.scrollHeight;
+    }
+
+    // legacy shim
+    function addStreamEntry(type, content) {
+      if (type === 'system' || type === 'error') appendSysEntry(content, type === 'error');
+    }
+
+    function clearStream() {
+      latestChunkBreakdown = null;
+      renderChunkGraph();
+      document.getElementById('debugStream').innerHTML = `
+        <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:60px;font-size:0.9rem;">
+          Connected · Waiting for Grace to think...
+        </div>`;
+    }
+
+    // ─── Stats Update (memory_stats topic) ────────────────────────────────────
+    function updateStats(stats) {
+      latestMemoryStats = stats;
+      if (stats.wmc) {
+        renderChunkGraph();
+      }
+      if (stats.emc) {
+        const emc = stats.emc;
+        document.getElementById('statEmcSize').textContent = emc.engram_count || 0;
+        document.getElementById('statEmcLast').textContent =
+          `${emc.binding_pending || 0} binding · ${emc.buffer_count || 0} staged · ${emc.physical_volume || 0} MB`;
+      }
+    }
+
+    // ─── Auto-scroll pause on manual scroll ───────────────────────────────────
+    const debugStream = document.getElementById('debugStream');
+    debugStream.addEventListener('scroll', () => {
+      const nearBottom = debugStream.scrollHeight - debugStream.scrollTop - debugStream.clientHeight < 50;
+      isAutoScroll = nearBottom;
+      document.getElementById('pauseIndicator').classList.toggle('active', !nearBottom);
+    });
+
+    // ─── Teleop ───────────────────────────────────────────────────────────────
+    function teleop(direction) { appendSysEntry(`Teleop: ${direction}`); }
+    function emergencyStop() { appendSysEntry('🚨 EMERGENCY STOP ACTIVATED', true); }
+
+    // ─── Keyboard Controls ────────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (document.getElementById('tab-teleop').classList.contains('active')) {
+        switch (e.key.toLowerCase()) {
+          case 'w': teleop('forward'); break;
+          case 'a': teleop('left'); break;
+          case 's': teleop('backward'); break;
+          case 'd': teleop('right'); break;
+          case ' ': teleop('stop'); e.preventDefault(); break;
+          case 'e': emergencyStop(); break;
+        }
+      }
+    });
+
+    // ─── Uptime Counter ───────────────────────────────────────────────────────
+    let uptimeSeconds = 0;
+    setInterval(() => {
+      uptimeSeconds++;
+      const mins = Math.floor(uptimeSeconds / 60).toString().padStart(2, '0');
+      const secs = (uptimeSeconds % 60).toString().padStart(2, '0');
+      document.getElementById('statUptime').textContent = `Up: ${mins}:${secs}`;
+    }, 1000);
+
+    // ─── Robot Selector ───────────────────────────────────────────────────────
+    document.getElementById('robotSelect').addEventListener('change', (e) => {
+      currentRobot = e.target.value;
+      connect(currentRobot);
+    });
+
+    // ─── Init ─────────────────────────────────────────────────────────────────
+    connect(currentRobot);
+  </script>
+
+</body>
+
+</html>
