@@ -48,6 +48,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **BAAI/bge-base-en-v1.5** — CPU-only semantic embeddings (anchor vector filtering + episodic recall)
 - **SQLite** — lightweight on-device memory storage
 - **rosbridge** — WebSocket bridge to web GUI
+- **FastAPI + Uvicorn** — authenticated HTTP ingress for PC health telemetry and homing requests; existing TIC/TOC WebSockets remain active
 - **ephem** — local moon phase calculation (no network)
 ---
  
@@ -548,6 +549,9 @@ bash ./launch.sh
  
 # 5. Start GRACE
 ros2 run scs cnc
+
+# Or start the complete launch description (CNC and authenticated HTTP API)
+ros2 launch ras ras.launch.py
  
 # 6. Start rosbridge
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml
@@ -556,6 +560,19 @@ ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 python3 -m http.server 9413 --directory src/scs/scs
 # Open: http://<jetson-ip>:9413/AGi.html
 ```
+
+The HTTP API starts with `ros2 launch ras ras.launch.py`. It listens on
+`127.0.0.1:8852` by default. The unauthenticated liveness endpoint is
+`GET /health/live`; mutating endpoints require a bearer token:
+
+- `POST /api/v1/telemetry/health` — `{ "robot_id": "AuRoRA", "metrics": { "cpu_percent": 20.5 } }`
+- `POST /api/v1/robot/homing` — `{ "robot_id": "AuRoRA", "target": "all" }`
+
+Both requests publish a typed `nes/NeuralImpulse` to
+`/agi/api/neural_impulse`. A homing request is only queued; a robot homing
+controller still needs to subscribe and perform it. For PC access, configure
+`AGI_API_HOST`, `AGI_API_TOKEN`, `AGI_API_TLS_CERT`, and `AGI_API_TLS_KEY`;
+the API refuses non-loopback binds without both bearer authentication and TLS.
  
 ---
  
