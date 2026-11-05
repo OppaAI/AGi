@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Chat with Grace ✨</title>
+    <script type="importmap">
+      {"imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.js"
+      }}
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+    <link rel="stylesheet" href="/styles.css">
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+    <div class="cyber-bg" id="cyberBg">
+        <div class="circuit-grid"></div>
+        <canvas id="matrixCanvas"></canvas>
+        <div class="pink-glow"></div>
+    </div>
+
+    <!-- RL Reward Feedback Overlay -->
+    <div class="reward-feedback" id="rewardFeedback"></div>
+
+    <div class="container">
+        <h1>✨ Chat with Grace ✨</h1>
+        <p class="subtitle">Your Cute AI Companion 💕</p>
+
+        <div class="mini-status" id="miniStatus">
+            <div class="status-left">
+                <span class="status-emoji" id="statusEmoji">🤖</span>
+                <span id="miniStatusText">Grace is here!</span>
+            </div>
+            <div class="status-right">
+                <span class="conn-dot" id="connDot"></span>
+                <span id="connText">Online</span>
+            </div>
+        </div>
+
+        <div class="status-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+
+        <div class="robot-container">
+            <div class="robot" id="robot">
+                <canvas id="robotVrmCanvas" aria-label="Grace avatar"></canvas>
+                <div class="pet-zone" id="petZone"></div>
+
+                <!-- CHEEK POKE ZONES FOR NEGATIVE FEEDBACK -->
+                <div class="cheek-poke-zone left" id="pokeZoneLeft" title="Poke for bad response"></div>
+                <div class="cheek-poke-zone right" id="pokeZoneRight" title="Poke for bad response"></div>
+
+                <div class="pet-counter" id="petCounter">Reward: 0</div>
+                <div class="poke-counter" id="pokeCounter">Penalties: 0</div>
+                <div class="emotion-indicator" id="emotionIndicator">😊</div>
+                <div class="speech-bubble" id="speechBubble">Hello! 💕</div>
+
+                <div class="speaking-waves" id="speakingWaves">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+
+                <div class="robot-head" id="robotHead">
+                    <div class="antenna-left">
+                        <div class="antenna-ball"></div>
+                    </div>
+                    <div class="antenna-right">
+                        <div class="antenna-ball"></div>
+                    </div>
+
+                    <div class="face">
+                        <div class="eyes">
+                            <div class="eye" id="leftEye"></div>
+                            <div class="eye" id="rightEye"></div>
+                        </div>
+                        <div class="cheeks">
+                            <div class="cheek" id="leftCheek"></div>
+                            <div class="cheek" id="rightCheek"></div>
+                        </div>
+                        <div class="mouth" id="mouth"></div>
+                    </div>
+                </div>
+
+                <div class="robot-body">
+                    <div class="heart"></div>
+                </div>
+
+                <div class="arm-left"></div>
+                <div class="arm-right"></div>
+            </div>
+        </div>
+
+        <!-- IMAGE PREVIEW AREA -->
+        <div class="image-preview-area" id="imagePreviewArea">
+            <button class="remove-btn" onclick="removeImage()">✕</button>
+            <img id="previewImg" alt="Preview">
+            <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
+        </div>
+
+        <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
+        <!-- MODERN CHAT INPUT -->
+        <div class="chat-input-wrapper">
+            <div class="chat-input-row">
+                <div class="chat-input-container">
+                    <button class="input-btn plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">+</button>
+                    <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+                    <button class="input-btn globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">🌐</button>
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+            </div>
+            <div class="plus-menu" id="plusMenu">
+                <label class="plus-menu-item">
+                    <span>📁</span>
+                    <span>Upload Image</span>
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+                <label class="plus-menu-item">
+                    <span>📷</span>
+                    <span>Take Photo</span>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
+                </label>
+            </div>
+        </div><!-- RL FEEDBACK INSTRUCTION TEXT -->
+        <div class="rl-feedback-text">
+            <span class="thumb-up">👍</span> Pet head for good response
+            <span style="color: rgba(0,255,136,0.4);">|</span>
+            <span class="thumb-down">👈</span> Poke cheeks for bad response
+        </div>
+
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+
+<script src="/script.js" defer></script>
+    <script type="module" src="/avatar.js"></script>
+</body>
+</html>

@@ -59,14 +59,21 @@ _cnc = Node(
     output     = "screen",                                  # stream logs to console and /rosout
 )
 
-# PC integration API. Mutating endpoints require AGI_API_TOKEN; keep the
-# default bind address loopback until an authenticated LAN deployment is set up.
+# PC integration API. Mutating endpoints require AGI_API_TOKEN.
+# The COC also binds to loopback; expose it with Tailscale Serve and tailnet ACLs.
 _api = Node(
     package    = "tms",
     executable = "api",
     name       = "agi_http_api",
     namespace  = "tms",
     parameters = [_aurora_params],
+    output     = "screen",
+)
+_coc = Node(
+    package    = "tms",
+    executable = "coc",
+    name       = "agi_coc",
+    namespace  = "tms",
     output     = "screen",
 )
 
@@ -92,7 +99,7 @@ _api = Node(
 
 # ─── Boot Sequence ────────────────────────────────────────────────────────────
 #
-#   Current: CNC only — no dependencies.
+#   Current: CNC, the authenticated HTTP API, and the loopback COC server.
 #
 #   When EEC and HRS are ready, replace the simple CNC action below with the
 #   staged sequence using RegisterEventHandler(OnProcessStart(...)) to block
@@ -129,9 +136,10 @@ def generate_launch_description() -> LaunchDescription:
         LogInfo(msg="=" * 60),                                              # visual separator — stdout and /rosout
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
-        # Only CNC active — expand to staged sequence when EEC/HRS are ready
+        # CNC, APIs, and COC active; expand staged cognition sequence as systems mature
         _cnc,                                                               # launch CNC node
         _api,                                                               # authenticated PC HTTP ingress → typed ROS impulses
+        _coc,                                                               # loopback WebUI + same-origin rosbridge websocket proxy
 
         # ── Future staged boot (stub) ─────────────────────────────────────────
         # _eec,

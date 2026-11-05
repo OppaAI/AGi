@@ -1,0 +1,1991 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Cyberpunk Circuit Background */
+        .cyber-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a1a 100%);
+            overflow: hidden;
+        }
+
+        .circuit-grid {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            top: -50%;
+            left: -50%;
+            background-image:
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: grid-move 20s linear infinite;
+        }
+
+        @keyframes grid-move {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(50px, 50px) rotate(0deg); }
+        }
+
+        #matrixCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.4;
+            z-index: 1;
+        }
+
+        .circuit-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+            animation: node-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes node-pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.5); }
+        }
+
+        .data-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            height: 1px;
+            opacity: 0.4;
+            animation: data-flow 3s linear infinite;
+        }
+
+        @keyframes data-flow {
+            0% { transform: translateX(-100%); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateX(100vw); opacity: 0; }
+        }
+
+        .circuit-symbol {
+            position: absolute;
+            color: #00ff88;
+            font-family: monospace;
+            font-size: 14px;
+            opacity: 0.2;
+            animation: symbol-float 10s ease-in-out infinite;
+            text-shadow: 0 0 10px #00ff88;
+        }
+
+        @keyframes symbol-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.1; }
+            50% { transform: translateY(-30px) rotate(10deg); opacity: 0.3; }
+        }
+
+        .pink-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 105, 180, 0.15) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: glow-pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+        }
+
+        .container {
+            position: relative;
+            z-index: 10;
+            max-width: 600px;
+            width: 100%;
+            background: rgba(10, 10, 20, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow:
+                0 10px 40px rgba(255, 105, 180, 0.2),
+                0 0 0 1px rgba(0, 255, 136, 0.3),
+                inset 0 0 30px rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #ff69b4;
+            font-size: 2.5em;
+            font-weight: 800;
+            text-shadow:
+                0 0 10px rgba(255, 105, 180, 0.5),
+                0 0 20px rgba(255, 105, 180, 0.3);
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #00ff88;
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+
+        .robot-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+            position: relative;
+            padding: 0 20px;
+        }
+
+        .robot {
+            width: 200px;
+            height: 200px;
+            position: relative;
+            animation: float 3s ease-in-out infinite;
+            cursor: default;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .robot.petting {
+            animation: wiggle 0.5s ease-in-out infinite;
+        }
+
+        .robot.poking {
+            animation: shake 0.3s ease-in-out;
+        }
+
+        .pet-zone {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            width: 160px;
+            height: 140px;
+            cursor: grab;
+            z-index: 15;
+            border-radius: 50%;
+        }
+
+        .pet-zone:active {
+            cursor: grabbing;
+        }
+
+        /* CHEEK POKE ZONES - LEFT AND RIGHT */
+        .cheek-poke-zone {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            z-index: 16;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cheek-poke-zone.left {
+            top: 85px;
+            left: 15px;
+        }
+
+        .cheek-poke-zone.right {
+            top: 85px;
+            right: 15px;
+        }
+
+        .cheek-poke-zone:hover {
+            background: rgba(255, 107, 107, 0.2);
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+        }
+
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg) scale(1.05); }
+            50% { transform: rotate(3deg) scale(1.05); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-2deg); }
+            75% { transform: translateX(5px) rotate(2deg); }
+        }
+
+        .pet-heart {
+            position: absolute;
+            font-size: 24px;
+            pointer-events: none;
+            animation: pet-heart-float 1.5s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes pet-heart-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(0.5) rotate(0deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(1.5) rotate(360deg);
+            }
+        }
+
+        .poke-mark {
+            position: absolute;
+            font-size: 20px;
+            pointer-events: none;
+            animation: poke-float 1s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes poke-float {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.5);
+            }
+        }
+
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 105, 180, 0.4);
+            transform: scale(0);
+            animation: ripple-effect 0.6s ease-out;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .ripple.poke {
+            background: rgba(255, 107, 107, 0.4);
+        }
+
+        @keyframes ripple-effect {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        .robot-head {
+            width: 140px;
+            height: 120px;
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            border-radius: 50% 50% 45% 45%;
+            position: absolute;
+            top: 20px;
+            left: 30px;
+            box-shadow:
+                0 8px 20px rgba(255, 105, 180, 0.3),
+                0 0 30px rgba(255, 105, 180, 0.2),
+                inset -5px -5px 15px rgba(0,0,0,0.1),
+                inset 5px 5px 15px rgba(255,255,255,0.3);
+            z-index: 10;
+            transition: all 0.5s ease;
+        }
+
+        /* ALL EMOTIONS NOW PINK - Different expressions only */
+        .robot-head.happy {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+        }
+
+        /* SAD - Now pink but with sad expression */
+        .robot-head.sad {
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
+            animation: float-slow 4s ease-in-out infinite;
+        }
+
+        /* ANGRY - Now pink but with angry expression */
+        .robot-head.angry {
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            animation: shake 0.5s ease-in-out infinite;
+        }
+
+        /* SURPRISED - Now pink instead of yellow */
+        .robot-head.surprised {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            animation: bounce-quick 0.8s ease-in-out infinite;
+        }
+
+        .robot-head.thinking {
+            background: linear-gradient(145deg, #ffc0cb, #ff69b4);
+        }
+
+        .robot-head.loving {
+            background: linear-gradient(145deg, #ff99cc, #ff66b2);
+            animation: pulse-heart 1s ease-in-out infinite;
+        }
+
+        .robot-head.petted {
+            background: linear-gradient(145deg, #ffb6c1, #ff1493);
+            animation: petted-glow 1s ease-in-out infinite;
+        }
+
+        /* POKED - Pink with hurt expression */
+        .robot-head.poked {
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            animation: poked-wince 0.5s ease-in-out;
+        }
+
+        @keyframes poked-wince {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-3deg); }
+            75% { transform: translateX(5px) rotate(3deg); }
+        }
+
+        @keyframes petted-glow {
+            0%, 100% {
+                box-shadow:
+                    0 8px 20px rgba(255, 105, 180, 0.3),
+                    0 0 30px rgba(255, 20, 147, 0.4),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
+            50% {
+                box-shadow:
+                    0 8px 20px rgba(255, 105, 180, 0.5),
+                    0 0 50px rgba(255, 20, 147, 0.6),
+                    inset -5px -5px 15px rgba(0,0,0,0.1),
+                    inset 5px 5px 15px rgba(255,255,255,0.3);
+            }
+        }
+
+        @keyframes float-slow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        @keyframes bounce-quick {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-20px) scale(1.05); }
+        }
+
+        @keyframes pulse-heart {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        .antenna-left, .antenna-right {
+            width: 12px;
+            height: 40px;
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
+            position: absolute;
+            top: -25px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .antenna-left {
+            left: 30px;
+            transform: rotate(-15deg);
+        }
+
+        .antenna-right {
+            right: 30px;
+            transform: rotate(15deg);
+        }
+
+        /* SAD - droopy antennas */
+        .robot-head.sad .antenna-left,
+        .robot-head.sad .antenna-right {
+            background: linear-gradient(to bottom, #ff69b4, #ffb6c1);
+            transform: rotate(-25deg) translateY(5px);
+        }
+
+        .robot-head.sad .antenna-right {
+            transform: rotate(25deg) translateY(5px);
+        }
+
+        /* ANGRY - antennas shaking */
+        .robot-head.angry .antenna-left,
+        .robot-head.angry .antenna-right {
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            animation: antenna-shake 0.3s ease-in-out infinite;
+        }
+
+        @keyframes antenna-shake {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
+        }
+
+        .robot-head.angry .antenna-right {
+            animation: antenna-shake-right 0.3s ease-in-out infinite;
+        }
+
+        @keyframes antenna-shake-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
+        }
+
+        .robot-head.petted .antenna-left,
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle 0.3s ease-in-out infinite;
+        }
+
+        @keyframes antenna-wiggle {
+            0%, 100% { transform: rotate(-15deg); }
+            50% { transform: rotate(-25deg); }
+        }
+
+        .robot-head.petted .antenna-right {
+            animation: antenna-wiggle-right 0.3s ease-in-out infinite;
+        }
+
+        @keyframes antenna-wiggle-right {
+            0%, 100% { transform: rotate(15deg); }
+            50% { transform: rotate(25deg); }
+        }
+
+        /* POKED - antennas droop */
+        .robot-head.poked .antenna-left,
+        .robot-head.poked .antenna-right {
+            background: linear-gradient(to bottom, #ff1493, #ff69b4);
+            transform: rotate(-30deg) translateY(8px);
+            transition: all 0.3s ease;
+        }
+
+        .robot-head.poked .antenna-right {
+            transform: rotate(30deg) translateY(8px);
+        }
+
+        .antenna-ball {
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle at 30% 30%, #fff, #ff69b4);
+            border-radius: 50%;
+            position: absolute;
+            top: -10px;
+            left: -4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: blink-ball 2s infinite;
+        }
+
+        @keyframes blink-ball {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.9); }
+        }
+
+        .face {
+            position: absolute;
+            top: 35px;
+            left: 20px;
+            width: 100px;
+            height: 60px;
+        }
+
+        .eyes {
+            display: flex;
+            justify-content: space-between;
+            width: 80px;
+            margin: 0 auto;
+        }
+
+        .eye {
+            width: 28px;
+            height: 28px;
+            background: white;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .eye::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(145deg, #4a4a4a, #2a2a2a);
+            border-radius: 50%;
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .eye::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        /* HAPPY - smiling eyes */
+        .eye.happy::after {
+            height: 10px;
+            border-radius: 0 0 15px 15px;
+            top: 10px;
+        }
+
+        .eye.happy::before {
+            opacity: 0;
+        }
+
+        /* SAD - looking down, teary */
+        .eye.sad::after {
+            transform: translateY(3px) scale(0.9);
+        }
+
+        .eye.sad::before {
+            transform: translateY(3px) scale(0.9);
+            opacity: 0.5;
+        }
+
+        /* ANGRY - narrowed eyes */
+        .eye.angry::after {
+            transform: translateY(-2px) scale(0.9);
+            height: 12px;
+            border-radius: 50% 50% 40% 40%;
+        }
+
+        .eye.angry::before {
+            opacity: 0;
+        }
+
+        /* SURPRISED - wide eyes */
+        .eye.surprised::after {
+            transform: scale(0.6);
+        }
+
+        .eye.surprised::before {
+            transform: scale(0.6);
+            opacity: 0.8;
+        }
+
+        /* LOVE - heart shaped pupils */
+        .eye.love::after {
+            transform: scale(0.8) translateY(-2px);
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+
+        /* POKED - squeezed shut */
+        .eye.poked::after {
+            height: 3px;
+            border-radius: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .eye.poked::before {
+            opacity: 0;
+        }
+
+        .eye.blink {
+            animation: blink-anim 0.2s ease;
+        }
+
+        @keyframes blink-anim {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+
+        .eye.look-left::after, .eye.look-left::before {
+            transform: translateX(-3px);
+        }
+
+        .eye.look-right::after, .eye.look-right::before {
+            transform: translateX(3px);
+        }
+
+        .eye.look-up::after, .eye.look-up::before {
+            transform: translateY(-3px);
+        }
+
+        .cheeks {
+            display: flex;
+            justify-content: space-between;
+            width: 100px;
+            margin-top: 5px;
+        }
+
+        .cheek {
+            width: 20px;
+            height: 12px;
+            background: rgba(255, 105, 180, 0.4);
+            border-radius: 50%;
+            opacity: 0.6;
+            transition: all 0.3s ease;
+        }
+
+        /* SAD - pale cheeks */
+        .robot-head.sad .cheek {
+            background: rgba(255, 105, 180, 0.2);
+            opacity: 0.4;
+        }
+
+        /* ANGRY - flushed cheeks */
+        .robot-head.angry .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 0.9;
+        }
+
+        /* LOVING/PETTED - blushing hard */
+        .robot-head.loving .cheek,
+        .robot-head.petted .cheek {
+            background: rgba(255, 20, 147, 0.6);
+            opacity: 1;
+            animation: blush 1s ease-in-out infinite;
+        }
+
+        /* POKED - red mark on cheek */
+        .robot-head.poked .cheek {
+            background: rgba(255, 107, 107, 0.8);
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+        @keyframes blush {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.3); opacity: 1; }
+        }
+
+        .mouth {
+            width: 40px;
+            height: 20px;
+            border: 3px solid #4a4a4a;
+            border-top: none;
+            border-radius: 0 0 40px 40px;
+            margin: 8px auto 0;
+            position: relative;
+            transition: all 0.3s ease;
+            background: transparent;
+        }
+
+        /* HAPPY - big smile */
+        .mouth.smile {
+            height: 25px;
+            border-radius: 0 0 50px 50px;
+            background: #ff69b4;
+            border: none;
+        }
+
+        /* SAD - frown */
+        .mouth.sad {
+            width: 30px;
+            height: 15px;
+            border-radius: 50% 50% 0 0;
+            border: 3px solid #4a4a4a;
+            border-bottom: none;
+            background: transparent;
+            margin-top: 12px;
+            transform: rotate(180deg);
+        }
+
+        /* ANGRY - gritted teeth line */
+        .mouth.angry {
+            width: 35px;
+            height: 8px;
+            border-radius: 4px;
+            background: #4a4a4a;
+            transform: rotate(-5deg);
+            margin-top: 18px;
+            border: none;
+        }
+
+        /* SURPRISED - O shape */
+        .mouth.surprised {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            background: #ff69b4;
+            border: 3px solid #4a4a4a;
+            margin-top: 8px;
+        }
+
+        /* LOVE - heart mouth */
+        .mouth.love {
+            width: 25px;
+            height: 20px;
+            background: #ff69b4;
+            border: none;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform: rotate(-45deg);
+            margin-top: 10px;
+        }
+
+        /* PETTED - big grin */
+        .mouth.petted {
+            width: 35px;
+            height: 20px;
+            border-radius: 0 0 50px 50px;
+            background: #ff1493;
+            border: none;
+            animation: mouth-happy 0.5s ease-in-out infinite;
+        }
+
+        /* POKED - wavy mouth */
+        .mouth.poked {
+            width: 30px;
+            height: 10px;
+            border: none;
+            border-bottom: 3px solid #4a4a4a;
+            border-radius: 50%;
+            margin-top: 15px;
+            animation: mouth-wince 0.5s ease-in-out;
+        }
+
+        @keyframes mouth-happy {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(1.2); }
+        }
+
+        @keyframes mouth-wince {
+            0%, 100% { transform: scaleX(1); }
+            50% { transform: scaleX(0.8) translateY(-2px); }
+        }
+
+        .robot-body {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            border-radius: 40px 40px 30px 30px;
+            position: absolute;
+            bottom: 0;
+            left: 50px;
+            box-shadow:
+                0 5px 15px rgba(0,0,0,0.1),
+                inset -3px -3px 10px rgba(0,0,0,0.05);
+            z-index: 5;
+            transition: all 0.5s ease;
+        }
+
+        /* All body colors now pink */
+        .robot-head.sad ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
+        }
+
+        .robot-head.angry ~ .robot-body {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+        }
+
+        .robot-head.thinking ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffc0cb);
+        }
+
+        .robot-head.petted ~ .robot-body {
+            background: linear-gradient(145deg, #ffe6f0, #ffb6d9);
+            animation: body-wiggle 0.5s ease-in-out infinite;
+        }
+
+        .robot-head.poked ~ .robot-body {
+            background: linear-gradient(145deg, #ffb6c1, #ff69b4);
+            animation: body-flinch 0.5s ease-in-out;
+        }
+
+        @keyframes body-wiggle {
+            0%, 100% { transform: rotate(-1deg); }
+            50% { transform: rotate(1deg); }
+        }
+
+        @keyframes body-flinch {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.95); }
+        }
+
+        .heart {
+            position: absolute;
+            top: 40px;
+            left: 43px;
+            width: 14px;
+            height: 12px;
+            background: #ff69b4;
+            transform: rotate(-45deg);
+            animation: heartbeat 1.5s ease-in-out infinite;
+            transition: all 0.3s ease;
+        }
+
+        .heart::before,
+        .heart::after {
+            content: '';
+            width: 14px;
+            height: 12px;
+            position: absolute;
+            background: #ff69b4;
+            border-radius: 50%;
+        }
+
+        .heart::before {
+            top: -7px;
+            left: 0;
+        }
+
+        .heart::after {
+            left: 7px;
+            top: 0;
+        }
+
+        @keyframes heartbeat {
+            0%, 100% { transform: rotate(-45deg) scale(1); }
+            50% { transform: rotate(-45deg) scale(1.1); }
+        }
+
+        /* All heart colors pink */
+        .robot-head.sad .heart {
+            background: #ff69b4;
+            animation: heartbeat-slow 2s ease-in-out infinite;
+        }
+
+        .robot-head.sad .heart::before,
+        .robot-head.sad .heart::after {
+            background: #ff69b4;
+        }
+
+        @keyframes heartbeat-slow {
+            0%, 100% { transform: rotate(-45deg) scale(0.9); }
+            50% { transform: rotate(-45deg) scale(1); }
+        }
+
+        .robot-head.loving .heart,
+        .robot-head.petted .heart {
+            background: #ff1493;
+            animation: heartbeat-fast 0.6s ease-in-out infinite;
+        }
+
+        .robot-head.loving .heart::before,
+        .robot-head.loving .heart::after,
+        .robot-head.petted .heart::before,
+        .robot-head.petted .heart::after {
+            background: #ff1493;
+        }
+
+        @keyframes heartbeat-fast {
+            0%, 100% { transform: rotate(-45deg) scale(1.2); }
+            50% { transform: rotate(-45deg) scale(1.5); }
+        }
+
+        .arm-left, .arm-right {
+            width: 30px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
+            position: absolute;
+            top: 80px;
+            border-radius: 15px;
+            z-index: 4;
+            transition: all 0.3s ease;
+        }
+
+        .arm-left {
+            left: 10px;
+            transform-origin: top center;
+            animation: wave-left 4s ease-in-out infinite;
+        }
+
+        .arm-right {
+            right: 10px;
+            transform-origin: top center;
+            animation: wave-right 4s ease-in-out infinite;
+        }
+
+        /* SAD - arms down */
+        .robot-head.sad .arm-left,
+        .robot-head.sad .arm-right {
+            background: linear-gradient(to bottom, #ffb6c1, #ff69b4);
+            animation: none;
+            transform: rotate(20deg) translateY(10px);
+        }
+
+        .robot-head.sad .arm-right {
+            transform: rotate(-20deg) translateY(10px);
+        }
+
+        /* ANGRY - fists shaking */
+        .robot-head.angry .arm-left,
+        .robot-head.angry .arm-right {
+            background: linear-gradient(to bottom, #ff69b4, #ff1493);
+            animation: shake-fists 0.3s ease-in-out infinite;
+        }
+
+        @keyframes shake-fists {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-30deg); }
+        }
+
+        .robot-head.angry .arm-right {
+            animation: shake-fists-right 0.3s ease-in-out infinite;
+        }
+
+        @keyframes shake-fists-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(30deg); }
+        }
+
+        /* LOVING - reaching out */
+        .robot-head.loving .arm-left {
+            animation: reach-out-left 2s ease-in-out infinite;
+        }
+
+        .robot-head.loving .arm-right {
+            animation: reach-out-right 2s ease-in-out infinite;
+        }
+
+        /* PETTED - happy wave */
+        .robot-head.petted .arm-left {
+            animation: happy-wave-left 0.5s ease-in-out infinite;
+        }
+
+        .robot-head.petted .arm-right {
+            animation: happy-wave-right 0.5s ease-in-out infinite;
+        }
+
+        /* POKED - covering cheeks */
+        .robot-head.poked .arm-left,
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks 0.5s ease-in-out;
+        }
+
+        @keyframes cover-cheeks {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(45deg) translateX(10px); }
+        }
+
+        .robot-head.poked .arm-right {
+            animation: cover-cheeks-right 0.5s ease-in-out;
+        }
+
+        @keyframes cover-cheeks-right {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-45deg) translateX(-10px); }
+        }
+
+        @keyframes happy-wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg); }
+        }
+
+        @keyframes happy-wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg); }
+        }
+
+        @keyframes reach-out-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-40deg) translateX(-5px); }
+        }
+
+        @keyframes reach-out-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(40deg) translateX(5px); }
+        }
+
+        @keyframes wave-left {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(20deg); }
+        }
+
+        @keyframes wave-right {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(-20deg); }
+        }
+
+        .speech-bubble {
+            position: absolute;
+            top: -60px;
+            right: -80px;
+            background: rgba(10, 10, 20, 0.95);
+            padding: 15px 20px;
+            border-radius: 20px;
+            box-shadow:
+                0 5px 15px rgba(0,0,0,0.3),
+                0 0 20px rgba(0, 255, 136, 0.2);
+            font-size: 0.9em;
+            color: #00ff88;
+            max-width: 150px;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.3);
+        }
+
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 20px;
+            height: 20px;
+            background: rgba(10, 10, 20, 0.95);
+            border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+            border-right: 1px solid rgba(0, 255, 136, 0.3);
+            transform: rotate(45deg);
+        }
+
+        .speech-bubble.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .speech-bubble.speaking {
+            animation: bounce 0.5s ease infinite alternate;
+        }
+
+        @keyframes bounce {
+            from { transform: scale(1) translateY(0); }
+            to { transform: scale(1.05) translateY(-5px); }
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 105, 180, 0.1);
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 700;
+            color: #00ff88;
+            margin: 0 auto 20px;
+            display: block;
+            width: fit-content;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff6b9d;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #00ff88;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        /* IMAGE PREVIEW AREA */
+        .image-preview-area {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            position: relative;
+            display: none;
+            animation: slide-in 0.3s ease;
+        }
+
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .image-preview-area.show {
+            display: block;
+        }
+
+        .image-preview-area img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto 10px;
+            box-shadow: 0 5px 15px rgba(0, 255, 136, 0.2);
+        }
+
+        .image-preview-area input {
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 15px;
+            color: #00ff88;
+            outline: none;
+            font-family: 'Nunito', sans-serif;
+            font-size: 0.95em;
+        }
+
+        .image-preview-area input:focus {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+
+        .image-preview-area input::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 107, 107, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            color: white;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .remove-btn:hover {
+            background: rgba(255, 107, 107, 1);
+            transform: scale(1.1) rotate(90deg);
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* RL FEEDBACK TEXT */
+        .rl-feedback-text {
+            text-align: center;
+            color: rgba(0, 255, 136, 0.7);
+            font-size: 0.85em;
+            margin-bottom: 15px;
+            font-weight: 600;
+            text-shadow: 0 0 5px rgba(0, 255, 136, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .rl-feedback-text .thumb-up {
+            color: #ff69b4;
+        }
+
+        .rl-feedback-text .thumb-down {
+            color: #ff6b6b;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            transition: all 0.3s ease;
+            background: rgba(10, 10, 20, 0.8);
+            color: #00ff88;
+            box-shadow: inset 0 0 10px rgba(0, 255, 136, 0.05);
+        }
+
+        #userInput:focus {
+            border-color: #ff69b4;
+            box-shadow:
+                0 0 0 4px rgba(255, 105, 180, 0.2),
+                inset 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+
+        #userInput::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        /* SINGLE + BUTTON FOR IMAGE/CAMERA */
+        .plus-btn {
+            padding: 15px 20px;
+            background: linear-gradient(145deg, #00ff88, #00cc6a);
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+            border: none;
+            min-width: 55px;
+            position: relative;
+        }
+
+        .plus-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .plus-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Dropdown menu for + button */
+        .plus-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .plus-menu.show {
+            transform: translateX(-50%) scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .plus-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            color: #00ff88;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .plus-menu-item:hover {
+            background: rgba(0, 255, 136, 0.1);
+            color: #ff69b4;
+        }
+
+        .plus-menu-item span {
+            font-size: 1.3em;
+        }
+
+        /* GLOBE BUTTON FOR WEB SEARCH */
+        .globe-btn {
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            font-size: 1.3em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 55px;
+        }
+
+        .globe-btn:hover {
+            transform: scale(1.1);
+            border-color: #ff69b4;
+        }
+
+        .globe-btn.active {
+            color: #00ff88;
+            text-shadow: 0 0 15px #00ff88, 0 0 30px #00ff88;
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            animation: globe-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes globe-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
+        }
+
+        .send-btn {
+            padding: 15px 30px;
+            background: linear-gradient(145deg, #ff69b4, #ff1493);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow:
+                0 4px 15px rgba(255, 20, 147, 0.3),
+                0 0 10px rgba(255, 105, 180, 0.2);
+            font-family: 'Nunito', sans-serif;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 6px 20px rgba(255, 20, 147, 0.4),
+                0 0 20px rgba(255, 105, 180, 0.3);
+        }
+
+        .send-btn:active {
+            transform: translateY(0);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .chat-container {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            background: rgba(10, 10, 20, 0.6);
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: inset 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 18px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: pop-in 0.3s ease;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        @keyframes pop-in {
+            0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .message.user {
+            background: rgba(0, 255, 136, 0.1);
+            color: #00ff88;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+            text-align: right;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.1);
+        }
+
+        .message.grace {
+            background: rgba(255, 105, 180, 0.1);
+            color: #ff69b4;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+            min-height: 44px;
+            border: 1px solid rgba(255, 105, 180, 0.2);
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.1);
+        }
+
+        .message-label {
+            font-size: 0.75em;
+            font-weight: 700;
+            margin-bottom: 5px;
+            opacity: 0.7;
+        }
+
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #ff69b4;
+            margin-left: 2px;
+            animation: blink-cursor 0.8s infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes blink-cursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 10px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 136, 0.3);
+            border-radius: 10px;
+        }
+
+        .float-hearts {
+            position: fixed;
+            font-size: 24px;
+            animation: float-up 4s ease-in infinite;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @keyframes float-up {
+            0% {
+                opacity: 0;
+                transform: translateY(100vh) rotate(0deg);
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) rotate(360deg);
+            }
+        }
+
+        .speaking-waves {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+        }
+
+        .speaking-waves.active {
+            display: flex;
+            gap: 5px;
+        }
+
+        .wave {
+            width: 4px;
+            height: 20px;
+            background: #00ff88;
+            border-radius: 2px;
+            animation: wave-anim 0.5s ease-in-out infinite;
+            box-shadow: 0 0 10px #00ff88;
+        }
+
+        .wave:nth-child(2) { animation-delay: 0.1s; }
+        .wave:nth-child(3) { animation-delay: 0.2s; }
+
+        @keyframes wave-anim {
+            0%, 100% { height: 10px; }
+            50% { height: 25px; }
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 0;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: typing-bounce 1.4s ease-in-out infinite;
+            box-shadow: 0 0 5px #00ff88;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing-bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        .emotion-indicator {
+            position: absolute;
+            top: -90px;
+            right: -60px;
+            font-size: 2em;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            text-shadow: 0 0 20px rgba(255, 105, 180, 0.5);
+        }
+
+        .emotion-indicator.show {
+            opacity: 1;
+            transform: scale(1);
+            animation: emotion-pop 0.5s ease;
+        }
+
+        @keyframes emotion-pop {
+            0% { transform: scale(0) rotate(-180deg); }
+            50% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        .pet-counter {
+            position: absolute;
+            top: -30px;
+            left: -60px;
+            background: rgba(255, 105, 180, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+        }
+
+        .pet-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* POKE COUNTER - Same style but red */
+        .poke-counter {
+            position: absolute;
+            top: -30px;
+            right: -60px;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 700;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s ease;
+            z-index: 20;
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+
+        .poke-counter.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* THUMB UP/DOWN ANIMATION STYLES */
+        .thumb-animation {
+            position: absolute;
+            font-size: 2em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transform: scale(0);
+            animation: thumb-pop 1s ease-out forwards;
+        }
+
+        .thumb-animation.up {
+            color: #ff69b4;
+            text-shadow: 0 0 20px #ff69b4, 0 0 40px #ff69b4;
+        }
+
+        .thumb-animation.down {
+            color: #ff6b6b;
+            text-shadow: 0 0 20px #ff6b6b, 0 0 40px #ff6b6b;
+        }
+
+        @keyframes thumb-pop {
+            0% {
+                opacity: 0;
+                transform: scale(0) translateY(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: scale(1.3) translateY(-20px) rotate(10deg);
+            }
+            40% {
+                transform: scale(1.1) translateY(-30px) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: scale(1.2) translateY(-40px) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8) translateY(-80px);
+            }
+        }
+
+        /* RL REWARD VISUAL FEEDBACK */
+        .reward-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            text-shadow: 0 0 30px currentColor;
+        }
+
+        .reward-feedback.show {
+            animation: reward-pop 1s ease-out forwards;
+        }
+
+        .reward-feedback.positive {
+            color: #ff69b4;
+        }
+
+        .reward-feedback.negative {
+            color: #ff6b6b;
+        }
+
+        @keyframes reward-pop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0) rotate(-20deg);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3) rotate(10deg);
+            }
+            40% {
+                transform: translate(-50%, -50%) scale(1.1) rotate(-5deg);
+            }
+            60% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8) translateY(-100px);
+            }
+        }
+
+        /* MODERN CHAT INPUT */
+        .chat-input-wrapper {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .chat-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(10, 10, 20, 0.8);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            border-radius: 25px;
+            padding: 5px;
+            flex: 1;
+        }
+
+        .chat-input-container:focus-within {
+            border-color: #ff69b4;
+            box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+        }
+
+        .input-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            padding: 0;
+        }
+
+        .plus-btn {
+            color: #00ff88;
+            font-size: 1.4em;
+            font-weight: 400;
+            line-height: 1;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .plus-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: scale(1.1);
+            border-color: rgba(0, 255, 136, 0.5);
+        }
+
+        .globe-btn {
+            color: #666;
+            font-size: 1.2em;
+        }
+
+        .globe-btn:hover {
+            background: rgba(255, 105, 180, 0.1);
+            transform: scale(1.1);
+        }
+
+        .globe-btn.active {
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.15);
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 10px 5px;
+            border: none;
+            background: transparent;
+            color: #00ff88;
+            font-size: 1em;
+            font-family: 'Nunito', sans-serif;
+            outline: none;
+            min-width: 0;
+        }
+
+        #userInput::placeholder {
+            color: rgba(0, 255, 136, 0.4);
+        }
+
+        .plus-menu {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 10px;
+            transform: scale(0);
+            transform-origin: bottom left;
+            background: rgba(10, 10, 20, 0.95);
+            border-radius: 15px;
+            padding: 10px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 100;
+        }
+
+        .plus-menu.show {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* MOBILE - Status with connection indicator */
+        @media screen and (max-width: 768px) {
+            html, body {
+                height: 100%;
+                overflow: hidden;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                height: 100vh;
+                max-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                padding: 5px 10px;
+                padding-bottom: 60px; /* Space for fixed input */
+                box-sizing: border-box;
+            }
+
+            .robot-container { display: none !important; }
+
+            /* Title at very top */
+            h1 {
+                font-size: 1em !important;
+                margin: 0 0 5px 0 !important;
+                padding: 0;
+                flex-shrink: 0;
+            }
+
+            /* Hide subtitle */
+            .subtitle { display: none !important; }
+
+            /* Status with emotion (left) and connection (right) */
+            .mini-status {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                padding: 5px 12px;
+                margin: 0 auto 5px;
+                color: #ff69b4;
+                background: rgba(10, 10, 20, 0.9);
+                border-radius: 15px;
+                border: 1px solid rgba(0, 255, 136, 0.3);
+                max-width: 95%;
+                font-size: 0.85em;
+                flex-shrink: 0;
+            }
+
+            .mini-status .status-left {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .mini-status .status-emoji {
+                font-size: 1.2em;
+            }
+
+            .mini-status .status-right {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 0.8em;
+            }
+
+            .mini-status .conn-dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: #00ff88;
+                box-shadow: 0 0 6px #00ff88;
+                flex-shrink: 0;
+            }
+
+            .mini-status.offline .conn-dot {
+                background: #ff6b6b;
+                box-shadow: 0 0 6px #ff6b6b;
+            }
+
+            .mini-status.offline {
+                border-color: rgba(255, 107, 107, 0.3);
+            }
+
+            /* Chat fills space */
+            .chat-container {
+                flex: 1;
+                overflow-y: auto;
+                margin: 0;
+                padding: 5px;
+                min-height: 0;
+            }
+
+            /* Fixed input at very bottom */
+            .chat-input-wrapper {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                padding: 5px 10px;
+                padding-bottom: max(5px, env(safe-area-inset-bottom));
+                background: rgba(10, 10, 20, 0.98);
+                border-top: 1px solid rgba(0, 255, 136, 0.2);
+                z-index: 1000;
+                box-sizing: border-box;
+                margin: 0;
+            }
+
+            .chat-input-row {
+                gap: 6px;
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .chat-input-container {
+                padding: 3px 5px;
+                gap: 4px;
+                flex: 1;
+                min-width: 0;
+                border-radius: 20px;
+            }
+
+            .input-btn {
+                width: 34px;
+                height: 34px;
+                min-width: 34px;
+                min-height: 34px;
+            }
+
+            .plus-btn {
+                font-size: 1.2em;
+                background: rgba(0, 255, 136, 0.15);
+                border: 1px solid rgba(0, 255, 136, 0.4);
+            }
+
+            .globe-btn {
+                font-size: 0.95em;
+            }
+
+            #userInput {
+                padding: 6px 4px;
+                font-size: 16px;
+                min-width: 0;
+            }
+
+            /* Send button with centered arrow */
+            .send-btn {
+                width: 38px;
+                height: 38px;
+                min-width: 38px;
+                min-height: 38px;
+                padding: 0;
+                border-radius: 50%;
+                font-size: 0;
+                position: relative;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .send-btn::after {
+                content: "↑";
+                font-size: 18px;
+                color: white;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -55%);
+                line-height: 1;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Hide RL feedback */
+            .rl-feedback-text { display: none !important; }
+        }
+
+        .mini-status { display: none; }
+
+/* COC avatar canvas and compact chat portrait */
+.robot { width: 260px; height: 310px; }
+#robotVrmCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.robot-head, .robot-body, .arm-left, .arm-right { visibility: hidden; }
+.pet-zone { width: 220px; height: 220px; top: 12px; left: 20px; }
+.cheek-poke-zone.left { top: 105px; left: 45px; }
+.cheek-poke-zone.right { top: 105px; right: 45px; }
+.message.grace .grace-mini-avatar { float: left; width: 34px; height: 42px; object-fit: contain; margin: 0 9px 4px 0; border-radius: 50%; background: rgba(255,255,255,.08); }
