@@ -1,0 +1,14 @@
+[Unit]
+Description=AGi AIVA online presence for the AuRoRA COC
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/agi/aiva-presence.env
+ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source %h/AGi/AIVA/install/setup.bash && exec ros2 run scs aiva-presence'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -24,7 +24,15 @@ can reach the machine. Keep the COC listener and rosbridge listener on loopback;
 do not expose port 8853 or 9090 directly on the LAN or public internet. Configure
 the tailnet rules to allow only your account/device to reach this machine.
 
-The VRM is loaded from this interface's local `/assets/AGi.vrm` path. Three.js,
-three-vrm, and roslib are loaded from jsDelivr, so the browser needs internet
-access for those libraries. The small chat portrait is captured from the main
-avatar render and reuses that image rather than loading another model.
+AIVA's `aiva-presence` process posts a heartbeat through the Tailscale Serve
+URL every four seconds. AuRoRA's live rosbridge connection supplies its online
+state. When both are online, the UI loads `/assets/AGi.vrm` for Grace in the
+center and moves AuRoRA's original pink robot beside her at a smaller size.
+When only AuRoRA is online, its original robot returns to the center at its
+usual size. When only AIVA is online, Grace appears alone. Each Grace message
+uses a small CSS-scale copy of the AuRoRA robot.
+
+The theme control follows Aidon's light and dark palettes and saves your choice
+in browser storage.
+Three.js, three-vrm, and roslib load from jsDelivr, so the browser needs internet
+access for those libraries. The VRM itself is served locally.

@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
 
         * {
             margin: 0;
@@ -7,7 +6,7 @@
         }
 
         body {
-            font-family: 'Nunito', sans-serif;
+            font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
             background: #000;
             min-height: 100vh;
             display: flex;
@@ -1135,7 +1134,7 @@
             border-radius: 15px;
             color: #00ff88;
             outline: none;
-            font-family: 'Nunito', sans-serif;
+            font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
             font-size: 0.95em;
         }
 
@@ -1204,7 +1203,7 @@
             border: 1px solid rgba(0, 255, 136, 0.3);
             border-radius: 25px;
             font-size: 1em;
-            font-family: 'Nunito', sans-serif;
+            font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
             outline: none;
             transition: all 0.3s ease;
             background: rgba(10, 10, 20, 0.8);
@@ -1341,7 +1340,7 @@
             box-shadow:
                 0 4px 15px rgba(255, 20, 147, 0.3),
                 0 0 10px rgba(255, 105, 180, 0.2);
-            font-family: 'Nunito', sans-serif;
+            font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
             text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
         }
 
@@ -1768,7 +1767,7 @@
             background: transparent;
             color: #00ff88;
             font-size: 1em;
-            font-family: 'Nunito', sans-serif;
+            font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
             outline: none;
             min-width: 0;
         }
@@ -1981,11 +1980,395 @@
 
         .mini-status { display: none; }
 
-/* COC avatar canvas and compact chat portrait */
-.robot { width: 260px; height: 310px; }
-#robotVrmCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.robot-head, .robot-body, .arm-left, .arm-right { visibility: hidden; }
-.pet-zone { width: 220px; height: 220px; top: 12px; left: 20px; }
-.cheek-poke-zone.left { top: 105px; left: 45px; }
-.cheek-poke-zone.right { top: 105px; right: 45px; }
-.message.grace .grace-mini-avatar { float: left; width: 34px; height: 42px; object-fit: contain; margin: 0 9px 4px 0; border-radius: 50%; background: rgba(255,255,255,.08); }
+/* Aidon-inspired COC palette, with Grace's pink identity kept as an accent. */
+:root, html[data-theme="light"] {
+    color-scheme: light;
+    --page: #d3d1c5;
+    --panel: #f0ede3;
+    --panel-raised: #e4e1d6;
+    --ink: #343a2e;
+    --muted-ink: #62695a;
+    --line: #b8bbaa;
+    --accent: #b96e35;
+    --accent-deep: #65734f;
+    --accent-soft: rgba(185, 110, 53, .16);
+    --success: #53725e;
+    --glass: #263a60;
+    --shell-shadow: rgba(54, 48, 42, .22);
+    --shell-highlight: rgba(255, 255, 255, .92);
+    --grid-ink: rgba(72, 77, 62, .045);
+}
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #19161d;
+    --panel: #211d25;
+    --panel-raised: #28242e;
+    --ink: #f2f1f4;
+    --muted-ink: #aaa4b2;
+    --line: #413a47;
+    --accent: #d58cae;
+    --accent-deep: #a3b58a;
+    --accent-soft: rgba(213, 140, 174, .16);
+    --success: #a3b58a;
+    --glass: #172439;
+    --shell-shadow: rgba(0, 0, 0, .48);
+    --shell-highlight: rgba(255, 255, 255, .9);
+    --grid-ink: rgba(198, 181, 211, .055);
+}
+
+body {
+    color: var(--ink);
+    background: var(--page);
+    font-family: "Avenir Next", Avenir, "Trebuchet MS", system-ui, sans-serif;
+    transition: color .22s ease, background-color .22s ease;
+}
+.cyber-bg {
+    background:
+        radial-gradient(ellipse at 50% 8%, var(--panel) 0%, transparent 68%),
+        var(--page);
+    transition: background .22s ease;
+}
+.circuit-grid {
+    background-image: linear-gradient(var(--grid-ink) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-ink) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: .8;
+    animation: none;
+}
+#matrixCanvas { opacity: .07; }
+html[data-theme="light"] #matrixCanvas { display: none; }
+html[data-theme="light"] .circuit-node,
+html[data-theme="light"] .data-line,
+html[data-theme="light"] .circuit-symbol { opacity: .16; }
+.pink-glow {
+    background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+    animation: none;
+}
+.container {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--panel) 94%, transparent);
+    border: 1px solid var(--line);
+    box-shadow: 2px 4px 0 var(--shell-shadow), 0 24px 70px rgba(25, 20, 28, .12);
+    backdrop-filter: blur(16px);
+    transition: color .22s ease, background .22s ease, border-color .22s ease;
+}
+h1 {
+    color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+    text-shadow: none;
+}
+.subtitle { color: var(--muted-ink); text-shadow: none; }
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px 7px 13px;
+    color: var(--muted-ink);
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    box-shadow: 1px 2px 0 var(--shell-shadow);
+}
+.status-dot.connected { background: var(--success); box-shadow: 0 0 8px color-mix(in srgb, var(--success) 60%, transparent); }
+.status-dot:not(.connected) { background: var(--accent); }
+.presence-divider { opacity: .55; }
+#aivaPresence { font-size: .86em; }
+.theme-toggle {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    color: var(--ink);
+    background: var(--panel);
+    font: 600 12px/1.2 "Avenir Next", Avenir, sans-serif;
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.theme-toggle { margin-left: auto; padding: 7px 10px; }
+.theme-toggle:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+
+/* The original pink AuRoRA robot is the offline/default presence view. */
+.robot-container {
+    width: min(100%, 500px);
+    height: 292px;
+    margin: 12px auto 20px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+}
+.robot {
+    width: 200px;
+    height: 200px;
+    flex: 0 0 200px;
+    animation: float 3.4s ease-in-out infinite;
+    filter: drop-shadow(0 15px 12px var(--shell-shadow));
+}
+.robot-head,
+.robot-head.happy,
+.robot-head.sad,
+.robot-head.angry,
+.robot-head.surprised,
+.robot-head.thinking,
+.robot-head.loving,
+.robot-head.petted,
+.robot-head.poked {
+    background: radial-gradient(ellipse at 32% 13%, #fff8fb 0%, #f9dfeb 29%, #edb7ce 62%, #bd789a 100%);
+    border: 1px solid rgba(145, 84, 117, .38);
+    box-shadow: 4px 8px 12px rgba(67, 36, 58, .22),
+        inset 5px 7px 10px rgba(255, 255, 255, .9),
+        inset -8px -10px 15px rgba(112, 53, 88, .28);
+    transform-style: preserve-3d;
+}
+.robot-head::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 8px;
+    left: 23px;
+    width: 80px;
+    height: 17px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.78), transparent);
+    filter: blur(2px);
+    pointer-events: none;
+}
+.robot-head::after {
+    content: "";
+    position: absolute;
+    inset: 7px 10px 8px;
+    border-radius: inherit;
+    border-bottom: 1px solid rgba(113, 55, 91, .19);
+    box-shadow: inset 0 -5px 8px rgba(132, 63, 103, .11);
+    pointer-events: none;
+}
+.face {
+    z-index: 2;
+    top: 34px;
+    left: 19px;
+    width: 102px;
+    height: 63px;
+    padding-top: 5px;
+    border: 1px solid rgba(11, 27, 53, .85);
+    border-radius: 22px;
+    background: linear-gradient(155deg, #536a8e 0%, #243756 28%, #17263f 74%, #111a2d 100%);
+    box-shadow: inset 2px 3px 6px rgba(255,255,255,.27),
+        inset -3px -5px 8px rgba(0,0,0,.58), 0 2px 5px rgba(77,40,67,.28);
+}
+.face::before {
+    content: "";
+    position: absolute;
+    inset: 2px 10px auto;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.24);
+    filter: blur(2px);
+}
+.eye {
+    background: radial-gradient(circle at 35% 25%, #fff 0%, #e7f6ff 40%, #97adc9 100%);
+    box-shadow: 0 1px 2px rgba(3, 12, 30, .55), inset 0 2px 5px rgba(21,36,57,.2);
+}
+.eye::after {
+    background: radial-gradient(circle at 34% 25%, #55799e, #203653 65%, #10192a);
+    box-shadow: inset 1px 1px 2px rgba(255,255,255,.28), 0 0 5px rgba(125,233,255,.32);
+}
+.eye::before { background: #fff; box-shadow: 0 0 4px rgba(255,255,255,.8); }
+.mouth { border-color: #b9eaff; filter: drop-shadow(0 0 2px rgba(125,233,255,.6)); }
+.antenna-left, .antenna-right {
+    background: linear-gradient(90deg, #b8799c 0%, #fff2f8 38%, #e9a9c7 72%, #a96188 100%);
+    box-shadow: inset 2px 1px 3px rgba(255,255,255,.82), 1px 3px 4px rgba(70,35,57,.28);
+}
+.antenna-ball {
+    background: radial-gradient(circle at 32% 25%, #fff, #7de9ff 35%, #638eae 72%, #253b58);
+    box-shadow: 0 0 8px rgba(125,233,255,.75), inset 1px 1px 2px white;
+}
+.robot-body,
+.robot-head.sad ~ .robot-body,
+.robot-head.angry ~ .robot-body,
+.robot-head.thinking ~ .robot-body,
+.robot-head.petted ~ .robot-body,
+.robot-head.poked ~ .robot-body {
+    background: radial-gradient(ellipse at 33% 12%, #fff 0%, #fff0f6 22%, #f2cbdc 53%, #c18baa 83%, #895875 100%);
+    border: 1px solid rgba(128, 74, 106, .35);
+    box-shadow: 4px 8px 12px rgba(53, 31, 48, .2),
+        inset 5px 6px 9px rgba(255,255,255,.85), inset -6px -8px 12px rgba(91,49,75,.24);
+}
+.robot-body::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    left: 18px;
+    right: 18px;
+    height: 9px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.82), transparent);
+    filter: blur(2px);
+}
+.robot-body::after {
+    content: "";
+    position: absolute;
+    top: 25px;
+    left: 16px;
+    width: 68px;
+    height: 37px;
+    border: 1px solid rgba(139, 75, 112, .22);
+    border-radius: 13px 13px 19px 19px;
+    background: linear-gradient(145deg, rgba(255,255,255,.42), rgba(196,129,166,.16));
+    box-shadow: inset 1px 2px 4px rgba(255,255,255,.46), 0 2px 4px rgba(111,61,92,.12);
+}
+.heart { z-index: 2; filter: drop-shadow(0 1px 2px rgba(123,47,91,.38)); }
+.arm-left, .arm-right {
+    background: linear-gradient(100deg, #a86389 0%, #e8b4cf 18%, #fff4f9 43%, #efc6da 68%, #a9688c 100%);
+    border: 1px solid rgba(130, 73, 108, .36);
+    box-shadow: inset 3px 2px 4px rgba(255,255,255,.86), inset -3px -3px 5px rgba(92,48,77,.21), 2px 5px 7px rgba(58,34,53,.19);
+}
+/* When AIVA is active, its VRM is Grace; the physical AuRoRA robot stays beside her. */
+.grace-avatar-stage { display: none; width: min(260px, 60vw); height: 292px; }
+#robotVrmCanvas { width: 100%; height: 100%; display: block; }
+.robot-container.aiva-online { height: 330px; }
+.robot-container.aiva-online .grace-avatar-stage,
+.robot-container.grace-only .grace-avatar-stage { display: block; }
+.robot-container.grace-only .robot { display: none; }
+.robot-container.aiva-online .robot {
+    position: absolute;
+    left: calc(50% + 85px);
+    bottom: 14px;
+    width: 200px;
+    height: 200px;
+    transform-origin: 50% 100%;
+    animation: auro-small-float 3.8s ease-in-out infinite;
+    z-index: 2;
+}
+@keyframes auro-small-float {
+    0%, 100% { transform: translateY(0) scale(.52); }
+    50% { transform: translateY(-7px) scale(.52); }
+}
+
+/* The same original robot appears as a tiny, shaded chat companion. */
+.message.grace { display: flow-root; }
+.grace-mini-avatar {
+    position: relative;
+    float: left;
+    width: 46px;
+    height: 52px;
+    margin: 0 9px 3px 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--panel-raised);
+    box-shadow: 1px 2px 0 var(--shell-shadow);
+}
+.grace-mini-avatar .robot {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    margin-left: -100px;
+    transform: scale(.22);
+    transform-origin: top center;
+    animation: none;
+    filter: none;
+}
+.grace-mini-avatar .robot-head,
+.grace-mini-avatar .robot-body,
+.grace-mini-avatar .arm-left,
+.grace-mini-avatar .arm-right { visibility: visible; }
+.grace-mini-avatar .speech-bubble,
+.grace-mini-avatar .speaking-waves,
+.grace-mini-avatar .pet-counter,
+.grace-mini-avatar .poke-counter,
+.grace-mini-avatar .emotion-indicator { display: none; }
+.message.user {
+    color: var(--ink);
+    background: var(--panel-raised);
+    border-color: var(--line);
+    box-shadow: 1px 2px 0 var(--shell-shadow);
+}
+.message.grace {
+    color: var(--ink);
+    background: var(--panel);
+    border-color: var(--line);
+    box-shadow: 1px 2px 0 var(--shell-shadow);
+}
+.chat-container {
+    background: color-mix(in srgb, var(--panel-raised) 78%, transparent);
+    border-color: var(--line);
+    box-shadow: inset 0 1px 3px rgba(35,30,35,.08);
+}
+.chat-input-container {
+    background: var(--panel);
+    border-color: var(--line);
+    box-shadow: inset 0 1px 3px rgba(35,30,35,.08);
+}
+.chat-input-container:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.chat-input-container input { color: var(--ink); }
+.chat-input-container input::placeholder { color: var(--muted-ink); }
+.input-btn { color: var(--accent-deep); }
+.plus-btn, .globe-btn { color: var(--accent-deep); background: var(--accent-soft); border-color: var(--line); }
+.send-btn {
+    color: #fff;
+    background: linear-gradient(145deg, var(--accent), var(--accent-deep));
+    box-shadow: 1px 3px 0 var(--shell-shadow);
+    text-shadow: none;
+}
+.send-btn:hover { filter: brightness(1.05); box-shadow: 1px 5px 0 var(--shell-shadow); }
+.plus-menu { background: var(--panel); border-color: var(--line); box-shadow: 2px 4px 0 var(--shell-shadow); }
+.plus-menu-item { color: var(--ink); }
+.status-text, .rl-feedback-text { color: var(--muted-ink); }
+html[data-theme="light"] .container { box-shadow: 2px 4px 0 rgba(41,40,35,.16), 0 22px 60px rgba(41,40,35,.11); }
+.speech-bubble {
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    box-shadow: 2px 4px 0 var(--shell-shadow);
+}
+.speech-bubble::after { border-top-color: var(--panel); }
+.image-preview-area {
+    background: var(--panel);
+    border-color: var(--line);
+    box-shadow: 1px 3px 0 var(--shell-shadow);
+}
+.image-preview-area input, #userInput {
+    color: var(--ink);
+    background: var(--panel-raised);
+    border-color: var(--line);
+    box-shadow: inset 0 1px 3px rgba(35,30,35,.08);
+    font-family: inherit;
+}
+.image-preview-area input::placeholder, #userInput::placeholder { color: var(--muted-ink); }
+.image-preview-area input:focus, #userInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.send-btn, .plus-btn, .input-btn, #userInput { font-family: inherit; }
+.rl-feedback-text { text-shadow: none; }
+html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.025); }
+@media (prefers-reduced-motion: reduce) {
+    .robot, .robot-container.aiva-online .robot { animation: none; }
+}
+@media (max-width: 600px) {
+    .status-badge { gap: 6px; padding: 6px 8px; font-size: .8em; }
+    .theme-toggle { padding: 6px 8px; }
+    .robot-container.aiva-online { width: 100%; }
+    .robot-container.aiva-online .grace-avatar-stage { width: 220px; }
+    .robot-container.aiva-online .robot { left: calc(50% - 7px); transform-origin: 50% 100%; }
+    .robot-container.grace-only .grace-avatar-stage { width: 200px; height: 210px; }
+    @keyframes auro-small-float {
+        0%, 100% { transform: translateY(0) scale(.40); }
+        50% { transform: translateY(-5px) scale(.40); }
+    }
+}
+@media (max-width: 768px) {
+    .robot-container {
+        display: flex !important;
+        height: 220px;
+        flex: 0 0 220px;
+        margin: 4px auto 8px;
+    }
+    .robot-container.aiva-online {
+        height: 248px;
+        flex-basis: 248px;
+    }
+    .robot-container.aiva-online .grace-avatar-stage {
+        width: 220px;
+        height: 220px;
+    }
+    .robot-container.grace-only {
+        height: 220px;
+        flex-basis: 220px;
+    }
+}

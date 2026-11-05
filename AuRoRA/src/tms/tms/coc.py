@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 
 import uvicorn
@@ -27,6 +28,26 @@ def _interface_dir() -> Path:
 INTERFACE_DIR = _interface_dir()
 app = FastAPI(title="AGi Communication Operation Console", docs_url=None, redoc_url=None)
 app.mount("/assets", StaticFiles(directory=INTERFACE_DIR / "assets"), name="assets")
+_aiva_last_seen: float | None = None
+
+
+@app.post("/api/presence/aiva", status_code=204)
+async def aiva_presence() -> None:
+    """Refresh AIVA's heartbeat; tailnet ACLs restrict callers to trusted devices."""
+    global _aiva_last_seen
+    _aiva_last_seen = time.monotonic()
+
+
+@app.get("/api/presence")
+async def presence() -> dict[str, bool | int | None]:
+    """Report whether AIVA refreshed its heartbeat before the TTL expired."""
+    timeout_s = max(5, int(os.getenv("AGI_AIVA_PRESENCE_TIMEOUT", "12")))
+    age = None if _aiva_last_seen is None else time.monotonic() - _aiva_last_seen
+    return {
+        "aiva_online": age is not None and age <= timeout_s,
+        "aiva_last_seen_seconds_ago": None if age is None else int(age),
+        "timeout_seconds": timeout_s,
+    }
 
 
 @app.get("/")
@@ -36,7 +57,7 @@ async def index() -> FileResponse:
 
 @app.get("/{filename}")
 async def static_file(filename: str) -> FileResponse:
-    allowed = {"styles.css", "script.js", "avatar.js"}
+    allowed = {"styles.css", "script.js", "avatar.js", "theme.js", "presence.js"}
     if filename not in allowed:
         from fastapi import HTTPException
         raise HTTPException(status_code=404)
