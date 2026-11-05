@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,8 +13,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <link rel="stylesheet" href="/styles.css">
-<base target="_blank">
-<base target="_blank">
+    <script src="/theme.js" defer></script>
 </head>
 <body>
     <div class="cyber-bg" id="cyberBg">
@@ -44,11 +43,16 @@
         <div class="status-badge">
             <span class="status-dot" id="statusDot"></span>
             <span id="statusText">Connecting...</span>
+            <span class="presence-divider" aria-hidden="true">·</span>
+            <span id="aivaPresence" aria-live="polite">Checking presence…</span>
+            <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Switch light or dark theme">◐ <span>Light</span></button>
         </div>
 
-        <div class="robot-container">
+        <div class="robot-container" id="avatarContainer">
+            <div class="grace-avatar-stage" id="graceAvatarStage" aria-label="Grace avatar">
+                <canvas id="robotVrmCanvas" aria-label="Grace 3D avatar"></canvas>
+            </div>
             <div class="robot" id="robot">
-                <canvas id="robotVrmCanvas" aria-label="Grace avatar"></canvas>
                 <div class="pet-zone" id="petZone"></div>
 
                 <!-- CHEEK POKE ZONES FOR NEGATIVE FEEDBACK -->
@@ -138,5 +142,6 @@
 
 <script src="/script.js" defer></script>
     <script type="module" src="/avatar.js"></script>
+    <script src="/presence.js" defer></script>
 </body>
 </html>

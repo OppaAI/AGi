@@ -70,10 +70,24 @@
             ctx.shadowBlur = 0;
         }
 
-        setInterval(() => {
-            drawMatrix();
-            drawMatrixHeads();
-        }, 33);
+        let matrixTimer = null;
+        function syncMatrixAnimation() {
+            const shouldAnimate = document.documentElement.dataset.theme === 'dark';
+            if (shouldAnimate && matrixTimer === null) {
+                matrixTimer = setInterval(() => {
+                    drawMatrix();
+                    drawMatrixHeads();
+                }, 70);
+            } else if (!shouldAnimate && matrixTimer !== null) {
+                clearInterval(matrixTimer);
+                matrixTimer = null;
+            }
+        }
+        new MutationObserver(syncMatrixAnimation).observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-theme'],
+        });
+        syncMatrixAnimation();
 
         // Circuit elements
         function createCircuitElements() {
@@ -178,6 +192,7 @@
         let pokeTimeout;
         let ros = null;
         let isROSConnected = false;
+        window.agiAuroraOnline = false;
         let webSearchEnabled = false;
 
         // RL Reward System
@@ -444,6 +459,8 @@
 
                 ros.on('connection', () => {
                     isROSConnected = true;
+                    window.agiAuroraOnline = true;
+                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: true } }));
                     statusDot.classList.add('connected');
                     statusText.textContent = 'Connected! 💖';
                     speechBubble.textContent = 'Connected! 💕';
@@ -454,6 +471,9 @@
 
                 ros.on('error', (error) => {
                     console.error('ROS connection error:', error);
+                    isROSConnected = false;
+                    window.agiAuroraOnline = false;
+                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: false } }));
                     statusText.textContent = 'Offline Mode';
                     statusDot.classList.remove('connected');
                     speechBubble.textContent = 'Hello! 💕';
@@ -464,6 +484,8 @@
 
                 ros.on('close', () => {
                     isROSConnected = false;
+                    window.agiAuroraOnline = false;
+                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: false } }));
                     statusDot.classList.remove('connected');
                     statusText.textContent = 'Reconnecting...';
                     stopIdleAnimations();
@@ -816,13 +838,19 @@
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${sender}`;
 
-            if (sender === 'grace' && window.graceAvatarImage) {
-                const avatar = document.createElement('img');
+            if (sender === 'grace') {
+                const avatar = document.createElement('div');
                 avatar.className = 'grace-mini-avatar';
-                avatar.alt = 'Grace';
-                avatar.src = window.graceAvatarImage;
+                avatar.setAttribute('aria-hidden', 'true');
+                const miniature = robot.cloneNode(true);
+                miniature.removeAttribute('id');
+                miniature.classList.add('miniature');
+                miniature.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+                miniature.querySelectorAll('.pet-zone, .cheek-poke-zone, .speech-bubble, .speaking-waves, .pet-counter, .poke-counter, .emotion-indicator, canvas').forEach((node) => node.remove());
+                avatar.appendChild(miniature);
                 msgDiv.appendChild(avatar);
             }
+
 
             const label = document.createElement('div');
             label.className = 'message-label';
