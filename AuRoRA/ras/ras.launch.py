@@ -59,6 +59,17 @@ _cnc = Node(
     output     = "screen",                                  # stream logs to console and /rosout
 )
 
+# PC integration API. Mutating endpoints require AGI_API_TOKEN; keep the
+# default bind address loopback until an authenticated LAN deployment is set up.
+_api = Node(
+    package    = "tms",
+    executable = "api",
+    name       = "agi_http_api",
+    namespace  = "tms",
+    parameters = [_aurora_params],
+    output     = "screen",
+)
+
 # Stage 1 — Infrastructure (stub)
 # _eec = Node(
 #     package    = RRR.HOMEOSTATIC_REGULATION_SYSTEM,
@@ -120,6 +131,7 @@ def generate_launch_description() -> LaunchDescription:
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
         # Only CNC active — expand to staged sequence when EEC/HRS are ready
         _cnc,                                                               # launch CNC node
+        _api,                                                               # authenticated PC HTTP ingress → typed ROS impulses
 
         # ── Future staged boot (stub) ─────────────────────────────────────────
         # _eec,

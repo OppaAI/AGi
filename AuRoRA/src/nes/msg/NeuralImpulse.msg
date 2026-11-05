@@ -48,7 +48,7 @@ string                  direction           # signal direction — "ascending" |
 # ── classification ────────────────────────────────────────────────────────────
 string                  signal_type         # what this impulse carries — see NISType
                                             # e.g. "percept" | "recall_request" | "recall_result"
-                                            #      | "cognitive_output" | "motor_command" | "internal"
+                                            #      | "cognitive_output" | "motor_command" | "health_telemetry" | "homing_request" | "internal"
 string                  modality            # sensory or cognitive channel if applicable — e.g. "text", "vision", "none"
 string                  trace_type          # WMC trace to instantiate if receiver is WMC — "pmt" | "vst" | "" 
 

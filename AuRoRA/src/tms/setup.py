@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='oppa-ai',
     maintainer_email='oppa.ai.org@proton.me',
-    description='TODO: Package description',
+    description='Telepathy Management System and authenticated HTTP API',
     license='GPL-3.0-only',
     extras_require={
         'test': [
@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'api = tms.api:main',
         ],
     },
 )
