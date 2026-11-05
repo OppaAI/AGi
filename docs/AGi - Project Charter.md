@@ -248,7 +248,7 @@ phases or left to the broader community:
  
 - NVIDIA Jetson Orin Nano remains the primary edge inference platform for the foreseeable future
 - Open-source LLM quality will continue to improve, benefiting GRACE's cognitive capabilities over time
-- ROS2 Humble remains the target robotics middleware stack
+- ROS 2 Jazzy is the target robotics middleware stack for JetPack 7.2 / Ubuntu 24.04
 - SQLite with sqlite-vec is sufficient as the vector storage backend until Phase 6 memory load requires migration
 - GRACE will operate primarily in supervised or semi-supervised environments during early phases
 - A single developer can maintain and advance the full stack across all phases

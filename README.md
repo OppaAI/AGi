@@ -14,7 +14,7 @@
  
 ![ARM](https://img.shields.io/badge/ARM64-aarch64-0091BD?logo=arm)
 ![LLM](https://img.shields.io/badge/Model-Cosmos%20Reason2%202B-76B900?logo=nvidia)
-![JetPack](https://img.shields.io/badge/JetPack-6.2.2-76B900?logo=nvidia)
+![JetPack target](https://img.shields.io/badge/JetPack-target%207.2-76B900?logo=nvidia)
 ![CUDA](https://img.shields.io/badge/CUDA-12.6-76B900?logo=nvidia)
  
 For more comprehensive documentation: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OppaAI/AGi)
@@ -44,7 +44,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 ## Stack
  
 - **Cosmos Reason2 2B** via vLLM — vision + reasoning brain (target: Jetson Orin Nano)
-- **ROS2 Humble** — full native architecture from day one
+- **ROS 2 Jazzy** — target middleware on JetPack 7.2 / Ubuntu 24.04
 - **BAAI/bge-base-en-v1.5** — CPU-only semantic embeddings (anchor vector filtering + episodic recall)
 - **SQLite** — lightweight on-device memory storage
 - **rosbridge** — WebSocket bridge to web GUI
@@ -529,6 +529,7 @@ git clone https://github.com/OppaAI/AGi ~/AGi
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
+source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 pip3 install -r requirements.txt --break-system-packages
  

@@ -27,9 +27,9 @@ paste logs here
 
 ## Environment
 - **Hardware:** <!-- Jetson Orin Nano Super 8GB / PC / other -->
-- **OS:** <!-- Ubuntu 22.04 / JetPack 6.2.2 -->
-- **ROS2:** <!-- Humble -->
-- **Python:** <!-- 3.10 -->
+- **OS:** <!-- Ubuntu 24.04 / JetPack 7.2 -->
+- **ROS 2:** <!-- Jazzy -->
+- **Python:** <!-- 3.12 -->
 - **Package:** <!-- scs / aiva / other -->
 - **Node:** <!-- cnc / mcc / wmc / emc / other -->
 

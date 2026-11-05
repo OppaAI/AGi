@@ -6,7 +6,7 @@ AuRoRA · Encoding Engine diagnostic
 Mirrors exactly what EncodingEngine._load_engine() does in msb.py.
 Run this under the ROS2 environment to isolate the failure:
 
-    source /opt/ros/humble/setup.bash
+    source /opt/ros/jazzy/setup.bash
     source ~/AGi/AuRoRA/install/setup.bash
     python3 test_encoding_engine.py
 
