@@ -2364,25 +2364,24 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
     }
     .robot-container {
         width: min(100%, 760px);
-        flex: 0 0 auto;
-        margin: 8px auto 10px;
+        flex: 1 1 0;
+        min-height: 420px;
+        margin: 4px auto;
         order: 1;
     }
     .robot-container.aiva-online {
-        height: 530px;
-        flex-basis: 530px;
+        height: auto;
     }
     .robot-container.aiva-online .grace-avatar-stage {
-        width: min(620px, 70vw);
-        height: 520px;
+        width: min(760px, 82vw);
+        height: 100%;
     }
     .robot-container.grace-only {
-        height: 550px;
-        flex-basis: 550px;
+        height: auto;
     }
     .robot-container.grace-only .grace-avatar-stage {
-        width: min(650px, 75vw);
-        height: 540px;
+        width: min(760px, 82vw);
+        height: 100%;
     }
     .robot-container.aiva-online .robot {
         --robot-scale: .82;
@@ -2397,6 +2396,7 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         padding: 6px 10px;
         order: 2;
         overflow-y: auto;
+        margin-top: auto;
     }
     .chat-container .message {
         display: flex;
@@ -2426,8 +2426,8 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         margin: 0 2px 0 0;
     }
     .image-preview-area { order: 3; }
-    .rl-feedback-text { order: 4; }
-    .chat-input-wrapper { order: 5; margin: auto 0 0; }
+    .rl-feedback-text { order: 4; margin: 0 0 8px; }
+    .chat-input-wrapper { order: 5; margin: 0; }
 }
 @media (min-width: 769px) and (max-height: 840px) {
     .container { padding: 12px 20px; }
@@ -2435,13 +2435,15 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
     .subtitle { display: none; }
     .robot-container { margin: 4px auto 6px; }
     .robot-container.aiva-online {
-        height: clamp(220px, 38vh, 300px);
-        flex-basis: clamp(220px, 38vh, 300px);
+        height: auto;
+        flex-basis: 0;
+        min-height: 220px;
     }
     .robot-container.aiva-online .grace-avatar-stage { height: 100%; }
     .robot-container.grace-only {
-        height: clamp(250px, 42vh, 340px);
-        flex-basis: clamp(250px, 42vh, 340px);
+        height: auto;
+        flex-basis: 0;
+        min-height: 250px;
     }
     .robot-container.grace-only .grace-avatar-stage { height: 100%; }
     .chat-container { min-height: 64px; }
