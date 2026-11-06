@@ -103,8 +103,8 @@
     const rightLower = pose.rightLowerArm;
     apply('leftShoulder', 0, holdingRobot ? -0.08 : 0, 0);
     apply('rightShoulder', 0, holdingRobot ? 0.08 : 0, 0);
-    apply('leftUpperArm', (holdingRobot ? 0.9 : 0) + 0.008 * drift(0.71, 0.5), holdingRobot ? -0.30 : 0.004 * drift(0.43, 2.2), holdingRobot && leftUpper ? 0.90 - leftUpper.z : 0.007 * drift(0.61, 1.0));
-    apply('rightUpperArm', (holdingRobot ? 0.9 : 0) + 0.008 * drift(0.73, 2.8), holdingRobot ? 0.30 : 0.004 * drift(0.83, 0.9), holdingRobot && rightUpper ? -0.90 - rightUpper.z : 0.007 * drift(0.79, 1.6));
+    apply('leftUpperArm', 0.008 * drift(0.71, 0.5), holdingRobot ? -0.30 : 0.004 * drift(0.43, 2.2), holdingRobot && leftUpper ? 0.90 - leftUpper.z : 0.007 * drift(0.61, 1.0));
+    apply('rightUpperArm', 0.008 * drift(0.73, 2.8), holdingRobot ? 0.30 : 0.004 * drift(0.83, 0.9), holdingRobot && rightUpper ? -0.90 - rightUpper.z : 0.007 * drift(0.79, 1.6));
     apply('leftLowerArm', 0.006 * drift(0.89, 0.2), holdingRobot ? 0.22 : 0.003 * drift(0.97, 1.9), holdingRobot && leftLower ? 2.15 - leftLower.z : 0.005 * drift(0.49, 0.9));
     apply('rightLowerArm', 0.006 * drift(1.02, 1.2), holdingRobot ? -0.22 : 0.003 * drift(1.11, 2.5), holdingRobot && rightLower ? -2.15 - rightLower.z : 0.005 * drift(0.51, 0.4));
     apply('leftHand', 0, 0, holdingRobot ? -0.18 : 0);
@@ -171,7 +171,6 @@
       const pointer = new THREE.Vector2();
       const leftHandPosition = new THREE.Vector3();
       const rightHandPosition = new THREE.Vector3();
-      const chestPosition = new THREE.Vector3();
       canvas.addEventListener('click', (event) => {
         if (!aivaOnline || !auroraOnline || !robot3d.visible) return;
         const rect = canvas.getBoundingClientRect();
@@ -197,7 +196,7 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, vrm, robot3d, leftHandPosition, rightHandPosition, chestPosition, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
+      avatar = { renderer, scene, camera, vrm, robot3d, leftHandPosition, rightHandPosition, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
       frameCamera();
       return avatar;
     })();
@@ -236,11 +235,6 @@
       avatar.robot3d.position.copy(avatar.leftHandPosition).add(avatar.rightHandPosition).multiplyScalar(0.5);
       avatar.robot3d.position.y += avatar.modelHeight * 0.025;
       avatar.robot3d.position.z -= avatar.modelHeight * 0.075;
-      const chest = avatar.restPose.chest?.bone;
-      if (chest) {
-        chest.getWorldPosition(avatar.chestPosition);
-        avatar.robot3d.position.z = Math.max(avatar.robot3d.position.z, avatar.chestPosition.z + avatar.modelHeight * 0.12);
-      }
     } else if (auroraOnline) {
       avatar.robot3d.visible = false;
     }
