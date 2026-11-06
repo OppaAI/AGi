@@ -21,10 +21,9 @@
     if (!avatar) return;
     const { camera, modelHeight } = avatar;
     const soloPortrait = !auroraOnline;
-    // In solo mode, crop to a close chest-up portrait. Leave more room when
-    // AuRoRA is beside her so both characters remain comfortably in frame.
-    const distance = soloPortrait ? 0.68 : 0.92;
-    const targetHeight = soloPortrait ? 0.84 : 0.82;
+    // Frame Grace from the chest up, while leaving the paired robot visible.
+    const distance = soloPortrait ? 0.62 : 0.76;
+    const targetHeight = soloPortrait ? 0.86 : 0.87;
     camera.position.set(0, modelHeight * (targetHeight + 0.05), modelHeight * distance);
     camera.lookAt(0, modelHeight * targetHeight, 0);
     camera.updateProjectionMatrix();
