@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import time
 import uuid
 import tempfile
@@ -244,16 +245,17 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    radio_id = uuid.uuid4().hex
+    identifier = uuid.uuid4().hex
     target = os.getenv("AGI_ROSBRIDGE_URL", "ws://127.0.0.1:9090")
     envelope = {
         "op": "publish",
         "topic": "/telepathic/stimulus",
         "msg": {
-            "telepathic_signal": list(signal),
-            "symbol_count": symbol_count,
-            "radio_id": radio_id,
-            "radio_channel": os.getenv("AGI_TELEPATHIC_CHANNEL", AGi.TMS.RADIO_CHANNEL),
+            "source": os.getenv("AGI_SOURCE_ID", socket.gethostname()),
+            "pulse": symbol_count,
+            "signal": list(signal),
+            "channel": os.getenv("AGI_TELEPATHIC_CHANNEL", AGi.TMS.RADIO_CHANNEL),
+            "identifier": identifier,
         },
     }
     try:
@@ -262,7 +264,7 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
             await rosbridge.send(json.dumps(envelope))
     except (websockets.WebSocketException, OSError, TimeoutError) as error:
         raise HTTPException(status_code=502, detail="Could not publish to ROS rosbridge") from error
-    return {"radio_id": radio_id, "topic": envelope["topic"]}
+    return {"identifier": identifier, "topic": envelope["topic"]}
 
 
 @app.get("/")
