@@ -29,9 +29,10 @@ URL every four seconds. AuRoRA's live rosbridge connection supplies its online
 state. When both are online, the UI loads `/assets/AGi.vrm` for Grace in the
 center and moves AuRoRA's original pink robot beside her at a smaller size.
 When only AuRoRA is online, its original robot returns to the center at its
-usual size. When only AIVA is online, Grace appears alone in a larger waist-up
-view with gentle breathing, head sway, and occasional blinks. Each Grace
-message uses a small CSS-scale copy of the AuRoRA robot.
+usual size. When only AIVA is online, Grace appears alone in a close chest-up
+portrait with gentle breathing, head sway, and occasional blinks. The paired
+view gives both characters more room. Each Grace message uses a small CSS-scale
+copy of the AuRoRA robot.
 
 Typed chat text is sent as `nes/msg/RadioSignal` on `/tms/radio_input`. The
 COC posts the original UTF-8 text to its same-origin Python encoder endpoint;
