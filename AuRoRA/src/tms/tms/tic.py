@@ -365,19 +365,19 @@ class TelepathyInputCore(Node):
 
     def _on_telepathic_signal(self, signal: TelepathicSignal) -> None:
         """Decode a typed Web Teleops Console signal, then route it through TIC's normal SSS gates."""
-        if signal.radio_channel != TMS.RADIO_CHANNEL:
+        if signal.channel != TMS.RADIO_CHANNEL:
             self.get_logger().warning("🚫 TelepathicSignal ignored — destination channel mismatch")
             return
-        if not signal.radio_id:
-            self.get_logger().warning("🚫 TelepathicSignal ignored — missing radio_id")
+        if not signal.identifier or not signal.source:
+            self.get_logger().warning("🚫 TelepathicSignal ignored — missing source or identifier")
             return
         max_symbols = (TMS.MAX_PAYLOAD_BYTES + 5) * 6
-        if signal.symbol_count > max_symbols:
+        if signal.pulse > max_symbols:
             self.get_logger().warning("🚫 TelepathicSignal ignored — payload exceeds limit")
             return
 
         try:
-            text = decode_text(signal.telepathic_signal, signal.symbol_count)
+            text = decode_text(signal.signal, signal.pulse)
         except (TypeError, ValueError) as error:
             self.get_logger().warning(f"🚫 TelepathicSignal ignored — invalid encoding: {error}")
             return
@@ -386,12 +386,12 @@ class TelepathyInputCore(Node):
             "role": "user",
             "content": text,
             "user_id": "demo",
-            "radio_id": signal.radio_id,
+            "radio_id": signal.identifier,
         })
         sss = self._receive_stimulus(raw_stimulus)
         if sss is None:
             return
-        sss.sss_id = signal.radio_id
+        sss.sss_id = signal.identifier
 
         sss = self._apply_transduction_gate(sss)
         if sss is None:
