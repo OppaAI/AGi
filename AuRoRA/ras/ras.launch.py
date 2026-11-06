@@ -59,7 +59,7 @@ _cnc = Node(
     output     = "screen",                                  # stream logs to console and /rosout
 )
 
-# TIC decodes the Web Teleops Console's typed RadioSignal and publishes normalized SSS to CNC.
+# TIC decodes the Web Teleops Console's typed TelepathicSignal and publishes normalized SSS to CNC.
 _tic = Node(
     package    = "tms",
     executable = "tic",

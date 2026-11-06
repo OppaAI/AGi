@@ -15,7 +15,7 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>gms</depend>
-  <depend>nes</depend>
+  <depend>cryptic_signal_core</depend>
   <depend>telepathic_management</depend>
   <exec_depend>python3-websockets</exec_depend>
 

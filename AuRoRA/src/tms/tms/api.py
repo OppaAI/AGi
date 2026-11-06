@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 import rclpy
 from rclpy.node import Node
-from nes.msg import NeuralImpulse
+from cryptic_signal_core.msg import NeuralImpulse
 import uvicorn
 
 from hrs.hrm import AGi
