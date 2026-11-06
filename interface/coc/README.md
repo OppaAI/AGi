@@ -32,6 +32,20 @@ When only AuRoRA is online, its original robot returns to the center at its
 usual size. When only AIVA is online, Grace appears alone. Each Grace message
 uses a small CSS-scale copy of the AuRoRA robot.
 
+Typed chat text is sent as `nes/msg/RadioSignal` on `/tms/radio_input`. The
+COC posts the original UTF-8 text to its same-origin Python encoder endpoint;
+the endpoint returns packed binary signal data, which the browser publishes
+through rosbridge as the custom ROS message. TIC decodes it in Python, applies
+the existing sensory gates, and forwards normalized SSS to CNC. Each UTF-8
+byte becomes six base-3 signal symbols (`-1`, `0`, `+1` mapped to digits
+`0`, `1`, `2`), packed five symbols per message byte. This is a reversible
+radio-inspired digital encoding, not a physical RF waveform; it is larger
+than raw UTF-8 and is for the signal-format experiment, not a speedup. Enabling
+Web prepends `/web ` before encoding. The destination `radio_channel` is a
+plain routing label, not authentication or encryption. Tailnet ACLs remain the
+access boundary. The `/web` directive is preserved through TIC, but CNC does
+not yet execute web search from that directive.
+
 The theme control follows Aidon's light and dark palettes and saves your choice
 in browser storage.
 Three.js, three-vrm, and roslib load from jsDelivr, so the browser needs internet

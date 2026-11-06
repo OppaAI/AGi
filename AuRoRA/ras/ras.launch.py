@@ -59,6 +59,16 @@ _cnc = Node(
     output     = "screen",                                  # stream logs to console and /rosout
 )
 
+# TIC decodes the COC's typed RadioSignal and publishes normalized SSS to CNC.
+_tic = Node(
+    package    = "tms",
+    executable = "tic",
+    name       = "tic",
+    namespace  = "tms",
+    parameters = [_aurora_params],
+    output     = "screen",
+)
+
 # PC integration API. Mutating endpoints require AGI_API_TOKEN.
 # The COC also binds to loopback; expose it with Tailscale Serve and tailnet ACLs.
 _api = Node(
@@ -99,7 +109,7 @@ _coc = Node(
 
 # ─── Boot Sequence ────────────────────────────────────────────────────────────
 #
-#   Current: CNC, the authenticated HTTP API, and the loopback COC server.
+#   Current: TIC, CNC, the authenticated HTTP API, and the loopback COC server.
 #
 #   When EEC and HRS are ready, replace the simple CNC action below with the
 #   staged sequence using RegisterEventHandler(OnProcessStart(...)) to block
@@ -137,6 +147,7 @@ def generate_launch_description() -> LaunchDescription:
 
         # ── Stage 3 — Cognition ───────────────────────────────────────────────
         # CNC, APIs, and COC active; expand staged cognition sequence as systems mature
+        _tic,                                                               # typed COC ingress → SSS transduction
         _cnc,                                                               # launch CNC node
         _api,                                                               # authenticated PC HTTP ingress → typed ROS impulses
         _coc,                                                               # loopback WebUI + same-origin rosbridge websocket proxy

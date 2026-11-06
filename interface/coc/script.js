@@ -496,10 +496,10 @@
                     }, 5000);
                 });
 
-                const cnsTopic = new ROSLIB.Topic({
+                const radioInputTopic = new ROSLIB.Topic({
                     ros: ros,
-                    name: '/cns/neural_input',
-                    messageType: 'std_msgs/String'
+                    name: '/tms/radio_input',
+                    messageType: 'nes/msg/RadioSignal'
                 });
 
                 imageInputTopic = new ROSLIB.Topic({
@@ -514,13 +514,13 @@
                     messageType: 'std_msgs/String'
                 });
 
-                const gceResponseTopic = new ROSLIB.Topic({
+                const textResponseTopic = new ROSLIB.Topic({
                     ros: ros,
-                    name: '/gce/response',
+                    name: '/tms/text_response',
                     messageType: 'std_msgs/String'
                 });
 
-                gceResponseTopic.subscribe((msg) => {
+                textResponseTopic.subscribe((msg) => {
                     try {
                         const data = JSON.parse(msg.data);
                         if (data.type === 'start') {
@@ -530,7 +530,7 @@
                             appendToStream(data.content);
                         } else if (data.type === 'done') {
                             finishStreaming();
-                            latestResponseId = generateResponseId();
+                            latestResponseId = data.radio_id || generateResponseId();
                             positiveRewardCount = 0;
                             negativeRewardCount = 0;
                             pokeCount = 0;
@@ -550,7 +550,7 @@
                     }
                 });
 
-                window.cnsTopic = cnsTopic;
+                window.radioInputTopic = radioInputTopic;
                 window.imageInputTopic = imageInputTopic;
                 window.rlRewardTopic = rlRewardTopic;
 
@@ -950,6 +950,34 @@
         }
 
         // Send message
+        async function publishRadioInput(text) {
+            const search = webSearchEnabled ? 'true' : 'false';
+            const response = await fetch(`/api/radio/encode?web_search=${search}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+                body: text
+            });
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || `Encoder returned HTTP ${response.status}`);
+            }
+
+            const radioId = response.headers.get('X-Radio-ID');
+            const radioChannel = response.headers.get('X-Radio-Channel');
+            const symbolCount = Number(response.headers.get('X-Radio-Symbol-Count'));
+            const radioSignal = Array.from(new Uint8Array(await response.arrayBuffer()));
+            if (!radioId || !radioChannel || !Number.isInteger(symbolCount)) {
+                throw new Error('Encoder returned incomplete RadioSignal metadata');
+            }
+
+            window.radioInputTopic.publish(new ROSLIB.Message({
+                radio_signal: radioSignal,
+                symbol_count: symbolCount,
+                radio_id: radioId,
+                radio_channel: radioChannel
+            }));
+        }
+
         function sendSignal() {
             const val = userInput.value.trim();
             if (isStreaming) return;
@@ -998,17 +1026,15 @@
             } else if (val) {
                 createMessageElement('user', val);
 
-                if (isROSConnected && window.cnsTopic) {
-                    const messageData = {
-                        text: val,
-                        web_search: webSearchEnabled
-                    };
-
-                    window.cnsTopic.publish(new ROSLIB.Message({
-                        data: JSON.stringify(messageData)
-                    }));
-
-                    console.log('💬 Sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
+                if (isROSConnected && window.radioInputTopic) {
+                    publishRadioInput(val).then(() => {
+                        console.log('📡 RadioSignal sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
+                    }).catch((error) => {
+                        console.error('RadioSignal encoding or publish failed:', error);
+                        speechBubble.textContent = 'Message could not be sent. Please try again.';
+                        speechBubble.classList.add('show');
+                        setTimeout(() => speechBubble.classList.remove('show'), 3000);
+                    });
                 } else {
                     setTimeout(() => {
                         const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";

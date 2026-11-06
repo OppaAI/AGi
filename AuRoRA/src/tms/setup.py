@@ -35,6 +35,7 @@ setup(
         'console_scripts': [
             'api = tms.api:main',
             'coc = tms.coc:main',
+            'tic = tms.tic:main',
         ],
     },
 )

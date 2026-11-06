@@ -126,6 +126,15 @@ class SSS:
     drop_reason     : str             = ""     # "below_threshold" | "duplicate" | "overload" | "efference_echo" | "injection"
     lifecycle_ms    : float           = 0.0    # elapsed ms from generation to depletion
 
+    @property
+    def text(self) -> str:
+        """Compatibility alias used by memory and cognition components."""
+        return self.content
+
+    @text.setter
+    def text(self, value: str) -> None:
+        self.content = value
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CRS — Cognitive Response Signal
@@ -182,7 +191,7 @@ class PMT:
     trace_id        : str           = ""    # identifier of this PMT "PMT-<source>-<induced_at>-<uuid>
     user_id         : str | None    = None  # identifier of the user AuRoRA is interacting with
     robot_id        : str | None    = None  # identifier of the AuRoRA robot itself
-    source          : SensoryInputChannel = SensoryInputChannel.CLI   # input modality — required
+    source          : SensoryInputChannel = SensoryInputChannel.UI    # input channel — defaults to the shared user interface
 
     # ── lifecycle ─────────────────────────────────────────────────
     state           : WMCState      = WMCState.INDUCED    # WMCState value — induced/filled/sustained/receded/evicted
