@@ -36,7 +36,7 @@
     // The Aiko VRM viewer drives raw bones directly. VRM 3.x otherwise
     // copies the normalized T-pose over them on every update.
     if (humanoid) humanoid.autoUpdateHumanBones = false;
-    for (const name of ['spine', 'chest', 'neck', 'head', 'leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand']) {
+    for (const name of ['spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm']) {
       const bone = humanoid?.getRawBoneNode(name);
       if (bone) bones[name] = { bone, x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
     }
@@ -63,19 +63,10 @@
     apply('chest', 0.014 * breathe);
     apply('head', 0.0045 * drift(0.47, 0.4), 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1), 0.006 * drift(0.19, 1.1));
     apply('neck', 0.003 * drift(0.67, 1.7), 0.004 * drift(0.59), 0);
-    const holdingRobot = auroraOnline;
-    const leftUpper = pose.leftUpperArm;
-    const rightUpper = pose.rightUpperArm;
-    const leftLower = pose.leftLowerArm;
-    const rightLower = pose.rightLowerArm;
-    apply('leftShoulder', 0, holdingRobot ? -0.08 : 0, 0);
-    apply('rightShoulder', 0, holdingRobot ? 0.08 : 0, 0);
-    apply('leftUpperArm', 0.008 * drift(0.71, 0.5), holdingRobot ? -0.30 : 0.004 * drift(0.43, 2.2), holdingRobot && leftUpper ? 0.90 - leftUpper.z : 0.007 * drift(0.61, 1.0));
-    apply('rightUpperArm', 0.008 * drift(0.73, 2.8), holdingRobot ? 0.30 : 0.004 * drift(0.83, 0.9), holdingRobot && rightUpper ? -0.90 - rightUpper.z : 0.007 * drift(0.79, 1.6));
-    apply('leftLowerArm', 0.006 * drift(0.89, 0.2), holdingRobot ? 0.22 : 0.003 * drift(0.97, 1.9), holdingRobot && leftLower ? 2.15 - leftLower.z : 0.005 * drift(0.49, 0.9));
-    apply('rightLowerArm', 0.006 * drift(1.02, 1.2), holdingRobot ? -0.22 : 0.003 * drift(1.11, 2.5), holdingRobot && rightLower ? -2.15 - rightLower.z : 0.005 * drift(0.51, 0.4));
-    apply('leftHand', 0, 0, holdingRobot ? -0.18 : 0);
-    apply('rightHand', 0, 0, holdingRobot ? 0.18 : 0);
+    apply('leftUpperArm', 0.008 * drift(0.71, 0.5), 0.004 * drift(0.43, 2.2), 0.007 * drift(0.61, 1.0));
+    apply('rightUpperArm', 0.008 * drift(0.73, 2.8), 0.004 * drift(0.83, 0.9), 0.007 * drift(0.79, 1.6));
+    apply('leftLowerArm', 0.006 * drift(0.89, 0.2), 0.003 * drift(0.97, 1.9), 0.005 * drift(0.49, 0.9));
+    apply('rightLowerArm', 0.006 * drift(1.02, 1.2), 0.003 * drift(1.11, 2.5), 0.005 * drift(0.51, 0.4));
 
     if (!animateMotion) return;
     const expressions = avatar.vrm.expressionManager;
