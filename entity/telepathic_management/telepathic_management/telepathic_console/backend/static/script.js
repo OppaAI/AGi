@@ -496,12 +496,6 @@
                     }, 5000);
                 });
 
-                const radioInputTopic = new ROSLIB.Topic({
-                    ros: ros,
-                    name: '/tms/radio_input',
-                    messageType: 'cryptic_signal_core/msg/TelepathicSignal'
-                });
-
                 imageInputTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/image_input',
@@ -550,7 +544,6 @@
                     }
                 });
 
-                window.radioInputTopic = radioInputTopic;
                 window.imageInputTopic = imageInputTopic;
                 window.rlRewardTopic = rlRewardTopic;
 
@@ -952,30 +945,17 @@
         // Send message
         async function publishRadioInput(text) {
             const search = webSearchEnabled ? 'true' : 'false';
-            const response = await fetch(`/api/radio/encode?web_search=${search}`, {
+            const response = await fetch(`/api/telepathic/send?web_search=${search}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain; charset=utf-8' },
                 body: text
             });
             if (!response.ok) {
-                const detail = await response.text();
+                const body = await response.json().catch(() => ({}));
+                const detail = body.detail;
                 throw new Error(detail || `Encoder returned HTTP ${response.status}`);
             }
-
-            const radioId = response.headers.get('X-Radio-ID');
-            const radioChannel = response.headers.get('X-Radio-Channel');
-            const symbolCount = Number(response.headers.get('X-Radio-Symbol-Count'));
-            const radioSignal = Array.from(new Uint8Array(await response.arrayBuffer()));
-            if (!radioId || !radioChannel || !Number.isInteger(symbolCount)) {
-                throw new Error('Encoder returned incomplete TelepathicSignal metadata');
-            }
-
-            window.radioInputTopic.publish(new ROSLIB.Message({
-                telepathic_signal: radioSignal,
-                symbol_count: symbolCount,
-                radio_id: radioId,
-                radio_channel: radioChannel
-            }));
+            return response.json();
         }
 
         function sendSignal() {
@@ -1026,9 +1006,9 @@
             } else if (val) {
                 createMessageElement('user', val);
 
-                if (isROSConnected && window.radioInputTopic) {
+                if (isROSConnected) {
                     publishRadioInput(val).then(() => {
-                        console.log('📡 TelepathicSignal sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
+                        console.log('📡 TelepathicSignal sent through ROS:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
                     }).catch((error) => {
                         console.error('TelepathicSignal encoding or publish failed:', error);
                         speechBubble.textContent = 'Message could not be sent. Please try again.';
