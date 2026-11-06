@@ -17,39 +17,6 @@
   let blinkTime = 0;
   let blinking = false;
 
-  // A small procedural model keeps AuRoRA in the same depth buffer as Grace.
-  function createRobot(THREE, height) {
-    const group = new THREE.Group();
-    const unit = height * 0.13;
-    group.scale.setScalar(unit);
-    const sphere = new THREE.SphereGeometry(1, 24, 16);
-    const pink = new THREE.MeshStandardMaterial({ color: 0xf3b9d5, roughness: 0.38, metalness: 0.08 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x18263f, roughness: 0.32 });
-    const pale = new THREE.MeshStandardMaterial({ color: 0xe4f5ff, roughness: 0.35 });
-    const accent = new THREE.MeshStandardMaterial({ color: 0xf4479c, roughness: 0.4 });
-    function part(material, x, y, z, sx, sy, sz) {
-      const mesh = new THREE.Mesh(sphere, material);
-      mesh.position.set(x, y, z);
-      mesh.scale.set(sx, sy, sz);
-      group.add(mesh);
-      return mesh;
-    }
-    part(pink, 0, -0.48, 0, 0.49, 0.42, 0.29);
-    part(pink, 0, 0.15, 0, 0.72, 0.58, 0.38);
-    part(dark, 0, 0.16, 0.345, 0.54, 0.32, 0.07);
-    part(pale, -0.25, 0.22, 0.409, 0.12, 0.095, 0.025);
-    part(pale, 0.25, 0.22, 0.409, 0.12, 0.095, 0.025);
-    part(accent, 0, -0.04, 0.41, 0.13, 0.06, 0.025);
-    part(accent, 0, -0.48, 0.285, 0.12, 0.11, 0.025);
-    for (const side of [-1, 1]) {
-      part(pink, side * 0.75, -0.22, 0, 0.12, 0.27, 0.13);
-      part(pink, side * 0.38, 0.73, 0, 0.055, 0.25, 0.055);
-      part(pale, side * 0.38, 0.96, 0, 0.09, 0.09, 0.09);
-    }
-    group.visible = false;
-    return group;
-  }
-
   function frameCamera() {
     if (!avatar) return;
     const { camera, modelHeight } = avatar;
@@ -165,25 +132,6 @@
       vrm.scene.position.x -= center.x;
       vrm.scene.position.y -= bounds.min.y;
       const modelHeight = Math.max(bounds.max.y - bounds.min.y, 1.2);
-      const robot3d = createRobot(THREE, modelHeight);
-      scene.add(robot3d);
-      const raycaster = new THREE.Raycaster();
-      const pointer = new THREE.Vector2();
-      const leftHandPosition = new THREE.Vector3();
-      const rightHandPosition = new THREE.Vector3();
-      canvas.addEventListener('click', (event) => {
-        if (!aivaOnline || !auroraOnline || !robot3d.visible) return;
-        const rect = canvas.getBoundingClientRect();
-        pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
-        raycaster.setFromCamera(pointer, camera);
-        const hit = raycaster.intersectObjects(robot3d.children, false)[0];
-        if (!hit) return;
-        const point = robot3d.worldToLocal(hit.point.clone());
-        const id = point.y > 0.45 ? 'petZone' : (point.x < 0 ? 'pokeZoneLeft' : 'pokeZoneRight');
-        document.getElementById(id)?.dispatchEvent(new MouseEvent('click', {
-          bubbles: true, clientX: event.clientX, clientY: event.clientY,
-        }));
-      });
       // Framing is tighter when Grace is alone and wider beside AuRoRA.
 
       const resize = () => {
@@ -196,7 +144,7 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, vrm, robot3d, leftHandPosition, rightHandPosition, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
+      avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
       frameCamera();
       return avatar;
     })();
@@ -225,19 +173,6 @@
     if (!reducedMotion) idleTime += delta;
     applyIdle(delta, !reducedMotion);
     avatar.vrm.update(delta);
-    avatar.robot3d.visible = auroraOnline;
-    const leftHand = avatar.restPose.leftHand?.bone;
-    const rightHand = avatar.restPose.rightHand?.bone;
-    if (auroraOnline && leftHand && rightHand) {
-      avatar.vrm.scene.updateMatrixWorld(true);
-      leftHand.getWorldPosition(avatar.leftHandPosition);
-      rightHand.getWorldPosition(avatar.rightHandPosition);
-      avatar.robot3d.position.copy(avatar.leftHandPosition).add(avatar.rightHandPosition).multiplyScalar(0.5);
-      avatar.robot3d.position.y += avatar.modelHeight * 0.025;
-      avatar.robot3d.position.z -= avatar.modelHeight * 0.075;
-    } else if (auroraOnline) {
-      avatar.robot3d.visible = false;
-    }
     avatar.renderer.render(avatar.scene, avatar.camera);
   }
 
