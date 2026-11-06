@@ -7,7 +7,7 @@ package_root = Path(__file__).resolve().parent
 shared_files = [path for path in package_root.rglob("*") if path.is_file() and "__pycache__" not in path.parts]
 shared_data = [
     ("share/" + package_name + "/" + str(path.parent.relative_to(package_root)), [os.path.relpath(path, package_root)])
-    for path in shared_files if path.is_relative_to(package_root / "frontend") or path.is_relative_to(package_root / "backend")
+    for path in shared_files if path.is_relative_to(package_root / "telepathic_console" / "frontend") or path.is_relative_to(package_root / "telepathic_console" / "backend")
 ]
 
 setup(
@@ -25,5 +25,5 @@ setup(
     maintainer_email="oppa.ai.org@gmail.com",
     description="Shared telepathic input and stimulus routing for AGi systems",
     license="GPL-3.0-only",
-    entry_points={"console_scripts": ["telepathic_input = telepathic_management.telepathic_input:main", "telepathic_console = telepathic_management.telepathic_console:main"]},
+    entry_points={"console_scripts": ["telepathic_input = telepathic_management.telepathic_input:main", "telepathic_console = telepathic_console.server:main"]},
 )

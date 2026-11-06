@@ -8,7 +8,7 @@ The input node accepts `std_msgs/msg/String` on `/telepathic/input`. Payloads
 may be plain text or JSON with a `text` field. It publishes canonical SSS JSON
 on `/telepathic/stimulus`. Topic names and size/repeat limits are ROS parameters.
 
-The console serves the shared frontend from this package and proxies its
+The console under `telepathic_console/` serves its shared frontend and proxies its
 WebSocket to local rosbridge at `ws://127.0.0.1:9090` by default. Override the
 interface directory with `AGI_WEB_TELEOPS_CONSOLE_INTERFACE_DIR`; set
 `AGI_ROSBRIDGE_URL` to select the local bridge.
