@@ -2231,8 +2231,8 @@ h1 {
 .robot-container.grace-only .robot { display: none; }
 .robot-container.aiva-online .grace-avatar-stage { position: relative; z-index: 1; }
 .robot-container.aiva-online .robot {
-    --robot-scale: .52;
-    --poke-target-scale: 1.92;
+    --robot-scale: 1.04;
+    --poke-target-scale: 1;
     position: absolute;
     left: calc(50% + 85px);
     bottom: 14px;
@@ -2384,8 +2384,8 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         height: 100%;
     }
     .robot-container.aiva-online .robot {
-        --robot-scale: .52;
-        --poke-target-scale: 1.92;
+        --robot-scale: 1.04;
+        --poke-target-scale: 1;
         left: calc(50% + 85px);
         bottom: 14px;
     }
@@ -2463,8 +2463,8 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         margin-right: 100px;
     }
     .robot-container.aiva-online .robot {
-        --robot-scale: .5;
-        --poke-target-scale: 2;
+        --robot-scale: 1;
+        --poke-target-scale: 1;
         left: calc(50% + 85px);
         bottom: 14px;
         transform-origin: 50% 100%;
