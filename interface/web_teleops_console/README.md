@@ -24,9 +24,20 @@ can reach the machine. Keep the Web Teleops Console listener and rosbridge liste
 do not expose port 8853 or 9090 directly on the LAN or public internet. Configure
 the tailnet rules to allow only your account/device to reach this machine.
 
+The UI is split by responsibility: `frontend/` contains the chat and settings
+pages, while `backend/static/` contains the served CSS and JavaScript, and
+`backend/static/assets/` contains the VRM, favicon, and asset notes. The FastAPI/ROS bridge backend lives in
+`AuRoRA/src/tms/tms/web_teleops_console.py` and serves this UI.
+Open `/settings` to edit HRM parameters marked `[INTRINSIC]`. They are validated
+and saved to `~/.agi/ras/aurora.yaml`; restart the AuRoRA ROS launch to apply
+them. AGi currently has no dynamic parameter-update callback, so these values
+cannot take effect in a running ROS process. Browser theme changes apply
+immediately and are kept in browser storage. Environment settings are shown
+read-only; edit the service environment and restart its process to change them.
+
 AIVA's `aiva-presence` process posts a heartbeat through the Tailscale Serve
 URL every four seconds. AuRoRA's live rosbridge connection supplies its online
-state. When both are online, the UI loads `/assets/AGi.vrm` for Grace in the
+state. When both are online, the UI loads `/static/assets/Grace.vrm` for Grace in the
 center and moves AuRoRA's original pink robot beside her at a smaller size.
 When only AuRoRA is online, its original robot returns to the center at its
 usual size. When only AIVA is online, Grace appears alone in a close chest-up

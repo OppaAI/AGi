@@ -1,6 +1,6 @@
 # AGi avatar asset
 
-`AGi.vrm` is a copy of the `Original.vrm` VRoid sample distributed in the
+`Grace.vrm` is a copy of the `Original.vrm` VRoid sample distributed in the
 Aiko-chan repository. Its embedded VRM metadata links to the VRoid Hub sample
 license, which permits modification and redistribution, including commercial
 use, and does not require attribution:
