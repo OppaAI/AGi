@@ -109,7 +109,7 @@
 
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
-      const gltf = await loader.loadAsync('/assets/Grace.vrm');
+      const gltf = await loader.loadAsync('/static/assets/Grace.vrm');
       const vrm = gltf.userData.vrm;
       if (!vrm) throw new Error('The avatar file did not contain a VRM model');
       VRMUtils.removeUnnecessaryVertices(gltf.scene);

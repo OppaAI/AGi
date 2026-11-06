@@ -12,8 +12,9 @@
       }}
     </script>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
-    <link rel="stylesheet" href="/styles.css">
-    <script src="/theme.js" defer></script>
+    <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/theme.js" defer></script>
 </head>
 <body>
     <div class="cyber-bg" id="cyberBg">
@@ -46,6 +47,7 @@
             <span class="presence-divider" aria-hidden="true">·</span>
             <span id="aivaPresence" aria-live="polite">Checking presence…</span>
             <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Switch light or dark theme">◐ <span>Light</span></button>
+            <a class="theme-toggle settings-link" href="/settings" title="Open settings">⚙ Settings</a>
         </div>
 
         <div class="robot-container" id="avatarContainer">
@@ -140,8 +142,8 @@
         <div class="chat-container" id="chatContainer"></div>
     </div>
 
-<script src="/script.js" defer></script>
-    <script type="module" src="/avatar.js"></script>
-    <script src="/presence.js" defer></script>
+<script src="/static/script.js" defer></script>
+    <script type="module" src="/static/avatar.js"></script>
+    <script src="/static/presence.js" defer></script>
 </body>
 </html>

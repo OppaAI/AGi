@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AGi Settings · Web Teleops Console</title>
+  <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/settings.css">
+  <script src="/static/theme.js" defer></script>
+  <script src="/static/settings.js" defer></script>
+</head>
+<body>
+  <div class="cyber-bg" aria-hidden="true"><div class="circuit-grid"></div><canvas id="matrixCanvas"></canvas><div class="pink-glow"></div></div>
+  <main class="settings-shell">
+    <header class="settings-header">
+      <a class="back-link" href="/">← Web Teleops Console</a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch theme">◐ <span>Light</span></button>
+      <h1>AuRoRA Settings</h1>
+      <p class="subtitle">Tune Grace and the robot systems</p>
+      <p class="config-path" id="configPath">Loading configuration…</p>
+    </header>
+    <section class="apply-banner" aria-live="polite">
+      <span class="apply-icon">↻</span>
+      <div><strong>ROS settings apply after restart</strong><p id="applyNote">Changes are saved to AuRoRA's launch configuration.</p></div>
+    </section>
+    <section class="instant-preference"><div><strong>Appearance</strong><p>Theme changes apply now and are saved in this browser.</p></div><span class="instant-tag">✓ Immediate</span></section>
+    <div class="settings-toolbar">
+      <label class="search-wrap">⌕ <input id="settingsSearch" type="search" placeholder="Filter settings" autocomplete="off"></label>
+      <span id="saveState" role="status">Loading…</span>
+    </div>
+    <form id="settingsForm">
+      <div id="settingsGroups" class="settings-groups"></div>
+      <div class="settings-actions"><button type="button" class="secondary-button" id="resetButton">Reset unsaved edits</button><button type="submit" class="primary-button" id="saveButton">Save settings</button></div>
+    </form>
+    <section class="runtime-section">
+      <div class="section-heading"><div><p class="eyebrow">PROCESS CONFIGURATION</p><h2>Runtime and service settings</h2></div><span class="restart-tag">Restart process</span></div>
+      <p class="section-description" id="runtimeNote">These values come from the environment and are shown read-only. Change them in the service configuration.</p>
+      <div id="runtimeSettings" class="runtime-list"></div>
+    </section>
+    <footer>Only HRM settings marked <code>[INTRINSIC]</code> are editable here. Derived values and architecture constants stay managed by AGi.</footer>
+  </main>
+</body>
+</html>

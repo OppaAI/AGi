@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 package_name = 'tms'
 
 package_root = Path(__file__).resolve().parent
-repo_root = package_root.parents[3]
+repo_root = package_root.parents[2]
 web_teleops_console_root = repo_root / 'interface' / 'web_teleops_console'
 
 web_teleops_console_files = [path for path in web_teleops_console_root.rglob('*') if path.is_file()]
