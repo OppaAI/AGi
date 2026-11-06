@@ -19,6 +19,9 @@ from tms.radio_encoding import encode_text
 
 def _interface_dir() -> Path:
     """Resolve the source checkout or the installed ROS package interface."""
+    configured = os.getenv("AGI_COC_INTERFACE_DIR")
+    if configured:
+        return Path(configured)
     try:
         from ament_index_python.packages import get_package_share_directory
         installed = Path(get_package_share_directory("tms")) / "coc"
