@@ -146,7 +146,7 @@ from datetime import datetime, timezone                                     # UT
 import rclpy                                                                # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                                 # base class for all ROS2 nodes
 from std_msgs.msg import String                                             # ROS2 string message type for topic I/O
-from nes.msg import RadioSignal                                             # typed ternary text signal from COC
+from nes.msg import RadioSignal                                             # typed ternary text signal from Web Teleops Console
 import websockets                                                           # async websocket server — WebUI connection layer
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # clean disconnect vs unexpected drop — handled separately in _handle_connection
 
@@ -218,7 +218,7 @@ class TelepathyInputCore(Node):
         )
 
         self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")                             # ROS2 topic for SSS published to SCS
-        self.get_logger().info(f"✅ Radio Signal Gateway : {TMS.RADIO_INPUT_GATEWAY}")                               # typed text signal input from COC
+        self.get_logger().info(f"✅ Radio Signal Gateway : {TMS.RADIO_INPUT_GATEWAY}")                               # typed text signal input from Web Teleops Console
         self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")                             # ROS2 topic for efference echoes
         self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELORECEPTOR_PORTAL}")  # WebSocket server for WebUI connection
         self.get_logger().info("=" * 60)                                                                               # log heading title border
@@ -364,7 +364,7 @@ class TelepathyInputCore(Node):
             return None                                                         # stop processing this stimulus
 
     def _on_radio_signal(self, signal: RadioSignal) -> None:
-        """Decode a typed COC signal, then route it through TIC's normal SSS gates."""
+        """Decode a typed Web Teleops Console signal, then route it through TIC's normal SSS gates."""
         if signal.radio_channel != TMS.RADIO_CHANNEL:
             self.get_logger().warning("🚫 RadioSignal ignored — destination channel mismatch")
             return

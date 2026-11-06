@@ -1,4 +1,4 @@
-"""Round-trip and malformed-input tests for the COC radio-inspired codec."""
+"""Round-trip and malformed-input tests for the Web Teleops Console radio-inspired codec."""
 
 import pytest
 

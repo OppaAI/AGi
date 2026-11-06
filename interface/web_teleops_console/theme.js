@@ -1,4 +1,4 @@
-/* COC theme preference follows Aidon's shared light/dark theme behavior. */
+/* Web Teleops Console theme preference follows Aidon's shared light/dark theme behavior. */
 (() => {
   'use strict';
 

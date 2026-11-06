@@ -1,10 +1,10 @@
-"""Checks that COC's local encoder endpoint returns packed bytes, not a JSON string."""
+"""Checks that Web Teleops Console's local encoder endpoint returns packed bytes, not a JSON string."""
 
 import asyncio
 
 from starlette.requests import Request
 
-from tms.coc import encode_radio_input
+from tms.web_teleops_console import encode_radio_input
 from tms.radio_encoding import decode_text
 
 

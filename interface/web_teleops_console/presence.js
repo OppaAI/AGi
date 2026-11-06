@@ -1,4 +1,4 @@
-/* Poll the local COC status so the shared UI can reflect the AIVA PC heartbeat. */
+/* Poll the local Web Teleops Console status so the shared UI can reflect the AIVA PC heartbeat. */
 (() => {
   'use strict';
   const label = document.getElementById('aivaPresence');
