@@ -11,7 +11,7 @@ from pathlib import Path
 import uvicorn
 import websockets
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from cryptic_signal_core.telepathic_encoding import encode_text
@@ -224,9 +224,9 @@ async def presence() -> dict[str, bool | int | None]:
     }
 
 
-@app.post("/api/radio/encode")
-async def encode_radio_input(request: Request) -> Response:
-    """Encode plain UTF-8 input for the typed TelepathicSignal ROS message."""
+@app.post("/api/telepathic/send")
+async def send_telepathic_input(request: Request) -> dict[str, str]:
+    """Encode text and publish a typed TelepathicSignal through rosbridge."""
     raw_text = await request.body()
     if len(raw_text) > 2048:
         raise HTTPException(status_code=413, detail="Text input exceeds 2048 bytes")
@@ -244,16 +244,25 @@ async def encode_radio_input(request: Request) -> Response:
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
-    return Response(
-        content=signal,
-        media_type="application/octet-stream",
-        headers={
-            "X-Radio-ID": uuid.uuid4().hex,
-            "X-Radio-Channel": AGi.TMS.RADIO_CHANNEL,
-            "X-Radio-Symbol-Count": str(symbol_count),
-            "Cache-Control": "no-store",
+    radio_id = uuid.uuid4().hex
+    target = os.getenv("AGI_ROSBRIDGE_URL", "ws://127.0.0.1:9090")
+    envelope = {
+        "op": "publish",
+        "topic": "/telepathic/stimulus",
+        "msg": {
+            "telepathic_signal": list(signal),
+            "symbol_count": symbol_count,
+            "radio_id": radio_id,
+            "radio_channel": os.getenv("AGI_TELEPATHIC_CHANNEL", AGi.TMS.RADIO_CHANNEL),
         },
-    )
+    }
+    try:
+        async with websockets.connect(target, open_timeout=3) as rosbridge:
+            await rosbridge.send(json.dumps({"op": "advertise", "topic": envelope["topic"], "type": "cryptic_signal_core/msg/TelepathicSignal"}))
+            await rosbridge.send(json.dumps(envelope))
+    except (websockets.WebSocketException, OSError, TimeoutError) as error:
+        raise HTTPException(status_code=502, detail="Could not publish to ROS rosbridge") from error
+    return {"radio_id": radio_id, "topic": envelope["topic"]}
 
 
 @app.get("/")

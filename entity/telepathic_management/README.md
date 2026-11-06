@@ -1,12 +1,13 @@
 # Telepathic Management
 
-Shared ROS 2 package for telepathic input and the Web Teleops Console. Package
-name is the noun `telepathic_management`; executables are actions: `telepathic_input`
-and `telepathic_console`.
+Shared ROS 2 package for the Web Teleops Console transport. Its package name is
+the noun `telepathic_management`; its executable is `telepathic_console`.
 
-The input node accepts `std_msgs/msg/String` on `/telepathic/input`. Payloads
-may be plain text or JSON with a `text` field. It publishes canonical SSS JSON
-on `/telepathic/stimulus`. Topic names and size/repeat limits are ROS parameters.
+The WebUI backend encodes each message with the shared cryptic codec and
+publishes a typed `cryptic_signal_core/msg/TelepathicSignal` through rosbridge
+on `/telepathic/stimulus`. Each assistant's TIC subscribes to that topic and
+decodes locally before sending the text into its own SCS. The decoded message
+does not need another ROS topic.
 
 The console under `telepathic_console/` serves its shared frontend and proxies its
 WebSocket to local rosbridge at `ws://127.0.0.1:9090` by default. Override the
