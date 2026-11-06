@@ -2245,6 +2245,7 @@ h1 {
 }
 .grace-hold-arm { display: none; }
 .robot-container.aiva-online .grace-hold-arm {
+    display: block;
     position: absolute;
     top: 143px;
     z-index: 18;
