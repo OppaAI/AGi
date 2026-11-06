@@ -17,6 +17,19 @@
   let blinkTime = 0;
   let blinking = false;
 
+  function frameCamera() {
+    if (!avatar) return;
+    const { camera, modelHeight } = avatar;
+    const soloPortrait = !auroraOnline;
+    // In solo mode, crop to a close chest-up portrait. Leave more room when
+    // AuRoRA is beside her so both characters remain comfortably in frame.
+    const distance = soloPortrait ? 0.68 : 0.92;
+    const targetHeight = soloPortrait ? 0.84 : 0.82;
+    camera.position.set(0, modelHeight * (targetHeight + 0.05), modelHeight * distance);
+    camera.lookAt(0, modelHeight * targetHeight, 0);
+    camera.updateProjectionMatrix();
+  }
+
   function rememberRestPose(vrm) {
     const bones = {};
     const humanoid = vrm.humanoid;
@@ -110,9 +123,7 @@
       vrm.scene.position.x -= center.x;
       vrm.scene.position.y -= bounds.min.y;
       const modelHeight = Math.max(bounds.max.y - bounds.min.y, 1.2);
-      // Waist-up portrait framing; the full-body stage made Grace appear tiny.
-      camera.position.set(0, modelHeight * 0.78, modelHeight * 1.65);
-      camera.lookAt(0, modelHeight * 0.76, 0);
+      // Framing is tighter when Grace is alone and wider beside AuRoRA.
 
       const resize = () => {
         if (!aivaOnline) return;
@@ -124,7 +135,8 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, vrm, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
+      avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
+      frameCamera();
       return avatar;
     })();
     try {
@@ -164,6 +176,7 @@
     }
     try {
       await loadAvatar();
+      frameCamera();
       avatar.resize();
       if (!frame) frame = requestAnimationFrame(render);
     } catch (error) {
