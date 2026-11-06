@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(nes)
+project(cryptic_signal_core)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -15,7 +16,7 @@ find_package(builtin_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/NeuralImpulse.msg"
-  "msg/RadioSignal.msg"
+  "msg/TelepathicSignal.msg"
   DEPENDENCIES builtin_interfaces
 )
 
@@ -30,5 +31,7 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+ament_python_install_package(${PROJECT_NAME})
 
 ament_package()

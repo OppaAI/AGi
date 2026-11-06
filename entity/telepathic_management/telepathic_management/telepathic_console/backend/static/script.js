@@ -499,7 +499,7 @@
                 const radioInputTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/tms/radio_input',
-                    messageType: 'nes/msg/RadioSignal'
+                    messageType: 'cryptic_signal_core/msg/TelepathicSignal'
                 });
 
                 imageInputTopic = new ROSLIB.Topic({
@@ -967,11 +967,11 @@
             const symbolCount = Number(response.headers.get('X-Radio-Symbol-Count'));
             const radioSignal = Array.from(new Uint8Array(await response.arrayBuffer()));
             if (!radioId || !radioChannel || !Number.isInteger(symbolCount)) {
-                throw new Error('Encoder returned incomplete RadioSignal metadata');
+                throw new Error('Encoder returned incomplete TelepathicSignal metadata');
             }
 
             window.radioInputTopic.publish(new ROSLIB.Message({
-                radio_signal: radioSignal,
+                telepathic_signal: radioSignal,
                 symbol_count: symbolCount,
                 radio_id: radioId,
                 radio_channel: radioChannel
@@ -1028,9 +1028,9 @@
 
                 if (isROSConnected && window.radioInputTopic) {
                     publishRadioInput(val).then(() => {
-                        console.log('📡 RadioSignal sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
+                        console.log('📡 TelepathicSignal sent:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
                     }).catch((error) => {
-                        console.error('RadioSignal encoding or publish failed:', error);
+                        console.error('TelepathicSignal encoding or publish failed:', error);
                         speechBubble.textContent = 'Message could not be sent. Please try again.';
                         speechBubble.classList.add('show');
                         setTimeout(() => speechBubble.classList.remove('show'), 3000);

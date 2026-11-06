@@ -146,7 +146,7 @@ from datetime import datetime, timezone                                     # UT
 import rclpy                                                                # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                                 # base class for all ROS2 nodes
 from std_msgs.msg import String                                             # ROS2 string message type for topic I/O
-from nes.msg import RadioSignal                                             # typed ternary text signal from Web Teleops Console
+from cryptic_signal_core.msg import TelepathicSignal                        # shared typed signal from Web Teleops Console
 import websockets                                                           # async websocket server — WebUI connection layer
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # clean disconnect vs unexpected drop — handled separately in _handle_connection
 
@@ -154,7 +154,7 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # cl
 from hrs.hrm import AGi                                                     # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest                                        # binds AuRoRA parameter server values into AGi constants at boot
 from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # SSS dataclass + channel/trace enums
-from telepathic_management.radio_encoding import decode_text                                  # Python-owned radio signal decoder
+from cryptic_signal_core.telepathic_encoding import decode_text               # shared signal decoder
 
 TMS = AGi.TMS                                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
@@ -196,7 +196,7 @@ class TelepathyInputCore(Node):
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
         self._radio_input = self.create_subscription(
-            RadioSignal, TMS.RADIO_INPUT_GATEWAY, self._on_radio_signal, 10,
+            TelepathicSignal, TMS.RADIO_INPUT_GATEWAY, self._on_telepathic_signal, 10,
         )
 
         # Runtime states for processing stimuli.
@@ -363,23 +363,23 @@ class TelepathyInputCore(Node):
             self.get_logger().debug(f"🚫 Stimulus rejected — malformed JSON: {e}")  # log the malformed JSON
             return None                                                         # stop processing this stimulus
 
-    def _on_radio_signal(self, signal: RadioSignal) -> None:
+    def _on_telepathic_signal(self, signal: TelepathicSignal) -> None:
         """Decode a typed Web Teleops Console signal, then route it through TIC's normal SSS gates."""
         if signal.radio_channel != TMS.RADIO_CHANNEL:
-            self.get_logger().warning("🚫 RadioSignal ignored — destination channel mismatch")
+            self.get_logger().warning("🚫 TelepathicSignal ignored — destination channel mismatch")
             return
         if not signal.radio_id:
-            self.get_logger().warning("🚫 RadioSignal ignored — missing radio_id")
+            self.get_logger().warning("🚫 TelepathicSignal ignored — missing radio_id")
             return
         max_symbols = (TMS.MAX_PAYLOAD_BYTES + 5) * 6
         if signal.symbol_count > max_symbols:
-            self.get_logger().warning("🚫 RadioSignal ignored — payload exceeds limit")
+            self.get_logger().warning("🚫 TelepathicSignal ignored — payload exceeds limit")
             return
 
         try:
-            text = decode_text(signal.radio_signal, signal.symbol_count)
+            text = decode_text(signal.telepathic_signal, signal.symbol_count)
         except (TypeError, ValueError) as error:
-            self.get_logger().warning(f"🚫 RadioSignal ignored — invalid encoding: {error}")
+            self.get_logger().warning(f"🚫 TelepathicSignal ignored — invalid encoding: {error}")
             return
 
         raw_stimulus = json.dumps({

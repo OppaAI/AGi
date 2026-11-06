@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from telepathic_management.radio_encoding import encode_text
+from cryptic_signal_core.telepathic_encoding import encode_text
 
 try:
     from hrs.hrm import AGi
@@ -226,7 +226,7 @@ async def presence() -> dict[str, bool | int | None]:
 
 @app.post("/api/radio/encode")
 async def encode_radio_input(request: Request) -> Response:
-    """Encode plain UTF-8 input for the typed RadioSignal ROS message."""
+    """Encode plain UTF-8 input for the typed TelepathicSignal ROS message."""
     raw_text = await request.body()
     if len(raw_text) > 2048:
         raise HTTPException(status_code=413, detail="Text input exceeds 2048 bytes")
