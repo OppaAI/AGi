@@ -846,7 +846,7 @@
                 miniature.removeAttribute('id');
                 miniature.classList.add('miniature');
                 miniature.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
-                miniature.querySelectorAll('.pet-zone, .cheek-poke-zone, .speech-bubble, .speaking-waves, .pet-counter, .poke-counter, .emotion-indicator, canvas').forEach((node) => node.remove());
+                miniature.querySelectorAll('.pet-zone, .cheek-poke-zone, .speech-bubble, .speaking-waves, .pet-counter, .poke-counter, .emotion-indicator, .grace-hold-arm, canvas').forEach((node) => node.remove());
                 avatar.appendChild(miniature);
                 msgDiv.appendChild(avatar);
             }
