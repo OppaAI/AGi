@@ -102,7 +102,7 @@
       avatar.resize();
       if (!frame) frame = requestAnimationFrame(render);
     } catch (error) {
-      console.error('Could not load AGi.vrm:', error);
+      console.error('Could not load Grace.vrm:', error);
       container.classList.remove('aiva-online', 'grace-only');
       const presence = document.getElementById('aivaPresence');
       if (presence) presence.textContent = 'AIVA avatar unavailable';
