@@ -2231,11 +2231,11 @@ h1 {
 .robot-container.grace-only .robot { display: none; }
 .robot-container.aiva-online .grace-avatar-stage { position: relative; z-index: 1; }
 .robot-container.aiva-online .robot {
-    --robot-scale: .66;
-    --poke-target-scale: 1.52;
+    --robot-scale: .52;
+    --poke-target-scale: 1.92;
     position: absolute;
-    left: calc(50% - 100px);
-    bottom: 20px;
+    left: calc(50% + 85px);
+    bottom: 14px;
     width: 200px;
     height: 200px;
     transform-origin: 50% 100%;
@@ -2384,9 +2384,10 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         height: 100%;
     }
     .robot-container.aiva-online .robot {
-        --robot-scale: .82;
-        --poke-target-scale: 1.22;
-        bottom: 24px;
+        --robot-scale: .52;
+        --poke-target-scale: 1.92;
+        left: calc(50% + 85px);
+        bottom: 14px;
     }
     .chat-container {
         flex: 0 0 82px;
@@ -2462,10 +2463,10 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         margin-right: 100px;
     }
     .robot-container.aiva-online .robot {
-        --robot-scale: .62;
-        --poke-target-scale: 1.62;
-        left: calc(50% - 150px);
-        bottom: 12px;
+        --robot-scale: .5;
+        --poke-target-scale: 2;
+        left: calc(50% + 85px);
+        bottom: 14px;
         transform-origin: 50% 100%;
     }
     .robot-container.aiva-online .cheek-poke-zone.left { left: 25px; }
