@@ -154,7 +154,7 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # cl
 from hrs.hrm import AGi                                                     # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest                                        # binds AuRoRA parameter server values into AGi constants at boot
 from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # SSS dataclass + channel/trace enums
-from tms.radio_encoding import decode_text                                  # Python-owned radio signal decoder
+from telepathic_management.radio_encoding import decode_text                                  # Python-owned radio signal decoder
 
 TMS = AGi.TMS                                                               # module-level alias — TMS-level constants (topic names, websocket config)
 

@@ -15,12 +15,9 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>gms</depend>
-  <depend>hrs</depend>
   <depend>nes</depend>
-  <exec_depend>python3-fastapi</exec_depend>
-  <exec_depend>python3-uvicorn</exec_depend>
+  <depend>telepathic_management</depend>
   <exec_depend>python3-websockets</exec_depend>
-  <exec_depend>python3-yaml</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
