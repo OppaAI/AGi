@@ -22,8 +22,8 @@
     const { camera, modelHeight } = avatar;
     const soloPortrait = !auroraOnline;
     // Frame Grace from the chest up, while leaving the paired robot visible.
-    const distance = 0.52;
-    const targetHeight = soloPortrait ? 0.90 : 0.91;
+    const distance = 0.58;
+    const targetHeight = soloPortrait ? 0.86 : 0.85;
     camera.position.set(0, modelHeight * (targetHeight + 0.05), modelHeight * distance);
     camera.lookAt(0, modelHeight * targetHeight, 0);
     camera.updateProjectionMatrix();
