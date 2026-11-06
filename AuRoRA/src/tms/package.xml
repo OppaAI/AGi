@@ -14,6 +14,8 @@
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
+  <depend>gms</depend>
+  <depend>hrs</depend>
   <depend>nes</depend>
   <exec_depend>python3-fastapi</exec_depend>
   <exec_depend>python3-uvicorn</exec_depend>

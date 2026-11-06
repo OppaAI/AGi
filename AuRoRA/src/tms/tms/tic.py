@@ -100,7 +100,7 @@ Lifecycle:
        SSS marked DEPLETED.
 
 Topics:
-    Sub: TMS.EFFERENCE_ECHO (std_msgs/String) — CNC-published echo hashes for suppression
+    Sub: TMS.RESPONSE_ECHO_GATEWAY (std_msgs/String) — CNC-published echo hashes for suppression
     Pub: TMS.TEXT_RESPONSE_GATEWAY (std_msgs/String) — normalized SSS JSON for SCS
 
 Message schema (inbound from WebUI):
@@ -146,6 +146,7 @@ from datetime import datetime, timezone                                     # UT
 import rclpy                                                                # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                                 # base class for all ROS2 nodes
 from std_msgs.msg import String                                             # ROS2 string message type for topic I/O
+from nes.msg import RadioSignal                                             # typed ternary text signal from COC
 import websockets                                                           # async websocket server — WebUI connection layer
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # clean disconnect vs unexpected drop — handled separately in _handle_connection
 
@@ -153,6 +154,7 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK # cl
 from hrs.hrm import AGi                                                     # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest                                        # binds AuRoRA parameter server values into AGi constants at boot
 from gms.csb import SensoryInputChannel, SensoryModality, TraceType, SSS    # SSS dataclass + channel/trace enums
+from tms.radio_encoding import decode_text                                  # Python-owned radio signal decoder
 
 TMS = AGi.TMS                                                               # module-level alias — TMS-level constants (topic names, websocket config)
 
@@ -193,6 +195,9 @@ class TelepathyInputCore(Node):
         self._response_echo_gateway = self.create_subscription(                         # response echo receptor — subscribes to CNC outbound response imprints
             String, TMS.RESPONSE_ECHO_GATEWAY, self._on_response_echo, 10,
         )
+        self._radio_input = self.create_subscription(
+            RadioSignal, TMS.RADIO_INPUT_GATEWAY, self._on_radio_signal, 10,
+        )
 
         # Runtime states for processing stimuli.
         self._active_connections = set()                                                # live connections to teloreceptor to track for clean shutdown
@@ -213,6 +218,7 @@ class TelepathyInputCore(Node):
         )
 
         self.get_logger().info(f"✅ Stimulus Gateway      : {TMS.TEXT_STIMULUS_GATEWAY}")                             # ROS2 topic for SSS published to SCS
+        self.get_logger().info(f"✅ Radio Signal Gateway : {TMS.RADIO_INPUT_GATEWAY}")                               # typed text signal input from COC
         self.get_logger().info(f"✅ Response Echo Gateway : {TMS.TEXT_RESPONSE_GATEWAY}")                             # ROS2 topic for efference echoes
         self.get_logger().info(f"✅ Telepathy Domain via  : ws://{TMS.TELEPATHY_GATEWAY}:{TMS.TELORECEPTOR_PORTAL}")  # WebSocket server for WebUI connection
         self.get_logger().info("=" * 60)                                                                               # log heading title border
@@ -346,9 +352,9 @@ class TelepathyInputCore(Node):
                 role         = stimulus.get("role", "user"),                    # speaker role — always "user" from UI
                 content      = stimulus.get("content", ""),                     # raw stimulus content — not yet validated
                 user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo if not provided
-                source       = SensoryInputChannel.UI.value,                    # adapter-stamped channel identity
-                modality     = SensoryModality.TEXT.value,                      # trace type — PMT for all conversational input (TODO: M1.X - to add modality check when implement image input)
-                trace_type   = TraceType.PMT.value,                             # adapter-stamped trace type (TODO: M1.X - to add VST when implement image input)
+                source       = SensoryInputChannel.UI,                          # adapter-stamped channel identity
+                modality     = SensoryModality.TEXT,                           # modality — text for symbolic chat input
+                trace_type   = TraceType.PMT,                                  # adapter-stamped trace type (TODO: M1.X - add VST for images)
                 state        = "GENERATED",                                     # lifecycle marker — SSS born
                 locus        = "TIC:RECEPTION",                                 # processing locus — reception stage
                 generated_at = generated_at,                                    # UTC birth timestamp — moment stimulus enters neural system
@@ -356,6 +362,45 @@ class TelepathyInputCore(Node):
         except (json.JSONDecodeError, ValueError) as e:                         # malformed JSON — drop at adapter boundary, never crash pipeline
             self.get_logger().debug(f"🚫 Stimulus rejected — malformed JSON: {e}")  # log the malformed JSON
             return None                                                         # stop processing this stimulus
+
+    def _on_radio_signal(self, signal: RadioSignal) -> None:
+        """Decode a typed COC signal, then route it through TIC's normal SSS gates."""
+        if signal.radio_channel != TMS.RADIO_CHANNEL:
+            self.get_logger().warning("🚫 RadioSignal ignored — destination channel mismatch")
+            return
+        if not signal.radio_id:
+            self.get_logger().warning("🚫 RadioSignal ignored — missing radio_id")
+            return
+        max_symbols = (TMS.MAX_PAYLOAD_BYTES + 5) * 6
+        if signal.symbol_count > max_symbols:
+            self.get_logger().warning("🚫 RadioSignal ignored — payload exceeds limit")
+            return
+
+        try:
+            text = decode_text(signal.radio_signal, signal.symbol_count)
+        except (TypeError, ValueError) as error:
+            self.get_logger().warning(f"🚫 RadioSignal ignored — invalid encoding: {error}")
+            return
+
+        raw_stimulus = json.dumps({
+            "role": "user",
+            "content": text,
+            "user_id": "demo",
+            "radio_id": signal.radio_id,
+        })
+        sss = self._receive_stimulus(raw_stimulus)
+        if sss is None:
+            return
+        sss.sss_id = signal.radio_id
+
+        sss = self._apply_transduction_gate(sss)
+        if sss is None:
+            return
+        sss = self._apply_heuristic_gate(sss)
+        if sss is None:
+            return
+        sss = self._buffer(sss)
+        self._publish_sss(sss)
 
     def _apply_transduction_gate(self, sss: SSS) -> SSS | None:
         """
@@ -401,7 +446,7 @@ class TelepathyInputCore(Node):
                       TIC                                    TIC
         Intercepts (in order):
             1. Oversized payload     — discard before any pattern matching
-            2. /commands             — local reflex handler (TODO)
+            2. Slash commands        — local reflex handler except `/web <query>`
             3. Injection patterns    — symbolic injection attempt
             4. Response echo         — CNC self-generated signal suppression
             5. Refractory period     — duplicate stimulus within refractory window
@@ -425,8 +470,10 @@ class TelepathyInputCore(Node):
             self.get_logger().warning(f"⚠️  SSS discarded — payload exceeds {TMS.MAX_PAYLOAD_BYTES}B ceiling")  # log the discard of SSS
             return None                                                                     # stop processing this stimulus
 
-        # 2. /command intercept — local reflex, never reaches CNS
-        if content.startswith("/"):                                                         # command — block before pattern matching
+        # 2. Local slash commands stay peripheral; `/web <query>` is an input
+        # directive that must continue to Grace for downstream handling.
+        is_web_directive = content.lower().startswith("/web ") and bool(content[5:].strip())
+        if content.startswith("/") and not is_web_directive:
             sss.state       = "INTERCEPTED"                                                 # lifecycle marker — signal dies here
             sss.locus       = "TIC:HEURISTIC"                                               # processing locus — heuristic stage
             sss.drop_reason = "COMMAND"                                                     # discard reason — command signal
@@ -436,7 +483,7 @@ class TelepathyInputCore(Node):
             return None                                                                     # stop processing this stimulus
 
         # 3. injection pattern intercept — symbolic injection attempt, blocked at periphery
-        for pattern in TMS.INJECTION_PATTERNS:                                              # scan known injection openers — peripheral reflex, never reaches CNS
+        for pattern in TMS.INJECTION_PREFIXES:                                              # scan known injection openers — peripheral reflex, never reaches CNS
             if content.lower().startswith(pattern):                                         # matches an injection opener
                 sss.state       = "INTERCEPTED"                                             # lifecycle marker — signal dies here
                 sss.locus       = "TIC:HEURISTIC"                                           # processing locus — heuristic stage
@@ -465,7 +512,7 @@ class TelepathyInputCore(Node):
         # stimulus within recovery window.
         timestamp = time.monotonic()                                                                # monotonic timestamp for refractory period
         refractory_content, refractory_time = self._refractory_anchor.get(sss.user_id, ("", 0.0))   # retrieve last stimulus anchor for this sender
-        if content == refractory_content and (timestamp - refractory_time) < TMS.REFRACTORY_PEROID: # same content within refractory window
+        if content == refractory_content and (timestamp - refractory_time) < TMS.REFRACTORY_PERIOD: # same content within refractory window
             sss.state               = "INTERCEPTED"                                                 # lifecycle marker — signal dies here
             sss.locus               = "TIC:HEURISTIC"                                               # processing locus — heuristic stage
             sss.drop_reason         = "DUPLICATE"                                                   # discard reason — duplicate
@@ -538,7 +585,7 @@ class TelepathyInputCore(Node):
         sss.salience = round(salience, 3)
 
         # fast-path flag — high-arousal signals bypass normal queue at CNS
-        sss.fast_path = arousal >= TMS._FAST_PATH_AROUSAL_THRESHOLD
+        sss.fast_path = arousal >= TMS.FAST_PATH_AROUSAL_THRESHOLD
 
         if sss.fast_path:
             self.get_logger().info(
@@ -569,6 +616,7 @@ class TelepathyInputCore(Node):
 
             signal = String()
             signal.data = json.dumps({                                          # serialize SSS fields — CNC deserializes back into SSS
+                "radio_id"    : sss.sss_id,
                 "role"        : sss.role,
                 "text"        : sss.text,
                 "user_id"     : sss.user_id,

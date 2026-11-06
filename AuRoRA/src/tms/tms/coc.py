@@ -4,13 +4,17 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import uuid
 from pathlib import Path
 
 import uvicorn
 import websockets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+from hrs.hrm import AGi
+from tms.radio_encoding import encode_text
 
 
 def _interface_dir() -> Path:
@@ -48,6 +52,38 @@ async def presence() -> dict[str, bool | int | None]:
         "aiva_last_seen_seconds_ago": None if age is None else int(age),
         "timeout_seconds": timeout_s,
     }
+
+
+@app.post("/api/radio/encode")
+async def encode_radio_input(request: Request) -> Response:
+    """Encode plain UTF-8 input for the typed RadioSignal ROS message."""
+    raw_text = await request.body()
+    if len(raw_text) > 2048:
+        raise HTTPException(status_code=413, detail="Text input exceeds 2048 bytes")
+    try:
+        text = raw_text.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=400, detail="Input must be UTF-8 text") from error
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text input is empty")
+
+    if request.query_params.get("web_search", "false").lower() in {"1", "true", "yes"}:
+        text = f"/web {text}"
+    try:
+        signal, symbol_count = encode_text(text)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return Response(
+        content=signal,
+        media_type="application/octet-stream",
+        headers={
+            "X-Radio-ID": uuid.uuid4().hex,
+            "X-Radio-Channel": AGi.TMS.RADIO_CHANNEL,
+            "X-Radio-Symbol-Count": str(symbol_count),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get("/")

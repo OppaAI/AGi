@@ -206,10 +206,11 @@ class CNC(Node):
                 return
 
             sss: SSS = SSS(                                                                     # reconstruct typed SSS from serialized fields
+                sss_id     = payload.get("radio_id", ""),
                 role       = payload.get("role", "user"),
-                text       = payload["text"].strip(),
+                content    = payload["text"].strip(),
                 user_id    = payload.get("user_id", "demo"),
-                source     = SensoryInputChannel(payload.get("source", SensoryInputChannel.WEBUI.value)),
+                source     = SensoryInputChannel(payload.get("source", SensoryInputChannel.UI.value)),
                 trace_type = TraceType(payload.get("trace_type", TraceType.PMT.value)),
             )
         except (json.JSONDecodeError, ValueError):
@@ -276,7 +277,9 @@ class CNC(Node):
 
             # 6. Stream from GCE
             self.get_logger().debug(f"📤 GCE messages: {messages}")
-            cognitive_response = await self._stream_gce(messages)                               # stream GCE response — CRS fragments published to motor gateway as they arrive
+            cognitive_response = await self._stream_gce(
+                messages, radio_id=stimulus.sss_id,
+            )                                                                                   # stream CRS fragments with the originating input ID
 
             # 7. Register interaction — pair SSS + CRS into complete episode for memory
             if cognitive_response:
@@ -286,7 +289,7 @@ class CNC(Node):
                 )
                 crs_sss = SSS(                                                                 # wrap CRS into SSS — MCC speaks SSS only, CNC owns the translation
                     role         = "assistant",
-                    text         = crs.text,
+                    content      = crs.text,
                     trace_type   = crs.trace_type,
                     user_id      = stimulus.user_id,                                           # carry forward from paired stimulus
                     source       = stimulus.source,                                            # carry forward from paired stimulus
@@ -303,7 +306,7 @@ class CNC(Node):
 
         except Exception as e:
             self.get_logger().error(f"❌ CNC handle error: {e}")
-            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e)})
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e), "radio_id": stimulus.sss_id})
 
         finally:
             self._attention_gate = False                                                        # reopen attentional gate — ready for next stimulus
@@ -313,13 +316,14 @@ class CNC(Node):
                 self._attention_gate = True                                                     # close gate before scheduling — queued stimulus now owns the cycle
                 asyncio.ensure_future(self._process_stimulus(pending))                          # schedule queued stimulus on the running cognitive cycle
 
-    async def _stream_gce(self, messages: list[dict]) -> str:
+    async def _stream_gce(self, messages: list[dict], radio_id: str = "") -> str:
         """
         Generate and emit a cognitive response through the Generative Cognitive Engine.
         Response is streamed as CRS fragments to the motor gateway as it arrives.
 
         Args:
             messages (list[dict]): Full memory context and current user prompt for inference.
+            radio_id (str): Input ID copied to each response fragment for correlation.
 
         Returns:
             str: Full cognitive response for memory registration as CRS.
@@ -338,7 +342,7 @@ class CNC(Node):
                 if response.status_code != 200:
                     anomaly: str = f"GCE HTTP {response.status_code}"
                     self.get_logger().error(f"❌ {anomaly}")
-                    self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": anomaly})
+                    self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": anomaly, "radio_id": radio_id})
                     return ""
 
                 async for line in response.aiter_lines():
@@ -365,25 +369,25 @@ class CNC(Node):
                     cognitive_response += fragment_content
 
                     if leading_fragment:
-                        self._emit_crs({"type": GCE.STREAM_LEADING, "content": fragment_content})  # first fragment — start event
+                        self._emit_crs({"type": GCE.STREAM_LEADING, "content": fragment_content, "radio_id": radio_id})  # first fragment — start event
                         leading_fragment = False
                     else:
-                        self._emit_crs({"type": GCE.STREAM_PROPAGATING, "content": fragment_content})  # subsequent fragments — delta event
+                        self._emit_crs({"type": GCE.STREAM_PROPAGATING, "content": fragment_content, "radio_id": radio_id})  # subsequent fragments — delta event
 
             if cognitive_response:
-                self._emit_crs({"type": GCE.STREAM_TRAILING, "content": cognitive_response})   # stream complete — done event
+                self._emit_crs({"type": GCE.STREAM_TRAILING, "content": cognitive_response, "radio_id": radio_id})   # stream complete — done event
                 self.get_logger().info(f"✅ Response: {len(cognitive_response)} chars")
             else:
-                self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE"})
+                self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": "Empty response from GCE", "radio_id": radio_id})
 
         except httpx.TimeoutException:
             err = "GCE timeout — model may still be loading"
             self.get_logger().error(f"❌ {err}")
-            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": err})
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": err, "radio_id": radio_id})
 
         except Exception as e:
             self.get_logger().error(f"❌ Stream error: {e}")
-            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e)})
+            self._emit_crs({"type": GCE.STREAM_ANOMALY, "content": str(e), "radio_id": radio_id})
 
         return cognitive_response
 
