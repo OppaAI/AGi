@@ -205,6 +205,8 @@
             z-index: 16;
             cursor: pointer;
             transition: all 0.3s ease;
+            /* Keep the touch target usable when the AuRoRA companion is scaled down. */
+            transform: scale(var(--poke-target-scale, 1));
         }
 
         .cheek-poke-zone.left {
@@ -2226,6 +2228,8 @@ h1 {
 .robot-container.grace-only .grace-avatar-stage { display: block; }
 .robot-container.grace-only .robot { display: none; }
 .robot-container.aiva-online .robot {
+    --robot-scale: .52;
+    --poke-target-scale: 1.92;
     position: absolute;
     left: calc(50% + 85px);
     bottom: 14px;
@@ -2236,8 +2240,8 @@ h1 {
     z-index: 2;
 }
 @keyframes auro-small-float {
-    0%, 100% { transform: translateY(0) scale(.52); }
-    50% { transform: translateY(-7px) scale(.52); }
+    0%, 100% { transform: translateY(0) scale(var(--robot-scale, .52)); }
+    50% { transform: translateY(-7px) scale(var(--robot-scale, .52)); }
 }
 
 /* The same original robot appears as a tiny, shaded chat companion. */
@@ -2344,12 +2348,24 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
     .status-badge { gap: 6px; padding: 6px 8px; font-size: .8em; }
     .theme-toggle { padding: 6px 8px; }
     .robot-container.aiva-online { width: 100%; }
-    .robot-container.aiva-online .grace-avatar-stage { width: 220px; }
-    .robot-container.aiva-online .robot { left: calc(50% - 7px); transform-origin: 50% 100%; }
+    /* Reserve a 100px side slot for AuRoRA and keep its touch targets full size. */
+    .robot-container.aiva-online { --grace-stage-width: min(220px, calc(100% - 100px)); }
+    .robot-container.aiva-online .grace-avatar-stage {
+        width: var(--grace-stage-width);
+        margin-right: 100px;
+    }
+    .robot-container.aiva-online .robot {
+        --robot-scale: .5;
+        --poke-target-scale: 2;
+        left: calc((100% + var(--grace-stage-width) - 200px) / 2);
+        transform-origin: 50% 100%;
+    }
+    .robot-container.aiva-online .cheek-poke-zone.left { left: 25px; }
+    .robot-container.aiva-online .cheek-poke-zone.right { right: 5px; }
     .robot-container.grace-only .grace-avatar-stage { width: 200px; height: 210px; }
     @keyframes auro-small-float {
-        0%, 100% { transform: translateY(0) scale(.40); }
-        50% { transform: translateY(-5px) scale(.40); }
+        0%, 100% { transform: translateY(0) scale(var(--robot-scale, .35)); }
+        50% { transform: translateY(-5px) scale(var(--robot-scale, .35)); }
     }
 }
 @media (max-width: 768px) {
@@ -2364,7 +2380,7 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         flex-basis: 248px;
     }
     .robot-container.aiva-online .grace-avatar-stage {
-        width: 220px;
+        width: var(--grace-stage-width, 220px);
         height: 220px;
     }
     .robot-container.grace-only {
