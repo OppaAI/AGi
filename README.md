@@ -426,7 +426,7 @@ AGi/
  
 ```mermaid
 flowchart TD
-    COC[Interface — COC WebUI]
+    WEB_TELEOPS_CONSOLE[Interface — Web Teleops Console WebUI]
     IN[ /cns/neural_input]
     OUT[ /gce/response]
  
@@ -451,7 +451,7 @@ flowchart TD
     DB[(Engram Complex - SQLite WAL)]
     EMBED[Embedding Model - CPU]
  
-    COC -->|user message| IN
+    WEB_TELEOPS_CONSOLE -->|user message| IN
     IN --> CNC
     CNC --> MCC
     MCC --> WMC
@@ -464,7 +464,7 @@ flowchart TD
     CNC -->|stream request| LLM
     LLM -->|SSE tokens| CNC
     CNC -->|chunks| OUT
-    OUT --> COC
+    OUT --> WEB_TELEOPS_CONSOLE
  
     SCN -->|chrono_state| MCC
     SCN -->|schedule triggers| EEE
@@ -476,7 +476,7 @@ flowchart TD
     SIG -->|threshold breach| EEE
 ```
 
-The COC runs on AuRoRA and is exposed through Tailscale Serve. Its same-origin WebSocket proxy keeps rosbridge private on loopback; see [`interface/coc/README.md`](interface/coc/README.md) for setup.
+The Web Teleops Console runs on AuRoRA and is exposed through Tailscale Serve. Its same-origin WebSocket proxy keeps rosbridge private on loopback; see [`interface/web_teleops_console/README.md`](interface/web_teleops_console/README.md) for setup.
  
 ---
  
@@ -552,13 +552,13 @@ bash ./launch.sh
 # 5. Start GRACE
 ros2 run scs cnc
 
-# Or start the complete launch description (CNC, HTTP API, and COC)
+# Or start the complete launch description (CNC, HTTP API, and Web Teleops Console)
 ros2 launch ras ras.launch.py
  
-# 6. Start rosbridge on loopback; COC proxies its WebSocket through Tailscale
+# 6. Start rosbridge on loopback; Web Teleops Console proxies its WebSocket through Tailscale
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=127.0.0.1
 
-# 7. Open COC locally or expose it privately with Tailscale Serve
+# 7. Open Web Teleops Console locally or expose it privately with Tailscale Serve
 tailscale serve --bg 8853
 # Open the HTTPS URL reported by: tailscale serve status
 ```

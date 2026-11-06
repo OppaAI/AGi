@@ -1,5 +1,5 @@
 [Unit]
-Description=AGi AIVA online presence for the AuRoRA COC
+Description=AGi AIVA online presence for the AuRoRA Web Teleops Console
 After=network-online.target tailscaled.service
 Wants=network-online.target
 

@@ -1,4 +1,4 @@
-"""Serve the COC interface and proxy its browser WebSocket to local rosbridge."""
+"""Serve the Web Teleops Console interface and proxy its browser WebSocket to local rosbridge."""
 from __future__ import annotations
 
 import asyncio
@@ -19,21 +19,21 @@ from tms.radio_encoding import encode_text
 
 def _interface_dir() -> Path:
     """Resolve the source checkout or the installed ROS package interface."""
-    configured = os.getenv("AGI_COC_INTERFACE_DIR")
+    configured = os.getenv("AGI_WEB_TELEOPS_CONSOLE_INTERFACE_DIR")
     if configured:
         return Path(configured)
     try:
         from ament_index_python.packages import get_package_share_directory
-        installed = Path(get_package_share_directory("tms")) / "coc"
+        installed = Path(get_package_share_directory("tms")) / "web_teleops_console"
         if (installed / "index.html").is_file():
             return installed
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "interface" / "coc"
+    return Path(__file__).resolve().parents[4] / "interface" / "web_teleops_console"
 
 
 INTERFACE_DIR = _interface_dir()
-app = FastAPI(title="AGi Communication Operation Console", docs_url=None, redoc_url=None)
+app = FastAPI(title="AGi Web Teleops Console", docs_url=None, redoc_url=None)
 app.mount("/assets", StaticFiles(directory=INTERFACE_DIR / "assets"), name="assets")
 _aiva_last_seen: float | None = None
 
@@ -139,11 +139,11 @@ async def rosbridge_proxy(browser: WebSocket) -> None:
 
 
 def main() -> None:
-    """Run loopback-only COC; use Tailscale Serve for tailnet access."""
+    """Run loopback-only Web Teleops Console; use Tailscale Serve for tailnet access."""
     uvicorn.run(
         app,
-        host=os.getenv("AGI_COC_HOST", "127.0.0.1"),
-        port=int(os.getenv("AGI_COC_PORT", "8853")),
+        host=os.getenv("AGI_WEB_TELEOPS_CONSOLE_HOST", "127.0.0.1"),
+        port=int(os.getenv("AGI_WEB_TELEOPS_CONSOLE_PORT", "8853")),
         log_level="info",
     )
 

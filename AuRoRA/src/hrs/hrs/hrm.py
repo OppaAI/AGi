@@ -87,7 +87,7 @@ class AGi:                                                              # Amazin
         API_GATEWAY                : str   = "127.0.0.1"                # [STATIC] HTTP API bind; use LAN IP only with AGI_API_TOKEN set
         API_PORTAL                 : int   = 8852                       # [STATIC] FastAPI/Uvicorn HTTP API port
         API_IMPULSE_GATEWAY        : str   = "/agi/api/neural_impulse"  # [STATIC] typed PC telemetry and robot request ingress
-        RADIO_INPUT_GATEWAY       : str   = "/tms/radio_input"          # [STATIC] packed text signal ingress from COC to TIC
+        RADIO_INPUT_GATEWAY       : str   = "/tms/radio_input"          # [STATIC] packed text signal ingress from Web Teleops Console to TIC
         RADIO_CHANNEL              : str   = "grace"                     # [STATIC] logical destination label; not an access-control secret
         TEXT_STIMULUS_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
         TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC

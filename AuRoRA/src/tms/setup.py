@@ -6,17 +6,17 @@ package_name = 'tms'
 
 package_root = Path(__file__).resolve().parent
 repo_root = package_root.parents[3]
-coc_root = repo_root / 'interface' / 'coc'
+web_teleops_console_root = repo_root / 'interface' / 'web_teleops_console'
 
-coc_files = [path for path in coc_root.rglob('*') if path.is_file()]
+web_teleops_console_files = [path for path in web_teleops_console_root.rglob('*') if path.is_file()]
 
 data_files = [
     (
-        'share/' + package_name + '/coc/' +
-        str(Path(path).parent.relative_to(coc_root)),
+        'share/' + package_name + '/web_teleops_console/' +
+        str(Path(path).parent.relative_to(web_teleops_console_root)),
         [os.path.relpath(path, package_root)],
     )
-    for path in coc_files
+    for path in web_teleops_console_files
 ]
 
 setup(
@@ -43,7 +43,7 @@ setup(
     entry_points={
         'console_scripts': [
             'api = tms.api:main',
-            'coc = tms.coc:main',
+            'web_teleops_console = tms.web_teleops_console:main',
             'tic = tms.tic:main',
         ],
     },

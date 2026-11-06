@@ -1982,7 +1982,7 @@
 
         .mini-status { display: none; }
 
-/* Aidon-inspired COC palette, with Grace's pink identity kept as an accent. */
+/* Aidon-inspired Web Teleops Console palette, with Grace's pink identity kept as an accent. */
 :root, html[data-theme="light"] {
     color-scheme: light;
     --page: #d3d1c5;
