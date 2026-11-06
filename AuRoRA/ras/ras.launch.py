@@ -80,8 +80,8 @@ _api = Node(
     output     = "screen",
 )
 _web_teleops_console = Node(
-    package    = "tms",
-    executable = "web_teleops_console",
+    package    = "telepathic_management",
+    executable = "telepathic_console",
     name       = "agi_web_teleops_console",
     namespace  = "tms",
     output     = "screen",

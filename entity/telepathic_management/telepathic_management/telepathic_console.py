@@ -14,8 +14,16 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from hrs.hrm import AGi
-from tms.radio_encoding import encode_text
+from .radio_encoding import encode_text
+
+try:
+    from hrs.hrm import AGi
+except ImportError:
+    class AGi:
+        class TMS:
+            RADIO_CHANNEL = "grace"
+            API_GATEWAY = "127.0.0.1"
+            API_PORTAL = 8852
 
 try:
     import yaml
@@ -30,12 +38,12 @@ def _interface_dir() -> Path:
         return Path(configured)
     try:
         from ament_index_python.packages import get_package_share_directory
-        installed = Path(get_package_share_directory("tms")) / "web_teleops_console"
+        installed = Path(get_package_share_directory("telepathic_management"))
         if (installed / "frontend" / "index.html").is_file():
             return installed
     except (ImportError, LookupError):
         pass
-    return Path(__file__).resolve().parents[4] / "interface" / "web_teleops_console"
+    return Path(__file__).resolve().parents[1]
 
 
 INTERFACE_DIR = _interface_dir()
