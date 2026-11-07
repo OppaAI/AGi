@@ -6,6 +6,7 @@ string source
 uint32 pulse
 uint8[] signal
 string channel
+string scheme
 
 # Unique ID for tracing and response correlation.
 string identifier
