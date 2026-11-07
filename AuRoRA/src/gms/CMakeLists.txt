@@ -19,10 +19,6 @@ find_package(ament_cmake_python REQUIRED)
 #  DEPENDENCIES builtin_interfaces
 #)
 
-install(DIRECTORY include/
-    DESTINATION include
-)
-
 ament_python_install_package(gms)
 
 
