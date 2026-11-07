@@ -11,6 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
+    package_data={'scs': ['persona/*.md']},
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='OppaAI',
