@@ -2499,3 +2499,119 @@ html[data-theme="dark"] .container { box-shadow: 0 22px 70px rgba(0,0,0,.3), 0 0
         flex-basis: 320px;
     }
 }
+
+/* Grace's display chamber: glass highlights, luminous coolant and slow bubbles. */
+.grace-avatar-stage {
+    position: relative;
+    isolation: isolate;
+    overflow: visible;
+}
+.fluid-tube {
+    position: absolute;
+    z-index: 0;
+    inset: 3% 13% 4%;
+    overflow: hidden;
+    border: 2px solid rgba(154, 243, 255, .64);
+    border-radius: 47% / 7%;
+    background:
+        linear-gradient(90deg, rgba(3, 24, 66, .38), transparent 17%, transparent 78%, rgba(7, 35, 82, .42)),
+        radial-gradient(ellipse at 50% 52%, rgba(111, 249, 255, .49), rgba(18, 175, 232, .35) 48%, rgba(4, 69, 144, .52) 100%);
+    box-shadow: 0 0 16px rgba(68, 220, 255, .56), inset 12px 0 20px rgba(160, 249, 255, .16), inset -13px 0 24px rgba(0, 17, 65, .4);
+    pointer-events: none;
+}
+.fluid-tube::before,
+.fluid-tube::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+}
+.fluid-tube::before {
+    background: linear-gradient(90deg, transparent 11%, rgba(200, 255, 255, .3) 14%, rgba(220, 255, 255, .06) 20%, transparent 25%, transparent 76%, rgba(205, 255, 255, .16) 81%, transparent 85%);
+    filter: blur(2px);
+}
+.fluid-tube::after {
+    background: linear-gradient(180deg, rgba(100, 231, 255, .16), transparent 24%, rgba(32, 198, 255, .12) 75%, rgba(97, 242, 255, .23));
+    animation: tube-fluid-shimmer 5s ease-in-out infinite alternate;
+}
+.tube-rim {
+    position: absolute;
+    z-index: 2;
+    left: -4%;
+    width: 108%;
+    height: 5.5%;
+    border: 2px solid rgba(139, 235, 255, .75);
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(170, 251, 255, .75), rgba(12, 95, 161, .88) 45%, rgba(13, 36, 83, .94));
+    box-shadow: 0 0 11px rgba(77, 222, 255, .66);
+}
+.tube-rim-top { top: -1.2%; }
+.tube-rim-bottom { bottom: -1.2%; }
+.tube-bubble {
+    position: absolute;
+    z-index: 1;
+    bottom: -12%;
+    width: 7px;
+    height: 7px;
+    border: 1px solid rgba(221, 255, 255, .92);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, white, rgba(127, 239, 255, .42) 42%, rgba(52, 192, 255, .08));
+    box-shadow: 0 0 8px rgba(138, 245, 255, .7);
+    animation: tube-bubble-rise 6.5s linear infinite;
+}
+.bubble-one { left: 25%; animation-delay: -1s; }
+.bubble-two { left: 69%; width: 5px; height: 5px; animation-delay: -3.8s; animation-duration: 8s; }
+.bubble-three { left: 42%; width: 4px; height: 4px; animation-delay: -5.1s; animation-duration: 7.3s; }
+.bubble-four { left: 82%; width: 9px; height: 9px; animation-delay: -2.2s; animation-duration: 9s; }
+#robotVrmCanvas { position: relative; z-index: 1; }
+.avatar-controls {
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    bottom: 5%;
+    display: flex;
+    gap: 7px;
+    transform: translateX(-50%);
+    padding: 5px;
+    border: 1px solid rgba(163, 235, 255, .42);
+    border-radius: 999px;
+    background: rgba(4, 22, 57, .58);
+    box-shadow: 0 3px 14px rgba(0, 22, 60, .35);
+    backdrop-filter: blur(8px);
+}
+.avatar-controls button {
+    min-height: 30px;
+    padding: 4px 11px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: rgba(229, 251, 255, .86);
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.avatar-controls button:hover,
+.avatar-controls button.active {
+    border-color: rgba(133, 237, 255, .55);
+    color: white;
+    background: rgba(41, 182, 226, .35);
+}
+@keyframes tube-bubble-rise {
+    0% { transform: translate3d(0, 0, 0) scale(.65); opacity: 0; }
+    12% { opacity: .85; }
+    82% { opacity: .55; }
+    100% { transform: translate3d(14px, -125%, 0) scale(1.1); opacity: 0; }
+}
+@keyframes tube-fluid-shimmer {
+    from { opacity: .45; }
+    to { opacity: .95; }
+}
+@media (max-width: 600px) {
+    .fluid-tube { inset-inline: 9%; }
+    .avatar-controls { bottom: 3%; gap: 3px; }
+    .avatar-controls button { padding-inline: 9px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fluid-tube::after, .tube-bubble { animation: none; }
+}

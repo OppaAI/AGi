@@ -52,7 +52,19 @@
 
         <div class="robot-container" id="avatarContainer">
             <div class="grace-avatar-stage" id="graceAvatarStage" aria-label="Grace avatar">
+                <div class="fluid-tube" aria-hidden="true">
+                    <span class="tube-rim tube-rim-top"></span>
+                    <span class="tube-rim tube-rim-bottom"></span>
+                    <span class="tube-bubble bubble-one"></span>
+                    <span class="tube-bubble bubble-two"></span>
+                    <span class="tube-bubble bubble-three"></span>
+                    <span class="tube-bubble bubble-four"></span>
+                </div>
                 <canvas id="robotVrmCanvas" aria-label="Grace 3D avatar"></canvas>
+                <div class="avatar-controls" role="group" aria-label="Avatar camera framing">
+                    <button type="button" id="avatarFullBody" title="Show Grace head to toe">Full body</button>
+                    <button type="button" id="avatarPortrait" title="Zoom in to portrait view">Portrait</button>
+                </div>
             </div>
             <div class="robot" id="robot">
                 <div class="pet-zone" id="petZone"></div>
