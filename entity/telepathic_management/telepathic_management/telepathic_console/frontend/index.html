@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,42 +14,30 @@
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/console.css">
     <script src="/static/theme.js" defer></script>
 </head>
-<body>
-    <div class="cyber-bg" id="cyberBg">
-        <div class="circuit-grid"></div>
-        <canvas id="matrixCanvas"></canvas>
-        <div class="pink-glow"></div>
-    </div>
-
-    <!-- RL Reward Feedback Overlay -->
+<body class="companion-console">
+    <div class="cyber-bg" id="cyberBg" aria-hidden="true"><canvas id="matrixCanvas"></canvas></div>
     <div class="reward-feedback" id="rewardFeedback"></div>
-
-    <div class="container">
-        <h1>✨ Chat with Grace ✨</h1>
-        <p class="subtitle">Your Cute AI Companion 💕</p>
-
-        <div class="mini-status" id="miniStatus">
-            <div class="status-left">
-                <span class="status-emoji" id="statusEmoji">🤖</span>
-                <span id="miniStatusText">Grace is here!</span>
-            </div>
-            <div class="status-right">
-                <span class="conn-dot" id="connDot"></span>
-                <span id="connText">Online</span>
-            </div>
-        </div>
-
-        <div class="status-badge">
-            <span class="status-dot" id="statusDot"></span>
-            <span id="statusText">Connecting...</span>
-            <span class="presence-divider" aria-hidden="true">·</span>
-            <span id="aivaPresence" aria-live="polite">Checking presence…</span>
-            <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Switch light or dark theme">◐ <span>Light</span></button>
-            <a class="theme-toggle settings-link" href="/settings" title="Open settings">⚙ Settings</a>
-        </div>
-
+    <div class="container companion-shell">
+        <header class="app-header">
+            <div class="window-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="app-heading"><h1><span>✦</span> Chat with Grace <span>✦</span></h1>
+                <p class="subtitle">Your AI companion <b>·</b> Talk, reflect, and be understood.</p></div>
+            <nav class="header-actions" aria-label="Console preferences">
+                <button class="theme-toggle" id="themeToggle" type="button" title="Switch light or dark theme">◐ <span>Dark</span></button>
+                <a class="settings-link" href="/settings" aria-label="Open settings" title="Open settings">⚙</a>
+            </nav>
+        </header>
+        <div class="connection-bar"><div class="status-badge" role="status">
+            <span class="status-dot" id="statusDot"></span><span id="statusText">Connecting…</span>
+            <span class="presence-divider" aria-hidden="true"></span><span class="presence-wave" aria-hidden="true">▂▆█▃</span>
+            <span id="aivaPresence">Checking presence…</span>
+        </div></div>
+        <main class="companion-layout">
+            <section class="chamber-panel" aria-label="Grace’s avatar chamber">
+                <div class="chamber-art" aria-hidden="true"></div>
         <div class="robot-container" id="avatarContainer">
             <div class="grace-avatar-stage" id="graceAvatarStage" aria-label="Grace avatar">
                 <div class="fluid-tube" aria-hidden="true">
@@ -60,11 +48,9 @@
                     <span class="tube-bubble bubble-three"></span>
                     <span class="tube-bubble bubble-four"></span>
                 </div>
+                <p class="avatar-placeholder">Grace’s chamber<br><span>Waiting for AIVA to connect</span></p>
                 <canvas id="robotVrmCanvas" aria-label="Grace 3D avatar"></canvas>
-                <div class="avatar-controls" role="group" aria-label="Avatar camera framing">
-                    <button type="button" id="avatarFullBody" title="Show Grace head to toe">Full body</button>
-                    <button type="button" id="avatarPortrait" title="Zoom in to portrait view">Portrait</button>
-                </div>
+
             </div>
             <div class="robot" id="robot">
                 <div class="pet-zone" id="petZone"></div>
@@ -114,23 +100,37 @@
             </div>
         </div>
 
-        <!-- IMAGE PREVIEW AREA -->
+
+                <div class="chamber-footer">
+                <div class="avatar-controls" role="group" aria-label="Avatar camera framing">
+                    <button type="button" id="avatarFullBody" title="Show Grace head to toe">Full body</button>
+                    <button type="button" id="avatarPortrait" title="Zoom in to portrait view">Portrait</button>
+                </div>
+                    <p class="avatar-hint">Move your pointer to catch her eye · Drag to orbit</p>
+                </div>
+            </section>
+            <section class="conversation-panel" aria-label="Chat with Grace">
+                <header class="conversation-header"><div class="grace-identity" aria-hidden="true">✦</div>
+                    <div><div class="conversation-title">Grace <span class="entity-tag">AIVA</span></div><p>Your AI companion</p></div>
+                </header>
+                <div class="chat-container" id="chatContainer" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
+                    <div class="chat-welcome"><span aria-hidden="true">✧</span><h2>A little space for us.</h2><p>Say hello to Grace to start a conversation.</p></div>
+                </div>
+                <div class="composer-area">
         <div class="image-preview-area" id="imagePreviewArea">
             <button class="remove-btn" onclick="removeImage()">✕</button>
             <img id="previewImg" alt="Preview">
             <input type="text" id="imagePrompt" placeholder="Ask Grace about this image..." maxlength="200">
         </div>
 
-        <!-- INPUT AREA WITH + BUTTON, GLOBE, AND SEND -->
-        <!-- MODERN CHAT INPUT -->
         <div class="chat-input-wrapper">
             <div class="chat-input-row">
                 <div class="chat-input-container">
-                    <button class="input-btn plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Add image">+</button>
-                    <input type="text" id="userInput" placeholder="Say something cute to Grace..." maxlength="200">
+                    <button class="input-btn plus-btn" id="plusBtn" onclick="togglePlusMenu()" title="Attach an image" aria-label="Attach an image">⌁</button>
+                    <input type="text" id="userInput" aria-label="Message Grace" placeholder="Message Grace…" maxlength="200">
                     <button class="input-btn globe-btn" id="globeBtn" onclick="toggleWebSearch()" title="Toggle web search">🌐</button>
                 </div>
-                <button class="send-btn" id="sendBtn" onclick="sendSignal()">Send 💌</button>
+                <button class="send-btn" id="sendBtn" aria-label="Send message" title="Send message" onclick="sendSignal()">➤</button>
             </div>
             <div class="plus-menu" id="plusMenu">
                 <label class="plus-menu-item">
@@ -144,17 +144,13 @@
                     <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(this)">
                 </label>
             </div>
-        </div><!-- RL FEEDBACK INSTRUCTION TEXT -->
-        <div class="rl-feedback-text">
-            <span class="thumb-up">👍</span> Pet head for good response
-            <span style="color: rgba(0,255,136,0.4);">|</span>
-            <span class="thumb-down">👈</span> Poke cheeks for bad response
         </div>
-
-        <div class="chat-container" id="chatContainer"></div>
+                </div>
+            </section>
+        </main>
+        <div class="mini-status" id="miniStatus" hidden><span id="statusEmoji">✦</span><span id="miniStatusText">Grace is here</span><span id="connDot"></span><span id="connText">Connecting</span></div>
     </div>
-
-<script src="/static/script.js" defer></script>
+    <script src="/static/script.js" defer></script>
     <script type="module" src="/static/avatar.js"></script>
     <script src="/static/presence.js" defer></script>
 </body>

@@ -462,7 +462,7 @@
                     window.agiAuroraOnline = true;
                     window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: true } }));
                     statusDot.classList.add('connected');
-                    statusText.textContent = 'Connected! 💖';
+                    statusText.textContent = 'Connected';
                     speechBubble.textContent = 'Connected! 💕';
                     speechBubble.classList.add('show');
                     setTimeout(() => speechBubble.classList.remove('show'), 2000);
@@ -835,19 +835,14 @@
                 const avatar = document.createElement('div');
                 avatar.className = 'grace-mini-avatar';
                 avatar.setAttribute('aria-hidden', 'true');
-                const miniature = robot.cloneNode(true);
-                miniature.removeAttribute('id');
-                miniature.classList.add('miniature');
-                miniature.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
-                miniature.querySelectorAll('.pet-zone, .cheek-poke-zone, .speech-bubble, .speaking-waves, .pet-counter, .poke-counter, .emotion-indicator, canvas').forEach((node) => node.remove());
-                avatar.appendChild(miniature);
+                avatar.textContent = '✦';
                 msgDiv.appendChild(avatar);
             }
 
 
             const label = document.createElement('div');
             label.className = 'message-label';
-            label.textContent = sender === 'user' ? 'You 💙' : 'Grace 💕';
+            label.textContent = sender === 'user' ? 'You' : 'Grace';
 
             const content = document.createElement('div');
             content.className = 'message-content';
@@ -855,6 +850,12 @@
 
             msgDiv.appendChild(label);
             msgDiv.appendChild(content);
+            const timestamp = document.createElement('time');
+            const now = new Date();
+            timestamp.className = 'message-time';
+            timestamp.dateTime = now.toISOString();
+            timestamp.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            msgDiv.appendChild(timestamp);
             chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 

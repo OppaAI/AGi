@@ -16,7 +16,7 @@
   let blinkWait = 1.5 + Math.random() * 2.5;
   let blinkTime = 0;
   let blinking = false;
-  let cameraMode = 'portrait';
+  let cameraMode = 'full';
   let lookX = 0;
   let lookY = 0;
   let targetLookX = 0;
@@ -33,7 +33,9 @@
     controls.update();
     camera.updateProjectionMatrix();
     document.getElementById('avatarFullBody')?.classList.toggle('active', mode === 'full');
+    document.getElementById('avatarFullBody')?.setAttribute('aria-pressed', String(mode === 'full'));
     document.getElementById('avatarPortrait')?.classList.toggle('active', mode === 'portrait');
+    document.getElementById('avatarPortrait')?.setAttribute('aria-pressed', String(mode === 'portrait'));
   }
 
   function rememberRestPose(vrm) {
@@ -109,10 +111,13 @@
       renderer.setClearColor(0x000000, 0);
 
       const scene = new THREE.Scene();
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x8c79aa, 2.0));
-      const key = new THREE.DirectionalLight(0xffffff, 2.3);
+      scene.add(new THREE.HemisphereLight(0xd7faff, 0x164279, 1.6));
+      const key = new THREE.DirectionalLight(0xedfaff, 1.8);
       key.position.set(-1, 2, 3);
       scene.add(key);
+      const rim = new THREE.DirectionalLight(0x53dfff, 1.5);
+      rim.position.set(1, 1, -1);
+      scene.add(rim);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
@@ -150,8 +155,19 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, controls, vrm, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
-      frameCamera();
+      avatar = { renderer, scene, camera, controls, vrm, modelHeight, restPose: rememberRestPose(vrm), baseY: vrm.scene.position.y, clock: new THREE.Clock(), resize };
+      resize();
+      // Capture the loaded model itself for the header and conversation badges.
+      const selectedMode = cameraMode;
+      frameCamera('portrait');
+      applyIdle(0, false);
+      vrm.update(0);
+      renderer.render(scene, camera);
+      try {
+        document.body.style.setProperty('--grace-portrait', `url("${canvas.toDataURL('image/webp')}")`);
+        document.body.classList.add('avatar-portrait-ready');
+      } catch (_) { /* Keep the neutral badge if canvas capture is unavailable. */ }
+      frameCamera(selectedMode);
       return avatar;
     })();
     try {
@@ -180,6 +196,7 @@
     lookY += (targetLookY - lookY) * lookEase;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reducedMotion) idleTime += delta;
+    avatar.vrm.scene.position.y = avatar.baseY + (reducedMotion ? 0 : Math.sin(idleTime * 0.8) * avatar.modelHeight * 0.006);
     applyIdle(delta, !reducedMotion);
     avatar.vrm.update(delta);
     avatar.controls.update();
@@ -197,6 +214,7 @@
   document.getElementById('avatarPortrait')?.addEventListener('click', () => frameCamera('portrait'));
 
   async function syncPresence() {
+    container.classList.toggle('aurora-online', auroraOnline);
     container.classList.toggle('aiva-online', aivaOnline && auroraOnline);
     container.classList.toggle('grace-only', aivaOnline && !auroraOnline);
     if (!aivaOnline) {
@@ -205,7 +223,6 @@
     }
     try {
       await loadAvatar();
-      frameCamera();
       avatar.resize();
       if (!frame) frame = requestAnimationFrame(render);
     } catch (error) {

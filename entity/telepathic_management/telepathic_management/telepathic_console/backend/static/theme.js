@@ -8,9 +8,10 @@
 
   function readTheme() {
     try {
-      return localStorage.getItem(KEY) === 'dark' ? 'dark' : 'light';
+      const saved = localStorage.getItem(KEY);
+      return saved === 'dark' || saved === 'light' ? saved : (root.dataset.theme || 'light');
     } catch (_) {
-      return 'light';
+      return root.dataset.theme || 'light';
     }
   }
 
