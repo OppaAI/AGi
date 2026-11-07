@@ -41,15 +41,38 @@
         <div class="robot-container" id="avatarContainer">
             <div class="grace-avatar-stage" id="graceAvatarStage" aria-label="Grace avatar">
                 <div class="fluid-tube" aria-hidden="true">
-                    <span class="tube-rim tube-rim-top"></span>
-                    <span class="tube-rim tube-rim-bottom"></span>
-                    <span class="tube-bubble bubble-one"></span>
-                    <span class="tube-bubble bubble-two"></span>
-                    <span class="tube-bubble bubble-three"></span>
-                    <span class="tube-bubble bubble-four"></span>
+                    <span class="tube-bubble" style="--bubble-x: 8%; --bubble-size: 6px; --rise-time: 9s; --rise-delay: -3.00s; --drift: 8px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 39%; --bubble-size: 4px; --rise-time: 12s; --rise-delay: -4.73s; --drift: -11px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 70%; --bubble-size: 11px; --rise-time: 7s; --rise-delay: -6.46s; --drift: 14px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 11%; --bubble-size: 9px; --rise-time: 10s; --rise-delay: -8.19s; --drift: -17px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 42%; --bubble-size: 7px; --rise-time: 13s; --rise-delay: -9.92s; --drift: 20px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 73%; --bubble-size: 5px; --rise-time: 8s; --rise-delay: -11.65s; --drift: -8px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 14%; --bubble-size: 3px; --rise-time: 11s; --rise-delay: -1.38s; --drift: 11px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 45%; --bubble-size: 10px; --rise-time: 6s; --rise-delay: -3.11s; --drift: -14px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 76%; --bubble-size: 8px; --rise-time: 9s; --rise-delay: -4.84s; --drift: 17px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 17%; --bubble-size: 6px; --rise-time: 12s; --rise-delay: -6.57s; --drift: -20px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 48%; --bubble-size: 4px; --rise-time: 7s; --rise-delay: -8.30s; --drift: 8px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 79%; --bubble-size: 11px; --rise-time: 10s; --rise-delay: -10.03s; --drift: -11px"></span>
                 </div>
                 <p class="avatar-placeholder">Grace’s chamber<br><span>Waiting for AIVA to connect</span></p>
                 <canvas id="robotVrmCanvas" aria-label="Grace 3D avatar"></canvas>
+                <div class="fluid-foreground" aria-hidden="true">
+                    <span class="liquid-caustics"></span>
+                    <span class="tube-bubble" style="--bubble-x: 16%; --bubble-size: 5px; --rise-time: 9s; --rise-delay: -11.00s; --drift: 8px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 47%; --bubble-size: 3px; --rise-time: 12s; --rise-delay: -0.73s; --drift: -11px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 78%; --bubble-size: 10px; --rise-time: 7s; --rise-delay: -2.46s; --drift: 14px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 19%; --bubble-size: 8px; --rise-time: 10s; --rise-delay: -4.19s; --drift: -17px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 50%; --bubble-size: 6px; --rise-time: 13s; --rise-delay: -5.92s; --drift: 20px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 81%; --bubble-size: 4px; --rise-time: 8s; --rise-delay: -7.65s; --drift: -8px"></span>
+                    <span class="tube-bubble" style="--bubble-x: 22%; --bubble-size: 11px; --rise-time: 11s; --rise-delay: -9.38s; --drift: 11px"></span>
+                    <span class="liquid-glint" style="--glint-x: 8%; --glint-y: 15%; --glint-delay: -0.00s"></span>
+                    <span class="liquid-glint" style="--glint-x: 21%; --glint-y: 38%; --glint-delay: -0.83s"></span>
+                    <span class="liquid-glint" style="--glint-x: 34%; --glint-y: 61%; --glint-delay: -1.66s"></span>
+                    <span class="liquid-glint" style="--glint-x: 47%; --glint-y: 84%; --glint-delay: -2.49s"></span>
+                    <span class="liquid-glint" style="--glint-x: 60%; --glint-y: 35%; --glint-delay: -3.32s"></span>
+                    <span class="liquid-glint" style="--glint-x: 73%; --glint-y: 58%; --glint-delay: -4.15s"></span>
+                    <span class="liquid-glint" style="--glint-x: 86%; --glint-y: 81%; --glint-delay: -4.98s"></span>
+                </div>
 
             </div>
             <div class="robot" id="robot">

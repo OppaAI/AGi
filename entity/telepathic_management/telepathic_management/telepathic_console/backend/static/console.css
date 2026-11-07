@@ -59,8 +59,43 @@
 .companion-console .fluid-tube { inset: 0; border: 0; border-radius: 0; box-shadow: none; background: none; }
 .companion-console .fluid-tube::before, .companion-console .tube-rim { display: none; }
 .companion-console .fluid-tube::after { background: linear-gradient(180deg, #62deff10, transparent, #48dfff18); }
-.companion-console .tube-bubble { animation-name: chamber-bubble; }
-@keyframes chamber-bubble { 0% { top: 100%; transform: translateX(0) scale(.6); opacity: 0; } 15% { opacity: .8; } 85% { opacity: .6; } 100% { top: -5%; transform: translateX(16px) scale(1.3); opacity: 0; } }
+/* Full-height bubble tracks animate with transforms instead of layout updates. */
+.companion-console .fluid-tube { border-radius: 46% / 5%; }
+.fluid-foreground { position: absolute; inset: 0; z-index: 2; overflow: hidden; border-radius: 46% / 5%; pointer-events: none; }
+.companion-console .tube-bubble {
+    position: absolute; top: auto; bottom: -14px; left: var(--bubble-x);
+    height: 100%; width: var(--bubble-size); border: 0; border-radius: 0;
+    background: none; box-shadow: none; pointer-events: none;
+    animation: chamber-bubble var(--rise-time) var(--rise-delay) linear infinite;
+}
+.companion-console .tube-bubble::after {
+    content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: var(--bubble-size);
+    border: 1px solid #cbfcffba; border-radius: 50%;
+    background: radial-gradient(circle at 30% 25%, #f2ffffe6 0 9%, #a6f9ff30 25%, transparent 55%);
+    box-shadow: inset -1px -1px 2px #85efff5c, 0 0 6px #62dfff65;
+}
+.fluid-foreground .tube-bubble { opacity: .7; }
+.liquid-caustics {
+    position: absolute; inset: -25%; opacity: .24; mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 25% 75%, transparent 42%, #73ecff45 44%, transparent 48%),
+        radial-gradient(ellipse at 80% 20%, transparent 38%, #b7ffff55 41%, transparent 45%),
+        repeating-linear-gradient(112deg, transparent 0 18%, #77edff35 21%, transparent 25% 43%);
+    filter: blur(3px); animation: liquid-refraction 9s ease-in-out infinite alternate;
+}
+.liquid-glint {
+    position: absolute; left: var(--glint-x); top: var(--glint-y); width: 3px; height: 3px;
+    background: #eaffff; border-radius: 50%; box-shadow: 0 0 6px 2px #82f3ff80;
+    animation: liquid-twinkle 4.5s var(--glint-delay) ease-in-out infinite;
+}
+.liquid-glint::before, .liquid-glint::after { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: linear-gradient(transparent, #d8ffff, transparent); width: 1px; height: 11px; }
+.liquid-glint::after { transform: translate(-50%, -50%) rotate(90deg); }
+@keyframes chamber-bubble {
+    0% { transform: translate3d(0, 8%, 0); opacity: 0; }
+    12% { opacity: .85; } 85% { opacity: .7; }
+    100% { transform: translate3d(var(--drift), -105%, 0); opacity: 0; }
+}
+@keyframes liquid-refraction { from { transform: translate3d(-3%, 3%, 0) rotate(-4deg); opacity: .16; } to { transform: translate3d(4%, -4%, 0) rotate(5deg); opacity: .32; } }
+@keyframes liquid-twinkle { 0%, 55%, 100% { transform: scale(.4); opacity: .08; } 72% { transform: scale(1.3); opacity: .9; } 85% { transform: scale(.7); opacity: .35; } }
 .avatar-placeholder { position: absolute; top: 42%; left: 0; width: 100%; text-align: center; color: #cff8ff; font-size: 19px; letter-spacing: .5px; text-shadow: 0 1px 10px #02142a; }
 .avatar-placeholder span { display: block; margin-top: 9px; color: #aad6e8; font-size: 12px; letter-spacing: 0; }
 .aiva-online .avatar-placeholder, .grace-only .avatar-placeholder { display: none; }
@@ -133,7 +168,11 @@
     .companion-console .chat-container { padding: 14px 12px; }.companion-console .chat-container .message { font-size: 13px; padding: 10px 13px; }
     .composer-area { padding: 6px; margin: 0 5px 5px; border-radius: 17px; }.companion-console .chat-input-container { height: 45px; }.companion-console .send-btn { flex-basis: 42px; min-width: 42px; height: 42px; }.companion-console .chat-input-row { gap: 7px; }.companion-console #userInput { font-size: 13px; padding: 7px; }
 }
-@media (prefers-reduced-motion: reduce) { .companion-console .tube-bubble, .companion-console .fluid-tube::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .companion-console .tube-bubble { display: none; animation: none; }
+    .companion-console .fluid-tube::after, .liquid-caustics, .liquid-glint { animation: none; }
+    .liquid-caustics { opacity: .12; } .liquid-glint { opacity: .2; }
+}
 
 .avatar-portrait-ready .grace-identity, .avatar-portrait-ready .grace-mini-avatar { background-image: var(--grace-portrait); background-size: cover; background-position: center; color: transparent; }
 .companion-console .grace-avatar-stage::after { content: ""; pointer-events: none; position: absolute; inset: 0; z-index: 2; background: linear-gradient(105deg, transparent 12%, #b8faff12 18%, transparent 25%, transparent 80%, #45dcff18); }

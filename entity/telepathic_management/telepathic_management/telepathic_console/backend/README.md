@@ -10,8 +10,10 @@ for a new companion page, while saved theme preferences are honored.
 
 `avatar.js` loads Grace when AIVA presence is online. Full body and Portrait
 reset the camera, dragging orbits it, and pointer motion gently turns her head.
-The chamber background is a local WebP asset. Bubbles and floating motion
-respect reduced-motion preferences. Chat badges are snapshots of the loaded
+The chamber background is a local WebP asset. Nineteen bubbles rise in front
+of and behind the avatar, with moving light refractions and twinkling glints.
+The decorative layers let pointer events pass through to the camera controls.
+Bubbles, reflections, glints, and floating motion respect reduced-motion preferences. Chat badges are snapshots of the loaded
 VRM; they fall back to a neutral emblem if capture is unavailable.
 
 The empty chamber remains visible while AIVA is offline. Chat submission and
