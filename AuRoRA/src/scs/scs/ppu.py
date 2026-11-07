@@ -34,6 +34,7 @@ Public interface:
 """
 
 # System components
+from pathlib import Path                   # resolve the packaged Grace soul file
 import yaml                             # YAML parsing — loads persona profile from persona.yaml
 
 # AGi components
@@ -77,9 +78,18 @@ class PersonalProgressionUnit:
 
     def _retrieve_active_persona(self) -> None:
         """
-        Retrieves AuRoRA's active persona and applies to the HRS manifest.
-        Falls back to HRS default active cognition if persona is missing or malformed.
+        Load the packaged Grace soul and apply it to the HRS manifest.
+        Fall back to the legacy runtime persona YAML, then the HRS default.
         """
+        soul_file = Path(__file__).parent / "persona" / "SOUL.md"
+        if soul_file.is_file():
+            try:
+                AGi.SCS.GCE.ACTIVE_COGNITION = soul_file.read_text(encoding="utf-8").strip()
+                self._logger.info("✅ Grace soul retrieved")
+                return
+            except OSError as e:
+                self._logger.error(f"❌ Failed to load Grace soul: {e}")
+
         gateway = GatewayMap().active_persona                                                           # retrieve the path to active persona file
 
         if not gateway.exists():                                                                        # no persona file — fall back to HRS default
