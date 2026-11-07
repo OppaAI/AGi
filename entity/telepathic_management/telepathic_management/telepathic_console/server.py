@@ -19,7 +19,10 @@ try:
     from aiva_cryptic_signal_core import CrypticSignalCore
 except ImportError:
     CrypticSignalCore = None
-from cryptic_signal_core.telepathic_encoding import encode_text as shared_encode_text
+try:
+    from tms.radio_encoding import encode_text as shared_encode_text
+except ImportError:
+    shared_encode_text = None
 
 try:
     from hrs.hrm import AGi
@@ -251,6 +254,8 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
         signal, symbol_count = _aiva_cryptic_core.encode(text, scheme)
         scheme = _aiva_cryptic_core.default_scheme(scheme)
         else:
+        if shared_encode_text is None:
+            raise HTTPException(status_code=503, detail="No cryptic signal encoder is available")
         if scheme != "ternary_utf8_v1":
             raise HTTPException(status_code=400, detail=f"Unsupported signal scheme: {scheme}")
             signal, symbol_count = shared_encode_text(text)
