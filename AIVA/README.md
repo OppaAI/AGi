@@ -25,7 +25,9 @@ Chat runs in the separate `aiva_chat` ROS package, not in SCS. It decodes
 `/telepathic/stimulus`, sends recent turns to an OpenAI-compatible chat API,
 and publishes `start` / `delta` / `done` response events on
 `/tms/text_response`, which the WebUI already displays. Recent turns persist
-in `~/.agi/aiva/conversation.sqlite3` (8 exchanges by default).
+in PostgreSQL (8 exchanges by default). It also creates basic document and
+chunk tables for a future knowledge-base ingester. Vector search is not
+enabled yet.
 
 For a local Ollama server, set `AIVA_LLM_BASE_URL` and `AIVA_LLM_MODEL` if your
 model or address differs from the defaults. Start Ollama, rosbridge, the AIVA
@@ -52,6 +54,12 @@ input signal there, and the browser receives responses through its WebSocket
 proxy. The default LLM endpoint is `http://127.0.0.1:11434/v1` and default
 model is `llama3.2`. For an authenticated endpoint, set `AIVA_LLM_API_KEY` in
 the environment; never put it in the ROS message or source files.
+
+Set `AIVA_DATABASE_URL` before starting the chat node, for example
+`postgresql://<db-user>:<db-password>@127.0.0.1:5432/grace`. Create a local
+`grace` database and dedicated database user once; the node creates its schema
+and tables at startup. Keep the password in local service environment
+configuration, not in source code or ROS messages.
 
 The AIVA ROS workspace can run a small heartbeat process alongside its future
 services. It lets the Web Teleops Console on AuRoRA distinguish the PC companion from the

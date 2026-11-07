@@ -11,5 +11,6 @@
   <depend>std_msgs</depend>
   <depend>cryptic_signal_core</depend>
   <exec_depend>python3-httpx</exec_depend>
+  <exec_depend>python3-psycopg</exec_depend>
   <export><build_type>ament_python</build_type></export>
 </package>

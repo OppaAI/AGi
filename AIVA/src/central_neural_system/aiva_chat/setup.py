@@ -10,7 +10,7 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
     ],
-    install_requires=["setuptools", "httpx"],
+    install_requires=["setuptools", "httpx", "psycopg[binary]>=3.2,<4"],
     zip_safe=True,
     maintainer="OppaAI",
     maintainer_email="oppa.ai.org@gmail.com",

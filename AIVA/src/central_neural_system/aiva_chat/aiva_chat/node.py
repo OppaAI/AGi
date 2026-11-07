@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import httpx
 import rclpy
@@ -13,7 +12,7 @@ from cryptic_signal_core.msg import TelepathicSignal
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from .memory import ConversationMemory
+from .memory import GraceMemory
 
 
 class AivaChat(Node):
@@ -26,13 +25,13 @@ class AivaChat(Node):
         self.declare_parameter("llm_base_url", os.getenv("AIVA_LLM_BASE_URL", "http://127.0.0.1:11434/v1"))
         self.declare_parameter("llm_model", os.getenv("AIVA_LLM_MODEL", "llama3.2"))
         self.declare_parameter("system_prompt", "You are Grace, AIVA's thoughtful and helpful companion.")
-        self.declare_parameter("memory_db", os.getenv("AIVA_MEMORY_DB", "~/.agi/aiva/conversation.sqlite3"))
+        self.declare_parameter("database_url", os.getenv("AIVA_DATABASE_URL", ""))
         self.declare_parameter("memory_turns", 8)
         self._base_url = str(self.get_parameter("llm_base_url").value).rstrip("/")
         self._model = str(self.get_parameter("llm_model").value)
         self._system_prompt = str(self.get_parameter("system_prompt").value)
-        memory_path = Path(os.path.expanduser(str(self.get_parameter("memory_db").value)))
-        self._memory = ConversationMemory(memory_path, int(self.get_parameter("memory_turns").value))
+        database_url = str(self.get_parameter("database_url").value)
+        self._memory = GraceMemory(database_url, int(self.get_parameter("memory_turns").value))
         self._cryptic = CrypticSignalCore()
         self._api_key = os.getenv("AIVA_LLM_API_KEY", "")
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="aiva-llm")
