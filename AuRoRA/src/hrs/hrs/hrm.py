@@ -146,8 +146,8 @@ class AGi:                                                              # Amazin
        
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]    LLM inferencer server base URL
-            COGNITIVE_ENGINE      : str   = "fredrezones55/gemma-4-26B-A4B-it-Claude-Opus-Distill-APEX-GGUF"  # [STATIC] LLM model tag
-            BASE_COGNITIVE_ENGINE : str   = "google/gemma-4-26B-A4B-it"                         # [STATIC]  for token estimation by tokenizer
+            COGNITIVE_ENGINE      : str   = "hf.co/unsloth/Ministral-3-14B-Instruct-2512-GGUF:UD-Q4_K_XL"  # [STATIC] LLM model tag
+            BASE_COGNITIVE_ENGINE : str   = "mistralai/Ministral-3-14B-Instruct-2512"           # [STATIC]  for token estimation by tokenizer
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
