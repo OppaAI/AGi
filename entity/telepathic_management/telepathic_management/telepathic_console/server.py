@@ -279,7 +279,10 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
             "source": os.getenv("AGI_SOURCE_ID", socket.gethostname()),
             "pulse": symbol_count,
             "signal": list(signal),
-            "channel": os.getenv("AGI_TELEPATHIC_CHANNEL", AGi.TMS.RADIO_CHANNEL),
+            "channel": os.getenv(
+                "AGI_TELEPATHIC_CHANNEL",
+                "aiva" if _aiva_cryptic_core is not None else AGi.TMS.RADIO_CHANNEL,
+            ),
             "scheme": scheme,
             "identifier": identifier,
         },
