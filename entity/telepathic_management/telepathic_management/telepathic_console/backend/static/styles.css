@@ -2222,7 +2222,8 @@ h1 {
 }
 /* When AIVA is active, its VRM is Grace; the physical AuRoRA robot stays beside her. */
 .grace-avatar-stage { display: none; width: min(260px, 60vw); height: 292px; }
-#robotVrmCanvas { width: 100%; height: 100%; display: block; }
+#robotVrmCanvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#robotVrmCanvas:active { cursor: grabbing; }
 .robot-container.aiva-online { height: 330px; }
 .robot-container.grace-only { height: 390px; }
 .robot-container.aiva-online .grace-avatar-stage,

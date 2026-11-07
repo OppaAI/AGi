@@ -19,13 +19,14 @@
 
   function frameCamera() {
     if (!avatar) return;
-    const { camera, modelHeight } = avatar;
+    const { camera, controls, modelHeight } = avatar;
     const soloPortrait = !auroraOnline;
     // Frame Grace from the chest up, while leaving the paired robot visible.
     const distance = 0.57;
     const targetHeight = soloPortrait ? 0.85 : 0.85;
-    camera.position.set(0, modelHeight * (targetHeight + 0.05), modelHeight * distance);
-    camera.lookAt(0, modelHeight * targetHeight, 0);
+    camera.position.set(0, modelHeight * targetHeight, modelHeight * distance);
+    controls.target.set(0, modelHeight * targetHeight, 0);
+    controls.update();
     camera.updateProjectionMatrix();
   }
 
@@ -92,6 +93,7 @@
       const THREE = await import('three');
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
       const { VRMLoaderPlugin, VRMUtils } = await import('@pixiv/three-vrm');
+      const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
 
       const renderer = new THREE.WebGLRenderer({
         canvas, alpha: true, antialias: true, powerPreference: 'low-power',
@@ -106,6 +108,10 @@
       key.position.set(-1, 2, 3);
       scene.add(key);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.enablePan = true;
 
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -122,6 +128,10 @@
       vrm.scene.position.x -= center.x;
       vrm.scene.position.y -= bounds.min.y;
       const modelHeight = Math.max(bounds.max.y - bounds.min.y, 1.2);
+      controls.minDistance = modelHeight * 0.3;
+      controls.maxDistance = modelHeight * 2.5;
+      controls.minPolarAngle = 0.08;
+      controls.maxPolarAngle = Math.PI - 0.08;
       // frameCamera applies the close chest portrait after avatar state is set.
 
       const resize = () => {
@@ -134,7 +144,7 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
+      avatar = { renderer, scene, camera, controls, vrm, modelHeight, restPose: rememberRestPose(vrm), clock: new THREE.Clock(), resize };
       frameCamera();
       return avatar;
     })();
@@ -163,6 +173,7 @@
     if (!reducedMotion) idleTime += delta;
     applyIdle(delta, !reducedMotion);
     avatar.vrm.update(delta);
+    avatar.controls.update();
     avatar.renderer.render(avatar.scene, avatar.camera);
   }
 
