@@ -3,16 +3,17 @@
 ## Central neural system packages
 
 Packages grouped under `src/central_neural_system/` belong to AIVA's central neural system. For
-example, `src/central_neural_system/cryptic_signal_core` is the AIVA-owned encoding package.
+example, `src/central_neural_system/cryptic_signal_core` is AIVA's cryptic ROS package, containing
+its message definitions and encoder class.
 Colcon discovers the package beneath the grouping directory; build it with:
 
 ```sh
 cd ~/AGi/AIVA
 source /opt/ros/jazzy/setup.bash
-colcon build --packages-select aiva_cryptic_signal_core
+colcon build --packages-select cryptic_signal_core
 ```
 
-The shared WebUI backend uses `CrypticSignalCore` when the AIVA package is
+The shared WebUI backend uses AIVA's `CrypticSignalCore` when the AIVA package is
 installed. `AGI_TELEPATHIC_SCHEME` selects a registered scheme (default
 `ternary_utf8_v1`); its non-secret name travels in the signal so the receiving
 TIC can select the matching decoder. Other deployments can retain their own
