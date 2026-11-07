@@ -125,10 +125,11 @@
 
 
                 <div class="chamber-footer">
-                <div class="avatar-controls" role="group" aria-label="Avatar camera framing">
-                    <button type="button" id="avatarFullBody" title="Show Grace head to toe">Full body</button>
-                    <button type="button" id="avatarPortrait" title="Zoom in to portrait view">Portrait</button>
-                </div>
+                <label class="avatar-controls avatar-zoom-control">
+                    <span class="zoom-label-full" aria-hidden="true">Full body</span>
+                    <input type="checkbox" role="switch" id="avatarZoomSwitch" aria-label="Zoom in on Grace" title="Switch between full body and portrait">
+                    <span class="zoom-label-portrait" aria-hidden="true">Zoom in</span>
+                </label>
                     <p class="avatar-hint">Move your pointer to catch her eye · Drag to orbit</p>
                 </div>
             </section>

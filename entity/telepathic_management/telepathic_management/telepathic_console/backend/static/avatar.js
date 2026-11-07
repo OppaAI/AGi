@@ -23,19 +23,17 @@
   let targetLookY = 0;
 
   function frameCamera(mode = cameraMode) {
+    cameraMode = mode;
+    const zoomSwitch = document.getElementById('avatarZoomSwitch');
+    if (zoomSwitch) zoomSwitch.checked = mode === 'portrait';
     if (!avatar) return;
     const { camera, controls, modelHeight } = avatar;
-    cameraMode = mode;
     const distance = mode === 'full' ? 2.3 : 0.57;
     const targetHeight = mode === 'full' ? 0.52 : 0.85;
     camera.position.set(0, modelHeight * targetHeight, modelHeight * distance);
     controls.target.set(0, modelHeight * targetHeight, 0);
     controls.update();
     camera.updateProjectionMatrix();
-    document.getElementById('avatarFullBody')?.classList.toggle('active', mode === 'full');
-    document.getElementById('avatarFullBody')?.setAttribute('aria-pressed', String(mode === 'full'));
-    document.getElementById('avatarPortrait')?.classList.toggle('active', mode === 'portrait');
-    document.getElementById('avatarPortrait')?.setAttribute('aria-pressed', String(mode === 'portrait'));
   }
 
   function rememberRestPose(vrm) {
@@ -210,8 +208,9 @@
     targetLookY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
   });
   canvas.addEventListener('pointerleave', () => { targetLookX = 0; targetLookY = 0; });
-  document.getElementById('avatarFullBody')?.addEventListener('click', () => frameCamera('full'));
-  document.getElementById('avatarPortrait')?.addEventListener('click', () => frameCamera('portrait'));
+  document.getElementById('avatarZoomSwitch')?.addEventListener('change', (event) => {
+    frameCamera(event.target.checked ? 'portrait' : 'full');
+  });
 
   async function syncPresence() {
     container.classList.toggle('aurora-online', auroraOnline);

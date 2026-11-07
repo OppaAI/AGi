@@ -8,8 +8,8 @@ The companion page pairs a live VRM chamber with a scrolling conversation.
 retains the original robot animation styles. The dark palette is the default
 for a new companion page, while saved theme preferences are honored.
 
-`avatar.js` loads Grace when AIVA presence is online. Full body and Portrait
-reset the camera, dragging orbits it, and pointer motion gently turns her head.
+`avatar.js` loads Grace when AIVA presence is online. The camera switch is off for full body and on for a zoomed-in portrait;
+changing it resets the camera, dragging orbits it, and pointer motion gently turns her head.
 The chamber background is a local WebP asset. Nineteen bubbles rise in front
 of and behind the avatar, with moving light refractions and twinkling glints.
 The decorative layers let pointer events pass through to the camera controls.
