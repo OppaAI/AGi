@@ -365,6 +365,9 @@ class TelepathyInputCore(Node):
 
     def _on_telepathic_signal(self, signal: TelepathicSignal) -> None:
         """Decode a typed Web Teleops Console signal, then route it through TIC's normal SSS gates."""
+        if signal.scheme != "ternary_utf8_v1":
+            self.get_logger().warning(f"🚫 TelepathicSignal ignored — unsupported scheme: {signal.scheme}")
+            return
         if signal.channel != TMS.RADIO_CHANNEL:
             self.get_logger().warning("🚫 TelepathicSignal ignored — destination channel mismatch")
             return

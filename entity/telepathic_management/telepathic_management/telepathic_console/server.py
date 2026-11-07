@@ -15,7 +15,11 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from cryptic_signal_core.telepathic_encoding import encode_text
+try:
+    from aiva_cryptic_signal_core import CrypticSignalCore
+except ImportError:
+    CrypticSignalCore = None
+from cryptic_signal_core.telepathic_encoding import encode_text as shared_encode_text
 
 try:
     from hrs.hrm import AGi
@@ -52,6 +56,7 @@ FRONTEND_DIR = INTERFACE_DIR / "frontend"
 app = FastAPI(title="AGi Web Teleops Console", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=INTERFACE_DIR / "backend" / "static"), name="static")
 _aiva_last_seen: float | None = None
+_aiva_cryptic_core = CrypticSignalCore() if CrypticSignalCore is not None else None
 
 # Only HRM values explicitly marked [INTRINSIC] are editable here. They are
 # hydrated into ROS nodes at launch, and AGi has no dynamic parameter callback
@@ -241,7 +246,14 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
     if request.query_params.get("web_search", "false").lower() in {"1", "true", "yes"}:
         text = f"/web {text}"
     try:
-        signal, symbol_count = encode_text(text)
+    scheme = os.getenv("AGI_TELEPATHIC_SCHEME", "ternary_utf8_v1")
+    if _aiva_cryptic_core is not None:
+        signal, symbol_count = _aiva_cryptic_core.encode(text, scheme)
+        scheme = _aiva_cryptic_core.default_scheme(scheme)
+        else:
+        if scheme != "ternary_utf8_v1":
+            raise HTTPException(status_code=400, detail=f"Unsupported signal scheme: {scheme}")
+            signal, symbol_count = shared_encode_text(text)
     except (TypeError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -255,6 +267,7 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
             "pulse": symbol_count,
             "signal": list(signal),
             "channel": os.getenv("AGI_TELEPATHIC_CHANNEL", AGi.TMS.RADIO_CHANNEL),
+            "scheme": scheme,
             "identifier": identifier,
         },
     }
