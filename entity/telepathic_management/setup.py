@@ -5,9 +5,10 @@ from setuptools import find_packages, setup
 package_name = "telepathic_management"
 package_root = Path(__file__).resolve().parent
 shared_files = [path for path in package_root.rglob("*") if path.is_file() and "__pycache__" not in path.parts]
+console_root = package_root / "telepathic_management"
 shared_data = [
-    ("share/" + package_name + "/" + str(path.parent.relative_to(package_root)), [os.path.relpath(path, package_root)])
-    for path in shared_files if path.is_relative_to(package_root / "telepathic_management" / "telepathic_console" / "frontend") or path.is_relative_to(package_root / "telepathic_management" / "telepathic_console" / "backend")
+    ("share/" + package_name + "/" + str(path.parent.relative_to(console_root)), [os.path.relpath(path, package_root)])
+    for path in shared_files if path.is_relative_to(console_root / "telepathic_console" / "frontend") or path.is_relative_to(console_root / "telepathic_console" / "backend")
 ]
 
 setup(
