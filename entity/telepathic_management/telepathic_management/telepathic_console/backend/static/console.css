@@ -68,6 +68,7 @@
 .chamber-panel.portrait-zoom .probe-set-zoom { display: inline; }
 .chamber-panel.portrait-zoom .probe-wire { stroke-width: .58; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
+.companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
 .companion-console .fluid-tube { inset: 0; border: 0; border-radius: 0; box-shadow: none; background: none; }
 .companion-console .fluid-tube::before, .companion-console .tube-rim { display: none; }
@@ -186,7 +187,7 @@
     .chamber-panel.portrait-zoom .robot-container { inset: 2% 5% 13%; }
     .chamber-art { inset: 0 0 33px; }
     .companion-console .robot-container, .companion-console .robot-container.aiva-online, .companion-console .robot-container.grace-only { inset: 17% 20% 25%; }
-    .companion-console .robot-container.aiva-online > .robot { right: -8%; bottom: 0; --robot-scale: .62; }
+    .companion-console .robot-container.aiva-online > .robot { right: -8%; bottom: 0; --robot-scale: .52; }
     .chamber-footer { padding: 0; bottom: 0; }.avatar-hint { display: none; }
     .companion-console .avatar-zoom-control { gap: 10px; min-height: 32px; font-size: 11px; }
     .conversation-header { padding: 9px 0; margin: 0 12px; }.grace-identity { width: 34px; height: 34px; font-size: 21px; }.conversation-title { font-size: 16px; }.conversation-header p { font-size: 11px; }
