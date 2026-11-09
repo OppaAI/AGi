@@ -16,7 +16,7 @@
   let blinkWait = 1.5 + Math.random() * 2.5;
   let blinkTime = 0;
   let blinking = false;
-  let cameraMode = 'full';
+  let cameraMode = 'portrait';
 
   function frameCamera(mode = cameraMode) {
     cameraMode = mode;
@@ -31,6 +31,9 @@
     camera.lookAt(0, modelHeight * targetHeight, 0);
     camera.updateProjectionMatrix();
   }
+
+  // Apply the default portrait framing and switch state before the VRM loads.
+  frameCamera();
 
   function rememberRestPose(vrm) {
     const bones = {};
