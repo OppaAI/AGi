@@ -112,6 +112,18 @@
       const gltf = await loader.loadAsync('/static/assets/Grace.vrm');
       const vrm = gltf.userData.vrm;
       if (!vrm) throw new Error('The avatar file did not contain a VRM model');
+      // Match the body skin to the cooler face without tinting clothes or hair.
+      const bodySkinTint = new THREE.Color().setRGB(0.78, 1.05, 1.35);
+      const adjustedMaterials = new Set();
+      gltf.scene.traverse((object) => {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!material || adjustedMaterials.has(material) || !/Body_00_SKIN/i.test(material.name)) continue;
+          adjustedMaterials.add(material);
+          material.color?.multiply(bodySkinTint);
+          material.shadeColorFactor?.multiply(bodySkinTint);
+        }
+      });
       VRMUtils.removeUnnecessaryVertices(gltf.scene);
       VRMUtils.combineSkeletons(gltf.scene);
       scene.add(vrm.scene);
