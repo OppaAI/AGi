@@ -63,10 +63,22 @@
 .probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
 .probe-head { stroke: #c08d88; stroke-width: .32; }
 .probe-body { stroke: #899f91; stroke-width: .34; }
-.probe-set-zoom { display: none; }
-.chamber-panel.portrait-zoom .probe-set-full { display: none; }
-.chamber-panel.portrait-zoom .probe-set-zoom { display: inline; }
-.chamber-panel.portrait-zoom .probe-wire { stroke-width: .58; }
+.probe-wire { stroke-width: .85; }
+.probe-signal { fill: none; stroke: #e4a39a; stroke-width: .56; stroke-linecap: round; stroke-dasharray: 2.5 11; stroke-dashoffset: 0; opacity: .36; animation: probe-signal-flow var(--signal-duration) var(--signal-delay) ease-in-out infinite alternate; }
+.probe-signal.probe-body { stroke: #a2c3ac; }
+.signal-1 { --signal-duration: 1.5s; --signal-delay: -.2s; }
+.signal-2 { --signal-duration: 2.4s; --signal-delay: -.9s; }
+.signal-3 { --signal-duration: 1.9s; --signal-delay: -1.3s; }
+.signal-4 { --signal-duration: 3.1s; --signal-delay: -.4s; }
+.signal-5 { --signal-duration: 2.1s; --signal-delay: -1.6s; }
+.signal-6 { --signal-duration: 3.7s; --signal-delay: -2.1s; }
+.signal-7 { --signal-duration: 2.8s; --signal-delay: -.7s; }
+.signal-8 { --signal-duration: 4.2s; --signal-delay: -2.8s; }
+.signal-9 { --signal-duration: 1.7s; --signal-delay: -1.1s; }
+@keyframes probe-signal-flow { from { stroke-dashoffset: 0; opacity: .3; } to { stroke-dashoffset: -13.5; opacity: 1; } }
+.chamber-panel.portrait-zoom .avatar-probes { transform: scale(1.18); transform-origin: 50% 0; }
+.chamber-panel.portrait-zoom .probe-wire { stroke-width: 1.05; }
+.chamber-panel.portrait-zoom .probe-signal { stroke-width: .72; stroke-dasharray: 3 9; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
@@ -120,8 +132,8 @@
 .chamber-panel.portrait-zoom .robot-container.aiva-online > .robot { right: -3%; bottom: 1%; --robot-scale: .84; }
 .chamber-footer { position: absolute; bottom: 0; width: 100%; padding: 5px 10px 0; text-align: center; }
 .companion-console .avatar-controls { position: static; transform: none; display: inline-flex; padding: 0; gap: 15px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
-.companion-console .avatar-zoom-control { align-items: center; gap: 12px; min-height: 40px; cursor: pointer; font-size: 13px; color: var(--console-muted); }
-.companion-console #avatarZoomSwitch { appearance: none; position: relative; flex: 0 0 50px; width: 50px; height: 28px; margin: 0; border: 1px solid #78978a; border-radius: 20px; background: #26332f; box-shadow: inset 0 1px 5px #0004; cursor: pointer; transition: background .2s, box-shadow .2s; }
+.companion-console .avatar-zoom-control { align-items: center; gap: 12px; min-height: 40px; cursor: default; font-size: 13px; color: var(--console-muted); }
+.companion-console #avatarZoomSwitch { appearance: none; position: relative; flex: 0 0 50px; width: 50px; height: 28px; margin: 0; border: 1px solid #78978a; border-radius: 20px; background: #26332f; box-shadow: inset 0 1px 5px #0004; cursor: default; transition: background .2s, box-shadow .2s; }
 .companion-console #avatarZoomSwitch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #eee5dd; box-shadow: 0 0 8px #d7bab477; transition: transform .2s; }
 .companion-console #avatarZoomSwitch:checked { background: #80585c; box-shadow: 0 0 12px #d08b8b33; }
 .companion-console #avatarZoomSwitch:checked::before { transform: translateX(22px); }
@@ -196,6 +208,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .companion-console #avatarZoomSwitch, .companion-console #avatarZoomSwitch::before { transition: none; }
+    .probe-signal { animation: none; }
     .companion-console .tube-bubble { display: none; animation: none; }
     .companion-console .fluid-tube::after, .liquid-caustics, .liquid-glint { animation: none; }
     .liquid-caustics { opacity: .12; } .liquid-glint { opacity: .2; }
