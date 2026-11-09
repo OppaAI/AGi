@@ -26,6 +26,7 @@
     cameraMode = mode;
     const zoomSwitch = document.getElementById('avatarZoomSwitch');
     if (zoomSwitch) zoomSwitch.checked = mode === 'portrait';
+    document.querySelector('.chamber-panel')?.classList.toggle('portrait-zoom', mode === 'portrait');
     if (!avatar) return;
     const { camera, controls, modelHeight } = avatar;
     const distance = mode === 'full' ? 2.3 : 0.57;
