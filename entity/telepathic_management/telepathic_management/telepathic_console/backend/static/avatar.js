@@ -17,10 +17,6 @@
   let blinkTime = 0;
   let blinking = false;
   let cameraMode = 'full';
-  let lookX = 0;
-  let lookY = 0;
-  let targetLookX = 0;
-  let targetLookY = 0;
 
   function frameCamera(mode = cameraMode) {
     cameraMode = mode;
@@ -28,12 +24,11 @@
     if (zoomSwitch) zoomSwitch.checked = mode === 'portrait';
     document.querySelector('.chamber-panel')?.classList.toggle('portrait-zoom', mode === 'portrait');
     if (!avatar) return;
-    const { camera, controls, modelHeight } = avatar;
+    const { camera, modelHeight } = avatar;
     const distance = mode === 'full' ? 2.3 : 0.72;
     const targetHeight = mode === 'full' ? 0.52 : 0.8;
     camera.position.set(0, modelHeight * targetHeight, modelHeight * distance);
-    controls.target.set(0, modelHeight * targetHeight, 0);
-    controls.update();
+    camera.lookAt(0, modelHeight * targetHeight, 0);
     camera.updateProjectionMatrix();
   }
 
@@ -68,7 +63,7 @@
     // Match Aiko's gentle, asynchronous breathing and tiny head micro-sway.
     apply('spine', 0.007 * Math.sin((2 * Math.PI * (t - 0.08)) / 3.5));
     apply('chest', 0.014 * breathe);
-    apply('head', 0.0045 * drift(0.47, 0.4) - lookY * 0.075, 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1) + lookX * 0.12, 0.006 * drift(0.19, 1.1));
+    apply('head', 0.0045 * drift(0.47, 0.4), 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1), 0.006 * drift(0.19, 1.1));
     apply('neck', 0.003 * drift(0.67, 1.7), 0.004 * drift(0.59), 0);
     apply('leftUpperArm', 0.008 * drift(0.71, 0.5), 0.004 * drift(0.43, 2.2), 0.007 * drift(0.61, 1.0));
     apply('rightUpperArm', 0.008 * drift(0.73, 2.8), 0.004 * drift(0.83, 0.9), 0.007 * drift(0.79, 1.6));
@@ -100,7 +95,6 @@
       const THREE = await import('three');
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
       const { VRMLoaderPlugin, VRMUtils } = await import('@pixiv/three-vrm');
-      const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
 
       const renderer = new THREE.WebGLRenderer({
         canvas, alpha: true, antialias: true, powerPreference: 'low-power',
@@ -118,10 +112,6 @@
       rim.position.set(1, 1, -1);
       scene.add(rim);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.08;
-      controls.enablePan = false;
 
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -138,10 +128,6 @@
       vrm.scene.position.x -= center.x;
       vrm.scene.position.y -= bounds.min.y;
       const modelHeight = Math.max(bounds.max.y - bounds.min.y, 1.2);
-      controls.minDistance = modelHeight * 0.3;
-      controls.maxDistance = modelHeight * 2.5;
-      controls.minPolarAngle = 0.08;
-      controls.maxPolarAngle = Math.PI - 0.08;
       // frameCamera applies the close chest portrait after avatar state is set.
 
       const resize = () => {
@@ -154,7 +140,7 @@
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
-      avatar = { renderer, scene, camera, controls, vrm, modelHeight, restPose: rememberRestPose(vrm), baseY: vrm.scene.position.y, clock: new THREE.Clock(), resize };
+      avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), baseY: vrm.scene.position.y, clock: new THREE.Clock(), resize };
       resize();
       // Capture the loaded model itself for the header and conversation badges.
       const selectedMode = cameraMode;
@@ -198,17 +184,9 @@
     avatar.vrm.scene.position.y = avatar.baseY + (reducedMotion ? 0 : Math.sin(idleTime * 0.8) * avatar.modelHeight * 0.006);
     applyIdle(delta, !reducedMotion);
     avatar.vrm.update(delta);
-    avatar.controls.update();
     avatar.renderer.render(avatar.scene, avatar.camera);
   }
 
-  canvas.addEventListener('pointermove', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    targetLookX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
-    targetLookY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
-  });
-  canvas.addEventListener('pointerleave', () => { targetLookX = 0; targetLookY = 0; });
   document.getElementById('avatarZoomSwitch')?.addEventListener('change', (event) => {
     frameCamera(event.target.checked ? 'portrait' : 'full');
   });
