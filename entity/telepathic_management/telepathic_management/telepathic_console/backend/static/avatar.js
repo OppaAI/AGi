@@ -13,9 +13,6 @@
   let auroraOnline = window.agiAuroraOnline === true;
   let nextFrameAt = 0;
   let idleTime = 0;
-  let blinkWait = 1.5 + Math.random() * 2.5;
-  let blinkTime = 0;
-  let blinking = false;
   let cameraMode = 'portrait';
 
   function frameCamera(mode = cameraMode) {
@@ -41,20 +38,25 @@
     // The Aiko VRM viewer drives raw bones directly. VRM 3.x otherwise
     // copies the normalized T-pose over them on every update.
     if (humanoid) humanoid.autoUpdateHumanBones = false;
-    for (const name of ['spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm']) {
+    for (const name of ['spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg']) {
       const bone = humanoid?.getRawBoneNode(name);
       if (bone) bones[name] = { bone, x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
     }
-    // Set the same relaxed arm rest pose used by Aiko's VRM, so a model
-    // exported in a T-pose doesn't stay frozen with its arms outstretched.
-    if (bones.leftUpperArm) bones.leftUpperArm.z = 1.28;
-    if (bones.rightUpperArm) bones.rightUpperArm.z = -1.28;
-    if (bones.leftLowerArm) { bones.leftLowerArm.x += 0.12; bones.leftLowerArm.z += 0.08; }
-    if (bones.rightLowerArm) { bones.rightLowerArm.x += 0.12; bones.rightLowerArm.z -= 0.08; }
+    // Relax into a suspended pose, with the head bowed and knees bent forward.
+    if (bones.neck) bones.neck.x -= 0.09;
+    if (bones.head) { bones.head.x -= 0.24; bones.head.z -= 0.06; }
+    if (bones.leftUpperArm) bones.leftUpperArm.z = 1.08;
+    if (bones.rightUpperArm) bones.rightUpperArm.z = -1.14;
+    if (bones.leftLowerArm) { bones.leftLowerArm.x += 0.12; bones.leftLowerArm.z += 0.12; }
+    if (bones.rightLowerArm) { bones.rightLowerArm.x += 0.16; bones.rightLowerArm.z -= 0.16; }
+    if (bones.leftUpperLeg) { bones.leftUpperLeg.x += 0.72; bones.leftUpperLeg.z -= 0.07; }
+    if (bones.rightUpperLeg) { bones.rightUpperLeg.x += 0.9; bones.rightUpperLeg.z += 0.1; }
+    if (bones.leftLowerLeg) bones.leftLowerLeg.x -= 0.8;
+    if (bones.rightLowerLeg) bones.rightLowerLeg.x -= 1.05;
     return bones;
   }
 
-  function applyIdle(delta, animateMotion = true) {
+  function applyIdle() {
     const t = idleTime;
     const breathe = Math.sin((2 * Math.PI * t) / 3.5);
     const drift = (frequency, phase = 0) => Math.sin(2 * Math.PI * frequency * t + phase);
@@ -72,23 +74,10 @@
     apply('rightUpperArm', 0.008 * drift(0.73, 2.8), 0.004 * drift(0.83, 0.9), 0.007 * drift(0.79, 1.6));
     apply('leftLowerArm', 0.006 * drift(0.89, 0.2), 0.003 * drift(0.97, 1.9), 0.005 * drift(0.49, 0.9));
     apply('rightLowerArm', 0.006 * drift(1.02, 1.2), 0.003 * drift(1.11, 2.5), 0.005 * drift(0.51, 0.4));
-
-    if (!animateMotion) return;
-    const expressions = avatar.vrm.expressionManager;
-    if (!expressions) return;
-    if (!blinking) {
-      blinkWait -= delta;
-      if (blinkWait <= 0) { blinking = true; blinkTime = 0; }
-      return;
-    }
-    blinkTime += delta;
-    const weight = Math.sin(Math.PI * Math.min(1, blinkTime / 0.12));
-    try { expressions.setValue('blink', weight); } catch (_) { /* VRM may omit blink. */ }
-    if (blinkTime >= 0.12) {
-      blinking = false;
-      try { expressions.setValue('blink', 0); } catch (_) { /* Optional expression. */ }
-      blinkWait = 2 + Math.random() * 4;
-    }
+    apply('leftUpperLeg');
+    apply('rightUpperLeg');
+    apply('leftLowerLeg');
+    apply('rightLowerLeg');
   }
 
   async function loadAvatar() {
@@ -144,11 +133,12 @@
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
       avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), baseY: vrm.scene.position.y, clock: new THREE.Clock(), resize };
+      vrm.expressionManager?.setValue('blink', 1);
       resize();
       // Capture the loaded model itself for the header and conversation badges.
       const selectedMode = cameraMode;
       frameCamera('portrait');
-      applyIdle(0, false);
+      applyIdle();
       vrm.update(0);
       renderer.render(scene, camera);
       try {
@@ -182,7 +172,7 @@
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reducedMotion) idleTime += delta;
     avatar.vrm.scene.position.y = avatar.baseY + (reducedMotion ? 0 : Math.sin(idleTime * 0.8) * avatar.modelHeight * 0.006);
-    applyIdle(delta, !reducedMotion);
+    applyIdle();
     avatar.vrm.update(delta);
     avatar.renderer.render(avatar.scene, avatar.camera);
   }
