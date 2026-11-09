@@ -106,8 +106,8 @@
 .avatar-placeholder span { display: block; margin-top: 9px; color: #aad6e8; font-size: 12px; letter-spacing: 0; }
 .aiva-online .avatar-placeholder, .grace-only .avatar-placeholder { display: none; }
 .companion-console .robot-container > .robot { display: none; }
-.companion-console .robot-container.aiva-online > .robot { display: block; position: absolute; left: auto; right: -5%; bottom: 3%; transform-origin: 50% 100%; --robot-scale: .76; z-index: 3; }
-.chamber-panel.portrait-zoom .robot-container.aiva-online > .robot { right: -3%; bottom: 1%; --robot-scale: .62; }
+.companion-console .robot-container.aiva-online > .robot { display: block; position: absolute; left: auto; right: -5%; bottom: 3%; transform-origin: 50% 100%; --robot-scale: .92; z-index: 3; }
+.chamber-panel.portrait-zoom .robot-container.aiva-online > .robot { right: -3%; bottom: 1%; --robot-scale: .84; }
 .chamber-footer { position: absolute; bottom: 0; width: 100%; padding: 5px 10px 0; text-align: center; }
 .companion-console .avatar-controls { position: static; transform: none; display: inline-flex; padding: 0; gap: 15px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
 .companion-console .avatar-zoom-control { align-items: center; gap: 12px; min-height: 40px; cursor: pointer; font-size: 13px; color: var(--console-muted); }
@@ -177,7 +177,7 @@
     .chamber-panel.portrait-zoom .robot-container { inset: 2% 5% 13%; }
     .chamber-art { inset: 0 0 33px; }
     .companion-console .robot-container, .companion-console .robot-container.aiva-online, .companion-console .robot-container.grace-only { inset: 17% 20% 25%; }
-    .companion-console .robot-container.aiva-online > .robot { right: -8%; bottom: 0; --robot-scale: .5; }
+    .companion-console .robot-container.aiva-online > .robot { right: -8%; bottom: 0; --robot-scale: .62; }
     .chamber-footer { padding: 0; bottom: 0; }.avatar-hint { display: none; }
     .companion-console .avatar-zoom-control { gap: 10px; min-height: 32px; font-size: 11px; }
     .conversation-header { padding: 9px 0; margin: 0 12px; }.grace-identity { width: 34px; height: 34px; font-size: 21px; }.conversation-title { font-size: 16px; }.conversation-header p { font-size: 11px; }
