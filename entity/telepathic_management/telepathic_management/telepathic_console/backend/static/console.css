@@ -64,21 +64,9 @@
 .probe-head { stroke: #c08d88; stroke-width: .32; }
 .probe-body { stroke: #899f91; stroke-width: .34; }
 .probe-wire { stroke-width: .85; }
-.probe-signal { fill: none; stroke: #54eaff; stroke-width: .68; stroke-linecap: round; stroke-dasharray: 3 97; stroke-dashoffset: 0; opacity: .95; animation: probe-signal-in var(--signal-duration) var(--signal-delay) linear infinite; }
-.probe-signal.probe-body { opacity: .85; }
-.signal-1 { --signal-duration: .3s; --signal-delay: -.2s; }
-.signal-2 { --signal-duration: .42s; --signal-delay: -.31s; }
-.signal-3 { --signal-duration: .54s; --signal-delay: -.12s; }
-.signal-4 { --signal-duration: .66s; --signal-delay: -.4s; }
-.signal-5 { --signal-duration: .78s; --signal-delay: -.25s; }
-.signal-6 { --signal-duration: .9s; --signal-delay: -.53s; }
-.signal-7 { --signal-duration: .36s; --signal-delay: -.18s; }
-.signal-8 { --signal-duration: .6s; --signal-delay: -.47s; }
-.signal-9 { --signal-duration: .84s; --signal-delay: -.29s; }
-@keyframes probe-signal-in { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -100; } }
+.probe-signal { fill: #54eaff; stroke: none; opacity: .95; }
 .chamber-panel.portrait-zoom .avatar-probes { transform: scale(1.18); transform-origin: 50% 0; }
 .chamber-panel.portrait-zoom .probe-wire { stroke-width: 1.05; }
-.chamber-panel.portrait-zoom .probe-signal { stroke-width: .82; stroke-dasharray: 3.5 96.5; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
@@ -208,7 +196,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .companion-console #avatarZoomSwitch, .companion-console #avatarZoomSwitch::before { transition: none; }
-    .probe-signal { animation: none; }
+    .probe-signal { display: none; }
     .companion-console .tube-bubble { display: none; animation: none; }
     .companion-console .fluid-tube::after, .liquid-caustics, .liquid-glint { animation: none; }
     .liquid-caustics { opacity: .12; } .liquid-glint { opacity: .2; }

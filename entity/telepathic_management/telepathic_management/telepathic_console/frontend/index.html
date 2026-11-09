@@ -66,15 +66,17 @@
                     <path class="probe-wire probe-body" d="M40 4 C40 21 41 34 42 47" />
                     <path class="probe-wire probe-body" d="M60 4 C60 21 59 34 58 47" />
                     <path class="probe-wire probe-body" d="M70 4 C70 17 65 25 60 35" />
-                    <path pathLength="100" class="probe-signal probe-head signal-1" d="M27 4 C27 9 35 10 42 17" />
-                    <path pathLength="100" class="probe-signal probe-head signal-2" d="M38 4 C38 9 42 11 45 15" />
-                    <path pathLength="100" class="probe-signal probe-head signal-3" d="M46 4 C46 8 47 9 48 13" />
-                    <path pathLength="100" class="probe-signal probe-head signal-4" d="M54 4 C54 8 53 9 52 13" />
-                    <path pathLength="100" class="probe-signal probe-head signal-5" d="M63 4 C63 9 58 11 55 15" />
-                    <path pathLength="100" class="probe-signal probe-body signal-6" d="M40 35 C35 25 30 17 30 4" />
-                    <path pathLength="100" class="probe-signal probe-body signal-7" d="M42 47 C41 34 40 21 40 4" />
-                    <path pathLength="100" class="probe-signal probe-body signal-8" d="M58 47 C59 34 60 21 60 4" />
-                    <path pathLength="100" class="probe-signal probe-body signal-9" d="M60 35 C65 25 70 17 70 4" />
+                    <!-- Red cables carry signals from the machine to Grace. -->
+                    <circle class="probe-signal" r=".5"><animateMotion path="M27 4 C27 9 35 10 42 17" dur=".3s" begin="-.2s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M38 4 C38 9 42 11 45 15" dur=".42s" begin="-.31s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M46 4 C46 8 47 9 48 13" dur=".54s" begin="-.12s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M54 4 C54 8 53 9 52 13" dur=".66s" begin="-.4s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M63 4 C63 9 58 11 55 15" dur=".78s" begin="-.25s" repeatCount="indefinite" /></circle>
+                    <!-- Grey cables carry signals from Grace back to the machine. -->
+                    <circle class="probe-signal" r=".5"><animateMotion path="M40 35 C35 25 30 17 30 4" dur=".9s" begin="-.53s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M42 47 C41 34 40 21 40 4" dur=".36s" begin="-.18s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M58 47 C59 34 60 21 60 4" dur=".6s" begin="-.47s" repeatCount="indefinite" /></circle>
+                    <circle class="probe-signal" r=".5"><animateMotion path="M60 35 C65 25 70 17 70 4" dur=".84s" begin="-.29s" repeatCount="indefinite" /></circle>
                 </svg>
                 <canvas id="robotVrmCanvas" aria-label="Grace 3D avatar"></canvas>
                 <div class="fluid-foreground" aria-hidden="true">
