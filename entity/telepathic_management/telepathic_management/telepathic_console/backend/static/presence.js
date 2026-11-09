@@ -8,10 +8,10 @@
 
   function updateLabel() {
     if (!label) return;
-    if (aivaOnline && rosConnected) label.textContent = 'AIVA + ROS connected';
+    if (aivaOnline && rosConnected) label.textContent = 'AIVA + ROS bridge connected';
     else if (aivaOnline) label.textContent = 'AIVA online';
     else if (rosConnected) label.textContent = 'ROS connected';
-    else label.textContent = 'AIVA + ROS offline';
+    else label.textContent = 'AIVA offline';
   }
 
   window.addEventListener('agi-ros-presence', (event) => {
