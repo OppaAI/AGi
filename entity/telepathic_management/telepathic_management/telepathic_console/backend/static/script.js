@@ -502,6 +502,12 @@
                     messageType: 'std_msgs/String'
                 });
 
+                window.aivaChatInputTopic = new ROSLIB.Topic({
+                    ros: ros,
+                    name: '/aiva/chat_input',
+                    messageType: 'std_msgs/String'
+                });
+
                 rlRewardTopic = new ROSLIB.Topic({
                     ros: ros,
                     name: '/cns/rl_reward',
@@ -943,22 +949,6 @@
             img.src = dataUrl;
         }
 
-        // Send message
-        async function publishRadioInput(text) {
-            const search = webSearchEnabled ? 'true' : 'false';
-            const response = await fetch(`/api/telepathic/send?web_search=${search}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-                body: text
-            });
-            if (!response.ok) {
-                const body = await response.json().catch(() => ({}));
-                const detail = body.detail;
-                throw new Error(detail || `Encoder returned HTTP ${response.status}`);
-            }
-            return response.json();
-        }
-
         function sendSignal() {
             const val = userInput.value.trim();
             if (isStreaming) return;
@@ -1007,15 +997,18 @@
             } else if (val) {
                 createMessageElement('user', val);
 
-                if (isROSConnected) {
-                    publishRadioInput(val).then(() => {
-                        console.log('📡 TelepathicSignal sent through ROS:', val, '| Web search:', webSearchEnabled ? 'ON' : 'OFF');
-                    }).catch((error) => {
-                        console.error('TelepathicSignal encoding or publish failed:', error);
+                if (isROSConnected && window.aivaChatInputTopic) {
+                    try {
+                        window.aivaChatInputTopic.publish(new ROSLIB.Message({
+                            data: JSON.stringify({ text: val, web_search: webSearchEnabled })
+                        }));
+                        console.log('📡 Chat message published to /aiva/chat_input');
+                    } catch (error) {
+                        console.error('Chat message publish failed:', error);
                         speechBubble.textContent = 'Message could not be sent. Please try again.';
                         speechBubble.classList.add('show');
                         setTimeout(() => speechBubble.classList.remove('show'), 3000);
-                    });
+                    }
                 } else {
                     setTimeout(() => {
                         const offlineResponse = "💖: I'm running in offline mode, but I still love you! Pet me instead? 💕";
