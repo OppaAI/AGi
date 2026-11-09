@@ -64,7 +64,6 @@
 .probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
 .probe-head { stroke: #c08d88; stroke-width: .32; }
 .probe-body { stroke: #899f91; stroke-width: .34; }
-.probe-wire { stroke-width: .85; }
 .probe-signal { fill: #54eaff; stroke: none; opacity: .95; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
