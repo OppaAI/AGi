@@ -51,9 +51,25 @@
 .chamber-visual-layer { position: absolute; inset: 0; overflow: hidden; transform: scale(1); transform-origin: 50% 45%; transition: transform 320ms ease; }
 .chamber-panel.portrait-zoom .chamber-visual-layer { transform: scale(1.12); }
 .chamber-art { position: absolute; inset: 0 0 60px; background: url('/static/assets/grace-chamber.webp') center / 100% 100% no-repeat; mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent); }
+.machine-bank { position: absolute; z-index: 1; top: 36%; bottom: 17%; width: 17%; min-width: 38px; padding: 7px 5px; overflow: hidden; border: 1px solid #70d8ef55; border-radius: 5px; background: linear-gradient(145deg, #06162bd9, #0a2940a8 58%, #04101dcc); box-shadow: inset 0 0 12px #31c9f022, 0 0 12px #20b8e51a; opacity: .8; }
+.machine-bank-left { left: 2%; }
+.machine-bank-right { right: 2%; }
+.machine-label { display: block; overflow: hidden; color: #8eeaffbb; font: 600 5px/1.2 ui-monospace, monospace; letter-spacing: .08em; white-space: nowrap; }
+.machine-display { display: block; height: 20%; min-height: 9px; margin: 5px 0; border: 1px solid #3ac6e744; background: repeating-linear-gradient(0deg, transparent 0 4px, #31c5e51c 5px), linear-gradient(90deg, #0b45634d, #167a8455, #10294b66); box-shadow: inset 0 0 8px #40d6ff33; animation: machine-scan 3.8s ease-in-out infinite alternate; }
+.machine-lights { display: flex; justify-content: space-between; gap: 3px; padding: 4px 1px; border-top: 1px solid #6bd9f033; border-bottom: 1px solid #6bd9f033; }
+.machine-lights i { width: 4px; height: 4px; border-radius: 50%; background: #54f2dc; box-shadow: 0 0 5px #54f2dc; animation: machine-blink 1.8s ease-in-out infinite; }
+.machine-lights i:nth-child(2n) { background: #ffca70; box-shadow: 0 0 5px #ffca70; animation-delay: -.7s; }
+.machine-lights i:nth-child(3n) { animation-delay: -1.2s; }
+.machine-meter { display: flex; align-items: end; gap: 2px; height: 24%; min-height: 11px; margin-top: 5px; }
+.machine-meter i { flex: 1; height: 45%; background: #44d9f0aa; box-shadow: 0 0 4px #44d9f055; animation: machine-level 1.1s ease-in-out infinite alternate; }
+.machine-meter i:nth-child(2n) { height: 80%; animation-delay: -.4s; }
+.machine-meter i:nth-child(3n) { height: 60%; animation-delay: -.8s; }
+@keyframes machine-blink { 0%, 18%, 100% { opacity: .28; } 32%, 62% { opacity: 1; } 76% { opacity: .55; } }
+@keyframes machine-level { from { transform: scaleY(.35); opacity: .45; } to { transform: scaleY(1); opacity: .95; } }
+@keyframes machine-scan { from { filter: brightness(.72); background-position: 0 0; } to { filter: brightness(1.25); background-position: 0 8px; } }
 .companion-console .robot-container,
 .companion-console .robot-container.aiva-online,
-.companion-console .robot-container.grace-only { display: flex !important; position: absolute; inset: 18% 20% 23%; width: auto; height: auto; min-height: 0; margin: 0; flex: none; padding: 0; }
+.companion-console .robot-container.grace-only { display: flex !important; position: absolute; z-index: 2; inset: 18% 20% 23%; width: auto; height: auto; min-height: 0; margin: 0; flex: none; padding: 0; }
 .companion-console .grace-avatar-stage,
 .companion-console .robot-container.aiva-online .grace-avatar-stage,
 .companion-console .robot-container.grace-only .grace-avatar-stage { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
@@ -169,6 +185,8 @@
     .companion-layout { grid-template-columns: 1fr; grid-template-rows: minmax(185px, 30dvh) minmax(0, 1fr); gap: 8px; padding: 4px 8px 8px; }
     .chamber-panel { width: 210px; justify-self: center; overflow: hidden; }
     .chamber-panel.portrait-zoom .chamber-visual-layer { transform: scale(1.07); }
+    .machine-bank { top: 38%; bottom: 20%; width: 15%; min-width: 30px; padding: 5px 3px; opacity: .7; }
+    .machine-label { font-size: 4px; }
     .chamber-art { inset: 0 0 33px; }
     .companion-console .robot-container, .companion-console .robot-container.aiva-online, .companion-console .robot-container.grace-only { inset: 17% 20% 25%; }
     .chamber-footer { padding: 0; bottom: 0; }.avatar-hint { display: none; }
@@ -181,6 +199,7 @@
     .companion-console #avatarZoomSwitch, .companion-console #avatarZoomSwitch::before { transition: none; }
     .companion-console .tube-bubble { display: none; animation: none; }
     .companion-console .fluid-tube::after, .liquid-caustics, .liquid-glint { animation: none; }
+    .machine-lights i, .machine-meter i, .machine-display { animation: none; }
     .liquid-caustics { opacity: .12; } .liquid-glint { opacity: .2; }
 }
 
