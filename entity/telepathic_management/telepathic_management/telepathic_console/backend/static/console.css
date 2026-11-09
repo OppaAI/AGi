@@ -64,21 +64,21 @@
 .probe-head { stroke: #c08d88; stroke-width: .32; }
 .probe-body { stroke: #899f91; stroke-width: .34; }
 .probe-wire { stroke-width: .85; }
-.probe-signal { fill: none; stroke: #54eaff; stroke-width: .68; stroke-linecap: round; stroke-dasharray: 3 10; stroke-dashoffset: 0; opacity: .5; animation: probe-signal-flow var(--signal-duration) var(--signal-delay) linear infinite alternate; }
+.probe-signal { fill: none; stroke: #54eaff; stroke-width: .68; stroke-linecap: round; stroke-dasharray: 3 97; stroke-dashoffset: 100; opacity: .9; animation: probe-signal-flow var(--signal-duration) var(--signal-delay) linear infinite; }
 .probe-signal.probe-body { stroke: #8ef5df; }
-.signal-1 { --signal-duration: 1s; --signal-delay: -.2s; }
-.signal-2 { --signal-duration: 1.45s; --signal-delay: -.9s; }
-.signal-3 { --signal-duration: 1.18s; --signal-delay: -.6s; }
-.signal-4 { --signal-duration: 1.75s; --signal-delay: -.4s; }
-.signal-5 { --signal-duration: 1.3s; --signal-delay: -.8s; }
-.signal-6 { --signal-duration: 2s; --signal-delay: -.5s; }
-.signal-7 { --signal-duration: 1.58s; --signal-delay: -.7s; }
-.signal-8 { --signal-duration: 2.2s; --signal-delay: -1.1s; }
-.signal-9 { --signal-duration: 1.1s; --signal-delay: -.3s; }
-@keyframes probe-signal-flow { from { stroke-dashoffset: 0; opacity: .3; } to { stroke-dashoffset: -13.5; opacity: 1; } }
+.signal-1 { --signal-duration: .38s; --signal-delay: -.2s; }
+.signal-2 { --signal-duration: .52s; --signal-delay: -.31s; }
+.signal-3 { --signal-duration: .44s; --signal-delay: -.12s; }
+.signal-4 { --signal-duration: .63s; --signal-delay: -.4s; }
+.signal-5 { --signal-duration: .47s; --signal-delay: -.25s; }
+.signal-6 { --signal-duration: .72s; --signal-delay: -.53s; }
+.signal-7 { --signal-duration: .58s; --signal-delay: -.18s; }
+.signal-8 { --signal-duration: .8s; --signal-delay: -.67s; }
+.signal-9 { --signal-duration: .41s; --signal-delay: -.29s; }
+@keyframes probe-signal-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
 .chamber-panel.portrait-zoom .avatar-probes { transform: scale(1.18); transform-origin: 50% 0; }
 .chamber-panel.portrait-zoom .probe-wire { stroke-width: 1.05; }
-.chamber-panel.portrait-zoom .probe-signal { stroke-width: .82; stroke-dasharray: 3.5 8; }
+.chamber-panel.portrait-zoom .probe-signal { stroke-width: .82; stroke-dasharray: 3.5 96.5; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
