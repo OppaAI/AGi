@@ -48,12 +48,14 @@
 .companion-console .presence-divider { width: 1px; height: 18px; margin: 0 10px; background: var(--console-line); }
 .companion-layout { display: grid; grid-template-columns: minmax(300px, 40%) minmax(0, 1fr); flex: 1; min-height: 0; gap: 12px; padding: 10px 16px 16px 0; }
 .chamber-panel { position: relative; min-height: 0; overflow: hidden; border-radius: 0 0 0 15px; }
-.chamber-visual-layer { position: absolute; inset: 0; overflow: hidden; transform: scale(1); transform-origin: 50% 45%; transition: transform 320ms ease; }
-.chamber-panel.portrait-zoom .chamber-visual-layer { transform: scale(1.06); }
-.chamber-art { position: absolute; inset: 0 0 60px; background: url('/static/assets/grace-chamber.webp') center / 100% 100% no-repeat; mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent); }
+.chamber-visual-layer { position: absolute; inset: 0; overflow: hidden; transform: scale(1); transform-origin: 50% 45%; transition: transform 320ms ease, background-color 320ms ease; }
+.chamber-panel.portrait-zoom .chamber-visual-layer { transform: none; background: radial-gradient(ellipse at 50% 55%, #345c5055, transparent 66%), linear-gradient(180deg, #151a1b, #18211f 52%, #202825); }
+.chamber-art { position: absolute; inset: 0 0 60px; background: url('/static/assets/grace-chamber.webp') center / 100% 100% no-repeat; mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent); opacity: 1; transition: opacity 260ms ease; }
+.chamber-panel.portrait-zoom .chamber-art { opacity: 0; }
 .companion-console .robot-container,
 .companion-console .robot-container.aiva-online,
 .companion-console .robot-container.grace-only { display: flex !important; position: absolute; z-index: 2; inset: 18% 20% 23%; width: auto; height: auto; min-height: 0; margin: 0; flex: none; padding: 0; }
+.chamber-panel.portrait-zoom .robot-container { inset: 2% 7% 13%; }
 .companion-console .grace-avatar-stage,
 .companion-console .robot-container.aiva-online .grace-avatar-stage,
 .companion-console .robot-container.grace-only .grace-avatar-stage { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
@@ -63,7 +65,9 @@
 .companion-console .fluid-tube::after { background: linear-gradient(180deg, #62deff10, transparent, #48dfff18); }
 /* Full-height bubble tracks animate with transforms instead of layout updates. */
 .companion-console .fluid-tube { border-radius: 46% / 5%; }
+.chamber-panel.portrait-zoom .fluid-tube { inset: -8%; border: 0; border-radius: 0; background: radial-gradient(ellipse at 50% 46%, #52766a26, transparent 65%), linear-gradient(90deg, transparent, #a6c8b412 48%, transparent); }
 .fluid-foreground { position: absolute; inset: 0; z-index: 2; overflow: hidden; border-radius: 46% / 5%; pointer-events: none; }
+.chamber-panel.portrait-zoom .fluid-foreground { border-radius: 0; }
 .companion-console .tube-bubble {
     position: absolute; top: auto; bottom: -14px; left: var(--bubble-x);
     height: 100%; width: var(--bubble-size); border: 0; border-radius: 0;
@@ -168,7 +172,8 @@
     .companion-console .presence-divider { margin: 0 4px; }
     .companion-layout { grid-template-columns: 1fr; grid-template-rows: minmax(185px, 30dvh) minmax(0, 1fr); gap: 8px; padding: 4px 8px 8px; }
     .chamber-panel { width: 210px; justify-self: center; overflow: hidden; }
-    .chamber-panel.portrait-zoom .chamber-visual-layer { transform: scale(1.03); }
+    .chamber-panel.portrait-zoom .chamber-visual-layer { transform: none; }
+    .chamber-panel.portrait-zoom .robot-container { inset: 2% 5% 13%; }
     .chamber-art { inset: 0 0 33px; }
     .companion-console .robot-container, .companion-console .robot-container.aiva-online, .companion-console .robot-container.grace-only { inset: 17% 20% 25%; }
     .chamber-footer { padding: 0; bottom: 0; }.avatar-hint { display: none; }
