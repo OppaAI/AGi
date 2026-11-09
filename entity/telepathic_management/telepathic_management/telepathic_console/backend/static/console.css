@@ -106,7 +106,7 @@
 .avatar-placeholder span { display: block; margin-top: 9px; color: #aad6e8; font-size: 12px; letter-spacing: 0; }
 .aiva-online .avatar-placeholder, .grace-only .avatar-placeholder { display: none; }
 .companion-console .robot-container > .robot { display: none; }
-.companion-console .robot-container.aiva-online > .robot { display: block; position: absolute; left: auto; right: -5%; bottom: 3%; transform-origin: 50% 100%; --robot-scale: .92; z-index: 3; }
+.companion-console .robot-container.aiva-online > .robot { display: block; position: absolute; left: auto; right: -5%; bottom: 3%; transform-origin: 50% 100%; --robot-scale: .76; z-index: 3; }
 .chamber-panel.portrait-zoom .robot-container.aiva-online > .robot { right: -3%; bottom: 1%; --robot-scale: .84; }
 .chamber-footer { position: absolute; bottom: 0; width: 100%; padding: 5px 10px 0; text-align: center; }
 .companion-console .avatar-controls { position: static; transform: none; display: inline-flex; padding: 0; gap: 15px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
