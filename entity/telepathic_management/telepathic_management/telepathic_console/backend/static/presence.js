@@ -4,20 +4,15 @@
   const label = document.getElementById('aivaPresence');
   let stopped = false;
   let aivaOnline = false;
-  let rosConnected = window.agiRosConnected === true;
+  let auroraOnline = false;
 
   function updateLabel() {
     if (!label) return;
-    if (aivaOnline && rosConnected) label.textContent = 'AIVA + ROS bridge connected';
+    if (aivaOnline && auroraOnline) label.textContent = 'AIVA + AuRoRA online';
     else if (aivaOnline) label.textContent = 'AIVA online';
-    else if (rosConnected) label.textContent = 'ROS connected';
-    else label.textContent = 'AIVA offline';
+    else if (auroraOnline) label.textContent = 'AuRoRA online';
+    else label.textContent = 'Offline';
   }
-
-  window.addEventListener('agi-ros-presence', (event) => {
-    rosConnected = Boolean(event.detail?.online);
-    updateLabel();
-  });
 
   async function refresh() {
     try {
@@ -25,12 +20,16 @@
       if (!response.ok) throw new Error(`Presence request returned ${response.status}`);
       const status = await response.json();
       aivaOnline = status.aiva_online === true;
+      auroraOnline = status.aurora_online === true;
       updateLabel();
       window.dispatchEvent(new CustomEvent('agi-aiva-presence', { detail: { online: aivaOnline } }));
+      window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: auroraOnline } }));
     } catch (error) {
       aivaOnline = false;
+      auroraOnline = false;
       updateLabel();
       window.dispatchEvent(new CustomEvent('agi-aiva-presence', { detail: { online: false } }));
+      window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: false } }));
       console.debug('AIVA presence is not available:', error);
     }
     if (!stopped) window.setTimeout(refresh, 4000);

@@ -232,11 +232,14 @@ async def presence() -> dict[str, bool | int | None]:
         # The AIVA-only cryptic codec is installed in AIVA's workspace and identifies
         # a console hosted there. AuRoRA continues to rely on AIVA's remote heartbeat.
         local_aiva = "true" if _aiva_cryptic_core is not None else "false"
-    aiva_online = local_aiva.strip().lower() in {"1", "true", "yes", "on"} or (
-        age is not None and age <= timeout_s
-    )
+    aiva_host = local_aiva.strip().lower() in {"1", "true", "yes", "on"}
+    aiva_online = aiva_host or (age is not None and age <= timeout_s)
+    # This console runs on AuRoRA unless explicitly identified as the AIVA-local
+    # console. A browser ROS bridge connection is not a robot presence signal.
+    aurora_online = not aiva_host
     return {
         "aiva_online": aiva_online,
+        "aurora_online": aurora_online,
         "aiva_last_seen_seconds_ago": None if age is None else int(age),
         "timeout_seconds": timeout_s,
     }
