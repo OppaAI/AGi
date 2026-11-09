@@ -171,6 +171,116 @@
         const globeBtn = document.getElementById('globeBtn');
         const rewardFeedback = document.getElementById('rewardFeedback');
 
+        // Render a small, safe Markdown subset using DOM nodes only. This keeps
+        // model output from being interpreted as HTML while supporting common
+        // chat formatting in both restored and streamed messages.
+        function appendInlineMarkdown(parent, source) {
+            const pattern = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+            let offset = 0;
+            for (const match of source.matchAll(pattern)) {
+                if (match.index > offset) parent.appendChild(document.createTextNode(source.slice(offset, match.index)));
+                const token = match[0];
+                let element;
+                if (token.startsWith('`')) {
+                    element = document.createElement('code');
+                    element.textContent = token.slice(1, -1);
+                } else if (token.startsWith('**') || token.startsWith('__')) {
+                    element = document.createElement('strong');
+                    element.textContent = token.slice(2, -2);
+                } else if (token.startsWith('~~')) {
+                    element = document.createElement('del');
+                    element.textContent = token.slice(2, -2);
+                } else if (token.startsWith('*') || token.startsWith('_')) {
+                    element = document.createElement('em');
+                    element.textContent = token.slice(1, -1);
+                } else {
+                    const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+                    element = document.createElement('a');
+                    element.textContent = link[1];
+                    element.href = link[2];
+                    element.target = '_blank';
+                    element.rel = 'noopener noreferrer';
+                }
+                parent.appendChild(element);
+                offset = match.index + token.length;
+            }
+            if (offset < source.length) parent.appendChild(document.createTextNode(source.slice(offset)));
+        }
+
+        function renderMarkdown(container, source) {
+            container.dataset.rawMarkdown = source;
+            container.replaceChildren();
+            const lines = source.replace(/\r\n?/g, '\n').split('\n');
+            let paragraph = [];
+            let list = null;
+            let codeLines = null;
+            const flushParagraph = () => {
+                if (!paragraph.length) return;
+                const p = document.createElement('p');
+                appendInlineMarkdown(p, paragraph.join('\n'));
+                container.appendChild(p);
+                paragraph = [];
+            };
+            const flushList = () => { list = null; };
+            for (const line of lines) {
+                if (line.trim().startsWith('```')) {
+                    flushParagraph();
+                    flushList();
+                    if (codeLines) {
+                        const pre = document.createElement('pre');
+                        const code = document.createElement('code');
+                        code.textContent = codeLines.join('\n');
+                        pre.appendChild(code);
+                        container.appendChild(pre);
+                        codeLines = null;
+                    } else codeLines = [];
+                    continue;
+                }
+                if (codeLines) { codeLines.push(line); continue; }
+                if (!line.trim()) { flushParagraph(); flushList(); continue; }
+                const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+)$/);
+                if (heading) {
+                    flushParagraph(); flushList();
+                    const h = document.createElement(`h${heading[1].length}`);
+                    appendInlineMarkdown(h, heading[2]);
+                    container.appendChild(h);
+                    continue;
+                }
+                const item = line.match(/^\s*([-*+] |\d+\. )(.*)$/);
+                if (item) {
+                    flushParagraph();
+                    const ordered = /^\d/.test(item[1]);
+                    if (!list || list.tagName.toLowerCase() !== (ordered ? 'ol' : 'ul')) {
+                        flushList();
+                        list = document.createElement(ordered ? 'ol' : 'ul');
+                        container.appendChild(list);
+                    }
+                    const li = document.createElement('li');
+                    appendInlineMarkdown(li, item[2]);
+                    list.appendChild(li);
+                    continue;
+                }
+                const quote = line.match(/^\s*&gt;\s?(.*)$/) || line.match(/^\s*>\s?(.*)$/);
+                if (quote) {
+                    flushParagraph(); flushList();
+                    const blockquote = document.createElement('blockquote');
+                    appendInlineMarkdown(blockquote, quote[1]);
+                    container.appendChild(blockquote);
+                    continue;
+                }
+                flushList();
+                paragraph.push(line);
+            }
+            flushParagraph();
+            if (codeLines) {
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                code.textContent = codeLines.join('\n');
+                pre.appendChild(code);
+                container.appendChild(pre);
+            }
+        }
+
         // Image elements
         const imagePreviewArea = document.getElementById('imagePreviewArea');
         const previewImg = document.getElementById('previewImg');
@@ -767,7 +877,7 @@
             currentStreamMessage = createMessageElement('grace', '');
             const contentDiv = currentStreamMessage.querySelector('.message-content');
 
-            contentDiv.textContent = streamBuffer;
+            renderMarkdown(contentDiv, streamBuffer);
 
             const cursor = document.createElement('span');
             cursor.className = 'streaming-cursor';
@@ -789,7 +899,7 @@
             const contentDiv = currentStreamMessage.querySelector('.message-content');
             const cursor = contentDiv.querySelector('.streaming-cursor');
 
-            contentDiv.textContent = streamBuffer;
+            renderMarkdown(contentDiv, streamBuffer);
 
             if (cursor) {
                 contentDiv.appendChild(cursor);
@@ -842,7 +952,7 @@
                 const history = Array.from(chatContainer.querySelectorAll('.message'))
                     .map((element) => ({
                         sender: element.classList.contains('user') ? 'user' : 'grace',
-                        text: element.querySelector('.message-content')?.textContent || '',
+                        text: element.querySelector('.message-content')?.dataset.rawMarkdown || element.querySelector('.message-content')?.textContent || '',
                         time: element.querySelector('.message-time')?.dateTime || new Date().toISOString()
                     }))
                     .filter((message) => message.text.trim().length > 0)
@@ -886,7 +996,7 @@
 
             const content = document.createElement('div');
             content.className = 'message-content';
-            content.textContent = text;
+            renderMarkdown(content, text);
 
             msgDiv.appendChild(label);
             msgDiv.appendChild(content);
