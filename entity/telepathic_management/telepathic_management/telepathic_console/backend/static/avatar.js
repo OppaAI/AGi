@@ -17,7 +17,7 @@
   let frame = 0;
   let loadPromise = null;
   let aivaOnline = false;
-  let auroraOnline = window.agiAuroraOnline === true;
+  let rosConnected = window.agiRosConnected === true;
   let nextFrameAt = 0;
   let idleTime = 0;
   let cameraMode = 'portrait';
@@ -231,9 +231,9 @@
   });
 
   async function syncPresence() {
-    container.classList.toggle('aurora-online', auroraOnline);
-    container.classList.toggle('aiva-online', aivaOnline && auroraOnline);
-    container.classList.toggle('grace-only', aivaOnline && !auroraOnline);
+    container.classList.toggle('ros-connected', rosConnected);
+    container.classList.toggle('aiva-online', aivaOnline && rosConnected);
+    container.classList.toggle('grace-only', aivaOnline && !rosConnected);
     if (!aivaOnline) {
       stopRender();
       return;
@@ -254,8 +254,8 @@
     aivaOnline = Boolean(event.detail?.online);
     syncPresence();
   });
-  window.addEventListener('agi-aurora-presence', (event) => {
-    auroraOnline = Boolean(event.detail?.online);
+  window.addEventListener('agi-ros-presence', (event) => {
+    rosConnected = Boolean(event.detail?.online);
     syncPresence();
   });
 })();

@@ -4,18 +4,18 @@
   const label = document.getElementById('aivaPresence');
   let stopped = false;
   let aivaOnline = false;
-  let auroraOnline = window.agiAuroraOnline === true;
+  let rosConnected = window.agiRosConnected === true;
 
   function updateLabel() {
     if (!label) return;
-    if (aivaOnline && auroraOnline) label.textContent = 'AIVA + AuRoRA online';
+    if (aivaOnline && rosConnected) label.textContent = 'AIVA + ROS connected';
     else if (aivaOnline) label.textContent = 'AIVA online';
-    else if (auroraOnline) label.textContent = 'AuRoRA online';
-    else label.textContent = 'AIVA + AuRoRA offline';
+    else if (rosConnected) label.textContent = 'ROS connected';
+    else label.textContent = 'AIVA + ROS offline';
   }
 
-  window.addEventListener('agi-aurora-presence', (event) => {
-    auroraOnline = Boolean(event.detail?.online);
+  window.addEventListener('agi-ros-presence', (event) => {
+    rosConnected = Boolean(event.detail?.online);
     updateLabel();
   });
 

@@ -192,7 +192,7 @@
         let pokeTimeout;
         let ros = null;
         let isROSConnected = false;
-        window.agiAuroraOnline = false;
+        window.agiRosConnected = false;
         let webSearchEnabled = false;
 
         // RL Reward System
@@ -459,8 +459,8 @@
 
                 ros.on('connection', () => {
                     isROSConnected = true;
-                    window.agiAuroraOnline = true;
-                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: true } }));
+                    window.agiRosConnected = true;
+                    window.dispatchEvent(new CustomEvent('agi-ros-presence', { detail: { online: true } }));
                     statusDot.classList.add('connected');
                     statusText.textContent = 'Connected';
                     speechBubble.textContent = 'Connected! 💕';
@@ -472,8 +472,8 @@
                 ros.on('error', (error) => {
                     console.error('ROS connection error:', error);
                     isROSConnected = false;
-                    window.agiAuroraOnline = false;
-                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: false } }));
+                    window.agiRosConnected = false;
+                    window.dispatchEvent(new CustomEvent('agi-ros-presence', { detail: { online: false } }));
                     statusText.textContent = 'Offline Mode';
                     statusDot.classList.remove('connected');
                     speechBubble.textContent = 'Hello! 💕';
@@ -484,8 +484,8 @@
 
                 ros.on('close', () => {
                     isROSConnected = false;
-                    window.agiAuroraOnline = false;
-                    window.dispatchEvent(new CustomEvent('agi-aurora-presence', { detail: { online: false } }));
+                    window.agiRosConnected = false;
+                    window.dispatchEvent(new CustomEvent('agi-ros-presence', { detail: { online: false } }));
                     statusDot.classList.remove('connected');
                     statusText.textContent = 'Reconnecting...';
                     stopIdleAnimations();
