@@ -59,6 +59,11 @@
 .companion-console .grace-avatar-stage,
 .companion-console .robot-container.aiva-online .grace-avatar-stage,
 .companion-console .robot-container.grace-only .grace-avatar-stage { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
+.avatar-probes { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+.probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
+.probe-head { stroke: #c08d88; stroke-width: .32; }
+.probe-body { stroke: #899f91; stroke-width: .34; }
+.probe-contacts { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; pointer-events: none; fill: #e0a69a; stroke: #403338; stroke-width: .45; filter: drop-shadow(0 0 1.3px #e3b0a5aa); }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
 .companion-console .fluid-tube { inset: 0; border: 0; border-radius: 0; box-shadow: none; background: none; }
 .companion-console .fluid-tube::before, .companion-console .tube-rim { display: none; }
