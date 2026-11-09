@@ -29,8 +29,8 @@
     document.querySelector('.chamber-panel')?.classList.toggle('portrait-zoom', mode === 'portrait');
     if (!avatar) return;
     const { camera, controls, modelHeight } = avatar;
-    const distance = mode === 'full' ? 2.3 : 0.57;
-    const targetHeight = mode === 'full' ? 0.52 : 0.85;
+    const distance = mode === 'full' ? 2.3 : 0.72;
+    const targetHeight = mode === 'full' ? 0.52 : 0.79;
     camera.position.set(0, modelHeight * targetHeight, modelHeight * distance);
     controls.target.set(0, modelHeight * targetHeight, 0);
     controls.update();
