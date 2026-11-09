@@ -141,7 +141,7 @@ async def get_settings() -> dict:
                          "apply": "restart"})
     runtime = [
         {"name": "Web Teleops Console bind", "value": os.getenv("TELEPATHIC_CONSOLE_HOST", "127.0.0.1"), "apply": "restart", "source": "Environment"},
-        {"name": "Web Teleops Console port", "value": os.getenv("AGI_WEB_TELEOPS_CONSOLE_PORT", "8853"), "apply": "restart", "source": "Environment"},
+        {"name": "Web Teleops Console port", "value": os.getenv("TELEPATHIC_CONSOLE_PORTAL", "8853"), "apply": "restart", "source": "Environment"},
         {"name": "Web Teleops Console interface directory", "value": os.getenv("AGI_WEB_TELEOPS_CONSOLE_INTERFACE_DIR", "auto-detected from ROS package or source checkout"), "apply": "restart", "source": "Environment"},
         {"name": "ROS bridge URL", "value": os.getenv("AGI_ROSBRIDGE_URL", "ws://127.0.0.1:9090"), "apply": "restart", "source": "Environment"},
         {"name": "AIVA presence timeout", "value": os.getenv("AGI_AIVA_PRESENCE_TIMEOUT", "12"), "apply": "restart", "source": "Environment"},
@@ -350,7 +350,7 @@ def main() -> None:
     uvicorn.run(
         app,
         host=os.getenv("TELEPATHIC_CONSOLE_HOST", "127.0.0.1"),
-        port=int(os.getenv("AGI_WEB_TELEOPS_CONSOLE_PORT", "8853")),
+        port=int(os.getenv("TELEPATHIC_CONSOLE_PORTAL", "8853")),
         log_level="info",
     )
 
