@@ -38,21 +38,21 @@
     // The Aiko VRM viewer drives raw bones directly. VRM 3.x otherwise
     // copies the normalized T-pose over them on every update.
     if (humanoid) humanoid.autoUpdateHumanBones = false;
-    for (const name of ['spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg']) {
+    for (const name of ['spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg']) {
       const bone = humanoid?.getRawBoneNode(name);
       if (bone) bones[name] = { bone, x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
     }
-    // Relax into a suspended pose, with the head bowed and knees bent forward.
+    // Let the arms and legs hang loosely while Grace rests in the chamber.
     if (bones.neck) bones.neck.x -= 0.09;
     if (bones.head) { bones.head.x -= 0.24; bones.head.z -= 0.06; }
-    if (bones.leftUpperArm) bones.leftUpperArm.z = 1.08;
-    if (bones.rightUpperArm) bones.rightUpperArm.z = -1.14;
-    if (bones.leftLowerArm) { bones.leftLowerArm.x += 0.12; bones.leftLowerArm.z += 0.12; }
-    if (bones.rightLowerArm) { bones.rightLowerArm.x += 0.16; bones.rightLowerArm.z -= 0.16; }
-    if (bones.leftUpperLeg) { bones.leftUpperLeg.x += 0.72; bones.leftUpperLeg.z -= 0.07; }
-    if (bones.rightUpperLeg) { bones.rightUpperLeg.x += 0.9; bones.rightUpperLeg.z += 0.1; }
-    if (bones.leftLowerLeg) bones.leftLowerLeg.x -= 0.8;
-    if (bones.rightLowerLeg) bones.rightLowerLeg.x -= 1.05;
+    if (bones.leftUpperArm) bones.leftUpperArm.z = 1.28;
+    if (bones.rightUpperArm) bones.rightUpperArm.z = -1.28;
+    if (bones.leftLowerArm) { bones.leftLowerArm.x += 0.12; bones.leftLowerArm.z += 0.08; }
+    if (bones.rightLowerArm) { bones.rightLowerArm.x += 0.12; bones.rightLowerArm.z -= 0.08; }
+    if (bones.leftUpperLeg) bones.leftUpperLeg.x += 0.06;
+    if (bones.rightUpperLeg) bones.rightUpperLeg.x += 0.08;
+    if (bones.leftLowerLeg) bones.leftLowerLeg.x -= 0.06;
+    if (bones.rightLowerLeg) bones.rightLowerLeg.x -= 0.08;
     return bones;
   }
 
@@ -70,10 +70,12 @@
     apply('chest', 0.014 * breathe);
     apply('head', 0.0045 * drift(0.47, 0.4), 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1), 0.006 * drift(0.19, 1.1));
     apply('neck', 0.003 * drift(0.67, 1.7), 0.004 * drift(0.59), 0);
-    apply('leftUpperArm', 0.008 * drift(0.71, 0.5), 0.004 * drift(0.43, 2.2), 0.007 * drift(0.61, 1.0));
-    apply('rightUpperArm', 0.008 * drift(0.73, 2.8), 0.004 * drift(0.83, 0.9), 0.007 * drift(0.79, 1.6));
-    apply('leftLowerArm', 0.006 * drift(0.89, 0.2), 0.003 * drift(0.97, 1.9), 0.005 * drift(0.49, 0.9));
-    apply('rightLowerArm', 0.006 * drift(1.02, 1.2), 0.003 * drift(1.11, 2.5), 0.005 * drift(0.51, 0.4));
+    apply('leftUpperArm');
+    apply('rightUpperArm');
+    apply('leftLowerArm');
+    apply('rightLowerArm');
+    apply('leftHand');
+    apply('rightHand');
     apply('leftUpperLeg');
     apply('rightUpperLeg');
     apply('leftLowerLeg');
