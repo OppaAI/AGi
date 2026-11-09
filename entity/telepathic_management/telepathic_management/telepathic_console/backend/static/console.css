@@ -64,7 +64,7 @@
 .probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
 .probe-head { stroke: #c08d88; stroke-width: .22; }
 .probe-body { stroke: #899f91; stroke-width: .23; }
-.probe-signal { fill: #54eaff; stroke: none; opacity: .95; }
+.probe-signal { fill: #54eaff; stroke: #c3fbff; stroke-width: .025; opacity: .98; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
@@ -195,7 +195,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
     .companion-console #avatarZoomSwitch, .companion-console #avatarZoomSwitch::before { transition: none; }
-    .probe-signal { display: none; }
     .companion-console .tube-bubble { display: none; animation: none; }
     .companion-console .fluid-tube::after, .liquid-caustics, .liquid-glint { animation: none; }
     .liquid-caustics { opacity: .12; } .liquid-glint { opacity: .2; }
