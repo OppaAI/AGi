@@ -62,8 +62,8 @@
 .companion-console .robot-container.grace-only .grace-avatar-stage { display: block; position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; }
 .avatar-probes { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; filter: drop-shadow(0 0 3px #50eaff88); }
 .probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
-.probe-head { stroke: #c08d88; stroke-width: .32; }
-.probe-body { stroke: #899f91; stroke-width: .34; }
+.probe-head { stroke: #c08d88; stroke-width: .22; }
+.probe-body { stroke: #899f91; stroke-width: .23; }
 .probe-signal { fill: #54eaff; stroke: none; opacity: .95; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }

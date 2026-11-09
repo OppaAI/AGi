@@ -226,6 +226,9 @@
   document.getElementById('avatarZoomSwitch')?.addEventListener('change', (event) => {
     frameCamera(event.target.checked ? 'portrait' : 'full');
   });
+  document.querySelector('.avatar-zoom-control')?.addEventListener('click', () => {
+    requestAnimationFrame(() => document.getElementById('userInput')?.focus({ preventScroll: true }));
+  });
 
   async function syncPresence() {
     container.classList.toggle('aurora-online', auroraOnline);
