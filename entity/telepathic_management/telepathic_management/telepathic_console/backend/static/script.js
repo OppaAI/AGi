@@ -161,6 +161,8 @@
         const petCounter = document.getElementById('petCounter');
         const pokeCounter = document.getElementById('pokeCounter');
         const chatContainer = document.getElementById('chatContainer');
+        const CHAT_HISTORY_KEY = 'agi.grace.chat.v1';
+        const CHAT_HISTORY_LIMIT = 200;
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const userInput = document.getElementById('userInput');
@@ -560,6 +562,7 @@
             }
         }
 
+        restoreChatHistory();
         initROS();
 
         // Petting (positive reward)
@@ -829,11 +832,42 @@
             }, 1500);
 
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            saveChatHistory();
             currentStreamMessage = null;
             streamBuffer = '';
         }
 
-        function createMessageElement(sender, text) {
+        function saveChatHistory() {
+            try {
+                const history = Array.from(chatContainer.querySelectorAll('.message'))
+                    .map((element) => ({
+                        sender: element.classList.contains('user') ? 'user' : 'grace',
+                        text: element.querySelector('.message-content')?.textContent || '',
+                        time: element.querySelector('.message-time')?.dateTime || new Date().toISOString()
+                    }))
+                    .filter((message) => message.text.trim().length > 0)
+                    .slice(-CHAT_HISTORY_LIMIT);
+                localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(history));
+            } catch (error) {
+                console.warn('Could not save Grace chat history in this browser:', error);
+            }
+        }
+
+        function restoreChatHistory() {
+            try {
+                const history = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
+                if (!Array.isArray(history)) return;
+                history.slice(-CHAT_HISTORY_LIMIT).forEach((message) => {
+                    if (!message || !['user', 'grace'].includes(message.sender) || typeof message.text !== 'string') return;
+                    createMessageElement(message.sender, message.text, message.time, false);
+                });
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } catch (error) {
+                console.warn('Could not restore Grace chat history from this browser:', error);
+            }
+        }
+
+        function createMessageElement(sender, text, timestampValue = new Date().toISOString(), persist = true) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${sender}`;
 
@@ -857,13 +891,15 @@
             msgDiv.appendChild(label);
             msgDiv.appendChild(content);
             const timestamp = document.createElement('time');
-            const now = new Date();
+            const now = new Date(timestampValue);
             timestamp.className = 'message-time';
-            timestamp.dateTime = now.toISOString();
-            timestamp.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const validTime = Number.isNaN(now.getTime()) ? new Date() : now;
+            timestamp.dateTime = validTime.toISOString();
+            timestamp.textContent = validTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             msgDiv.appendChild(timestamp);
             chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            if (persist && text.trim()) saveChatHistory();
 
             return msgDiv;
         }
