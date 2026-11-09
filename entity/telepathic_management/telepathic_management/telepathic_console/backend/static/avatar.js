@@ -176,9 +176,6 @@
     if (now < nextFrameAt) return;
     nextFrameAt = now + 33;
     const delta = Math.min(avatar.clock.getDelta(), 0.05);
-    const lookEase = Math.min(1, delta * 5);
-    lookX += (targetLookX - lookX) * lookEase;
-    lookY += (targetLookY - lookY) * lookEase;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reducedMotion) idleTime += delta;
     avatar.vrm.scene.position.y = avatar.baseY + (reducedMotion ? 0 : Math.sin(idleTime * 0.8) * avatar.modelHeight * 0.006);
