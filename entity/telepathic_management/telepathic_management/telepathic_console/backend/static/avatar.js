@@ -5,6 +5,13 @@
   const canvas = document.getElementById('robotVrmCanvas');
   const container = document.getElementById('avatarContainer');
   if (!canvas || !container) return;
+  const probes = container.querySelector('.avatar-probes');
+  const fullFrame = document.querySelector('.probe-full-frame');
+  const cameraViews = {
+    full: { distance: 2.3, targetHeight: 0.52 },
+    portrait: { distance: 0.72, targetHeight: 0.8 },
+  };
+  const cameraFov = 30;
 
   let avatar = null;
   let frame = 0;
@@ -20,17 +27,42 @@
     const zoomSwitch = document.getElementById('avatarZoomSwitch');
     if (zoomSwitch) zoomSwitch.checked = mode === 'portrait';
     document.querySelector('.chamber-panel')?.classList.toggle('portrait-zoom', mode === 'portrait');
+    syncProbeView();
     if (!avatar) return;
     const { camera, modelHeight } = avatar;
-    const distance = mode === 'full' ? 2.3 : 0.72;
-    const targetHeight = mode === 'full' ? 0.52 : 0.8;
+    const { distance, targetHeight } = cameraViews[mode];
     camera.position.set(0, modelHeight * targetHeight, modelHeight * distance);
     camera.lookAt(0, modelHeight * targetHeight, 0);
     camera.updateProjectionMatrix();
   }
 
+  // Crop the full-view cable drawing using the same camera framing as Grace.
+  function syncProbeView() {
+    if (!probes || !fullFrame) return;
+    if (cameraMode === 'full') {
+      probes.setAttribute('viewBox', '0 0 100 100');
+      return;
+    }
+    const full = fullFrame.getBoundingClientRect();
+    const zoom = canvas.getBoundingClientRect();
+    if (!full.width || !full.height || !zoom.width || !zoom.height) return;
+    const scale = (zoom.height / full.height) * (cameraViews.full.distance / cameraViews.portrait.distance);
+    const focalPixels = zoom.height / (2 * Math.tan(cameraFov * Math.PI / 360));
+    const verticalShift = focalPixels * (cameraViews.portrait.targetHeight - cameraViews.full.targetHeight) / cameraViews.portrait.distance;
+    const width = 100 * zoom.width / (full.width * scale);
+    const height = 100 * zoom.height / (full.height * scale);
+    const x = 50 - width / 2;
+    const y = 50 - 100 * (zoom.height / 2 + verticalShift) / (full.height * scale);
+    probes.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+  }
+
   // Apply the default portrait framing and switch state before the VRM loads.
   frameCamera();
+  if (probes && fullFrame) {
+    const probeResizeObserver = new ResizeObserver(syncProbeView);
+    probeResizeObserver.observe(canvas);
+    probeResizeObserver.observe(fullFrame);
+  }
 
   function rememberRestPose(vrm) {
     const bones = {};
@@ -105,7 +137,7 @@
       const rim = new THREE.DirectionalLight(0x53dfff, 1.5);
       rim.position.set(1, 1, -1);
       scene.add(rim);
-      const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
+      const camera = new THREE.PerspectiveCamera(cameraFov, 1, 0.1, 30);
 
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));

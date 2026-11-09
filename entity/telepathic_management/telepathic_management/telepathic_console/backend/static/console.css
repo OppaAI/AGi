@@ -52,6 +52,7 @@
 .chamber-panel.portrait-zoom .chamber-visual-layer { transform: none; background: radial-gradient(ellipse at 50% 55%, #345c5055, transparent 66%), linear-gradient(180deg, #151a1b, #18211f 52%, #202825); }
 .chamber-art { position: absolute; inset: 0 0 60px; background: url('/static/assets/grace-chamber.webp') center / 100% 100% no-repeat; mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent); opacity: 1; transition: opacity 260ms ease; }
 .chamber-panel.portrait-zoom .chamber-art { opacity: 0; }
+.probe-full-frame { position: absolute; inset: 18% 20% 23%; visibility: hidden; pointer-events: none; }
 .companion-console .robot-container,
 .companion-console .robot-container.aiva-online,
 .companion-console .robot-container.grace-only { display: flex !important; position: absolute; z-index: 2; inset: 18% 20% 23%; width: auto; height: auto; min-height: 0; margin: 0; flex: none; padding: 0; }
@@ -65,8 +66,6 @@
 .probe-body { stroke: #899f91; stroke-width: .34; }
 .probe-wire { stroke-width: .85; }
 .probe-signal { fill: #54eaff; stroke: none; opacity: .95; }
-.chamber-panel.portrait-zoom .avatar-probes { transform: scale(1.18); transform-origin: 50% 0; }
-.chamber-panel.portrait-zoom .probe-wire { stroke-width: 1.05; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
@@ -185,6 +184,7 @@
     .chamber-panel { width: 210px; justify-self: center; overflow: hidden; }
     .chamber-panel.portrait-zoom .chamber-visual-layer { transform: none; }
     .chamber-panel.portrait-zoom .robot-container { inset: 2% 5% 13%; }
+    .probe-full-frame { inset: 17% 20% 25%; }
     .chamber-art { inset: 0 0 33px; }
     .companion-console .robot-container, .companion-console .robot-container.aiva-online, .companion-console .robot-container.grace-only { inset: 17% 20% 25%; }
     .companion-console .robot-container.aiva-online > .robot { right: -8%; bottom: 0; --robot-scale: .52; }
