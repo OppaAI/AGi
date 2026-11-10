@@ -1,0 +1,26 @@
+name: AIVA checks
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  aiva-python-and-launch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check AIVA launch script syntax
+        run: bash -n AIVA/launch.sh
+      - name: Compile AIVA chat and signal packages
+        run: python -m compileall -q AIVA/src/central_neural_system/aiva_chat/aiva_chat AIVA/src/central_neural_system/cryptic_signal_core/aiva_cryptic_signal_core
+      - name: Test AIVA signal encoding and memory
+        env:
+          PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
+        run: |
+          python -m unittest discover -s AIVA/src/central_neural_system/aiva_chat/test -v
+          python -m unittest discover -s AIVA/src/central_neural_system/cryptic_signal_core/test -v
