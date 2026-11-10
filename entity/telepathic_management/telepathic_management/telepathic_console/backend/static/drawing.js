@@ -183,6 +183,7 @@
   $('drawingPrompt').addEventListener('submit',e=> {
     e.preventDefault();if(busy||!connected)return;const text=$('drawPrompt').value.trim();if(!text)return;finishGesture();
     requestId=uid();token++;setBusy(true);status('Grace is planning her drawing…');
+    $('drawResponse').textContent='Grace is thinking about what to draw…';
     deadline=setTimeout(()=>stop('Grace did not respond in time. You can try again.'),150000);
     try { inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier:requestId,canvas:{objects,selected}})})); }catch(error){stop(error.message);}
   });
@@ -197,6 +198,7 @@
     let event;try{event=JSON.parse(message.data);}catch(_){return;}
     if(!requestId||event.identifier!==requestId)return;
     if(event.type==='canvas_start')status('Grace is planning her drawing…');
+    else if(event.type==='canvas_reply')$('drawResponse').textContent=String(event.content||'').slice(0,1000);
     else if(event.type==='canvas_actions') {
       try {
         if(!Array.isArray(event.actions)||!event.actions.length||event.actions.length>100)throw new Error('Invalid drawing plan');

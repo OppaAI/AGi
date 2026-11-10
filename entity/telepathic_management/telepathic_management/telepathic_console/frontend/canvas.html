@@ -30,6 +30,7 @@
 <div class="drawing-actions"><button id="drawUndo">Undo</button><button id="drawRedo">Redo</button><button id="drawDelete">Delete selected</button><button id="drawClear">Clear</button><button id="drawExport">Save PNG</button><button id="drawStop" disabled>Stop Grace</button></div>
 <div class="paper"><canvas id="drawingCanvas" width="1000" height="650" tabindex="0" aria-label="Shared drawing canvas, 1000 by 650 pixels"></canvas></div>
 <p id="drawStatus" role="status" aria-live="polite">Connecting to Grace…</p>
+<section class="grace-response" aria-label="Grace's response"><strong>Grace</strong><p id="drawResponse" role="status" aria-live="polite">Her reply will appear here when you ask her to draw.</p></section>
 </section>
 <form id="drawingPrompt"><label for="drawPrompt">Ask Grace to draw or write</label><div><input id="drawPrompt" placeholder="Draw a blue cat and write “Hello!” beside it" maxlength="4000" required><button id="drawAsk" disabled>Ask Grace</button></div><p>Watch her actions replay on the canvas. You can also draw, select and move objects, or undo a stroke. Artwork is saved in this browser.</p></form>
 </main>
