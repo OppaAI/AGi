@@ -14,13 +14,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install pytest dependencies
+        run: python -m pip install pytest httpx
       - name: Check AIVA launch script syntax
         run: bash -n AIVA/launch.sh
       - name: Compile AIVA chat and signal packages
         run: python -m compileall -q AIVA/src/central_neural_system/aiva_chat/aiva_chat AIVA/src/central_neural_system/cryptic_signal_core/aiva_cryptic_signal_core
-      - name: Test AIVA signal encoding and memory
+      - name: Test AIVA chat, launch services, memory, and signal encoding
         env:
           PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
+        run: python -m pytest -q AIVA/src/central_neural_system/aiva_chat/test AIVA/src/central_neural_system/cryptic_signal_core/test
+
+  aiva-ros-jazzy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+      - name: Prepare Python test environment
         run: |
-          python -m unittest discover -s AIVA/src/central_neural_system/aiva_chat/test -v
-          python -m unittest discover -s AIVA/src/central_neural_system/cryptic_signal_core/test -v
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install pytest httpx
+      - name: Build AIVA chat and ROS message packages
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          cd AIVA
+          colcon build --base-paths src/central_neural_system --packages-up-to aiva_chat
+      - name: Run tests against the ROS graph
+        env:
+          AIVA_TEST_WITH_ROS: "1"
+          PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source AIVA/install/setup.bash
+          .venv/bin/python -m pytest -q AIVA/src/central_neural_system/aiva_chat/test AIVA/src/central_neural_system/cryptic_signal_core/test
