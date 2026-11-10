@@ -18,7 +18,14 @@
 <label>Color <input type="color" id="drawColor" value="#183b65"></label>
 <label>Size <input id="drawSize" type="number" min="1" max="120" value="5"></label>
 <label><input id="drawFill" type="checkbox"> Fill shapes</label>
-<label class="text-tool">Text <input id="drawText" placeholder="Click the canvas to place text" maxlength="2000"></label>
+<label class="text-tool">Text <textarea id="drawText" placeholder="Click the canvas to place text, or use Add letter page. Blank lines separate paragraphs." maxlength="2000" rows="3"></textarea></label>
+</div>
+<div class="tools letter-tools" role="group" aria-label="Letter formatting">
+<label>Letter alignment <select id="letterAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+<label>Margin <input id="letterMargin" type="number" min="0" max="100" value="40"></label>
+<label>Line spacing <select id="letterSpacing"><option value="1">Single</option><option value="1.5" selected>1.5</option><option value="2">Double</option></select></label>
+<button id="drawLetter" type="button">Add letter page</button>
+<span>Uses the text above at 16 px. Select a letter to edit its text and formatting.</span>
 </div>
 <div class="drawing-actions"><button id="drawUndo">Undo</button><button id="drawRedo">Redo</button><button id="drawDelete">Delete selected</button><button id="drawClear">Clear</button><button id="drawExport">Save PNG</button><button id="drawStop" disabled>Stop Grace</button></div>
 <div class="paper"><canvas id="drawingCanvas" width="1000" height="650" tabindex="0" aria-label="Shared drawing canvas, 1000 by 650 pixels"></canvas></div>

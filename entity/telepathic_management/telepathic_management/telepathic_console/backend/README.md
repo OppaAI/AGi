@@ -30,6 +30,16 @@ rectangle, ellipse, text, object selection/move/delete, undo/redo, clear and PNG
 export work locally. Text is placed by clicking after entering it in the toolbar.
 Artwork persists in that browser's local storage (up to 100 objects).
 
+For letters, enter paragraphs in the multiline Text field and choose **Add letter
+page**, or ask Grace to write a letter. A portrait page uses serif text, automatic
+word wrapping (including long URLs), blank lines between paragraphs, adjustable
+margins, line spacing, and left/center/right alignment. New pages use a 16 px font;
+select a page with **Select / move** to load its text and formatting, adjust Size
+or other controls, then choose **Update letter page**. Changes support undo/redo.
+Letters currently fit one page; overflow displays an error so text is not silently
+cut off. Shorten the letter or reduce font size, margins, or spacing. PNG export
+includes the formatted page. Grace uses the `letter` canvas action for this layout.
+
 The page sends a request and the current drawing objects/selection to AIVA's
 `/aiva/chat_input`. AIVA calls the configured OpenAI-compatible model with a
 `canvas_draw` tool. This requires an endpoint/model supporting `tools` and
