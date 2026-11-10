@@ -1,0 +1,11 @@
+:root { color-scheme: dark; --page:#071226; --panel:#101f39; --ink:#e7f5ff; --muted:#a0bad5; --line:#38587d; --accent:#52d5f4; }
+html[data-theme="light"] { color-scheme:light; --page:#eaf3ff; --panel:#f7fbff; --ink:#152b4c; --muted:#526e94; --line:#a0bad8; --accent:#087493; }
+* { box-sizing:border-box; } body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 system-ui,sans-serif; }
+header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; border-bottom:1px solid var(--line); gap:12px; } h1 { font-size:22px; margin:0; } a { color:var(--accent); text-decoration:none; }
+main { max-width:1200px; margin:20px auto; padding:0 16px; } .studio,form { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; }
+.tools,.drawing-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:12px; } label { display:flex; align-items:center; gap:7px; } .text-tool { flex:1; min-width:240px; }.text-tool input { width:100%; }
+button,input,select { font:inherit; border:1px solid var(--line); border-radius:7px; padding:7px 10px; background:var(--page); color:var(--ink); min-height:36px; } button { cursor:pointer; } button:hover { border-color:var(--accent); } button:disabled { opacity:.45; cursor:default; } input[type="color"] { width:44px; padding:3px; } input[type="number"] { width:65px; } input[type="checkbox"] { min-height:0; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.paper { background:#c1d1df; padding:12px; border-radius:10px; overflow:hidden; } #drawingCanvas { width:100%; height:auto; display:block; background:#fff; border-radius:2px; box-shadow:0 3px 12px #0003; touch-action:none; cursor:crosshair; }
+#drawStatus { margin:10px 0 0; color:var(--muted); } form { margin-top:14px; } form>label { margin-bottom:8px; font-weight:600; } form>div { display:flex; gap:10px; } #drawPrompt { min-width:0; flex:1; } #drawAsk { color:var(--page); background:var(--accent); border-color:var(--accent); } form p { color:var(--muted); font-size:12px; margin-bottom:0; }
+@media(max-width:600px) { header { padding:10px 12px; } h1 { font-size:18px; } main { margin:10px auto; padding:0 8px; }.studio,form { padding:10px; }.tools,.drawing-actions { gap:7px; }.paper { padding:4px; } form>div { flex-direction:column; } }

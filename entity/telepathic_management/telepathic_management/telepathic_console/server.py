@@ -300,6 +300,11 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
     return {"identifier": identifier, "topic": envelope["topic"]}
 
 
+@app.get("/canvas")
+async def canvas_page():
+    return FileResponse(FRONTEND_DIR / "canvas.html")
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
