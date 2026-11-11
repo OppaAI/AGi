@@ -134,6 +134,7 @@ import hashlib                                                              # SH
 import math
 import json                                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                                            # owns the websocket server thread — keeps asyncio loop off the ROS2 spin thread
+import uuid
 import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
 from datetime import datetime, timezone                                     # UTC timestamps for SSS lifecycle fields
 
@@ -348,11 +349,18 @@ class TelepathyInputCore(Node):
                 self.get_logger().debug(f"🚫 Stimulus rejected — invalid schema: {type(stimulus).__name__}")  # log the invalid stimulus
                 return None                                                     # stop processing this stimulus
 
+            user_id = stimulus.get("user_id", "demo")
+            radio_id = stimulus.get("radio_id")
+            if not isinstance(user_id, str) or not user_id.strip():
+                return None
+            if radio_id is not None and (not isinstance(radio_id, str) or not radio_id.strip()):
+                return None
             generated_at = datetime.now(timezone.utc).isoformat()               # UTC birth timestamp — moment stimulus enters neural system
             return SSS(
-                role         = stimulus.get("role", "user"),                    # speaker role — always "user" from UI
+                sss_id       = radio_id or uuid.uuid4().hex,
+                role         = "user",                    # speaker role — always "user" from UI
                 content      = stimulus.get("content", ""),                     # raw stimulus content — not yet validated
-                user_id      = stimulus.get("user_id", "demo"),                 # speaker identity — defaults to demo if not provided
+                user_id      = user_id,                 # speaker identity — defaults to demo if not provided
                 source       = SensoryInputChannel.UI,                          # adapter-stamped channel identity
                 modality     = SensoryModality.TEXT,                           # modality — text for symbolic chat input
                 trace_type   = TraceType.PMT,                                  # adapter-stamped trace type (TODO: M1.X - add VST for images)

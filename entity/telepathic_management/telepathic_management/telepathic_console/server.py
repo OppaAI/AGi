@@ -99,7 +99,16 @@ _SETTING_INDEX = {entry[0]: entry for entry in _SETTINGS}
 
 
 def _settings_path() -> Path:
-    from hrs.hru import GatewayMap
+    configured = os.getenv("AGI_AURORA_SETTINGS_PATH")
+    if configured:
+        return Path(configured).expanduser()
+    try:
+        from hrs.hru import GatewayMap
+    except ImportError as error:
+        raise HTTPException(status_code=503, detail=(
+            "AuRoRA settings are unavailable on this host. Install HRS or set "
+            "AGI_AURORA_SETTINGS_PATH to the ROS parameter file."
+        )) from error
     return GatewayMap().aurora_setpoints
 
 
@@ -200,6 +209,12 @@ async def put_settings(request: Request) -> dict:
     displayed = _parameter_values(current)
     effective = {key: displayed.get(key, entry[4]) for key, entry in _SETTING_INDEX.items()}
     effective.update(values)
+    for key, value in effective.items():
+        entry = _SETTING_INDEX[key]
+        default, minimum, maximum = entry[4:]
+        expected = int if isinstance(default, int) else (int, float)
+        if isinstance(value, bool) or not isinstance(value, expected) or not minimum <= value <= maximum:
+            raise HTTPException(status_code=422, detail=f"Invalid stored setting {key}; provide a value between {minimum} and {maximum}")
     if effective["scs.cortical_capacity"] <= effective["scs.cognitive_reserve"] + effective["scs.emc.recall_reserve"]:
         raise HTTPException(status_code=422, detail="Cortical capacity must exceed cognitive and recall reserves combined")
     if effective["scs.gce.context_window"] < effective["scs.gce.response_depth"]:

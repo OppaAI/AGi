@@ -49,3 +49,20 @@ def test_failed_replace_preserves_file_and_removes_temporary_file(settings_clien
     assert response.status_code == 500
     assert path.read_text() == '{}\n'
     assert list(path.parent.iterdir()) == [path]
+
+
+def test_invalid_stored_numeric_value_does_not_crash_or_overwrite(settings_client):
+    client, path, _ = settings_client
+    path.write_text(yaml.safe_dump({'/**': {'ros__parameters': {'scs.cortical_capacity': 'invalid'}}}))
+    before = path.read_text()
+    response = client.put('/api/settings', json={'settings': {'scs.gce.response_depth': 100}})
+    assert response.status_code == 422
+    assert 'scs.cortical_capacity' in response.json()['detail']
+    assert path.read_text() == before
+
+
+def test_explicit_settings_path_works_without_robot_packages(tmp_path, monkeypatch):
+    server = importlib.import_module('telepathic_management.telepathic_console.server')
+    path = tmp_path / 'setpoints.yaml'
+    monkeypatch.setenv('AGI_AURORA_SETTINGS_PATH', str(path))
+    assert server._settings_path() == path
