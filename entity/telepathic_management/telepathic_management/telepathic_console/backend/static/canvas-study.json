@@ -1,0 +1,2017 @@
+{
+  "version": 1,
+  "objects": [
+    {
+      "kind": "rectangle",
+      "id": "apricot-evening-sky",
+      "x": 0,
+      "y": 0,
+      "width": 1000,
+      "height": 650,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#e6b6ac",
+      "gradient": "linear",
+      "gradient_angle": 90,
+      "gradient_color": "#f9e3ba",
+      "gradient_stops": [
+        {
+          "offset": 0,
+          "color": "#d4bdc9"
+        },
+        {
+          "offset": 0.46,
+          "color": "#f1c9ac"
+        },
+        {
+          "offset": 1,
+          "color": "#fbe9be"
+        }
+      ]
+    },
+    {
+      "kind": "ellipse",
+      "id": "soft-sun-halo",
+      "x": 532,
+      "y": 89,
+      "width": 260,
+      "height": 260,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#f9d6ae",
+      "opacity": 0.15
+    },
+    {
+      "kind": "ellipse",
+      "id": "late-summer-sun",
+      "x": 598,
+      "y": 150,
+      "width": 124,
+      "height": 124,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#fff0ca"
+    },
+    {
+      "kind": "curve",
+      "id": "upper-cloud-wisp",
+      "points": [
+        [
+          99,
+          112
+        ],
+        [
+          184,
+          94
+        ],
+        [
+          239,
+          125
+        ],
+        [
+          311,
+          107
+        ]
+      ],
+      "color": "#fff0d7",
+      "fill_color": "#fff0d7",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.35
+    },
+    {
+      "kind": "curve",
+      "id": "long-cloud-wisp",
+      "points": [
+        [
+          721,
+          102
+        ],
+        [
+          804,
+          80
+        ],
+        [
+          877,
+          109
+        ],
+        [
+          948,
+          90
+        ]
+      ],
+      "color": "#fff0d7",
+      "fill_color": "#fff0d7",
+      "fill": false,
+      "stroke": true,
+      "size": 3,
+      "opacity": 0.35
+    },
+    {
+      "kind": "curve",
+      "id": "distant-cloud-wisp",
+      "points": [
+        [
+          352,
+          184
+        ],
+        [
+          400,
+          174
+        ],
+        [
+          449,
+          190
+        ],
+        [
+          484,
+          179
+        ]
+      ],
+      "color": "#fff0d7",
+      "fill_color": "#fff0d7",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.45
+    },
+    {
+      "kind": "curve",
+      "id": "distant-lilac-range",
+      "points": [
+        [
+          0,
+          300
+        ],
+        [
+          65,
+          284
+        ],
+        [
+          122,
+          219
+        ],
+        [
+          191,
+          242
+        ],
+        [
+          267,
+          267
+        ],
+        [
+          300,
+          292
+        ],
+        [
+          353,
+          269
+        ],
+        [
+          420,
+          240
+        ],
+        [
+          439,
+          208
+        ],
+        [
+          489,
+          228
+        ],
+        [
+          555,
+          253
+        ],
+        [
+          580,
+          300
+        ],
+        [
+          658,
+          282
+        ],
+        [
+          744,
+          262
+        ],
+        [
+          803,
+          200
+        ],
+        [
+          864,
+          220
+        ],
+        [
+          926,
+          242
+        ],
+        [
+          969,
+          272
+        ],
+        [
+          1000,
+          264
+        ],
+        [
+          1000,
+          320
+        ],
+        [
+          1000,
+          370
+        ],
+        [
+          1000,
+          386
+        ],
+        [
+          660,
+          386
+        ],
+        [
+          300,
+          386
+        ],
+        [
+          0,
+          386
+        ],
+        [
+          0,
+          366
+        ],
+        [
+          0,
+          330
+        ],
+        [
+          0,
+          300
+        ]
+      ],
+      "color": "#b7a9ba",
+      "fill_color": "#b7a9ba",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "misty-rose-range",
+      "points": [
+        [
+          0,
+          332
+        ],
+        [
+          71,
+          300
+        ],
+        [
+          103,
+          322
+        ],
+        [
+          163,
+          306
+        ],
+        [
+          231,
+          288
+        ],
+        [
+          277,
+          254
+        ],
+        [
+          332,
+          274
+        ],
+        [
+          417,
+          308
+        ],
+        [
+          457,
+          313
+        ],
+        [
+          526,
+          283
+        ],
+        [
+          587,
+          259
+        ],
+        [
+          610,
+          279
+        ],
+        [
+          672,
+          306
+        ],
+        [
+          746,
+          338
+        ],
+        [
+          813,
+          286
+        ],
+        [
+          879,
+          300
+        ],
+        [
+          934,
+          310
+        ],
+        [
+          969,
+          305
+        ],
+        [
+          1000,
+          287
+        ],
+        [
+          1000,
+          330
+        ],
+        [
+          1000,
+          370
+        ],
+        [
+          1000,
+          392
+        ],
+        [
+          663,
+          392
+        ],
+        [
+          330,
+          392
+        ],
+        [
+          0,
+          392
+        ],
+        [
+          0,
+          360
+        ],
+        [
+          0,
+          345
+        ],
+        [
+          0,
+          332
+        ]
+      ],
+      "color": "#9d91a4",
+      "fill_color": "#9d91a4",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "velvet-foothills",
+      "points": [
+        [
+          0,
+          355
+        ],
+        [
+          76,
+          338
+        ],
+        [
+          124,
+          363
+        ],
+        [
+          184,
+          345
+        ],
+        [
+          259,
+          325
+        ],
+        [
+          295,
+          312
+        ],
+        [
+          356,
+          338
+        ],
+        [
+          414,
+          363
+        ],
+        [
+          463,
+          342
+        ],
+        [
+          520,
+          333
+        ],
+        [
+          582,
+          324
+        ],
+        [
+          627,
+          362
+        ],
+        [
+          695,
+          351
+        ],
+        [
+          764,
+          340
+        ],
+        [
+          794,
+          317
+        ],
+        [
+          854,
+          335
+        ],
+        [
+          910,
+          353
+        ],
+        [
+          967,
+          346
+        ],
+        [
+          1000,
+          331
+        ],
+        [
+          1000,
+          364
+        ],
+        [
+          1000,
+          388
+        ],
+        [
+          1000,
+          404
+        ],
+        [
+          678,
+          404
+        ],
+        [
+          328,
+          404
+        ],
+        [
+          0,
+          404
+        ],
+        [
+          0,
+          387
+        ],
+        [
+          0,
+          366
+        ],
+        [
+          0,
+          355
+        ]
+      ],
+      "color": "#777e8d",
+      "fill_color": "#777e8d",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "last-light-on-ridge",
+      "points": [
+        [
+          187,
+          344
+        ],
+        [
+          265,
+          330
+        ],
+        [
+          291,
+          316
+        ],
+        [
+          355,
+          340
+        ]
+      ],
+      "color": "#e8b6a2",
+      "fill_color": "#e8b6a2",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.7
+    },
+    {
+      "kind": "rectangle",
+      "id": "quiet-lake",
+      "x": 0,
+      "y": 382,
+      "width": 1000,
+      "height": 268,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#b7b1bb",
+      "gradient": "linear",
+      "gradient_angle": 90,
+      "gradient_color": "#577a78",
+      "gradient_stops": [
+        {
+          "offset": 0,
+          "color": "#c9b3b1"
+        },
+        {
+          "offset": 0.45,
+          "color": "#92a2a5"
+        },
+        {
+          "offset": 1,
+          "color": "#5b7b7a"
+        }
+      ]
+    },
+    {
+      "kind": "curve",
+      "id": "distant-bank",
+      "points": [
+        [
+          0,
+          384
+        ],
+        [
+          224,
+          381
+        ],
+        [
+          370,
+          382
+        ],
+        [
+          507,
+          384
+        ],
+        [
+          691,
+          387
+        ],
+        [
+          851,
+          381
+        ],
+        [
+          1000,
+          385
+        ]
+      ],
+      "color": "#687c84",
+      "fill_color": "#687c84",
+      "fill": false,
+      "stroke": true,
+      "size": 3,
+      "opacity": 0.6
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-1",
+      "x": 607,
+      "y": 389,
+      "width": 100,
+      "height": 3,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.7
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-2",
+      "x": 587,
+      "y": 401,
+      "width": 144,
+      "height": 4,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.57
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-3",
+      "x": 612,
+      "y": 413,
+      "width": 92,
+      "height": 3,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.57
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-4",
+      "x": 569,
+      "y": 427,
+      "width": 179,
+      "height": 5,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.5
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-5",
+      "x": 602,
+      "y": 444,
+      "width": 128,
+      "height": 4,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.42
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-6",
+      "x": 553,
+      "y": 463,
+      "width": 210,
+      "height": 5,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.34
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-7",
+      "x": 583,
+      "y": 487,
+      "width": 167,
+      "height": 5,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.3
+    },
+    {
+      "kind": "ellipse",
+      "id": "sunlight-on-water-8",
+      "x": 527,
+      "y": 516,
+      "width": 245,
+      "height": 5,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#ffe5b0",
+      "opacity": 0.23
+    },
+    {
+      "kind": "curve",
+      "id": "lake-ripple-1",
+      "points": [
+        [
+          70,
+          429
+        ],
+        [
+          146,
+          425
+        ],
+        [
+          183,
+          430
+        ],
+        [
+          243,
+          427
+        ]
+      ],
+      "color": "#e0c8bc",
+      "fill_color": "#e0c8bc",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.45
+    },
+    {
+      "kind": "curve",
+      "id": "lake-ripple-2",
+      "points": [
+        [
+          312,
+          474
+        ],
+        [
+          364,
+          471
+        ],
+        [
+          401,
+          476
+        ],
+        [
+          448,
+          472
+        ]
+      ],
+      "color": "#e0c8bc",
+      "fill_color": "#e0c8bc",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.45
+    },
+    {
+      "kind": "curve",
+      "id": "lake-ripple-3",
+      "points": [
+        [
+          799,
+          452
+        ],
+        [
+          842,
+          449
+        ],
+        [
+          891,
+          455
+        ],
+        [
+          929,
+          452
+        ]
+      ],
+      "color": "#e0c8bc",
+      "fill_color": "#e0c8bc",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.45
+    },
+    {
+      "kind": "curve",
+      "id": "lake-ripple-4",
+      "points": [
+        [
+          228,
+          527
+        ],
+        [
+          298,
+          524
+        ],
+        [
+          328,
+          529
+        ],
+        [
+          382,
+          525
+        ]
+      ],
+      "color": "#e0c8bc",
+      "fill_color": "#e0c8bc",
+      "fill": false,
+      "stroke": true,
+      "size": 2,
+      "opacity": 0.45
+    },
+    {
+      "kind": "curve",
+      "id": "left-bank",
+      "points": [
+        [
+          0,
+          516
+        ],
+        [
+          72,
+          523
+        ],
+        [
+          105,
+          541
+        ],
+        [
+          157,
+          549
+        ],
+        [
+          228,
+          563
+        ],
+        [
+          264,
+          580
+        ],
+        [
+          343,
+          590
+        ],
+        [
+          433,
+          601
+        ],
+        [
+          457,
+          629
+        ],
+        [
+          492,
+          650
+        ],
+        [
+          327,
+          650
+        ],
+        [
+          160,
+          650
+        ],
+        [
+          0,
+          650
+        ],
+        [
+          0,
+          610
+        ],
+        [
+          0,
+          550
+        ],
+        [
+          0,
+          516
+        ]
+      ],
+      "color": "#426463",
+      "fill_color": "#426463",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-bank",
+      "points": [
+        [
+          1000,
+          493
+        ],
+        [
+          936,
+          517
+        ],
+        [
+          912,
+          543
+        ],
+        [
+          842,
+          557
+        ],
+        [
+          754,
+          576
+        ],
+        [
+          716,
+          603
+        ],
+        [
+          675,
+          650
+        ],
+        [
+          800,
+          650
+        ],
+        [
+          911,
+          650
+        ],
+        [
+          1000,
+          650
+        ],
+        [
+          1000,
+          602
+        ],
+        [
+          1000,
+          550
+        ],
+        [
+          1000,
+          493
+        ]
+      ],
+      "color": "#345957",
+      "fill_color": "#345957",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "warm-foreground",
+      "points": [
+        [
+          0,
+          596
+        ],
+        [
+          106,
+          585
+        ],
+        [
+          186,
+          623
+        ],
+        [
+          292,
+          650
+        ],
+        [
+          192,
+          650
+        ],
+        [
+          95,
+          650
+        ],
+        [
+          0,
+          650
+        ],
+        [
+          0,
+          630
+        ],
+        [
+          0,
+          610
+        ],
+        [
+          0,
+          596
+        ]
+      ],
+      "color": "#6e7764",
+      "fill_color": "#6e7764",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-tall-stem",
+      "points": [
+        [
+          182,
+          650
+        ],
+        [
+          190,
+          571
+        ],
+        [
+          174,
+          469
+        ],
+        [
+          125,
+          383
+        ]
+      ],
+      "color": "#d1bca0",
+      "fill_color": "#d1bca0",
+      "fill": false,
+      "stroke": true,
+      "size": 2.4
+    },
+    {
+      "kind": "curve",
+      "id": "left-side-stem",
+      "points": [
+        [
+          186,
+          643
+        ],
+        [
+          161,
+          591
+        ],
+        [
+          116,
+          557
+        ],
+        [
+          64,
+          532
+        ]
+      ],
+      "color": "#b6ba98",
+      "fill_color": "#b6ba98",
+      "fill": false,
+      "stroke": true,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-inner-stem",
+      "points": [
+        [
+          189,
+          642
+        ],
+        [
+          221,
+          588
+        ],
+        [
+          225,
+          547
+        ],
+        [
+          237,
+          493
+        ]
+      ],
+      "color": "#d3c8a4",
+      "fill_color": "#d3c8a4",
+      "fill": false,
+      "stroke": true,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-tall-stem",
+      "points": [
+        [
+          850,
+          650
+        ],
+        [
+          838,
+          573
+        ],
+        [
+          863,
+          470
+        ],
+        [
+          910,
+          407
+        ]
+      ],
+      "color": "#c6b997",
+      "fill_color": "#c6b997",
+      "fill": false,
+      "stroke": true,
+      "size": 2.5
+    },
+    {
+      "kind": "curve",
+      "id": "right-inner-stem",
+      "points": [
+        [
+          853,
+          650
+        ],
+        [
+          826,
+          592
+        ],
+        [
+          792,
+          562
+        ],
+        [
+          773,
+          514
+        ]
+      ],
+      "color": "#a0b39c",
+      "fill_color": "#a0b39c",
+      "fill": false,
+      "stroke": true,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-01",
+      "points": [
+        [
+          169,
+          481
+        ],
+        [
+          161.81,
+          457.35
+        ],
+        [
+          126.4,
+          446.97
+        ],
+        [
+          104,
+          444
+        ],
+        [
+          116.27,
+          461.75
+        ],
+        [
+          150.3,
+          482.09
+        ],
+        [
+          169,
+          481
+        ]
+      ],
+      "color": "#879b83",
+      "fill_color": "#879b83",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-02",
+      "points": [
+        [
+          169,
+          481
+        ],
+        [
+          189.92,
+          475.69
+        ],
+        [
+          199.86,
+          445.34
+        ],
+        [
+          203,
+          426
+        ],
+        [
+          187.14,
+          435.96
+        ],
+        [
+          168.48,
+          464.72
+        ],
+        [
+          169,
+          481
+        ]
+      ],
+      "color": "#a9b396",
+      "fill_color": "#a9b396",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-03",
+      "points": [
+        [
+          155,
+          446
+        ],
+        [
+          150.45,
+          426.1
+        ],
+        [
+          121.52,
+          412.05
+        ],
+        [
+          103,
+          406
+        ],
+        [
+          112.16,
+          422.07
+        ],
+        [
+          139.32,
+          443.78
+        ],
+        [
+          155,
+          446
+        ]
+      ],
+      "color": "#98a98a",
+      "fill_color": "#98a98a",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-04",
+      "points": [
+        [
+          155,
+          446
+        ],
+        [
+          171.19,
+          439.48
+        ],
+        [
+          176.29,
+          413.94
+        ],
+        [
+          177,
+          398
+        ],
+        [
+          165.28,
+          407.73
+        ],
+        [
+          153.07,
+          432.92
+        ],
+        [
+          155,
+          446
+        ]
+      ],
+      "color": "#c4c4a3",
+      "fill_color": "#c4c4a3",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-05",
+      "points": [
+        [
+          181,
+          529
+        ],
+        [
+          174.92,
+          505.25
+        ],
+        [
+          141.36,
+          497.32
+        ],
+        [
+          120,
+          496
+        ],
+        [
+          131.15,
+          513.29
+        ],
+        [
+          163.05,
+          531.57
+        ],
+        [
+          181,
+          529
+        ]
+      ],
+      "color": "#8c9f85",
+      "fill_color": "#8c9f85",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-06",
+      "points": [
+        [
+          181,
+          529
+        ],
+        [
+          205.6,
+          526.52
+        ],
+        [
+          219.1,
+          494.16
+        ],
+        [
+          224,
+          473
+        ],
+        [
+          204.97,
+          481.53
+        ],
+        [
+          181.46,
+          510.66
+        ],
+        [
+          181,
+          529
+        ]
+      ],
+      "color": "#acb999",
+      "fill_color": "#acb999",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-07",
+      "points": [
+        [
+          186,
+          576
+        ],
+        [
+          181.5,
+          556.23
+        ],
+        [
+          155.55,
+          552.91
+        ],
+        [
+          139,
+          554
+        ],
+        [
+          147.49,
+          567.69
+        ],
+        [
+          172.06,
+          580.07
+        ],
+        [
+          186,
+          576
+        ]
+      ],
+      "color": "#9eaa88",
+      "fill_color": "#9eaa88",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-08",
+      "points": [
+        [
+          186,
+          576
+        ],
+        [
+          208.28,
+          577.03
+        ],
+        [
+          221.74,
+          550.11
+        ],
+        [
+          227,
+          532
+        ],
+        [
+          209.5,
+          537.07
+        ],
+        [
+          187.15,
+          559.81
+        ],
+        [
+          186,
+          576
+        ]
+      ],
+      "color": "#cad1a5",
+      "fill_color": "#cad1a5",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-branch-01",
+      "points": [
+        [
+          104,
+          555
+        ],
+        [
+          110.28,
+          536.26
+        ],
+        [
+          91.54,
+          514.43
+        ],
+        [
+          78,
+          503
+        ],
+        [
+          77.87,
+          519.96
+        ],
+        [
+          91.03,
+          547.84
+        ],
+        [
+          104,
+          555
+        ]
+      ],
+      "color": "#aab694",
+      "fill_color": "#aab694",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-branch-02",
+      "points": [
+        [
+          104,
+          555
+        ],
+        [
+          90.08,
+          540.0
+        ],
+        [
+          62.24,
+          547.5
+        ],
+        [
+          46,
+          555
+        ],
+        [
+          61.08,
+          563.25
+        ],
+        [
+          91.82,
+          564.0
+        ],
+        [
+          104,
+          555
+        ]
+      ],
+      "color": "#839d87",
+      "fill_color": "#839d87",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-inner-01",
+      "points": [
+        [
+          222,
+          555
+        ],
+        [
+          241.89,
+          557.26
+        ],
+        [
+          256.54,
+          533.93
+        ],
+        [
+          263,
+          518
+        ],
+        [
+          246.81,
+          521.5
+        ],
+        [
+          224.58,
+          540.55
+        ],
+        [
+          222,
+          555
+        ]
+      ],
+      "color": "#9eae8d",
+      "fill_color": "#9eae8d",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "left-inner-02",
+      "points": [
+        [
+          230,
+          520
+        ],
+        [
+          234.65,
+          505.42
+        ],
+        [
+          219.72,
+          489.31
+        ],
+        [
+          209,
+          481
+        ],
+        [
+          209.13,
+          494.01
+        ],
+        [
+          219.78,
+          514.94
+        ],
+        [
+          230,
+          520
+        ]
+      ],
+      "color": "#c8c9a3",
+      "fill_color": "#c8c9a3",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-01",
+      "points": [
+        [
+          862,
+          515
+        ],
+        [
+          864.33,
+          493.09
+        ],
+        [
+          838.56,
+          475.24
+        ],
+        [
+          821,
+          467
+        ],
+        [
+          824.97,
+          485.2
+        ],
+        [
+          846.09,
+          511.16
+        ],
+        [
+          862,
+          515
+        ]
+      ],
+      "color": "#91a88e",
+      "fill_color": "#91a88e",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-02",
+      "points": [
+        [
+          862,
+          515
+        ],
+        [
+          886.54,
+          523.73
+        ],
+        [
+          913.87,
+          498.97
+        ],
+        [
+          928,
+          481
+        ],
+        [
+          906.05,
+          480.55
+        ],
+        [
+          870.64,
+          497.73
+        ],
+        [
+          862,
+          515
+        ]
+      ],
+      "color": "#718f7d",
+      "fill_color": "#718f7d",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-03",
+      "points": [
+        [
+          879,
+          468
+        ],
+        [
+          887.41,
+          453.87
+        ],
+        [
+          875.4,
+          433.93
+        ],
+        [
+          866,
+          423
+        ],
+        [
+          863.04,
+          436.53
+        ],
+        [
+          869.35,
+          460.55
+        ],
+        [
+          879,
+          468
+        ]
+      ],
+      "color": "#c4c6a0",
+      "fill_color": "#c4c6a0",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-04",
+      "points": [
+        [
+          879,
+          468
+        ],
+        [
+          898.7,
+          475.74
+        ],
+        [
+          923.05,
+          456.87
+        ],
+        [
+          936,
+          443
+        ],
+        [
+          917.87,
+          441.94
+        ],
+        [
+          887.36,
+          454.51
+        ],
+        [
+          879,
+          468
+        ]
+      ],
+      "color": "#9bad8d",
+      "fill_color": "#9bad8d",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-05",
+      "points": [
+        [
+          850,
+          561
+        ],
+        [
+          873.6,
+          568.48
+        ],
+        [
+          891.2,
+          543.14
+        ],
+        [
+          899,
+          525
+        ],
+        [
+          879.75,
+          525.5
+        ],
+        [
+          853.19,
+          543.77
+        ],
+        [
+          850,
+          561
+        ]
+      ],
+      "color": "#b1bd96",
+      "fill_color": "#b1bd96",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-06",
+      "points": [
+        [
+          850,
+          561
+        ],
+        [
+          851.73,
+          541.51
+        ],
+        [
+          828.66,
+          529.06
+        ],
+        [
+          813,
+          524
+        ],
+        [
+          816.79,
+          539.45
+        ],
+        [
+          835.87,
+          559.59
+        ],
+        [
+          850,
+          561
+        ]
+      ],
+      "color": "#819c86",
+      "fill_color": "#819c86",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-inner-01",
+      "points": [
+        [
+          800,
+          563
+        ],
+        [
+          795.04,
+          545.61
+        ],
+        [
+          773.52,
+          546.51
+        ],
+        [
+          760,
+          550
+        ],
+        [
+          767.85,
+          561.23
+        ],
+        [
+          788.82,
+          568.83
+        ],
+        [
+          800,
+          563
+        ]
+      ],
+      "color": "#a3b494",
+      "fill_color": "#a3b494",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "curve",
+      "id": "right-inner-02",
+      "points": [
+        [
+          784,
+          538
+        ],
+        [
+          798.77,
+          531.4
+        ],
+        [
+          799.79,
+          508.9
+        ],
+        [
+          798,
+          495
+        ],
+        [
+          788.08,
+          504.14
+        ],
+        [
+          780.09,
+          526.74
+        ],
+        [
+          784,
+          538
+        ]
+      ],
+      "color": "#c6c9a2",
+      "fill_color": "#c6c9a2",
+      "fill": true,
+      "stroke": false,
+      "size": 2
+    },
+    {
+      "kind": "ellipse",
+      "id": "left-stem-bud",
+      "x": 120,
+      "y": 375,
+      "width": 9,
+      "height": 14,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#eac7a3"
+    },
+    {
+      "kind": "ellipse",
+      "id": "right-stem-bud",
+      "x": 907,
+      "y": 398,
+      "width": 9,
+      "height": 14,
+      "fill": true,
+      "stroke": false,
+      "fill_color": "#eac7a3"
+    },
+    {
+      "kind": "curve",
+      "id": "distant-bird-one",
+      "points": [
+        [
+          455,
+          169
+        ],
+        [
+          463,
+          160
+        ],
+        [
+          471,
+          163
+        ],
+        [
+          474,
+          170
+        ],
+        [
+          478,
+          163
+        ],
+        [
+          486,
+          162
+        ],
+        [
+          494,
+          167
+        ]
+      ],
+      "color": "#8e828d",
+      "fill_color": "#8e828d",
+      "fill": false,
+      "stroke": true,
+      "size": 1.8
+    },
+    {
+      "kind": "curve",
+      "id": "distant-bird-two",
+      "points": [
+        [
+          512,
+          146
+        ],
+        [
+          518,
+          139
+        ],
+        [
+          523,
+          141
+        ],
+        [
+          527,
+          147
+        ],
+        [
+          532,
+          141
+        ],
+        [
+          537,
+          141
+        ],
+        [
+          543,
+          145
+        ]
+      ],
+      "color": "#8e828d",
+      "fill_color": "#8e828d",
+      "fill": false,
+      "stroke": true,
+      "size": 1.5
+    }
+  ]
+}
