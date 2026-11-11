@@ -37,6 +37,35 @@
     if(lines.length*step>height-2*margin) throw new Error('Letter is too long for one page. Shorten it, reduce its font size, or reduce spacing or margins.');
     return {x,y,width,height,margin,size,step,lines};
   }
+  function textLayout(a) {
+    const size=Math.max(8,Math.min(120,a.size||24));
+    const x=Math.max(12,Math.min(WIDTH-80,a.x??12));
+    const y=Math.max(12,Math.min(HEIGHT-size-12,a.y??12));
+    const maxWidth=WIDTH-12-x, maxHeight=HEIGHT-12-y, lineHeight=size*1.2, lines=[];
+    ctx.font=`${size}px sans-serif`;
+    const pushWrapped = source => {
+      let line='';
+      for(const word of source.split(/\s+/).filter(Boolean)) {
+        const candidate=line?`${line} ${word}`:word;
+        if(ctx.measureText(candidate).width<=maxWidth) { line=candidate; continue; }
+        if(line) { lines.push(line); line=''; }
+        for(const character of Array.from(word)) {
+          if(line&&ctx.measureText(line+character).width>maxWidth) { lines.push(line);line=''; }
+          line+=character;
+        }
+      }
+      lines.push(line);
+    };
+    (a.text||'').split('\n').forEach(pushWrapped);
+    const maxLines=Math.max(1,Math.floor(maxHeight/lineHeight));
+    if(lines.length>maxLines) {
+      lines.length=maxLines;
+      let last=lines[maxLines-1];
+      while(last&&ctx.measureText(`${last}…`).width>maxWidth) last=Array.from(last).slice(0,-1).join('');
+      lines[maxLines-1]=`${last}…`;
+    }
+    return {x,y,size,lineHeight,lines,width:Math.max(0,...lines.map(line=>ctx.measureText(line).width)),height:lines.length*lineHeight};
+  }
   function paint(a, progress = 1) {
     ctx.save(); style(a);
     if (a.kind === 'erase') ctx.globalCompositeOperation = 'destination-out';
@@ -57,9 +86,10 @@
       let remaining=Math.ceil(lines.reduce((n,line)=>n+Array.from(line).length,0)*progress);
       lines.forEach((line,i)=>{const chars=Array.from(line);ctx.fillText(chars.slice(0,Math.max(0,remaining)).join(''),anchor,y+margin+i*step);remaining-=chars.length;});
     } else if (a.kind === 'text') {
-      ctx.font = `${Math.max(8,a.size || 24)}px sans-serif`; ctx.textBaseline = 'top';
-      const text = (a.text || '').slice(0, Math.ceil((a.text || '').length * progress));
-      text.split('\n').forEach((line,i) => ctx.fillText(line, a.x || 0, (a.y || 0) + i * (a.size || 24) * 1.2));
+      const layout=textLayout(a), chars=Math.ceil(Array.from(a.text||'').length*progress);
+      ctx.font=`${layout.size}px sans-serif`;ctx.textBaseline='top';
+      let remaining=chars;
+      layout.lines.forEach((line,i)=>{const visible=Array.from(line).slice(0,Math.max(0,remaining)).join('');ctx.fillText(visible,layout.x,layout.y+i*layout.lineHeight);remaining-=Array.from(line).length;});
     } else {
       ctx.beginPath();
       if (a.kind === 'ellipse') ctx.ellipse((a.x||0)+(a.width||0)/2,(a.y||0)+(a.height||0)/2,Math.abs(a.width||0)/2,Math.abs(a.height||0)/2,-Math.PI/2,0,Math.PI*2*progress);
@@ -75,7 +105,7 @@
   function bounds(a) {
     if(a.kind==='letter') { const p=letterLayout(a);return [p.x,p.y,p.width,p.height]; }
     if (a.points) { const xs=a.points.map(p=>p[0]), ys=a.points.map(p=>p[1]); return [Math.min(...xs),Math.min(...ys),Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys)]; }
-    if(a.kind==='text') { ctx.font=`${a.size||24}px sans-serif`; const lines=(a.text||'').split('\n'); return [a.x||0,a.y||0,Math.max(...lines.map(l=>ctx.measureText(l).width)),lines.length*(a.size||24)*1.2]; }
+    if(a.kind==='text') { const p=textLayout(a);return [p.x,p.y,p.width,p.height]; }
     return [a.x||0,a.y||0,a.width||0,a.height||0];
   }
   function render(preview = null, progress = 1, selection = true) {
