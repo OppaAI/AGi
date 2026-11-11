@@ -132,8 +132,14 @@
     if(a.color) { if(!/^#[0-9a-f]{6}$/i.test(a.color)) throw new Error('Invalid color');out.color=a.color; }
     out.fill=a.fill===true;
     if(['line','path','erase'].includes(a.kind)) { if(!Array.isArray(a.points)||!a.points.length||a.points.length>2000) throw new Error('Invalid drawing path');out.points=a.points.map(p=>{if(!Array.isArray(p)||p.length!==2||p.some(v=>typeof v!=='number'||!Number.isFinite(v))) throw new Error('Invalid path point');return [Math.max(0,Math.min(WIDTH,p[0])),Math.max(0,Math.min(HEIGHT,p[1]))];}); }
+    if(['rectangle','ellipse'].includes(out.kind)) {
+      out.width=Math.min(out.width??0,WIDTH);out.height=Math.min(out.height??0,HEIGHT);
+      out.x=Math.min(out.x??0,WIDTH-out.width);out.y=Math.min(out.y??0,HEIGHT-out.height);
+    }
     if(out.kind==='letter') {
       Object.assign(out,{x:out.x??270,y:out.y??20,width:out.width??460,height:out.height??610,size:out.size??16});
+      out.width=Math.min(out.width,WIDTH);out.height=Math.min(out.height,HEIGHT);
+      out.x=Math.min(out.x,WIDTH-out.width);out.y=Math.min(out.y,HEIGHT-out.height);
       letterLayout(out);
     }
     return out;
