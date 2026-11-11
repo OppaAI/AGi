@@ -18,8 +18,8 @@ jobs:
         run: python -m pip install pytest httpx
       - name: Check AIVA launch script syntax
         run: bash -n AIVA/launch.sh
-      - name: Compile AIVA chat and signal packages
-        run: python -m compileall -q AIVA/src/central_neural_system/aiva_chat/aiva_chat AIVA/src/central_neural_system/cryptic_signal_core/aiva_cryptic_signal_core
+      - name: Compile AIVA chat, logging, and signal packages
+        run: python -m compileall -q AIVA/src/central_neural_system/aiva_chat/aiva_chat AIVA/src/central_neural_system/agi_logging/agi_logging AIVA/src/central_neural_system/cryptic_signal_core/aiva_cryptic_signal_core
       - name: Test AIVA chat, launch services, memory, and signal encoding
         env:
           PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
@@ -36,11 +36,11 @@ jobs:
         run: |
           /usr/bin/python3 -m venv --system-site-packages .venv
           .venv/bin/python -m pip install pytest httpx
-      - name: Build AIVA chat and ROS message packages
+      - name: Build AIVA chat, logging, and ROS message packages
         run: |
           source /opt/ros/jazzy/setup.bash
           cd AIVA
-          colcon build --base-paths src/central_neural_system --packages-up-to aiva_chat
+          colcon build --base-paths src/central_neural_system --packages-up-to aiva_chat agi_logging
       - name: Run tests against the ROS graph
         env:
           AIVA_TEST_WITH_ROS: "1"
