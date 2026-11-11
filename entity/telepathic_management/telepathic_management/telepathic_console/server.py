@@ -122,7 +122,9 @@ def _parameter_values(data: dict) -> dict:
     # ROS 2 allows node-specific selectors as well as the /** wildcard.
     # Merge them for display; wildcard values are the editable source of truth.
     merged: dict = {}
-    for block in data.values():
+    blocks = [block for selector, block in data.items() if selector != "/**"]
+    blocks.append(data.get("/**", {}))
+    for block in blocks:
         params = block.get("ros__parameters", {}) if isinstance(block, dict) else {}
         if isinstance(params, dict):
             merged.update(params)
@@ -173,7 +175,9 @@ async def put_settings(request: Request) -> dict:
     if unknown:
         raise HTTPException(status_code=400, detail=f"Unknown or read-only setting: {sorted(unknown)[0]}")
     current = _read_settings()
-    params = _parameter_values(current).copy()
+    wildcard = current.get("/**", {})
+    params = wildcard.get("ros__parameters", {}) if isinstance(wildcard, dict) else {}
+    params = params.copy() if isinstance(params, dict) else {}
     for key, raw in values.items():
         _, label, _, _, default, minimum, maximum = _SETTING_INDEX[key]
         if isinstance(default, bool):
@@ -193,7 +197,8 @@ async def put_settings(request: Request) -> dict:
             selected_params = block.get("ros__parameters")
             if isinstance(selected_params, dict) and key in selected_params:
                 selected_params[key] = raw
-    effective = {key: params.get(key, entry[4]) for key, entry in _SETTING_INDEX.items()}
+    displayed = _parameter_values(current)
+    effective = {key: displayed.get(key, entry[4]) for key, entry in _SETTING_INDEX.items()}
     effective.update(values)
     if effective["scs.cortical_capacity"] <= effective["scs.cognitive_reserve"] + effective["scs.emc.recall_reserve"]:
         raise HTTPException(status_code=422, detail="Cortical capacity must exceed cognitive and recall reserves combined")
@@ -202,17 +207,21 @@ async def put_settings(request: Request) -> dict:
     current["/**"] = current.get("/**") if isinstance(current.get("/**"), dict) else {}
     current["/**"]["ros__parameters"] = params
     path = _settings_path()
+    temp_path = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         serialized = yaml.safe_dump(current, sort_keys=False, allow_unicode=True)
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as temp:
+            temp_path = Path(temp.name)
             temp.write(serialized)
             temp.flush()
             os.fsync(temp.fileno())
-            temp_path = Path(temp.name)
         os.replace(temp_path, path)
     except OSError as error:
         raise HTTPException(status_code=500, detail=f"Could not save AuRoRA settings: {error}") from error
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
     return {"saved": sorted(values), "path": str(path), "apply": "restart"}
 
 
