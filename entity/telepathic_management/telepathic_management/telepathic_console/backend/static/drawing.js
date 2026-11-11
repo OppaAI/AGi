@@ -207,7 +207,11 @@
       }catch(error){stop(error.message);}
     } else if(event.type==='canvas_done') {
       const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);requestId=null;setBusy(false);status('Grace finished. You can edit the drawing or ask for changes.');}});
-    } else if(event.type==='canvas_error') stop(`Grace could not draw: ${event.content}`);
+    } else if(event.type==='canvas_error') {
+      const detail=String(event.content||'The drawing request failed.');
+      $('drawResponse').textContent=`I couldn't finish that drawing: ${detail}`;
+      stop(`Grace could not draw: ${detail}`);
+    }
   });
   window.addEventListener('pagehide',()=>{token++;ros.close();},{once:true});
 })();
