@@ -64,3 +64,18 @@ loop are future work. Planning occurs before the animated replay. Browser pages
 have independent artwork; the memory service records the requested action plan,
 while the actual editable document is saved locally. PNG export saves an image.
 Rebuild/source AIVA's packages after updating so the node and packaged pages match.
+
+### Painting studio
+
+Canvas Studio adds a 16-color artist palette plus arbitrary hex colors, separate
+outline and fill colors, ink/soft/marker brushes, transparency, linear/radial
+fills, and closed freehand contours. Select an object to load its paint settings,
+then use **Apply to selection**; front/back controls reorder objects. Letter
+controls are under **Typography & letter layout**. Existing saved art still loads.
+
+Grace's drawing tool accepts `polygon`, `smooth`, `fill_color`, `gradient_color`,
+`gradient`, `opacity`, `brush`, and `stroke`, plus `style`, `front`, and `back`
+editing actions. Her instructions encourage layered compositions, varied palettes,
+consistent lighting, and shadows/highlights. This expands vector illustration
+capabilities; it does not add a photographic image generator or visual feedback
+loop. Live drawing quality still depends on the configured model's tool output.

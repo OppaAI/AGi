@@ -10,28 +10,40 @@
 <script src="/static/drawing.js" defer></script>
 </head>
 <body>
-<header><a href="/">← Chat with Grace</a><h1>✦ Canvas</h1><button id="themeToggle" type="button">◐ <span>Dark</span></button></header>
+<header><a href="/">← Chat with Grace</a><div class="studio-title"><span>GRACE’S CREATIVE WORKSPACE</span><h1>Canvas Studio</h1></div><button id="themeToggle" type="button">◐ <span>Dark</span></button></header>
 <main>
+<div class="workspace-intro"><div><h2>Make something beautiful.</h2><p>Paint together, explore color, and bring an idea to life.</p></div><span class="document-badge">1000 × 650 · Browser autosave</span></div>
 <section class="studio" aria-label="Drawing workspace">
 <div class="tools" role="toolbar" aria-label="Drawing tools">
-<label>Tool <select id="drawTool"><option value="path">Brush</option><option value="erase">Eraser</option><option value="select">Select / move</option><option value="line">Line</option><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="text">Text</option></select></label>
-<label>Color <input type="color" id="drawColor" value="#183b65"></label>
+<label>Tool <select id="drawTool"><option value="path">Brush</option><option value="polygon">Filled contour</option><option value="erase">Eraser</option><option value="select">Select / move</option><option value="line">Line</option><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="text">Text</option></select></label>
+<label>Color <input type="color" id="drawColor" value="#c75b4b"></label>
 <label>Size <input id="drawSize" type="number" min="1" max="120" value="5"></label>
 <label><input id="drawFill" type="checkbox"> Fill shapes</label>
-<label class="text-tool">Text <textarea id="drawText" placeholder="Click the canvas to place text, or use Add letter page. Blank lines separate paragraphs." maxlength="2000" rows="3"></textarea></label>
 </div>
-<div class="tools letter-tools" role="group" aria-label="Letter formatting">
+
+<div class="tools paint-tools" role="group" aria-label="Painting controls">
+<label>Brush <select id="drawBrush"><option value="ink">Ink</option><option value="soft">Soft paint</option><option value="marker">Marker</option></select></label>
+<label>Opacity <input id="drawOpacity" type="range" min="1" max="100" value="100" aria-label="Brush opacity"></label>
+<label>Fill <input id="fillColor" type="color" value="#ed8060"></label>
+<label>Blend to <input id="gradientColor" type="color" value="#f4c56a"></label>
+<label>Gradient <select id="drawGradient"><option value="none">Solid</option><option value="linear">Linear</option><option value="radial">Radial</option></select></label>
+<label><input id="drawStroke" type="checkbox" checked> Outline</label>
+<button id="applyStyle" type="button">Apply to selection</button>
+</div>
+<div class="tools palette-bar"><span>Artist palette</span><div id="colorPalette" aria-label="Color palette"></div></div>
+<details class="writing-tools"><summary>Typography &amp; letter layout</summary><div class="tools"><label class="text-tool">Text <textarea id="drawText" placeholder="Click the canvas to place text, or use Add letter page. Blank lines separate paragraphs." maxlength="2000" rows="3"></textarea></label>
+</div><div class="tools letter-tools" role="group" aria-label="Letter formatting">
 <label>Letter alignment <select id="letterAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
 <label>Margin <input id="letterMargin" type="number" min="0" max="100" value="40"></label>
 <label>Line spacing <select id="letterSpacing"><option value="1">Single</option><option value="1.5" selected>1.5</option><option value="2">Double</option></select></label>
 <button id="drawLetter" type="button">Add letter page</button>
 <span>Uses the text above at 16 px. Select a letter to edit its text and formatting.</span>
-</div>
-<div class="drawing-actions"><button id="drawUndo">Undo</button><button id="drawRedo">Redo</button><button id="drawDelete">Delete selected</button><button id="drawClear">Clear</button><button id="drawExport">Save PNG</button><button id="drawStop" disabled>Stop Grace</button></div>
+</div></details>
+<div class="drawing-actions"><button id="drawBack">Send to back</button><button id="drawFront">Bring to front</button><button id="drawUndo">Undo</button><button id="drawRedo">Redo</button><button id="drawDelete">Delete selected</button><button id="drawClear">Clear</button><button id="drawExport">Save PNG</button><button id="drawStop" disabled>Stop Grace</button></div>
 <div class="paper"><canvas id="drawingCanvas" width="1000" height="650" tabindex="0" aria-label="Shared drawing canvas, 1000 by 650 pixels"></canvas></div>
 <p id="drawStatus" role="status" aria-live="polite">Connecting to Grace…</p>
 <section class="grace-response" aria-label="Grace's response"><strong>Grace</strong><p id="drawResponse" role="status" aria-live="polite">Her reply will appear here when you ask her to draw.</p></section>
 </section>
-<form id="drawingPrompt"><label for="drawPrompt">Ask Grace to draw or write</label><div><input id="drawPrompt" placeholder="Draw a blue cat and write “Hello!” beside it" maxlength="4000" required><button id="drawAsk" disabled>Ask Grace</button></div><p>Watch her actions replay on the canvas. You can also draw, select and move objects, or undo a stroke. Artwork is saved in this browser.</p></form>
+<form id="drawingPrompt"><label for="drawPrompt">Ask Grace to draw or write</label><div><input id="drawPrompt" placeholder="Paint a sunset garden with warm light, layered flowers, and soft shadows" maxlength="4000" required><button id="drawAsk" disabled>Ask Grace</button></div><p>Watch her actions replay on the canvas. You can also draw, select and move objects, or undo a stroke. Artwork is saved in this browser.</p></form>
 </main>
 </body></html>

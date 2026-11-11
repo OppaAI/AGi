@@ -11,6 +11,15 @@ button,input,select { font:inherit; border:1px solid var(--line); border-radius:
 #drawStatus { margin:10px 0 0; color:var(--muted); } form { margin-top:14px; } form>label { margin-bottom:8px; font-weight:600; } form>div { display:flex; gap:10px; } #drawPrompt { min-width:0; flex:1; } #drawAsk { color:var(--page); background:var(--accent); border-color:var(--accent); } form p { color:var(--muted); font-size:12px; margin-bottom:0; }
 .grace-response { margin-top:12px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--page); } .grace-response p { margin:4px 0 0; white-space:pre-wrap; }
 @media(max-width:600px) { header { padding:10px 12px; } h1 { font-size:18px; } main { margin:10px auto; padding:0 8px; }.studio,form { padding:10px; }.tools,.drawing-actions { gap:7px; }.paper { padding:4px; } form>div { flex-direction:column; } }
+/* Studio chrome keeps color and painting controls close to the artwork. */
+body { background:radial-gradient(ellipse at 20% 0%,#21324f66,transparent 55%),var(--page); }
+header { padding:18px 32px; } .studio-title { text-align:center; } .studio-title>span { font-size:10px;letter-spacing:2px;color:var(--muted); } .studio-title h1 { font-size:25px;font-weight:550;letter-spacing:-.5px; }
+main { max-width:1400px;margin:28px auto; } .workspace-intro { display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 4px 20px; } .workspace-intro h2 { font-size:26px;letter-spacing:-.7px;margin:0 0 4px; } .workspace-intro p { margin:0;color:var(--muted); }.document-badge { border:1px solid var(--line);padding:6px 12px;border-radius:20px;color:var(--muted);font-size:12px; }
+.studio { padding:20px;box-shadow:0 20px 60px #0002; }.tools { font-size:12px;gap:14px; }.paint-tools { border-top:1px solid var(--line);padding-top:14px; }.palette-bar { margin:16px 0;color:var(--muted); } #colorPalette { display:flex;flex-wrap:wrap;gap:7px; }#colorPalette button { width:24px;height:24px;min-height:0;padding:0;border-radius:50%;border:2px solid #ffffff33;box-shadow:0 1px 4px #0003; }#colorPalette button:hover { outline:2px solid var(--accent);outline-offset:2px;transform:translateY(-2px); }
+.writing-tools { margin:10px 0 16px;border:1px solid var(--line);border-radius:9px;padding:10px; } summary { cursor:pointer;color:var(--muted);font-size:12px; }details[open] summary { margin-bottom:12px; }.drawing-actions { padding:12px 0;border-top:1px solid var(--line);gap:8px; }.drawing-actions button { font-size:12px; }#drawExport { margin-left:auto;border-color:var(--accent);color:var(--accent); }.paper { background:repeating-conic-gradient(#75849924 0% 25%,#6a7a9024 0% 50%) 50% / 18px 18px;padding:28px;box-shadow:inset 0 1px 10px #0002; }#drawingCanvas { border-radius:0;box-shadow:0 8px 28px #0004; }
+#drawOpacity { width:100px;accent-color:var(--accent);padding:0; }.grace-response { border-left:3px solid #c89670; }#drawingPrompt { padding:20px; }#drawPrompt { font-size:14px; }
+@media(max-width:700px) { header { padding:12px; }.studio-title>span { display:none; }.workspace-intro { align-items:flex-start;flex-direction:column; }.workspace-intro h2 { font-size:23px; }.studio { padding:12px; }.paper { padding:8px; }.tools { gap:10px; }#drawExport { margin-left:0; } }
+
 
 /* On desktop, keep the complete canvas workspace and prompt in the viewport. */
 @media (min-width: 700px) and (min-height: 620px) {
@@ -34,4 +43,10 @@ button,input,select { font:inherit; border:1px solid var(--line); border-radius:
   #drawingPrompt>div { gap:8px; }
   #drawingPrompt>div input,#drawingPrompt>div button { min-height:34px; padding:5px 9px; }
   #drawingPrompt>p { display:none; }
+}
+
+@media(min-width:700px) and (min-height:620px) {
+ .workspace-intro { margin:0;flex:0 0 auto; }.workspace-intro h2 { font-size:17px;margin:0; }.workspace-intro p { display:none; }
+ .paint-tools { padding-top:7px; }.palette-bar { margin:0; }.writing-tools { margin:0;padding:5px 9px; }.drawing-actions { padding:5px 0; }
+ .studio-title>span { display:none; }.studio-title h1 { font-size:20px; }
 }

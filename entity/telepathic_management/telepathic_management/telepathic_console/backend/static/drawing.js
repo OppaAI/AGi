@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const canvas = $('drawingCanvas'), ctx = canvas.getContext('2d');
   const WIDTH = 1000, HEIGHT = 650, KEY = 'grace-canvas-v1';
-  const kinds = new Set(['path','erase','line','rectangle','ellipse','text','letter','select','move','delete','clear','undo','redo']);
+  const kinds = new Set(['path','polygon','erase','line','rectangle','ellipse','text','letter','select','move','delete','style','front','back','clear','undo','redo']);
   let objects = [], undo = [], redo = [], selected = null, gesture = null;
   let busy = false, connected = false, token = 0, requestId = null, deadline = null;
   let inputTopic, replay = Promise.resolve();
@@ -13,7 +13,17 @@
   const uid = () => globalThis.crypto?.randomUUID?.() || `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(objects)); } catch (_) { status('Browser storage is full; use Save PNG to keep your artwork.'); } }
   function checkpoint() { undo.push(clone(objects)); if (undo.length > 50) undo.shift(); redo = []; }
-  function style(a) { ctx.strokeStyle = a.color || '#183b65'; ctx.fillStyle = a.color || '#183b65'; ctx.lineWidth = Math.max(1, a.size || 5); ctx.lineCap = ctx.lineJoin = 'round'; }
+  function style(a) {
+    ctx.strokeStyle=a.color||'#c75b4b';ctx.fillStyle=a.fill_color||a.color||'#c75b4b';
+    ctx.lineWidth=Math.max(.5,a.size??5);ctx.lineCap=ctx.lineJoin='round';
+    ctx.globalAlpha=(a.opacity??1)*(a.brush==='marker'?.4:1);
+    if(a.brush==='soft'){ctx.shadowColor=a.color||'#c75b4b';ctx.shadowBlur=Math.min(60,(a.size||5)*.8);}
+    if(a.gradient && a.gradient!=='none' && a.gradient_color){
+      const [x,y,w,h]=bounds(a),radius=Math.max(1,w,h)/2;
+      const gradient=a.gradient==='radial'?ctx.createRadialGradient(x+w*.4,y+h*.35,0,x+w/2,y+h/2,radius):ctx.createLinearGradient(x,y,x+w||x+1,y+h||y+1);
+      gradient.addColorStop(0,a.fill_color||a.color||'#c75b4b');gradient.addColorStop(1,a.gradient_color);ctx.fillStyle=gradient;
+    }
+  }
   // Lay out the complete letter before replay so wrapping stays stable as text appears.
   function letterLayout(a) {
     const x=a.x??270, y=a.y??20, width=a.width??460, height=a.height??610;
@@ -69,14 +79,18 @@
   function paint(a, progress = 1) {
     ctx.save(); style(a);
     if (a.kind === 'erase') ctx.globalCompositeOperation = 'destination-out';
-    if (['path','erase','line'].includes(a.kind)) {
+    if (['path','polygon','erase','line'].includes(a.kind)) {
       const points = a.points || []; if (!points.length) { ctx.restore(); return; }
       const travel = Math.max(0, (points.length - 1) * progress), whole = Math.floor(travel);
       ctx.beginPath(); ctx.moveTo(...points[0]);
-      for (let i = 1; i <= whole; i++) ctx.lineTo(...points[i]);
+      for (let i = 1; i <= whole; i++) {
+        if(a.smooth && i<whole)ctx.quadraticCurveTo(...points[i],(points[i][0]+points[i+1][0])/2,(points[i][1]+points[i+1][1])/2);
+        else ctx.lineTo(...points[i]);
+      }
       if (whole < points.length - 1) { const f=travel-whole;ctx.lineTo(points[whole][0]+(points[whole+1][0]-points[whole][0])*f,points[whole][1]+(points[whole+1][1]-points[whole][1])*f); }
       if (points.length === 1) ctx.lineTo(points[0][0]+.01, points[0][1]);
-      ctx.stroke();
+      if((a.fill||a.kind==='polygon') && progress===1){ctx.closePath();ctx.fill();}
+      if(a.stroke!==false||a.kind==='erase')ctx.stroke();
     } else if (a.kind === 'letter') {
       const page=letterLayout(a), {x,y,width,height,margin,size,step,lines}=page;
       ctx.fillStyle='#ffffff';ctx.fillRect(x,y,width,height);
@@ -98,7 +112,7 @@
         ctx.moveTo(x,y); const edges=progress*4;
         for(let i=0;i<4;i++) { if(edges>=i+1) ctx.lineTo(...pts[i+1]); else if(edges>i) ctx.lineTo(pts[i][0]+(pts[i+1][0]-pts[i][0])*(edges-i),pts[i][1]+(pts[i+1][1]-pts[i][1])*(edges-i)); }
       }
-      if (a.fill && progress === 1) ctx.fill(); ctx.stroke();
+      if (a.fill && progress === 1) ctx.fill(); if(a.stroke!==false)ctx.stroke();
     }
     ctx.restore();
   }
@@ -116,7 +130,12 @@
     $('drawLetter').textContent=active?.kind==='letter'?'Update letter page':'Add letter page';
   }
   function editLetter() {
-    const a=objects.find(o=>o.id===selected);if(a?.kind!=='letter')return;
+    const a=objects.find(o=>o.id===selected);if(!a)return;
+    $('drawColor').value=a.color||'#c75b4b';$('fillColor').value=a.fill_color||a.color||'#c75b4b';
+    $('drawOpacity').value=(a.opacity??1)*100;$('drawBrush').value=a.brush||'ink';
+    $('drawGradient').value=a.gradient||'none';$('gradientColor').value=a.gradient_color||'#f4c56a';
+    $('drawFill').checked=a.fill===true||a.kind==='polygon';$('drawStroke').checked=a.stroke!==false;
+    if(a.kind!=='letter')return;
     $('drawText').value=a.text||'';$('drawSize').value=a.size??16;$('drawColor').value=a.color||'#183b65';
     $('letterAlign').value=a.align||'left';$('letterMargin').value=a.margin??40;$('letterSpacing').value=String(a.line_height??1.5);
   }
@@ -130,6 +149,12 @@
     else if(a.kind==='undo') { if(undo.length) { redo.push(clone(objects));objects=undo.pop();selected=null; } }
     else if(a.kind==='redo') { if(redo.length) { undo.push(clone(objects));objects=redo.pop();selected=null; } }
     else if(a.kind==='clear') { checkpoint();objects=[];selected=null; }
+    else if(['style','front','back'].includes(a.kind)) {
+      const target=objects.find(o=>o.id===(a.id||selected));if(!target)throw new Error('Select an object first.');
+      checkpoint();
+      if(a.kind==='style')for(const key of ['color','fill_color','gradient_color','gradient','opacity','brush','stroke','fill']){if(key in a)target[key]=a[key];}
+      else {objects=objects.filter(o=>o!==target);a.kind==='front'?objects.push(target):objects.unshift(target);}
+    }
     else if(['move','delete'].includes(a.kind)) {
       const id=a.id||selected, target=objects.find(o=>o.id===id);if(!target) throw new Error('Select an object first.');
       checkpoint();if(a.kind==='delete') { objects=objects.filter(o=>o.id!==id);selected=null; } else move(target,a.dx||0,a.dy||0);
@@ -146,7 +171,7 @@
     document.querySelectorAll('.tools input,.tools select,.tools textarea,.tools button,.drawing-actions button').forEach(el=> { if(el.id!=='drawStop' && el.id!=='drawExport') el.disabled=value; });
   }
   async function animate(a, session) {
-    if(['select','move','delete','clear','undo','redo'].includes(a.kind)) { action(a); return; }
+    if(['select','move','delete','style','front','back','clear','undo','redo'].includes(a.kind)) { action(a); return; }
     if(a.kind==='letter') letterLayout(a);
     const duration=window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : (['text','letter'].includes(a.kind) ? Math.min(6000,(a.text||'').length*40) : 600);
     const start=performance.now();
@@ -156,12 +181,14 @@
   function normalize(a) {
     if(!a || !kinds.has(a.kind)) throw new Error('Unknown drawing action');
     const out={kind:a.kind};
-    for(const key of ['x','y','width','height','dx','dy','size','margin','line_height']) if(key in a) { if(typeof a[key]!=='number'||!Number.isFinite(a[key])) throw new Error('Invalid drawing coordinates');const max={x:WIDTH,y:HEIGHT,width:WIDTH,height:HEIGHT,dx:WIDTH,dy:HEIGHT,size:120,margin:100,line_height:2}[key];out[key]=Math.max(key==='dx'||key==='dy'?-max:key==='line_height'?1:0,Math.min(max,a[key])); }
+    for(const key of ['x','y','width','height','dx','dy','size','margin','line_height','opacity']) if(key in a) { if(typeof a[key]!=='number'||!Number.isFinite(a[key])) throw new Error('Invalid drawing coordinates');const max={x:WIDTH,y:HEIGHT,width:WIDTH,height:HEIGHT,dx:WIDTH,dy:HEIGHT,size:120,margin:100,line_height:2,opacity:1}[key];out[key]=Math.max(key==='dx'||key==='dy'?-max:key==='line_height'?1:0,Math.min(max,a[key])); }
     if('align' in a) { if(!['left','center','right'].includes(a.align)) throw new Error('Invalid letter alignment');out.align=a.align; }
     for(const key of ['text','id']) if(key in a) { if(typeof a[key]!=='string'||a[key].length>(key==='text'?2000:64)) throw new Error('Invalid drawing text');out[key]=a[key]; }
-    if(a.color) { if(!/^#[0-9a-f]{6}$/i.test(a.color)) throw new Error('Invalid color');out.color=a.color; }
-    out.fill=a.fill===true;
-    if(['line','path','erase'].includes(a.kind)) { if(!Array.isArray(a.points)||!a.points.length||a.points.length>2000) throw new Error('Invalid drawing path');out.points=a.points.map(p=>{if(!Array.isArray(p)||p.length!==2||p.some(v=>typeof v!=='number'||!Number.isFinite(v))) throw new Error('Invalid path point');return [Math.max(0,Math.min(WIDTH,p[0])),Math.max(0,Math.min(HEIGHT,p[1]))];}); }
+    for(const key of ['color','fill_color','gradient_color'])if(key in a){if(!/^#[0-9a-f]{6}$/i.test(a[key]))throw new Error('Invalid color');out[key]=a[key];}
+    for(const [key,choices] of [['brush',['ink','soft','marker']],['gradient',['none','linear','radial']]])if(key in a){if(!choices.includes(a[key]))throw new Error(`Invalid ${key}`);out[key]=a[key];}
+    for(const key of ['stroke','smooth'])if(key in a){if(typeof a[key]!=='boolean')throw new Error('Invalid brush option');out[key]=a[key];}
+    if(a.kind!=='style'||'fill' in a)out.fill=a.fill===true;
+    if(['line','path','polygon','erase'].includes(a.kind)) { if(!Array.isArray(a.points)||!a.points.length||a.points.length>2000) throw new Error('Invalid drawing path');out.points=a.points.map(p=>{if(!Array.isArray(p)||p.length!==2||p.some(v=>typeof v!=='number'||!Number.isFinite(v))) throw new Error('Invalid path point');return [Math.max(0,Math.min(WIDTH,p[0])),Math.max(0,Math.min(HEIGHT,p[1]))];}); }
     if(['rectangle','ellipse'].includes(out.kind)) {
       out.width=Math.min(out.width??0,WIDTH);out.height=Math.min(out.height??0,HEIGHT);
       out.x=Math.min(out.x??0,WIDTH-out.width);out.y=Math.min(out.y??0,HEIGHT-out.height);
@@ -179,9 +206,10 @@
     if(busy || e.button!==0) return; e.preventDefault();canvas.focus();canvas.setPointerCapture(e.pointerId);
     const p=point(e), kind=$('drawTool').value;
     if(kind==='select') { selected=null;for(let i=objects.length-1;i>=0;i--) { const a=objects[i];if(a.kind==='erase') continue; const [x,y,w,h]=bounds(a);if(p[0]>=x-8&&p[0]<=x+w+8&&p[1]>=y-8&&p[1]<=y+h+8){selected=a.id;break;} } editLetter();gesture={kind,start:p,original:clone(objects)};render();return; }
-    const a={kind,color:$('drawColor').value,size:Math.max(1,Math.min(120,Number($('drawSize').value)||5)),fill:$('drawFill').checked};
+    const a={kind,smooth:kind==='path',fill_color:$('fillColor').value,gradient_color:$('gradientColor').value,gradient:$('drawGradient').value,opacity:Number($('drawOpacity').value)/100,brush:$('drawBrush').value,stroke:$('drawStroke').checked,color:$('drawColor').value,size:Math.max(1,Math.min(120,Number($('drawSize').value)||5)),fill:kind==='polygon'||$('drawFill').checked};
     if(kind==='text') { a.text=$('drawText').value; a.x=p[0];a.y=p[1];if(a.text) action(a);return; }
-    a.points=[p];gesture={kind,start:p,object:a};
+    if(['rectangle','ellipse'].includes(kind))Object.assign(a,{x:p[0],y:p[1],width:0,height:0});else a.points=[p];
+    gesture={kind,start:p,object:a};
   });
   canvas.addEventListener('pointermove',e=> {
     if(!gesture || busy) return;const p=point(e),g=gesture;
@@ -195,6 +223,10 @@
     if(g.kind==='select') { if(cancel)objects=g.original;else if(selected){undo.push(g.original);redo=[];save();} }
     else if(!cancel) { try{action(normalize(g.object));}catch(e){status(e.message);} }render();
   }
+  const palette=['#211d2a','#ffffff','#b84a56','#ed8060','#f4c56a','#f4e8c1','#648c55','#234f4a','#529c9c','#4d75a0','#555080','#a57aaf','#d8a7b1','#995d43','#786b57','#b8c4b3'];
+  palette.forEach(color=>{const button=document.createElement('button');button.type='button';button.style.background=color;button.title=`Use ${color}`;button.setAttribute('aria-label',`Use ${color}`);button.addEventListener('click',()=>{$('drawColor').value=color;$('fillColor').value=color;});$('colorPalette').append(button);});
+  $('applyStyle').addEventListener('click',()=>{if(busy)return;try{action({kind:'style',color:$('drawColor').value,fill_color:$('fillColor').value,gradient_color:$('gradientColor').value,gradient:$('drawGradient').value,opacity:Number($('drawOpacity').value)/100,brush:$('drawBrush').value,fill:$('drawFill').checked,stroke:$('drawStroke').checked});}catch(error){status(error.message);}});
+  for(const kind of ['front','back'])$(kind==='front'?'drawFront':'drawBack').addEventListener('click',()=>{if(!busy)try{action({kind});}catch(error){status(error.message);}});
   $('drawTool').addEventListener('change',()=>{if($('drawTool').value==='text')$('drawSize').value=24;});
   $('drawLetter').addEventListener('click',()=> {
     if(busy)return;
