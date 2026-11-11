@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 import socket
 import time
@@ -305,6 +306,32 @@ async def canvas_page():
     return FileResponse(FRONTEND_DIR / "canvas.html")
 
 
+@app.get("/api/logs")
+async def get_logs(limit: int = 200, level: str = "ALL") -> dict:
+    """Return recent persistent ROS logs for the local WebUI log viewer."""
+    log_dir = Path(os.getenv("AGI_LOG_DIR", str(Path(os.getenv("AGI_HOME", "~/.agi")).expanduser() / "log"))).expanduser()
+    if not re.fullmatch(r"ALL|DEBUG|INFO|WARN|ERROR|FATAL", level):
+        raise HTTPException(status_code=400, detail="Invalid log level")
+    limit = max(1, min(limit, 1000))
+    entries = []
+    for path in (log_dir / "application.jsonl", log_dir / "errors.jsonl"):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise HTTPException(status_code=500, detail=f"Cannot read logs: {error}") from error
+        for line in lines[-limit:]:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if level == "ALL" or event.get("level") == level:
+                entries.append(event)
+    entries.sort(key=lambda event: event.get("timestamp", ""))
+    return {"entries": entries[-limit:], "path": str(log_dir)}
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
@@ -313,6 +340,11 @@ async def index() -> FileResponse:
 @app.get("/settings")
 async def settings_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "settings.html")
+
+
+@app.get("/logs")
+async def logs_page() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "logs.html")
 
 
 @app.websocket("/rosbridge")

@@ -23,6 +23,16 @@ The UI does not require changes to Grace's LLM or PostgreSQL memory service.
 ROS packaging installs the frontend directory and all backend static assets,
 including `console.css` and `assets/grace-chamber.webp`.
 
+## System logs
+
+The AIVA launcher stores service output and ROS logs under `~/.agi/log` by
+default. `AIVA_LOG_DIR` can override that location. ROS log records are collected
+by the `agi_logging` ROS node, saved as rotating `application.jsonl` and
+`errors.jsonl`, and published as JSON strings on `/agi/logs` for other ROS
+components. The WebUI **Logs** page reads recent entries from `/api/logs` and
+can filter by severity or refresh automatically. The collector keeps five
+10 MiB rotations per file by default.
+
 ## Canvas page
 
 Open **Canvas** from the chat header, or visit `/canvas`. Brush, eraser, line,
