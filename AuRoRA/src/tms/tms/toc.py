@@ -67,8 +67,8 @@ import threading                                                              # 
 import rclpy                                                                  # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                                   # base class for all ROS2 nodes
 from std_msgs.msg import String                                               # ROS2 string message type for topic I/O
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK   # clean disconnect vs unexpected drop — handled separately in _on_peripheral_link
-from websockets.server import ServerConnection                                # type hint for peripheral link parameter
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError, ConnectionClosedOK   # clean disconnect vs unexpected drop — handled separately in _on_peripheral_link
+from websockets.asyncio.server import ServerConnection, serve                                # type hint for peripheral link parameter
 
 from hrs.hrm import AGi                                                       # homeostatic regulation manifest namespace
 from hrs.hru import hydrate_manifest                                          # binds AuRoRA parameter server values into AGi constants at boot
@@ -78,12 +78,12 @@ TMS = AGi.TMS                                                                 # 
 class TOC(Node):
     """
     Telepathy Output Core — Robot system neural node.
-    
+
     Core for directing efferent traffic for telepathy responses from Cognitive Engine.
     Receives continous stream of CRS fragments via the motor gateway, relays the stream to all active peripheral effectors.
     Receiving -> Relaying -> Transmission
-    
-    Biological analogue: Peripheral Nervous System (PNS) — efferent projection from motor cortex, 
+
+    Biological analogue: Peripheral Nervous System (PNS) — efferent projection from motor cortex,
     outward transmission to peripheral effectors.
     """
 
@@ -104,7 +104,7 @@ class TOC(Node):
         self._active_connections = set()                                        # registry of active peripheral links to broadcast targets
 
         self._crs_receptor = self.create_subscription(                          # Open the gateway to receive the streams of CRS fragments
-            String, TMS.TEXT_RESPONSE_GATEWAY, self._on_crs_received, 10        # signal type | neural gateway | action | buffer depth 10
+            String, TMS.TEXT_RESPONSE_GATEWAY, self._receive_crs, 10        # signal type | neural gateway | action | buffer depth 10
         )
 
         # Ignite telepathy domain on its dedicated thread — never shares with main robot system processes
@@ -131,7 +131,7 @@ class TOC(Node):
         Ignites telepathy domain and retain the connection open for the neural node lifetime.
         Runs entirely on the teleeffector thread — never touches the main robot system cycle.
         """
-        self._telepathy_domain = await websockets.serve(                        # open the telepathy domain for connect to communicate with user
+        self._telepathy_domain = await serve(                        # open the telepathy domain for connect to communicate with user
             self._on_peripheral_connected,                                      # fire on each incoming peripheral connection
             TMS.TELEPATHY_GATEWAY,                                              # gateway to telepathy domain
             TMS.TELEEFFECTOR_PORTAL,                                            # portal to enter the gateway
@@ -147,17 +147,17 @@ class TOC(Node):
         Args:
             peripheral_link: Active connection from a peripheral adapter to the telepathy domain.
         """
-        self._active_connections.add(websocket)                                                 # register as broadcast target
+        self._active_connections.add(peripheral_link)                                                 # register as broadcast target
         self.get_logger().info("🔗 Telepathy output connected")                                 # TODO: log the connection to telepathy gateway
 
         try:                                                                                    # attempt to connect to telepathy domain
-            await websocket.wait_closed()                                                       # hold open — TOC pushes, WebUI doesn't send here
-        except websockets.exceptions.ConnectionClosedOK:                                        # 
+            await peripheral_link.wait_closed()                                                       # hold open — TOC pushes, WebUI doesn't send here
+        except ConnectionClosedOK:                                        #
             pass                                                                                # no action needed
-        except websockets.exceptions.ConnectionClosedError as e:                                # if error causing connection closed,
-            self.get_logger().warning(f"⚠️  Telepathy Domain disconnected unexpectedly: {e}")   # TODO: log the error 
+        except ConnectionClosedError as e:                                # if error causing connection closed,
+            self.get_logger().warning(f"⚠️  Telepathy Domain disconnected unexpectedly: {e}")   # TODO: log the error
         finally:                                                                                # on every closing path
-            self._active_connections.discard(websocket)                                         # unregister the connection
+            self._active_connections.discard(peripheral_link)                                         # unregister the connection
             self.get_logger().info("🔌 Telepathy Domain disconnected")                          #
 
     def _receive_crs(self, msg: String) -> None:
@@ -174,7 +174,7 @@ class TOC(Node):
                 return
 
             asyncio.run_coroutine_threadsafe(                                   # schedule broadcast on ws loop — crosses thread boundary safely
-                self._broadcast(payload), self._ws_loop
+                self._broadcast(payload), self._teleeffector_cycle
             )
         except (json.JSONDecodeError, ValueError):
             self.get_logger().warning("⚠️  Malformed CRS received — dropped")
@@ -192,12 +192,12 @@ class TOC(Node):
             return
 
         raw: str = json.dumps(payload)                                          # serialize once — broadcast same payload to all connections
-        dead: Set = set()                                                       # collect dead connections — pruned after iteration
+        dead: set = set()                                                       # collect dead connections — pruned after iteration
 
-        for websocket in self._active_connections:
+        for websocket in tuple(self._active_connections):
             try:
                 await websocket.send(raw)                                       # relay CRS fragment to this connection
-            except websockets.exceptions.ConnectionClosed:
+            except ConnectionClosed:
                 dead.add(websocket)                                             # mark dead — prune after iteration completes
             except Exception as e:
                 self.get_logger().warning(f"⚠️  Broadcast error: {e}")
@@ -214,18 +214,18 @@ class TOC(Node):
         async def _close():
             for ws in list(self._active_connections):                           # close all active connections cleanly
                 await ws.close()
-            if hasattr(self, "_ws_server"):
-                self._ws_server.close()
-                await self._ws_server.wait_closed()
+            if hasattr(self, "_telepathy_domain"):
+                self._telepathy_domain.close()
+                await self._telepathy_domain.wait_closed()
 
-        future = asyncio.run_coroutine_threadsafe(_close(), self._ws_loop)
+        future = asyncio.run_coroutine_threadsafe(_close(), self._teleeffector_cycle)
         try:
             future.result(timeout=3.0)
         except Exception:
             pass
 
-        self._ws_loop.call_soon_threadsafe(self._ws_loop.stop)
-        self._ws_thread.join(timeout=3.0)
+        self._teleeffector_cycle.call_soon_threadsafe(self._teleeffector_cycle.stop)
+        self._teleeffector_thread.join(timeout=3.0)
         super().destroy_node()
         self.get_logger().info("✅ TOC shutdown complete")
 

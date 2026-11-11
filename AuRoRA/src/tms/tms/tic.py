@@ -129,14 +129,9 @@ Terminology:
 """
 
 # System libraries
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-import websockets
 import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
 import hashlib                                                              # SHA-256 hashing for response echo imprints
+import math
 import json                                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                                            # owns the websocket server thread — keeps asyncio loop off the ROS2 spin thread
 import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
@@ -235,8 +230,14 @@ class TelepathyInputCore(Node):
         """
         try:                                                                                                        # attempt to interpret response echo
             echo = json.loads(response_echo.data)                                                                   # deserialize echo imprint payload
+            if not isinstance(echo, dict):
+                raise ValueError("Response echo must be an object")
             imprint = echo.get("imprint", "")                                                                       # SHA-256 hex digest of CNC outbound response
             echo_duration = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                                 # suppression window — falls back to module default
+            if not math.isfinite(echo_duration) or echo_duration <= 0:
+                raise ValueError("Response echo duration must be positive and finite")
+            if not isinstance(imprint, str):
+                raise ValueError("Response echo imprint must be a string")
             if imprint:                                                                                             # if echo contains an imprint
                 echo_expiry = time.monotonic() + echo_duration                                                      # absolute expiry time on monotonic clock
                 self._response_echoes[imprint] = echo_expiry                                                        # register imprint with expiry duration
@@ -555,7 +556,7 @@ class TelepathyInputCore(Node):
         sss.buffered_at = datetime.now(timezone.utc).isoformat()
 
         # EXTRACT — measure structural primitives
-        text          = sss.text
+        text          = sss.content
         char_len      = len(text)
         word_count    = len(text.split())
         density       = word_count / char_len if char_len > 0 else 0.0         # lexical density — words per character
@@ -621,7 +622,7 @@ class TelepathyInputCore(Node):
             signal.data = json.dumps({                                          # serialize SSS fields — CNC deserializes back into SSS
                 "radio_id"    : sss.sss_id,
                 "role"        : sss.role,
-                "text"        : sss.text,
+                "text"        : sss.content,
                 "user_id"     : sss.user_id,
                 "source"      : sss.source.value,
                 "trace_type"  : sss.trace_type.value,
@@ -636,9 +637,9 @@ class TelepathyInputCore(Node):
             self._stimulus_gateway.publish(signal)
 
             if sss.fast_path:
-                self.get_logger().info(f"⚡ SSS dispatched (fast-path): {sss.text[:60]}…")
+                self.get_logger().info(f"⚡ SSS dispatched (fast-path): {sss.content[:60]}…")
             else:
-                self.get_logger().debug(f"📤 SSS dispatched: {sss.text[:60]}…")
+                self.get_logger().debug(f"📤 SSS dispatched: {sss.content[:60]}…")
 
         except Exception as e:
             self.get_logger().error(f"❌ Publish error: {e}")                   # non-fatal — publish failure must not crash the peripheral pathway

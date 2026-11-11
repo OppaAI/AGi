@@ -4,7 +4,9 @@ import asyncio
 
 from starlette.requests import Request
 
-from tms.web_teleops_console import encode_radio_input
+import json
+from types import SimpleNamespace
+from telepathic_management.telepathic_console import server
 from tms.radio_encoding import decode_text
 
 
@@ -34,11 +36,21 @@ def _request(body: bytes, query: bytes = b"") -> Request:
     return Request(scope, receive)
 
 
-def test_encoder_endpoint_returns_binary_radio_signal() -> None:
-    response = asyncio.run(encode_radio_input(_request(b"Hello world!", b"web_search=true")))
-
-    assert response.media_type == "application/octet-stream"
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["x-radio-id"]
-    assert response.headers["x-radio-channel"] == "grace"
-    assert decode_text(response.body, int(response.headers["x-radio-symbol-count"])) == "/web Hello world!"
+def test_encoder_endpoint_publishes_typed_signal(monkeypatch) -> None:
+    monkeypatch.setenv("AGI_TELEPATHIC_CHANNEL", "grace")
+    messages = []
+    class Connection:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_):
+            pass
+        async def send(self, raw):
+            messages.append(json.loads(raw))
+    monkeypatch.setattr(server, 'websockets', SimpleNamespace(connect=lambda *a, **k: Connection(), WebSocketException=Exception))
+    response = asyncio.run(server.send_telepathic_input(_request(b"Hello world!", b"web_search=true")))
+    assert response['identifier']
+    assert messages[0]['op'] == 'advertise'
+    envelope = messages[1]
+    assert envelope['topic'] == '/telepathic/stimulus'
+    assert envelope['msg']['identifier'] == response['identifier']
+    assert decode_text(bytes(envelope['msg']['signal']), envelope['msg']['pulse']) == '/web Hello world!'

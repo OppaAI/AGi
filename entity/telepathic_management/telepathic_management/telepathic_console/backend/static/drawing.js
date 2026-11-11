@@ -12,7 +12,7 @@
   const status = text => { $('drawStatus').textContent = text; };
   const uid = () => globalThis.crypto?.randomUUID?.() || `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(objects)); } catch (_) { status('Browser storage is full; use Save PNG to keep your artwork.'); } }
-  function checkpoint() { undo.push(clone(objects)); if (undo.length > 50) undo.shift(); redo = []; }
+  function checkpoint(snapshot = objects) { undo.push(clone(snapshot)); if (undo.length > 50) undo.shift(); redo = []; }
   function style(a) {
     ctx.strokeStyle=a.color||'#c75b4b';ctx.fillStyle=a.fill_color||a.color||'#c75b4b';
     ctx.lineWidth=Math.max(.5,a.size??5);ctx.lineCap=ctx.lineJoin='round';
@@ -106,7 +106,7 @@
       layout.lines.forEach((line,i)=>{const visible=Array.from(line).slice(0,Math.max(0,remaining)).join('');ctx.fillText(visible,layout.x,layout.y+i*layout.lineHeight);remaining-=Array.from(line).length;});
     } else {
       ctx.beginPath();
-      if (a.kind === 'ellipse') ctx.ellipse((a.x||0)+(a.width||0)/2,(a.y||0)+(a.height||0)/2,Math.abs(a.width||0)/2,Math.abs(a.height||0)/2,-Math.PI/2,0,Math.PI*2*progress);
+      if (a.kind === 'ellipse') ctx.ellipse((a.x||0)+(a.width||0)/2,(a.y||0)+(a.height||0)/2,Math.abs(a.width||0)/2,Math.abs(a.height||0)/2,0,-Math.PI/2,-Math.PI/2+Math.PI*2*progress);
       else if (a.kind === 'rectangle') {
         const x=a.x||0,y=a.y||0,w=a.width||0,h=a.height||0, pts=[[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
         ctx.moveTo(x,y); const edges=progress*4;
@@ -140,6 +140,9 @@
     $('letterAlign').value=a.align||'left';$('letterMargin').value=a.margin??40;$('letterSpacing').value=String(a.line_height??1.5);
   }
   function move(a,dx,dy) {
+    const [bx,by,bw,bh]=bounds(a);
+    dx=Math.max(-bx,Math.min(WIDTH-bx-bw,dx));
+    dy=Math.max(-by,Math.min(HEIGHT-by-bh,dy));
     if(a.points) a.points=a.points.map(([x,y])=>[x+dx,y+dy]);
     else if(a.kind==='letter') { a.x=Math.max(0,Math.min(WIDTH-a.width,a.x+dx));a.y=Math.max(0,Math.min(HEIGHT-a.height,a.y+dy)); }
     else { a.x=(a.x||0)+dx;a.y=(a.y||0)+dy; }
@@ -203,7 +206,7 @@
   }
   function point(e) { const r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(WIDTH,(e.clientX-r.left)*WIDTH/r.width)),Math.max(0,Math.min(HEIGHT,(e.clientY-r.top)*HEIGHT/r.height))]; }
   canvas.addEventListener('pointerdown',e=> {
-    if(busy || e.button!==0) return; e.preventDefault();canvas.focus();canvas.setPointerCapture(e.pointerId);
+    if(busy || gesture || e.button!==0 || e.isPrimary===false) return; e.preventDefault();canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);
     const p=point(e), kind=$('drawTool').value;
     if(kind==='select') { selected=null;for(let i=objects.length-1;i>=0;i--) { const a=objects[i];if(a.kind==='erase') continue; const [x,y,w,h]=bounds(a);if(p[0]>=x-8&&p[0]<=x+w+8&&p[1]>=y-8&&p[1]<=y+h+8){selected=a.id;break;} } editLetter();gesture={kind,start:p,original:clone(objects)};render();return; }
     const a={kind,smooth:kind==='path',fill_color:$('fillColor').value,gradient_color:$('gradientColor').value,gradient:$('drawGradient').value,opacity:Number($('drawOpacity').value)/100,brush:$('drawBrush').value,stroke:$('drawStroke').checked,color:$('drawColor').value,size:Math.max(1,Math.min(120,Number($('drawSize').value)||5)),fill:kind==='polygon'||$('drawFill').checked};
@@ -220,7 +223,7 @@
   });
   function finishGesture(cancel=false) {
     if(!gesture)return;const g=gesture;gesture=null;
-    if(g.kind==='select') { if(cancel)objects=g.original;else if(selected){undo.push(g.original);redo=[];save();} }
+    if(g.kind==='select') { if(cancel)objects=g.original;else if(selected){checkpoint(g.original);save();} }
     else if(!cancel) { try{action(normalize(g.object));}catch(e){status(e.message);} }render();
   }
   const palette=['#211d2a','#ffffff','#b84a56','#ed8060','#f4c56a','#f4e8c1','#648c55','#234f4a','#529c9c','#4d75a0','#555080','#a57aaf','#d8a7b1','#995d43','#786b57','#b8c4b3'];
@@ -271,7 +274,7 @@
       try {
         if(!Array.isArray(event.actions)||!event.actions.length||event.actions.length>100)throw new Error('Invalid drawing plan');
         const actions=event.actions.map(normalize),session=token;status('Grace is drawing…');
-        replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`Grace is drawing · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>stop(error.message));
+        replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`Grace is drawing · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>{if(session===token)stop(error.message);});
       }catch(error){stop(error.message);}
     } else if(event.type==='canvas_done') {
       const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);requestId=null;setBusy(false);status('Grace finished. You can edit the drawing or ask for changes.');}});
