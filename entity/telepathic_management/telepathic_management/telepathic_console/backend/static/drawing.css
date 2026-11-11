@@ -11,3 +11,27 @@ button,input,select { font:inherit; border:1px solid var(--line); border-radius:
 #drawStatus { margin:10px 0 0; color:var(--muted); } form { margin-top:14px; } form>label { margin-bottom:8px; font-weight:600; } form>div { display:flex; gap:10px; } #drawPrompt { min-width:0; flex:1; } #drawAsk { color:var(--page); background:var(--accent); border-color:var(--accent); } form p { color:var(--muted); font-size:12px; margin-bottom:0; }
 .grace-response { margin-top:12px; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--page); } .grace-response p { margin:4px 0 0; white-space:pre-wrap; }
 @media(max-width:600px) { header { padding:10px 12px; } h1 { font-size:18px; } main { margin:10px auto; padding:0 8px; }.studio,form { padding:10px; }.tools,.drawing-actions { gap:7px; }.paper { padding:4px; } form>div { flex-direction:column; } }
+
+/* On desktop, keep the complete canvas workspace and prompt in the viewport. */
+@media (min-width: 700px) and (min-height: 620px) {
+  body { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+  header { flex:0 0 auto; min-height:52px; padding:7px 20px; }
+  main { width:min(1400px,100%); height:calc(100vh - 52px); height:calc(100dvh - 52px); margin:0 auto; padding:8px 16px; display:flex; flex-direction:column; gap:8px; min-height:0; }
+  .studio { flex:1 1 auto; min-height:0; padding:10px; display:flex; flex-direction:column; gap:7px; }
+  .tools,.drawing-actions { flex:0 0 auto; gap:8px; margin:0; }
+  .tools label { gap:5px; }
+  .text-tool { min-width:180px; }
+  .text-tool textarea { height:44px; min-height:38px; resize:none; }
+  .letter-tools span { display:none; }
+  .drawing-actions button { min-height:32px; padding:4px 9px; }
+  .paper { flex:1 1 auto; min-height:80px; display:grid; place-items:center; padding:6px; }
+  #drawingCanvas { width:min(100%, calc((100dvh - 410px) * 1.53846)); max-height:100%; height:auto; }
+  #drawStatus { flex:0 0 auto; margin:0; min-height:18px; }
+  .grace-response { flex:0 0 auto; max-height:62px; overflow:auto; margin:0; padding:6px 10px; }
+  .grace-response p { margin-top:2px; }
+  #drawingPrompt { flex:0 0 auto; margin:0; padding:8px 12px; }
+  #drawingPrompt>label { margin:0 0 4px; }
+  #drawingPrompt>div { gap:8px; }
+  #drawingPrompt>div input,#drawingPrompt>div button { min-height:34px; padding:5px 9px; }
+  #drawingPrompt>p { display:none; }
+}
