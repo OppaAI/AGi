@@ -54,10 +54,17 @@ namespace Aiva.GraceAR
             var emission = particles.emission;
             emission.rateOverTime = 5f;
             var shape = particles.shape;
-            shape.shapeType = ParticleSystemShapeType.Cylinder;
-            shape.radius = 0.48f;
-            shape.height = 0.1f;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.24f;
+            shape.rotation = new Vector3(-90f, 0f, 0f);
             shape.position = Vector3.zero;
+            var velocity = particles.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.space = ParticleSystemSimulationSpace.Local;
+            velocity.y = 0.28f;
+            main.startSpeed = 0f;
+            var renderer = particles.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = CreateTransparentMaterial(new Color(0.7f, 1f, 1f, 0.5f));
         }
 
         private static void CreateCylinder(string name, Transform parent, Vector3 position, Vector3 scale, Material material)

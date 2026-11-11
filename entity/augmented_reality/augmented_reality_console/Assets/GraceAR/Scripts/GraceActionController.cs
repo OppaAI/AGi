@@ -12,12 +12,14 @@ namespace Aiva.GraceAR
         private Quaternion _upperRest;
         private Quaternion _lowerRest;
         private Vector3 _modelRestPosition;
+        private Quaternion _modelRestRotation;
         private Coroutine _action;
 
         public void Bind(GameObject model)
         {
             _model = model.transform;
             _modelRestPosition = _model.localPosition;
+            _modelRestRotation = _model.localRotation;
             _animator = model.GetComponent<Animator>();
             if (_animator == null || !_animator.isHuman)
             {
@@ -40,15 +42,23 @@ namespace Aiva.GraceAR
         public void Wave()
         {
             if (_rightUpperArm == null || _rightLowerArm == null) return;
-            if (_action != null) StopCoroutine(_action);
+            ResetAction();
             _action = StartCoroutine(WaveRoutine());
         }
 
         public void TurnAround()
         {
             if (_model == null) return;
-            if (_action != null) StopCoroutine(_action);
+            ResetAction();
             _action = StartCoroutine(TurnRoutine());
+        }
+
+        private void ResetAction()
+        {
+            if (_action != null) StopCoroutine(_action);
+            if (_rightUpperArm != null) _rightUpperArm.localRotation = _upperRest;
+            if (_rightLowerArm != null) _rightLowerArm.localRotation = _lowerRest;
+            if (_model != null) _model.localRotation = _modelRestRotation;
         }
 
         private IEnumerator WaveRoutine()

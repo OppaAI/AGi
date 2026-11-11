@@ -9,9 +9,15 @@ This Unity project places Grace's complete liquid chamber in an Android ARCore s
 - Procedural transparent chamber, liquid, illuminated rings, and bubbles.
 - Tap a detected floor to place or move the chamber.
 - Grace gently floats and has initial **Wave** and **Turn** actions.
-- The chamber remains fixed while ARCore's current tracking session is alive.
+- Real AR anchors keep the chamber placed during the current tracking session.
+- Printable image marker restores its saved room-relative placement after restarting.
+- Connect to AIVA's WebUI gateway for streamed chat through ROS, using Grace's shared memory.
+- Canvas button opens the hosted Canvas Studio in the phone's browser.
 
-Persistent recognition of the exact lab corner after fully closing the app will use an image marker mounted near that corner. That is the next milestone; a plain saved coordinate is not reliable because ARCore creates a new origin in each session.
+The marker workflow saves the chamber pose relative to a printed physical image, rather than
+saving ARCore world coordinates. Rescanning that fixed marker restores the pose in a new session.
+Accuracy depends on ARCore tracking, lighting, and keeping the physical marker in the same place.
+This implementation still needs a Unity Android build and real-device validation.
 
 ## Open and build
 
@@ -35,3 +41,34 @@ The first launch needs camera permission. Move the phone slowly until a floor is
 - `Assets/GraceAR/Scripts/GraceActionController.cs`: floating and actions.
 - `Assets/GraceAR/Editor/GraceArProjectSetup.cs`: Android and scene setup.
 
+
+## Remember a room location
+
+The setup menu generates `Assets/GraceAR/GraceMarker.png` and a reference-image library.
+Print the **whole square image at exactly 15 × 15 cm**, without cropping, and mount it flat
+in a fixed, well-lit location near the chamber. Scan the marker first, then use **Place / Move**
+and tap a horizontal surface. The phone saves the relative pose in its app preferences.
+After reopening, scan the same marker: the chamber is restored and attached to a new session
+anchor. Once restored, the marker may leave the camera view. Moving the physical marker moves
+the reference location; clearing app data removes the saved pose. Placement without a visible
+tracked marker is session-only. Marker recognition quality must be checked on the target phone.
+
+## Connect to Grace and Canvas
+
+Start AIVA, then enter a phone-reachable WebUI gateway URL in the AR app and tap **Connect to
+AIVA**. Use the HTTPS address from Tailscale Serve, or the PC's LAN address if the console is
+explicitly bound to its LAN interface. `127.0.0.1` on a phone refers to the phone, not the PC.
+The project allows HTTP for a local gateway; HTTPS uses WSS for the ROS bridge.
+
+AR chat uses `/rosbridge`, publishes JSON prompts on `/aiva/chat_input`, and receives streamed
+replies on `/tms/text_response`. Request IDs keep responses separate from other clients. The
+phone stores the gateway and room pose locally; LLM credentials and conversation memory stay
+on AIVA. AIVA must be online for chat. **Canvas** opens `/canvas` in the system browser; drawing
+is not embedded onto a surface in the AR scene. The browser keeps its own drawing document.
+Canvas requests use Grace's recent shared conversation context and persist prompts, replies,
+and the proposed drawing commands to the same SQLite memory as normal chat.
+
+Rebuild AIVA as well as the Android app for correlated chat events. Check ARCore is enabled in
+XR Plug-in Management after running setup. The setup keeps Standard/MToon shaders for runtime
+VRM loading and adds a key light. Hardware checks remaining: package import/build, camera
+permissions, marker detection/scale, anchor drift, avatar appearance, and gateway streaming.
