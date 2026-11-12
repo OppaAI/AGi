@@ -11,6 +11,10 @@
         "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.js"
       }}
     </script>
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" crossorigin>
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js" crossorigin>
+    <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.js" crossorigin>
+    <link rel="preload" href="/static/assets/Grace.vrm" as="fetch" crossorigin fetchpriority="high">
     <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
     <link rel="icon" href="/static/assets/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css?v=presence-host-status">
@@ -201,7 +205,7 @@
         <div class="mini-status" id="miniStatus" hidden><span id="statusEmoji">✦</span><span id="miniStatusText">Grace is here</span><span id="connDot"></span><span id="connText">Connecting</span></div>
     </div>
     <script src="/static/script.js?v=chat-metrics-20261111" defer></script>
-    <script type="module" src="/static/avatar.js?v=presence-host-status"></script>
+    <script type="module" src="/static/avatar.js?v=vrm-preload-20261111"></script>
     <script src="/static/presence.js?v=presence-host-status" defer></script>
 </body>
 </html>
