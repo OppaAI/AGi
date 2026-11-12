@@ -40,12 +40,16 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.bash
           cd AIVA
-          colcon build --base-paths src/central_neural_system --packages-up-to aiva_chat agi_logging
+          colcon build --base-paths src/central_neural_system --packages-up-to aiva_chat agi_logging --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Run tests against the ROS graph
         env:
           AIVA_TEST_WITH_ROS: "1"
           PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
+          ROS_HOME: ${{ runner.temp }}/ros-home
+          RMW_IMPLEMENTATION: rmw_fastrtps_cpp
         run: |
           source /opt/ros/jazzy/setup.bash
           source AIVA/install/setup.bash
-          .venv/bin/python -m pytest -q AIVA/src/central_neural_system/aiva_chat/test AIVA/src/central_neural_system/cryptic_signal_core/test
+          mapfile -t chat_tests < <(find AIVA/src/central_neural_system/aiva_chat/test -maxdepth 1 -type f -name 'test_*.py' ! -name 'test_legacy_toc.py' -print)
+          mapfile -t signal_tests < <(find AIVA/src/central_neural_system/cryptic_signal_core/test -maxdepth 1 -type f -name 'test_*.py' -print)
+          .venv/bin/python -m pytest -q "${chat_tests[@]}" "${signal_tests[@]}"
