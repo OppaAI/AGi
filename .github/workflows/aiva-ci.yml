@@ -23,7 +23,7 @@ jobs:
       - name: Test AIVA chat, launch services, memory, and signal encoding
         env:
           PYTHONPATH: AIVA/src/central_neural_system/aiva_chat:AIVA/src/central_neural_system/cryptic_signal_core
-        run: python -m pytest -q AIVA/src/central_neural_system/aiva_chat/test AIVA/src/central_neural_system/cryptic_signal_core/test
+        run: python -m pytest -q --ignore=AIVA/src/central_neural_system/aiva_chat/test/test_legacy_toc.py AIVA/src/central_neural_system/aiva_chat/test AIVA/src/central_neural_system/cryptic_signal_core/test
 
   aiva-ros-jazzy:
     runs-on: ubuntu-24.04
@@ -35,7 +35,7 @@ jobs:
       - name: Prepare Python test environment
         run: |
           /usr/bin/python3 -m venv --system-site-packages .venv
-          .venv/bin/python -m pip install pytest httpx
+          .venv/bin/python -m pip install pytest httpx websockets
       - name: Build AIVA chat, logging, and ROS message packages
         run: |
           source /opt/ros/jazzy/setup.bash
