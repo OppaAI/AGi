@@ -641,7 +641,7 @@
                         } else if (data.type === 'delta') {
                             appendToStream(data.content);
                         } else if (data.type === 'done') {
-                            finishStreaming();
+                            finishStreaming(data.metrics || null);
                             latestResponseId = data.radio_id || generateResponseId();
                             positiveRewardCount = 0;
                             negativeRewardCount = 0;
@@ -921,13 +921,15 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
-        function finishStreaming() {
+        function finishStreaming(metrics = null) {
             isStreaming = false;
             isSpeaking = false;
 
             if (currentStreamMessage) {
-                const cursor = currentStreamMessage.querySelector('.streaming-cursor');
+                const completedMessage = currentStreamMessage;
+                const cursor = completedMessage.querySelector('.streaming-cursor');
                 if (cursor) cursor.remove();
+                if (metrics) appendMessageMetrics(completedMessage, metrics);
             }
 
             userInput.disabled = false;
@@ -953,7 +955,8 @@
                     .map((element) => ({
                         sender: element.classList.contains('user') ? 'user' : 'grace',
                         text: element.querySelector('.message-content')?.dataset.rawMarkdown || element.querySelector('.message-content')?.textContent || '',
-                        time: element.querySelector('.message-time')?.dateTime || new Date().toISOString()
+                        time: element.querySelector('.message-time')?.dateTime || new Date().toISOString(),
+                        metrics: element.dataset.metrics ? JSON.parse(element.dataset.metrics) : null
                     }))
                     .filter((message) => message.text.trim().length > 0)
                     .slice(-CHAT_HISTORY_LIMIT);
@@ -969,7 +972,7 @@
                 if (!Array.isArray(history)) return;
                 history.slice(-CHAT_HISTORY_LIMIT).forEach((message) => {
                     if (!message || !['user', 'grace'].includes(message.sender) || typeof message.text !== 'string') return;
-                    createMessageElement(message.sender, message.text, message.time, false);
+                    createMessageElement(message.sender, message.text, message.time, false, message.metrics);
                 });
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             } catch (error) {
@@ -977,7 +980,7 @@
             }
         }
 
-        function createMessageElement(sender, text, timestampValue = new Date().toISOString(), persist = true) {
+        function createMessageElement(sender, text, timestampValue = new Date().toISOString(), persist = true, metrics = null) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${sender}`;
 
@@ -1007,11 +1010,54 @@
             timestamp.dateTime = validTime.toISOString();
             timestamp.textContent = validTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             msgDiv.appendChild(timestamp);
+            if (sender === 'grace' && metrics) appendMessageMetrics(msgDiv, metrics);
             chatContainer.appendChild(msgDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             if (persist && text.trim()) saveChatHistory();
 
             return msgDiv;
+        }
+
+        function appendMessageMetrics(message, metrics) {
+            if (!metrics || message.querySelector('.message-metrics')) return;
+            message.dataset.metrics = JSON.stringify(metrics);
+
+            const row = document.createElement('div');
+            row.className = 'message-metrics';
+            const makeMetric = (kind, pathData, value, title) => {
+                const item = document.createElement('span');
+                item.className = `message-metric ${kind}`;
+                item.title = title;
+                item.setAttribute('aria-label', title);
+                const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                icon.setAttribute('viewBox', '0 0 16 16');
+                icon.setAttribute('aria-hidden', 'true');
+                icon.setAttribute('focusable', 'false');
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', pathData);
+                icon.appendChild(path);
+                const label = document.createElement('span');
+                label.textContent = value;
+                item.append(icon, label);
+                return item;
+            };
+
+            const latencyMs = metrics.latency_ms == null ? Number.NaN : Number(metrics.latency_ms);
+            const latency = Number.isFinite(latencyMs)
+                ? latencyMs >= 1000 ? `${(latencyMs / 1000).toFixed(1)} s` : `${Math.max(0, Math.round(latencyMs))} ms`
+                : '—';
+            const total = metrics.total_tokens == null ? Number.NaN : Number(metrics.total_tokens);
+            const tokenCount = Number.isFinite(total) ? `${total} tokens` : '— tokens';
+            const prompt = metrics.prompt_tokens;
+            const completion = metrics.completion_tokens;
+            const tokenTitle = prompt != null && completion != null
+                ? `Tokens: ${Number.isFinite(total) ? total : Number(prompt) + Number(completion)} total (${prompt} input, ${completion} output)`
+                : 'Token usage';
+            row.append(
+                makeMetric('latency', 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Zm0 1.5a.75.75 0 0 1 .75.75v3.3l2.1 1.26a.75.75 0 1 1-.77 1.29l-2.46-1.48A.75.75 0 0 1 7.25 8V4.25A.75.75 0 0 1 8 3.5Z', latency, `Response time: ${latency}`),
+                makeMetric('tokens', 'M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v1A1.5 1.5 0 0 1 11.5 5h-7A1.5 1.5 0 0 1 3 3.5v-1Zm-1 5A1.5 1.5 0 0 1 3.5 6h8A1.5 1.5 0 0 1 13 7.5v1A1.5 1.5 0 0 1 11.5 10h-8A1.5 1.5 0 0 1 2 8.5v-1Zm1 5A1.5 1.5 0 0 1 4.5 11h7a1.5 1.5 0 0 1 0 3h-7A1.5 1.5 0 0 1 3 12.5Z', tokenCount, tokenTitle)
+            );
+            message.appendChild(row);
         }
 
         function randomizeMouth() {

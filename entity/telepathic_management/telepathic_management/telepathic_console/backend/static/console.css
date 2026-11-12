@@ -146,6 +146,9 @@
 .companion-console .chat-container .message-content { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
 .companion-console .grace-mini-avatar { position: absolute; left: -49px; top: 2px; float: none; width: 33px; height: 33px; margin: 0; display: grid; place-items: center; border: 1px solid #927273; border-radius: 50%; background: radial-gradient(circle at 30% 20%, #a68b86, #4a393d 50%, #1b1b1d); color: #f1dcd6; font-size: 20px; }
 .message-time { position: absolute; bottom: -20px; right: 4px; white-space: nowrap; font-size: 10px; color: var(--console-muted); }
+.companion-console .message-metrics { display: flex; align-items: center; justify-content: flex-end; gap: 11px; margin-top: 6px; padding-top: 5px; border-top: 1px solid #ffffff17; color: var(--console-muted); font-size: 10px; line-height: 1.2; letter-spacing: .01em; }
+.companion-console .message-metric { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.companion-console .message-metric svg { width: 11px; height: 11px; fill: currentColor; opacity: .82; }
 .composer-area { padding: 10px; margin: 0 8px 8px; border: 1px solid #51484a; border-radius: 22px; }
 .companion-console .chat-input-wrapper { order: 0; margin: 0; padding: 0; position: relative; }
 .companion-console .chat-input-row { display: flex; align-items: center; gap: 12px; }
