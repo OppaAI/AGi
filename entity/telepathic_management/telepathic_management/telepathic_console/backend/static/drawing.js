@@ -399,7 +399,7 @@
     requestId=uid();token++;setBusy(true);status('Grace is planning her drawing…');
     $('drawResponse').textContent='Grace is thinking about what to draw…';
     // Allow the local model time to produce a detailed plan, then replay it.
-    deadline=setTimeout(()=>stop('Grace did not finish in time. Try a simpler request or check the AIVA chat log.'),360000);
+    deadline=setTimeout(()=>stop('Grace did not finish in time. Try a simpler request or check the AIVA chat log.'),720000);
     try { inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier:requestId,canvas:{objects,selected}})})); }catch(error){stop(error.message);}
   });
   if(!window.ROSLIB) { status('Could not load the ROS connection library. You can still draw by hand.');return; }
