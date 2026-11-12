@@ -413,6 +413,7 @@
     let event;try{event=JSON.parse(message.data);}catch(_){return;}
     if(!requestId||event.identifier!==requestId)return;
     if(event.type==='canvas_start')status('Grace is planning her drawing…');
+    else if(event.type==='canvas_progress')status(String(event.content||'Grace is refining her drawing…'));
     else if(event.type==='canvas_reply')$('drawResponse').textContent=String(event.content||'').slice(0,1000);
     else if(event.type==='canvas_actions') {
       try {
@@ -421,11 +422,13 @@
         replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`Grace is drawing · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>{if(session===token)stop(error.message);});
       }catch(error){stop(error.message);}
     } else if(event.type==='canvas_done') {
-      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);requestId=null;setBusy(false);status('Grace finished. You can edit the drawing or ask for changes.');}});
+      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);requestId=null;setBusy(false);status(event.partial?'Draft saved. Ask Grace to refine a specific part for more detail.':'Grace finished. You can edit the drawing or ask for changes.');}});
     } else if(event.type==='canvas_error') {
       const detail=String(event.content||'The drawing request failed.');
       $('drawResponse').textContent=`I couldn't finish that drawing: ${detail}`;
-      stop(`Grace could not draw: ${detail}`);
+      const session=token;
+      // Finish replaying validated actions already received, including those from a truncated pass.
+      replay.then(()=>{if(session===token&&requestId)stop(`Drawing interrupted: ${detail}`);});
     }
   });
   window.addEventListener('pagehide',()=>{token++;ros.close();},{once:true});
