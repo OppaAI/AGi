@@ -1,37 +1,78 @@
 <!doctype html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Grace · Canvas</title>
-<link rel="icon" href="/static/assets/favicon.svg">
-<link rel="stylesheet" href="/static/drawing.css">
-<script src="/static/theme.js" defer></script>
-<script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js" defer></script>
-<script src="/static/drawing.js" defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#201d22">
+  <title>Grace · Canvas Studio</title>
+  <link rel="icon" href="/static/assets/favicon.svg">
+  <link rel="stylesheet" href="/static/drawing.css">
+  <script src="/static/theme.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js" defer></script>
+  <script src="/static/drawing.js?v=20261111-360s" defer></script>
 </head>
 <body>
-<header><a href="/">← Chat with Grace</a><h1>✦ Canvas</h1><button id="themeToggle" type="button">◐ <span>Dark</span></button></header>
-<main>
-<section class="studio" aria-label="Drawing workspace">
-<div class="tools" role="toolbar" aria-label="Drawing tools">
-<label>Tool <select id="drawTool"><option value="path">Brush</option><option value="erase">Eraser</option><option value="select">Select / move</option><option value="line">Line</option><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="text">Text</option></select></label>
-<label>Color <input type="color" id="drawColor" value="#183b65"></label>
-<label>Size <input id="drawSize" type="number" min="1" max="120" value="5"></label>
-<label><input id="drawFill" type="checkbox"> Fill shapes</label>
-<label class="text-tool">Text <textarea id="drawText" placeholder="Click the canvas to place text, or use Add letter page. Blank lines separate paragraphs." maxlength="2000" rows="3"></textarea></label>
-</div>
-<div class="tools letter-tools" role="group" aria-label="Letter formatting">
-<label>Letter alignment <select id="letterAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-<label>Margin <input id="letterMargin" type="number" min="0" max="100" value="40"></label>
-<label>Line spacing <select id="letterSpacing"><option value="1">Single</option><option value="1.5" selected>1.5</option><option value="2">Double</option></select></label>
-<button id="drawLetter" type="button">Add letter page</button>
-<span>Uses the text above at 16 px. Select a letter to edit its text and formatting.</span>
-</div>
-<div class="drawing-actions"><button id="drawUndo">Undo</button><button id="drawRedo">Redo</button><button id="drawDelete">Delete selected</button><button id="drawClear">Clear</button><button id="drawExport">Save PNG</button><button id="drawStop" disabled>Stop Grace</button></div>
-<div class="paper"><canvas id="drawingCanvas" width="1000" height="650" tabindex="0" aria-label="Shared drawing canvas, 1000 by 650 pixels"></canvas></div>
-<p id="drawStatus" role="status" aria-live="polite">Connecting to Grace…</p>
-<section class="grace-response" aria-label="Grace's response"><strong>Grace</strong><p id="drawResponse" role="status" aria-live="polite">Her reply will appear here when you ask her to draw.</p></section>
-</section>
-<form id="drawingPrompt"><label for="drawPrompt">Ask Grace to draw or write</label><div><input id="drawPrompt" placeholder="Draw a blue cat and write “Hello!” beside it" maxlength="4000" required><button id="drawAsk" disabled>Ask Grace</button></div><p>Watch her actions replay on the canvas. You can also draw, select and move objects, or undo a stroke. Artwork is saved in this browser.</p></form>
-</main>
-</body></html>
+  <header class="studio-header">
+    <a class="back-link" href="/" aria-label="Back to chat with Grace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg><span>Chat</span></a>
+    <div class="studio-title"><span class="brand-mark" aria-hidden="true">g.</span><div><span class="eyebrow">GRACE’S WORKSPACE</span><h1>Canvas Studio</h1></div></div>
+    <div class="document-actions" role="group" aria-label="Artwork files">
+      <label class="button file-button">Open artwork<input id="importProject" type="file" accept="application/json,.json"></label>
+      <button id="saveProject" type="button">Save artwork</button>
+      <button id="drawExport" class="accent-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Export PNG</button>
+      <button id="themeToggle" class="theme-button" type="button">◐ <span>Dark</span></button>
+    </div>
+  </header>
+  <main>
+    <section class="studio" aria-label="Drawing workspace">
+      <div class="artwork-panel">
+        <div class="artboard-toolbar">
+          <div class="document-heading"><span class="document-dot" aria-hidden="true"></span><h2>Shared canvas</h2><span class="canvas-dimensions">1000 × 650</span></div>
+          <div class="history-actions" role="group" aria-label="Canvas history">
+            <button id="drawUndo" type="button" title="Undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12"/></svg><span>Undo</span></button>
+            <button id="drawRedo" type="button" title="Redo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12"/></svg><span>Redo</span></button>
+            <button id="drawClear" class="quiet-button" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="paper">
+          <canvas id="drawingCanvas" width="1000" height="650" tabindex="0" aria-label="Shared drawing canvas, 1000 by 650 pixels"></canvas>
+          <div id="emptyCanvasState" class="empty-canvas-state" aria-hidden="true">
+            <svg class="empty-mark" viewBox="0 0 100 90"><path d="M20 68C12 45 33 14 47 28S45 73 62 66 88 40 76 23"/><path d="M33 76C46 57 67 63 78 70"/></svg>
+            <span class="eyebrow">A LITTLE SPACE FOR BIG IDEAS</span>
+            <h3>What shall we create?</h3>
+            <p>Ask Grace to paint something you imagine,<br>or pick up a brush and make the first mark.</p>
+          </div>
+        </div>
+        <div class="canvas-footnote"><span>Made together, one mark at a time.</span><span>Saved in this browser</span></div>
+        <div class="grace-dock">
+          <section class="grace-response" aria-label="Grace's response"><div class="grace-avatar" aria-hidden="true">G</div><div class="response-copy"><strong>Grace <span>YOUR CREATIVE COMPANION</span></strong><p id="drawResponse" role="status" aria-live="polite">Tell me what you have in mind. We can make it our own.</p></div></section>
+          <form id="drawingPrompt"><label class="visually-hidden" for="drawPrompt">Ask Grace to draw or write</label><div class="prompt-row"><input id="drawPrompt" placeholder="A wildflower meadow at golden hour, soft light and rich colours…" maxlength="4000" required autocomplete="off"><button id="drawAsk" class="accent-button" disabled>Ask Grace <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button></div></form>
+          <div class="connection-row"><p id="drawStatus" role="status" aria-live="polite">Connecting to Grace…</p><button id="drawStop" type="button" disabled>Stop Grace</button></div>
+        </div>
+      </div>
+      <aside class="inspector" aria-label="Artist tools and layers">
+        <div class="inspector-heading"><span class="eyebrow">YOUR TOOLKIT</span><svg class="toolkit-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M6 6l12 12M6 18 18 6"/></svg></div>
+        <section class="inspector-section tools" aria-labelledby="toolsHeading">
+          <h2 id="toolsHeading">Make your mark</h2>
+          <label class="full-control">Tool<select id="drawTool"><option value="path">Brush</option><option value="polygon">Filled contour</option><option value="erase">Eraser</option><option value="select">Select / move</option><option value="line">Line</option><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="text">Text</option></select></label>
+          <div class="control-grid"><label>Brush<select id="drawBrush"><option value="ink">Ink</option><option value="soft">Soft paint</option><option value="marker">Marker</option></select></label><label>Size · px<input id="drawSize" type="number" min="1" max="120" value="5"></label></div>
+          <label class="range-control">Opacity<input id="drawOpacity" type="range" min="1" max="100" value="100" aria-label="Brush opacity"></label>
+          <label class="check-control"><input id="drawSmooth" type="checkbox" checked> Smooth contours</label>
+        </section>
+        <section class="inspector-section paint-tools" aria-labelledby="colorHeading">
+          <h2 id="colorHeading">Colour &amp; light</h2>
+          <div class="colour-wells"><label><input type="color" id="drawColor" value="#c75b4b">Stroke</label><label><input id="fillColor" type="color" value="#ed8060">Fill</label><label><input id="gradientColor" type="color" value="#f4c56a">Blend to</label></div>
+          <div class="control-grid palette-controls"><label>Palette<select id="palettePreset"><option value="studio">Studio</option><option value="botanical">Botanical</option><option value="sunset">Sunset</option><option value="graphite">Graphite</option></select></label><label>Apply swatch to<select id="paletteTarget"><option value="stroke">Stroke</option><option value="fill">Fill</option></select></label></div>
+          <div id="colorPalette" aria-label="Colour palette"></div>
+          <label class="full-control">Fill effect<select id="drawGradient"><option value="none">Solid colour</option><option value="linear">Linear gradient</option><option value="radial">Radial glow</option></select></label>
+          <label class="range-control">Light direction · degrees<input id="gradientAngle" type="range" min="0" max="360" value="90" aria-label="Gradient angle in degrees"></label>
+          <div class="check-row"><label class="check-control"><input id="drawFill" type="checkbox"> Fill shapes</label><label class="check-control"><input id="drawStroke" type="checkbox" checked> Outline</label></div>
+          <button id="applyStyle" class="full-width" type="button">Apply to selection</button>
+        </section>
+        <details class="inspector-section writing-tools"><summary>Typography &amp; letters</summary><div class="details-content"><label class="full-control">Typeface<select id="drawFont"><option value="sans">Modern sans</option><option value="serif">Classic serif</option><option value="mono">Monospace</option><option value="handwritten">Handwritten</option></select></label><label class="text-tool">Text<textarea id="drawText" placeholder="Write something, then choose Text and click the canvas." maxlength="2000" rows="3"></textarea></label><div class="letter-tools"><label class="full-control">Alignment<select id="letterAlign"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></label><div class="control-grid"><label>Margin · px<input id="letterMargin" type="number" min="0" max="100" value="40"></label><label>Line spacing<select id="letterSpacing"><option value="1">Single</option><option value="1.5" selected>1.5</option><option value="2">Double</option></select></label></div><button id="drawLetter" class="full-width" type="button">Add letter page</button><p class="hint">Select a letter to edit its text and layout.</p></div></div></details>
+        <section class="inspector-section layers-section" aria-labelledby="layersHeading"><div class="section-heading"><h2 id="layersHeading">Layers</h2><span id="objectCount" class="count-badge">0</span></div><div id="layerList" aria-label="Artwork layers"><p class="hint">Your marks will appear here.</p></div><div class="layer-actions"><button id="drawBack" type="button" title="Send selected layer to back">To back</button><button id="drawFront" type="button" title="Bring selected layer to front">To front</button><button id="drawDelete" type="button" title="Delete selected layer">Delete</button></div></section>
+        <section class="study-card"><span class="eyebrow">A STARTING POINT</span><p>Explore light, layers<br>and a little colour.</p><button id="loadStudy" type="button">Open colour study <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button></section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
