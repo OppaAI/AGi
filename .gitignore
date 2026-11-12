@@ -52,3 +52,6 @@ qtcreator-*
 
 # Catkin custom files
 CATKIN_IGNORE
+
+# llama.cpp models (large binaries)
+models/**/*.gguf
