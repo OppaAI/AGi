@@ -14,10 +14,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Install pytest dependencies
         run: python -m pip install pytest httpx
       - name: Check AIVA launch script syntax
         run: bash -n AIVA/launch.sh
+      - name: Check canvas syntax and bitmap lifecycle
+        run: |
+          node --check entity/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
+          node --test entity/telepathic_management/test/test_canvas.cjs
       - name: Compile AIVA chat, logging, and signal packages
         run: python -m compileall -q AIVA/src/central_neural_system/aiva_chat/aiva_chat AIVA/src/central_neural_system/agi_logging/agi_logging AIVA/src/central_neural_system/cryptic_signal_core/aiva_cryptic_signal_core
       - name: Test AIVA chat, launch services, memory, and signal encoding

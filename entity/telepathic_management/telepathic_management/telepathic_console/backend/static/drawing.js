@@ -4,6 +4,7 @@
   const $ = id => document.getElementById(id);
   const canvas = $('drawingCanvas'), ctx = canvas.getContext('2d');
   const WIDTH = 1000, HEIGHT = 650, KEY = 'grace-canvas-v1';
+  const MAX_IMAGE_CHARS = 8000000, MAX_ARTWORK_BYTES = 32 * 1024 * 1024;
   const drawingKinds = new Set(['path','curve','polygon','erase','line','rectangle','ellipse','text','letter','image']);
   const kinds = new Set([...drawingKinds,'select','move','delete','style','front','back','clear','undo','redo']);
   const fonts = {sans:'system-ui, sans-serif',serif:'Georgia, serif',mono:'monospace',handwritten:'"Segoe Print", "Bradley Hand", cursive'};
@@ -15,7 +16,7 @@
   const status = text => { $('drawStatus').textContent = text; };
   const uid = () => globalThis.crypto?.randomUUID?.() || `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const fontFamily = a => fonts[a.font] || (a.kind==='letter' ? fonts.serif : fonts.sans);
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(objects)); } catch (_) { status('Browser storage is full; use Save PNG to keep your artwork.'); } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(objects)); } catch (_) { status('Browser storage is full; use Save artwork to keep your editable picture.'); } }
   function checkpoint(snapshot = objects) { undo.push(clone(snapshot)); if (undo.length > 50) undo.shift(); redo = []; }
   function style(a) {
     ctx.strokeStyle=a.color||'#c75b4b';ctx.fillStyle=a.fill_color||a.color||'#c75b4b';
@@ -83,20 +84,33 @@
     }
     return {x,y,size,lineHeight,lines,width:Math.max(0,...lines.map(line=>ctx.measureText(line).width)),height:lines.length*lineHeight};
   }
+  function imageEntry(a) {
+    let entry=imageCache.get(a.src);
+    if(!entry) {
+      const el=new Image();el.decoding='async';
+      entry={el,ready:false};
+      entry.loaded=new Promise(resolve=>{
+        el.onload=()=>{entry.ready=true;resolve();if(!gesture&&objects.some(a=>a.src===el.src))render();};
+        el.onerror=()=>resolve();
+      });
+      imageCache.set(a.src,entry);el.src=a.src;
+    }
+    return entry;
+  }
+  async function waitForImages(layers=objects) {
+    await Promise.all(layers.filter(a=>a.kind==='image').map(async a=>{
+      const entry=imageEntry(a);await entry.loaded;
+      if(!entry.ready)throw new Error('A painted image could not be decoded.');
+    }));
+  }
   function paint(a, progress = 1) {
     ctx.save();
     if (a.kind === 'image') {
-      // Painted pictures are bitmaps; the browser decodes each one once.
-      let entry=imageCache.get(a.id);
-      if(!entry && typeof a.src==='string' && a.src.startsWith('data:image/')) {
-        const el=new Image();el.decoding='async';
-        entry={el,ready:false};
-        el.onload=()=>{entry.ready=true;if(!gesture)render();};
-        el.onerror=()=>imageCache.delete(a.id);
-        el.src=a.src;imageCache.set(a.id,entry);
-      }
-      if(entry?.ready)ctx.drawImage(entry.el,a.x||0,a.y||0,a.width||0,a.height||0);
-      else { ctx.fillStyle='#ece7dd';ctx.fillRect(a.x||0,a.y||0,a.width||0,a.height||0); }
+      const entry=imageEntry(a);
+      if(entry.ready) {
+        ctx.globalAlpha=a.opacity??1;
+        ctx.drawImage(entry.el,a.x,a.y,a.width,a.height);
+      } else { ctx.fillStyle='#ece7dd';ctx.fillRect(a.x,a.y,a.width,a.height); }
       ctx.restore();return;
     }
     style(a);
@@ -160,6 +174,10 @@
     return [a.x||0,a.y||0,a.width||0,a.height||0];
   }
   function render(preview = null, progress = 1, selection = true) {
+    // Drop decoded pictures once their layers leave the document. Undo can
+    // decode them again, without retaining every deleted GPU bitmap forever.
+    const sources=new Set(objects.filter(a=>a.kind==='image').map(a=>a.src));
+    for(const source of imageCache.keys())if(!sources.has(source))imageCache.delete(source);
     ctx.clearRect(0,0,WIDTH,HEIGHT); objects.forEach(a=>paint(a));
     if (preview) paint(preview,progress);
     const active=objects.find(a=>a.id===selected);
@@ -282,7 +300,7 @@
     for(const key of ['text','id','prompt']) if(key in a) { if(typeof a[key]!=='string'||a[key].length>(key==='text'?2000:key==='prompt'?800:64)) throw new Error('Invalid drawing text');out[key]=a[key]; }
     if(a.kind==='image') {
       // Painted images carry their bitmap only inside trusted artwork files.
-      if(typeof a.src!=='string'||!a.src.startsWith('data:image/')||a.src.length>8000000) throw new Error('Invalid painted image');
+      if(typeof a.src!=='string'||!/^data:image\/(png|jpeg);base64,/.test(a.src)||a.src.length>MAX_IMAGE_CHARS) throw new Error('Invalid painted image');
       out.src=a.src;
     }
     for(const key of ['color','fill_color','gradient_color'])if(key in a){if(!/^#[0-9a-f]{6}$/i.test(a[key]))throw new Error('Invalid color');out[key]=a[key];}
@@ -299,8 +317,10 @@
     if(a.kind!=='style'||'fill' in a)out.fill=a.fill===true;
     if(['line','path','polygon','erase','curve'].includes(a.kind)) { if(!Array.isArray(a.points)||!a.points.length||a.points.length>2000) throw new Error('Invalid drawing path');out.points=a.points.map(p=>{if(!Array.isArray(p)||p.length!==2||p.some(v=>typeof v!=='number'||!Number.isFinite(v))) throw new Error('Invalid path point');return [Math.max(0,Math.min(WIDTH,p[0])),Math.max(0,Math.min(HEIGHT,p[1]))];}); }
     if(a.kind==='curve' && (out.points.length<4 || out.points.length>61 || (out.points.length-1)%3))throw new Error('A curve needs a start followed by groups of two control points and an endpoint.');
-    if(['rectangle','ellipse'].includes(out.kind)) {
-      out.width=Math.min(out.width??0,WIDTH);out.height=Math.min(out.height??0,HEIGHT);
+    if(['rectangle','ellipse','image'].includes(out.kind)) {
+      const image=out.kind==='image';
+      out.width=Math.max(image?16:0,Math.min(out.width??(image?WIDTH:0),WIDTH));
+      out.height=Math.max(image?16:0,Math.min(out.height??(image?HEIGHT:0),HEIGHT));
       out.x=Math.min(out.x??0,WIDTH-out.width);out.y=Math.min(out.y??0,HEIGHT-out.height);
     }
     if(out.kind==='letter') {
@@ -377,7 +397,16 @@
       if(tool){$('drawTool').value=tool;$('drawTool').dispatchEvent(new Event('change'));}
     }
   });
-  $('drawExport').addEventListener('click',()=>{render(null,1,false);const output=document.createElement('canvas');output.width=WIDTH;output.height=HEIGHT;const exportCtx=output.getContext('2d');exportCtx.fillStyle='white';exportCtx.fillRect(0,0,WIDTH,HEIGHT);exportCtx.drawImage(canvas,0,0);const link=document.createElement('a');link.download='grace-drawing.png';link.href=output.toDataURL('image/png');link.click();render();});
+  $('drawExport').addEventListener('click',async()=>{
+    try {
+      await waitForImages();render(null,1,false);
+      const output=document.createElement('canvas');output.width=WIDTH;output.height=HEIGHT;
+      const exportCtx=output.getContext('2d');exportCtx.fillStyle='white';exportCtx.fillRect(0,0,WIDTH,HEIGHT);
+      exportCtx.drawImage(canvas,0,0);const link=document.createElement('a');
+      link.download='grace-drawing.png';link.href=output.toDataURL('image/png');link.click();render();
+    }catch(error){status(error.message);}
+  });
+
   function documentObjects(source) {
     if(!Array.isArray(source)||source.length>100)throw new Error('Artwork must contain at most 100 layers.');
     const ids=new Set();
@@ -407,7 +436,7 @@
     const session=++token;
     setBusy(true);
     try{
-      if(file.size>2*1024*1024)throw new Error('Choose an artwork file smaller than 2 MB.');
+      if(file.size>MAX_ARTWORK_BYTES)throw new Error('Choose an artwork file smaller than 32 MB.');
       const document=JSON.parse(await file.text());
       if(session!==token)return;
       replaceArtwork(document);status('Artwork opened. Undo restores your previous canvas.');
@@ -429,8 +458,9 @@
     $('drawPrompt').value=button.dataset.prompt;$('drawPrompt').focus();
   }));
   // A detailed JPEG render lets Grace assess composition and clean up her prior pass.
-  function snapshot() {
+  async function snapshot() {
     try {
+      await waitForImages();
       render(null,1,false);
       const snap=document.createElement('canvas');snap.width=768;snap.height=499;
       const view=snap.getContext('2d');view.fillStyle='#ffffff';view.fillRect(0,0,768,499);
@@ -442,13 +472,19 @@
   function stop(message='Stopped. Completed actions are kept; Undo can remove them.') { token++;requestId=null;clearTimeout(deadline);setBusy(false);render();status(message); }
   $('drawStop').addEventListener('click',()=>stop());
   try { objects=documentObjects(JSON.parse(localStorage.getItem(KEY)||'[]')); }catch(_){objects=[];status('Saved artwork could not be restored. Open an exported artwork file to recover it.');}render();syncControls();
-  $('drawingPrompt').addEventListener('submit',e=> {
+  $('drawingPrompt').addEventListener('submit',async e=> {
     e.preventDefault();if(busy||!connected)return;const text=$('drawPrompt').value.trim();if(!text)return;finishGesture();
     requestId=uid();token++;setBusy(true);status('Grace is planning her drawing…');
     $('drawResponse').textContent='Grace is thinking about what to draw…';
     // Allow the local model time to produce a detailed plan, then replay it.
     deadline=setTimeout(()=>stop('Grace did not finish in time. Try a simpler request or check the AIVA chat log.'),720000);
-    try { inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier:requestId,canvas:{objects,selected},snapshot:snapshot()})})); }catch(error){stop(error.message);}
+    const identifier=requestId;
+    try {
+      const image=await snapshot();if(requestId!==identifier)return;
+      // PNG bytes stay local. The model sees metadata plus the downscaled render.
+      const layers=objects.map(({src,...metadata})=>metadata);
+      inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier,canvas:{objects:layers,selected},snapshot:image})}));
+    }catch(error){stop(error.message);}
   });
   if(!window.ROSLIB) { status('Could not load the ROS connection library. You can still draw by hand.');return; }
   const ros=new ROSLIB.Ros({url:`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/rosbridge`});
@@ -467,33 +503,22 @@
       // Answer after the replayed strokes settle so the screenshot shows her draft.
       status('Grace is looking at her draft before refining it…');
       $('drawResponse').textContent='Grace is looking at what she painted and deciding what to improve…';
-      replay.then(()=>{if(requestId===event.identifier) {
-        const image=snapshot();if(image)try{snapshotTopic.publish(new ROSLIB.Message({data:JSON.stringify({identifier:event.identifier,image})}));}catch(_){}
+      replay.then(async()=>{if(requestId===event.identifier) {
+        const image=await snapshot();if(image&&requestId===event.identifier)try{snapshotTopic.publish(new ROSLIB.Message({data:JSON.stringify({identifier:event.identifier,image})}));}catch(_){}
       }});
     }
     else if(event.type==='canvas_image') {
-      // A painted raster picture arrives as its own event; insert it after the
-      // queued replay so it lands at the right point in the artwork's history.
-      if(typeof event.src!=='string'||!event.src.startsWith('data:image/')||event.src.length>8000000) { status('Grace painted a picture but it could not be displayed.');return; }
-      const object={id:String(event.id||uid()),kind:'image',src:event.src,
-        x:Math.max(0,Math.min(WIDTH-16,Number(event.x)||0)),
-        y:Math.max(0,Math.min(HEIGHT-16,Number(event.y)||0)),
-        width:Math.max(16,Math.min(WIDTH,Number(event.width)||256)),
-        height:Math.max(16,Math.min(HEIGHT,Number(event.height)||256))};
       const session=token;
-      replay=replay.then(()=>{if(session!==token)return;
-        try {
-          if(objects.some(o=>o.id===object.id))throw new Error(`Object ID already exists: ${object.id}`);
-          if(objects.length>=100)throw new Error('Canvas has 100 objects. Delete some before adding more.');
-          checkpoint();objects.push(object);selected=null;
-          render();save();syncControls();
-          status('Grace painted a picture onto the canvas.');
-        }catch(error){stop(error.message);}
+      replay=replay.then(async()=>{
+        if(session!==token)return;
+        const object=normalize({id:String(event.id||uid()),kind:'image',src:event.src,
+          prompt:event.prompt||'Existing painted image',x:event.x,y:event.y,
+          width:event.width,height:event.height});
+        await waitForImages([object]);
+        if(session!==token)return;
+        action(object);
+        status('Grace painted a picture onto the canvas.');
       }).catch(error=>{if(session===token)stop(error.message);});
-    }
-    else if(event.type==='canvas_image_error') {
-      status(String(event.content||'Grace could not paint that image.'));
-      $('drawResponse').textContent=String(event.content||'Grace could not paint that image.');
     }
     else if(event.type==='canvas_reply')$('drawResponse').textContent=String(event.content||'').slice(0,1000);
     else if(event.type==='canvas_actions') {

@@ -72,15 +72,18 @@ Rebuild/source AIVA's packages after updating so the node and packaged pages mat
 
 In addition to vector actions, Grace can request a raster painting with the canvas
 `image` action: `{"kind": "image", "prompt": "...", "x", "y", "width", "height"}`. The
-model places at most two image actions per request, and they paint first in a pass (later
-vector actions draw on top). AIVA generates the bitmap server-side through the MossInfer
+server permits at most two image actions per request and preserves their action order
+relative to vector overlays and edits. AIVA generates the bitmap server-side through the MossInfer
 `moss-server` sidecar and publishes it as a separate `canvas_image` event — the bitmap
 never travels through the model or `canvas_actions`. On failure she publishes
-`canvas_image_error` and keeps the rest of the draft. An image action counts as finished
+`canvas_error` and keeps layers already received; a failed image is not marked finished. An image action counts as finished
 art, so it does not trigger the vector refinement loop. Raster paintings cannot be
 recolored in place; move, delete, or repaint them instead. Painting is disabled unless the
 moss-server binary and the MOSS-Image weights are installed (see the AIVA README,
-MossInfer section).
+MossInfer section). The browser waits for images to decode before taking review screenshots
+or exporting PNGs. Later requests send image metadata and a downscaled screenshot rather
+than full PNG payloads; old saved pictures without a prompt remain editable. Editable
+artwork imports accept up to 32 MiB. If browser storage fills, use **Save artwork**.
 
 ### Painting studio
 
