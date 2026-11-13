@@ -58,9 +58,35 @@ The page sends a request and the current drawing objects/selection to AIVA's
 replays strokes, shapes, and text visibly; **Stop Grace** interrupts replay and
 ignores later results for that request. Completed actions can be undone.
 
-Grace sees object coordinates and text supplied by the page. She currently
-plans one batch per request; screenshot feedback and a repeated observation/tool
-loop are future work. Planning occurs before the animated replay. Browser pages
+Grace sees object coordinates and text supplied by the page. The page also renders a
+downscaled JPEG screenshot of the canvas and sends it with each request, and again when
+Grace asks for a fresh look between passes (`canvas_snapshot_request` answered on
+`/aiva/canvas_snapshot`), so a vision-capable endpoint can observe what it actually drew
+and correct placement before refining. Endpoints that reject image content fall back to
+text-only planning automatically. Planning occurs before the animated replay. Browser pages
 have independent artwork; the memory service records the requested action plan,
 while the actual editable document is saved locally. PNG export saves an image.
 Rebuild/source AIVA's packages after updating so the node and packaged pages match.
+
+### Painting studio
+
+Canvas Studio adds a 16-color artist palette plus arbitrary hex colors, separate
+outline and fill colors, ink/soft/marker brushes, transparency, linear/radial
+fills, and closed freehand contours. Select an object to load its paint settings,
+then use **Apply to selection**; front/back controls reorder objects. Letter
+controls are under **Typography & letter layout**. Existing saved art still loads.
+
+Grace's drawing tool accepts `polygon`, `smooth`, `fill_color`, `gradient_color`,
+`gradient`, `opacity`, `brush`, and `stroke`, plus `style`, `front`, and `back`
+editing actions. Her instructions encourage layered compositions, varied palettes,
+consistent lighting, and shadows/highlights. This expands vector illustration
+capabilities; it does not add a photographic image generator. Live drawing quality still
+depends on the configured model's tool output.
+
+### Vision feedback
+
+With a vision-capable model (such as Ministral 3 14B Instruct) as `AIVA_LLM_MODEL`, Grace
+compares an attached canvas screenshot with the request during drawing and can reposition,
+restyle, or delete her own shapes between passes instead of planning blind. Set
+`AIVA_SNAPSHOT_TIMEOUT_SECONDS` (default 10) to tune how long a pass waits for the browser's
+screenshot; a text-only endpoint is used automatically if images are rejected.

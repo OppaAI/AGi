@@ -55,3 +55,6 @@ CATKIN_IGNORE
 
 # llama.cpp models (large binaries)
 models/**/*.gguf
+
+# MOSS-Image weights (large binaries)
+/models/mossimage/
