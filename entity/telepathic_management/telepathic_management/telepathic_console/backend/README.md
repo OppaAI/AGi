@@ -68,6 +68,20 @@ have independent artwork; the memory service records the requested action plan,
 while the actual editable document is saved locally. PNG export saves an image.
 Rebuild/source AIVA's packages after updating so the node and packaged pages match.
 
+### Raster painting (MOSS-Image)
+
+In addition to vector actions, Grace can request a raster painting with the canvas
+`image` action: `{"kind": "image", "prompt": "...", "x", "y", "width", "height"}`. The
+model places at most two image actions per request, and they paint first in a pass (later
+vector actions draw on top). AIVA generates the bitmap server-side through the MossInfer
+`moss-server` sidecar and publishes it as a separate `canvas_image` event — the bitmap
+never travels through the model or `canvas_actions`. On failure she publishes
+`canvas_image_error` and keeps the rest of the draft. An image action counts as finished
+art, so it does not trigger the vector refinement loop. Raster paintings cannot be
+recolored in place; move, delete, or repaint them instead. Painting is disabled unless the
+moss-server binary and the MOSS-Image weights are installed (see the AIVA README,
+MossInfer section).
+
 ### Painting studio
 
 Canvas Studio adds a 16-color artist palette plus arbitrary hex colors, separate
@@ -80,8 +94,10 @@ Grace's drawing tool accepts `polygon`, `smooth`, `fill_color`, `gradient_color`
 `gradient`, `opacity`, `brush`, and `stroke`, plus `style`, `front`, and `back`
 editing actions. Her instructions encourage layered compositions, varied palettes,
 consistent lighting, and shadows/highlights. This expands vector illustration
-capabilities; it does not add a photographic image generator. Live drawing quality still
-depends on the configured model's tool output.
+capabilities. On top of vectors, Grace can also request a raster painting (canvas
+`image` action), rendered server-side by the MossInfer MOSS-Image engine and published
+as a `canvas_image` event. Live drawing quality still depends on the configured model's
+tool output.
 
 ### Vision feedback
 
