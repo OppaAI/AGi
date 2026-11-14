@@ -59,3 +59,9 @@ models/**/*.gguf
 # MOSS-Image weights (large binaries)
 /models/mossimage/
 
+# These are separate AGi-robot repositories; commit within each repo.
+/AIVA/
+/canvas/
+/imaging/
+/memory/
+
