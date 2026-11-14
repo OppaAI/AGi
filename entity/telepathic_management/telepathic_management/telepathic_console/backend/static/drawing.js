@@ -11,6 +11,7 @@
   let objects = [], undo = [], redo = [], selected = null, gesture = null;
   const imageCache = new Map();
   let busy = false, connected = false, token = 0, requestId = null, deadline = null;
+  let lastStudyId = null;
   let inputTopic, replay = Promise.resolve();
   const clone = value => JSON.parse(JSON.stringify(value));
   const status = text => { $('drawStatus').textContent = text; };
@@ -272,6 +273,7 @@
     render();save();syncControls();return true;
   }
   function setBusy(value) {
+    $('creationMode').disabled=value;
     busy=value; $('drawAsk').disabled=value||!connected; $('drawStop').disabled=!value;
     document.querySelectorAll('.inspector input,.inspector select,.inspector textarea,.inspector button,.history-actions button,#importProject').forEach(el=> { if(el.id!=='drawStop' && el.id!=='drawExport') el.disabled=value; });
     syncControls();
@@ -475,6 +477,8 @@
   $('drawingPrompt').addEventListener('submit',async e=> {
     e.preventDefault();if(busy||!connected)return;const text=$('drawPrompt').value.trim();if(!text)return;finishGesture();
     requestId=uid();token++;setBusy(true);status('Grace is planning her drawing…');
+    $('referencePanel').hidden=true;$('referenceImage').removeAttribute('src');
+    $('studyReview').hidden=true;lastStudyId=null;$('reviewStatus').textContent='';$('studyNotes').value='';
     $('drawResponse').textContent='Grace is thinking about what to draw…';
     // Allow the local model time to produce a detailed plan, then replay it.
     deadline=setTimeout(()=>stop('Grace did not finish in time. Try a simpler request or check the AIVA chat log.'),720000);
@@ -483,8 +487,13 @@
       const image=await snapshot();if(requestId!==identifier)return;
       // PNG bytes stay local. The model sees metadata plus the downscaled render.
       const layers=objects.map(({src,...metadata})=>metadata);
-      inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier,canvas:{objects:layers,selected},snapshot:image})}));
+      inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier,canvas:{objects:layers,selected,mode:$('creationMode').value||'draw'},snapshot:image})}));
     }catch(error){stop(error.message);}
+  });
+  for(const [id,rating] of [['keepStudy','keep'],['improveStudy','improve']])$(id).addEventListener('click',()=>{
+    if(!lastStudyId||!connected||busy)return;
+    try{inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({canvas_feedback:{identifier:lastStudyId,rating,notes:$('studyNotes').value.slice(0,1000)}})}));$('reviewStatus').textContent='Saving review…';}
+    catch(error){$('reviewStatus').textContent=error.message;}
   });
   if(!window.ROSLIB) { status('Could not load the ROS connection library. You can still draw by hand.');return; }
   const ros=new ROSLIB.Ros({url:`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/rosbridge`});
@@ -496,6 +505,7 @@
   ros.on('close',()=>{connected=false;stop('Disconnected. Reload this page after AIVA reconnects.');});
   responses.subscribe(message=> {
     let event;try{event=JSON.parse(message.data);}catch(_){return;}
+    if(event.type==='canvas_feedback' && event.identifier===lastStudyId){$('reviewStatus').textContent=String(event.content||'');return;}
     if(!requestId||event.identifier!==requestId)return;
     if(event.type==='canvas_start') { status('Grace is planning her drawing…');$('drawResponse').textContent='Grace is planning the composition, colour and light…'; }
     else if(event.type==='canvas_progress') { const message=String(event.content||'Grace is refining her drawing…');status(message);$('drawResponse').textContent=message; }
@@ -506,6 +516,11 @@
       replay.then(async()=>{if(requestId===event.identifier) {
         const image=await snapshot();if(image&&requestId===event.identifier)try{snapshotTopic.publish(new ROSLIB.Message({data:JSON.stringify({identifier:event.identifier,image})}));}catch(_){}
       }});
+    }
+    else if(event.type==='canvas_reference') {
+      if(typeof event.src!=='string'||event.src.length>MAX_IMAGE_CHARS||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(event.src)){stop('Invalid reference image');return;}
+      $('referenceImage').src=event.src;$('referencePanel').hidden=false;
+      status('Reference ready. Grace is drawing with tools…');
     }
     else if(event.type==='canvas_image') {
       const session=token;
@@ -529,7 +544,7 @@
         replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`Grace is painting · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>{if(session===token)stop(error.message);});
       }catch(error){stop(error.message);}
     } else if(event.type==='canvas_done') {
-      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);requestId=null;setBusy(false);status(event.partial?'Draft saved. Ask Grace to refine a specific part for more detail.':'Grace finished. You can edit the drawing or ask for changes.');}});
+      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);lastStudyId=requestId;$('studyReview').hidden=false;requestId=null;setBusy(false);status(event.partial?'Draft saved. Ask Grace to refine a specific part for more detail.':'Grace finished. You can edit the drawing or ask for changes.');}});
     } else if(event.type==='canvas_error') {
       const detail=String(event.content||'The drawing request failed.');
       $('drawResponse').textContent=`I couldn't finish that drawing: ${detail}`;

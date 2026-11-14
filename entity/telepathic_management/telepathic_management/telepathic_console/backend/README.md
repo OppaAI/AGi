@@ -70,7 +70,7 @@ Rebuild/source AIVA's packages after updating so the node and packaged pages mat
 
 ### Raster painting (MOSS-Image)
 
-In addition to vector actions, Grace can request a raster painting with the canvas
+Select **Generate image with MOSS** to let Grace request a raster painting with the canvas
 `image` action: `{"kind": "image", "prompt": "...", "x", "y", "width", "height"}`. The
 server permits at most two image actions per request and preserves their action order
 relative to vector overlays and edits. AIVA generates the bitmap server-side through the MossInfer
@@ -84,6 +84,18 @@ MossInfer section). The browser waits for images to decode before taking review 
 or exporting PNGs. Later requests send image metadata and a downscaled screenshot rather
 than full PNG payloads; old saved pictures without a prompt remain editable. Editable
 artwork imports accept up to 32 MiB. If browser storage fills, use **Save artwork**.
+
+**Draw with tools** is the default and excludes image actions even with MOSS installed.
+**Draw from MOSS reference** generates one separate study image, sends it with the
+current canvas screenshot to Grace, and permits only tool strokes/shapes on the artwork.
+Reference images do not become layers or appear in exports. Fresh canvas screenshots
+drive later review passes; this mode reports missing vision/screenshots rather than
+silently proceeding without visual feedback.
+
+After completion, **Keep as example** and **Needs improvement** save your review to
+Grace's SQLite `drawing_studies`. Relevant reviewed summaries and short approved
+recipes are included in future requests, including drawing without a reference.
+This is curated memory and practice support; no model weights are trained automatically.
 
 ### Painting studio
 

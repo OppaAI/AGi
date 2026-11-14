@@ -20,7 +20,7 @@ function studio() {
     async emit(type,event={}){return this.handlers[type]?.({target:this,preventDefault(){},...event});}
     replaceChildren(...children){this.children=children;}
     append(...children){this.children.push(...children);}
-    setAttribute(){} getContext(){return context;} focus(){} click(){}
+    setAttribute(){} removeAttribute(){} getContext(){return context;} focus(){} click(){}
     toDataURL(){return PNG;}
   }
   const element=id=>{
@@ -99,4 +99,22 @@ test('invalid image payload ends the request without adding a layer',async()=>{
   assert.deepEqual(app.artwork(),[]);
   assert.match(app.element('drawStatus').textContent,/Invalid painted image/);
   assert.equal(app.element('drawAsk').disabled,false);
+});
+
+test('reference image stays separate from artwork and reviewed studies send feedback',async()=>{
+  const app=studio();app.element('creationMode').value='reference';
+  const request=await app.ask();assert.equal(request.canvas.mode,'reference');
+  app.respond({type:'canvas_reference',identifier:request.identifier,src:PNG});
+  assert.equal(app.element('referenceImage').src,PNG);
+  assert.equal(app.element('referencePanel').hidden,false);
+  assert.deepEqual(app.artwork(),[]);
+  app.respond({type:'canvas_actions',identifier:request.identifier,actions:[{kind:'ellipse',id:'drawn',x:10,y:10,width:20,height:20}]});
+  app.respond({type:'canvas_done',identifier:request.identifier});await tick();
+  assert.equal(app.element('studyReview').hidden,false);
+  app.element('studyNotes').value='Keep the smooth outline';await app.element('keepStudy').emit('click');
+  const feedback=JSON.parse(app.topic('/aiva/chat_input').published.at(-1).data).canvas_feedback;
+  assert.equal(feedback.identifier,request.identifier);assert.equal(feedback.rating,'keep');
+  assert.equal(app.artwork()[0].kind,'ellipse');
+  app.respond({type:'canvas_feedback',identifier:request.identifier,content:'Saved'});
+  assert.equal(app.element('reviewStatus').textContent,'Saved');
 });
