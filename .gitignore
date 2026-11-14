@@ -59,7 +59,3 @@ models/**/*.gguf
 # MOSS-Image weights (large binaries)
 /models/mossimage/
 
-# extracted packages now live as their own AGi-robot repos
-canvas/
-imagegen/
-memory/
