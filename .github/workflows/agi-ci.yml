@@ -1,0 +1,57 @@
+name: AGi checks
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  shared-console-and-encoding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Python dependencies
+        run: python -m pip install pytest httpx fastapi uvicorn websockets PyYAML
+      - name: Check AuRoRA launch script syntax
+        run: bash -n AuRoRA/launch.sh
+      - name: Check console JavaScript and canvas behavior
+        run: |
+          node --check entity/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
+          node --test entity/telepathic_management/test/test_canvas.cjs
+      - name: Compile shared ROS packages
+        run: python -m compileall -q entity/telepathic_management/telepathic_management entity/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
+      - name: Import the shared console and test signal encoding
+        env:
+          PYTHONPATH: entity/telepathic_management:entity/cryptic_signal_core:AuRoRA/src/tms
+        run: |
+          python -c "from telepathic_management.telepathic_console.server import app; assert app.title == 'AGi Web Teleops Console'"
+          python -m pytest -q AuRoRA/tests/tms/test_radio_encoding.py
+
+  shared-ros-jazzy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+      - name: Prepare Python test environment
+        run: |
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install pytest httpx websockets
+      - name: Build shared ROS message and console packages
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --base-paths entity --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+      - name: Verify the built ROS packages
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          ros2 pkg prefix cryptic_signal_core
+          ros2 pkg prefix telepathic_management

@@ -207,6 +207,17 @@
 }
 
 .avatar-portrait-ready .grace-identity, .avatar-portrait-ready .grace-mini-avatar { background-image: var(--grace-portrait); background-size: cover; background-position: center; color: transparent; }
+.companion-console .grace-identity,
+.companion-console .grace-mini-avatar {
+    background-image: url('/static/assets/grace-mascot.png');
+    background-size: cover;
+    background-position: center;
+    color: transparent;
+    border-color: #a36c98;
+    box-shadow: 0 0 12px #e658bb2b, inset 0 0 0 1px #47d9ed24;
+}
+.companion-console .grace-identity { border-radius: 15px; }
+.companion-console .grace-mini-avatar { border-radius: 11px; }
 .companion-console .grace-avatar-stage::after { content: ""; pointer-events: none; position: absolute; inset: 0; z-index: 2; background: linear-gradient(105deg, transparent 12%, #b8faff12 18%, transparent 25%, transparent 80%, #45dcff18); }
 .companion-console .send-btn::after { content: none; }
 .companion-console .chat-input-wrapper { border: 0; background: transparent; }
