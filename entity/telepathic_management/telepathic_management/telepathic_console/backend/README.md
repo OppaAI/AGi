@@ -8,7 +8,7 @@ The companion page pairs a live VRM chamber with a scrolling conversation.
 retains the original robot animation styles. The dark palette is the default
 for a new companion page, while saved theme preferences are honored.
 
-`avatar.js` loads Grace when AIVA presence is online. The camera switch is off for full body and on for a zoomed-in portrait;
+`avatar.js` keeps Grace's VRM visible in both presence states. Offline she rests with her head lowered and eyes closed; online she raises her head slightly and opens her eyes halfway. The camera switch is off for full body and on for a zoomed-in portrait;
 changing it resets the camera, dragging orbits it, and pointer motion gently turns her head.
 The chamber background is a local WebP asset. Nineteen bubbles rise in front
 of and behind the avatar, with moving light refractions and twinkling glints.
@@ -16,12 +16,14 @@ The decorative layers let pointer events pass through to the camera controls.
 Bubbles, reflections, glints, and floating motion respect reduced-motion preferences. Chat badges are snapshots of the loaded
 VRM; they fall back to a neutral emblem if capture is unavailable.
 
-The empty chamber remains visible while AIVA is offline. Chat submission and
+Grace remains visible while AIVA is offline. Chat submission and
 response streaming continue to use the existing telepathic API and ROS bridge.
 The UI does not require changes to Grace's LLM or PostgreSQL memory service.
 
-ROS packaging installs the frontend directory and all backend static assets,
-including `console.css` and `assets/grace-chamber.webp`.
+ROS packaging installs the companion frontend and its backend static assets,
+including `console.css`, `assets/grace-chamber.webp`, and the Canvas Studio UI.
+The reusable action language and SVG renderer live in the separate `grace-canvas`
+Python library.
 
 ## System logs
 
@@ -33,11 +35,22 @@ components. The WebUI **Logs** page reads recent entries from `/api/logs` and
 can filter by severity or refresh automatically. The collector keeps five
 10 MiB rotations per file by default.
 
-## Canvas page
+## Canvas Studio integration
 
-Open **Canvas** from the chat header, or visit `/canvas`. Brush, eraser, line,
-rectangle, ellipse, text, object selection/move/delete, undo/redo, clear and PNG
-export work locally. Text is placed by clicking after entering it in the toolbar.
+Open **Canvas** from the chat header, or visit `/canvas`. The host WebUI serves
+the Studio page. Brush, eraser, line,
+rectangle, ellipse, text, object selection/move/delete, undo/redo, clear, PNG
+export, and SVG export work locally. Ask-artist requests use `/api/canvas/ws`;
+the host relays them to AIVA over rosbridge. Direct trusted clients can use the
+same API with `AGI_CANVAS_API_KEY` configured on the host.
+
+The API is a WebSocket at `ws://<host>/api/canvas/ws` (`wss://` behind TLS).
+Clients send a `request` packet containing the same JSON payload as the Canvas
+page, then receive the `canvas_*` events. They send `snapshot` packets when
+Grace requests a fresh render and `feedback` packets for a reviewed study. When
+`AGI_CANVAS_API_KEY` is set, direct clients first send
+`{"type":"auth","token":"…"}`. The host WebUI is loopback-only by default;
+set a key and use HTTPS/WSS before allowing remote clients to connect.
 Artwork persists in that browser's local storage (up to 100 objects).
 
 For letters, enter paragraphs in the multiline Text field and choose **Add letter

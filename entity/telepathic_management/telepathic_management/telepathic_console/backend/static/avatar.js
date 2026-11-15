@@ -1,4 +1,4 @@
-/* Grace's 3D VRM is shown when the AIVA PC presence heartbeat is online. */
+/* Grace's 3D VRM stays present and changes pose with the AIVA heartbeat. */
 (() => {
   'use strict';
 
@@ -20,6 +20,7 @@
   let auroraOnline = false;
   let nextFrameAt = 0;
   let idleTime = 0;
+  let awakeBlend = 0;
   let cameraMode = 'portrait';
 
   function frameCamera(mode = cameraMode) {
@@ -100,8 +101,10 @@
     // Match Aiko's gentle, asynchronous breathing and tiny head micro-sway.
     apply('spine', 0.007 * Math.sin((2 * Math.PI * (t - 0.08)) / 3.5));
     apply('chest', 0.014 * breathe);
-    apply('head', 0.0045 * drift(0.47, 0.4), 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1), 0.006 * drift(0.19, 1.1));
-    apply('neck', 0.003 * drift(0.67, 1.7), 0.004 * drift(0.59), 0);
+    // Grace rests with her head bowed offline; online she gently raises it.
+    const awakeLift = 0.14 * awakeBlend;
+    apply('head', awakeLift + 0.0045 * drift(0.47, 0.4), 0.016 * drift(0.41) + 0.007 * drift(0.53, 2.1), 0.006 * drift(0.19, 1.1));
+    apply('neck', (0.025 * awakeBlend) + 0.003 * drift(0.67, 1.7), 0.004 * drift(0.59), 0);
     apply('leftUpperArm');
     apply('rightUpperArm');
     apply('leftLowerArm');
@@ -169,7 +172,6 @@
       // frameCamera applies the close chest portrait after avatar state is set.
 
       const resize = () => {
-        if (!aivaOnline) return;
         const { width, height } = canvas.getBoundingClientRect();
         if (!width || !height) return;
         renderer.setSize(width, height, false);
@@ -179,7 +181,7 @@
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
       avatar = { renderer, scene, camera, vrm, modelHeight, restPose: rememberRestPose(vrm), baseY: vrm.scene.position.y, clock: new THREE.Clock(), resize };
-      vrm.expressionManager?.setValue('blink', 1);
+      vrm.expressionManager?.setValue('blink', 1 - 0.55 * awakeBlend);
       resize();
       // Capture the loaded model itself for the header and conversation badges.
       const selectedMode = cameraMode;
@@ -187,6 +189,7 @@
       applyIdle();
       vrm.update(0);
       renderer.render(scene, camera);
+      container.classList.add('avatar-loaded');
       try {
         document.body.style.setProperty('--grace-portrait', `url("${canvas.toDataURL('image/webp')}")`);
         document.body.classList.add('avatar-portrait-ready');
@@ -202,23 +205,18 @@
     }
   }
 
-  function stopRender() {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    nextFrameAt = 0;
-    if (avatar) avatar.clock.getDelta();
-  }
-
   function render(now) {
-    if (!aivaOnline || !avatar) return;
+    if (!avatar) return;
     frame = requestAnimationFrame(render);
     if (now < nextFrameAt) return;
     nextFrameAt = now + 33;
     const delta = Math.min(avatar.clock.getDelta(), 0.05);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reducedMotion) idleTime += delta;
+    awakeBlend += ((aivaOnline ? 1 : 0) - awakeBlend) * Math.min(delta * 1.8, 1);
     avatar.vrm.scene.position.y = avatar.baseY + (reducedMotion ? 0 : Math.sin(idleTime * 0.8) * avatar.modelHeight * 0.006);
     applyIdle();
+    avatar.vrm.expressionManager?.setValue('blink', 1 - 0.55 * awakeBlend);
     avatar.vrm.update(delta);
     avatar.renderer.render(avatar.scene, avatar.camera);
   }
@@ -231,14 +229,14 @@
   });
 
   async function syncPresence() {
+    if (probes) {
+      if (aivaOnline) probes.unpauseAnimations();
+      else probes.pauseAnimations();
+    }
     container.classList.toggle('aiva-online', aivaOnline);
     container.classList.toggle('aurora-online', auroraOnline);
     container.classList.toggle('aurora-only', auroraOnline && !aivaOnline);
     container.classList.toggle('grace-only', aivaOnline && !auroraOnline);
-    if (!aivaOnline) {
-      stopRender();
-      return;
-    }
     try {
       await loadAvatar();
       avatar.resize();
@@ -259,4 +257,6 @@
     auroraOnline = Boolean(event.detail?.online);
     syncPresence();
   });
+  // Render offline as the initial state while presence.js checks the heartbeat.
+  syncPresence();
 })();

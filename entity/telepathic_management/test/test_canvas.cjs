@@ -9,7 +9,7 @@ const PNG='data:image/png;base64,iVBORw0KGgo=';
 const tick=()=>new Promise(setImmediate);
 
 function studio() {
-  const storage=new Map(), elements=new Map(), topics=new Map(), images=[], draws=[];
+  const storage=new Map(), elements=new Map(), sockets=[], images=[], draws=[];
   const context=new Proxy({measureText:text=>({width:String(text).length*8}),
     drawImage:image=>draws.push(image.src||'canvas'),
     createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})},
@@ -34,33 +34,29 @@ function studio() {
     constructor(){images.push(this);}
     set src(src){this._src=src;} get src(){return this._src;}
   }
-  class Ros {
-    constructor(){this.handlers={};studio.ros=this;}
-    on(type,handler){this.handlers[type]=handler;}
-    close(){}
-  }
-  class Topic {
-    constructor({name}){this.name=name;this.published=[];topics.set(name,this);}
-    publish(message){this.published.push(message);}
-    subscribe(handler){this.handler=handler;}
+  class Socket {
+    static OPEN=1;
+    constructor(url){this.url=url;this.readyState=0;this.sent=[];sockets.push(this);setImmediate(()=>{this.readyState=1;this.onopen?.();});}
+    send(raw){const message=JSON.parse(raw);this.sent.push(message);if(message.type==='request')this.request=message.payload;}
+    close(){this.readyState=3;this.onclose?.({reason:''});}
+    deliver(event){this.onmessage?.({data:JSON.stringify(event)});}
   }
   let nextId=0;
   const sandbox={document,Image,location:{protocol:'http:',host:'127.0.0.1'},
-    window:{ROSLIB:true,matchMedia:()=>({matches:true}),addEventListener(){}},
-    ROSLIB:{Ros,Topic,Message:class {constructor(value){Object.assign(this,value);}}},
+    window:{CANVAS_STUDIO_CONFIG:{features:{reference:true,image:true,feedback:true}},matchMedia:()=>({matches:true}),addEventListener(){}},
+    WebSocket:Socket,sessionStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     crypto:{randomUUID:()=>`id-${++nextId}`},performance,Event,Blob,URL,
     setTimeout:()=>1,clearTimeout(){},requestAnimationFrame:setImmediate};
   vm.runInNewContext(source,sandbox,{filename:'drawing.js'});
-  studio.ros.handlers.connection();
   return {
     element,images,draws,
     artwork:()=>JSON.parse(storage.get('grace-canvas-v1')||'[]'),
-    topic:name=>topics.get(name),
-    respond:event=>topics.get('/tms/text_response').handler({data:JSON.stringify(event)}),
+    socket:()=>sockets.at(-1),
+    respond:event=>sockets.at(-1).deliver(event),
     async loadImages(){for(const image of images)if(!image.done){image.done=true;image.onload();}await tick();},
     async ask(){element('drawPrompt').value='Paint an apple';await element('drawingPrompt').emit('submit');
-      return JSON.parse(topics.get('/aiva/chat_input').published.at(-1).data);},
+      await tick();return sockets.at(-1).request;},
   };
 }
 
@@ -70,10 +66,10 @@ test('bitmap decoding finishes before overlays and vision snapshots, without res
   app.respond({type:'canvas_actions',identifier,actions:[{kind:'text',id:'caption',text:'Apple',x:40,y:40}]});
   app.respond({type:'canvas_snapshot_request',identifier});
   await tick();
-  assert.equal(app.topic('/aiva/canvas_snapshot').published.length,0);
+  assert.equal(app.socket().sent.filter(item=>item.type==='snapshot').length,0);
   await app.loadImages();
   assert.deepEqual(app.artwork().map(a=>a.id),['painting','caption']);
-  assert.equal(app.topic('/aiva/canvas_snapshot').published.length,1);
+  assert.equal(app.socket().sent.filter(item=>item.type==='snapshot').length,1);
   assert.ok(app.draws.includes(PNG));
   app.respond({type:'canvas_done',identifier});await tick();
   const followup=await app.ask();
@@ -112,7 +108,7 @@ test('reference image stays separate from artwork and reviewed studies send feed
   app.respond({type:'canvas_done',identifier:request.identifier});await tick();
   assert.equal(app.element('studyReview').hidden,false);
   app.element('studyNotes').value='Keep the smooth outline';await app.element('keepStudy').emit('click');
-  const feedback=JSON.parse(app.topic('/aiva/chat_input').published.at(-1).data).canvas_feedback;
+  const feedback=app.socket().sent.at(-1);
   assert.equal(feedback.identifier,request.identifier);assert.equal(feedback.rating,'keep');
   assert.equal(app.artwork()[0].kind,'ellipse');
   app.respond({type:'canvas_feedback',identifier:request.identifier,content:'Saved'});

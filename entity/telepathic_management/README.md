@@ -12,7 +12,10 @@ does not need another ROS topic.
 The console under `telepathic_console/` serves its shared frontend and proxies its
 WebSocket to local rosbridge at `ws://127.0.0.1:9090` by default. Override the
 interface directory with `AGI_WEB_TELEOPS_CONSOLE_INTERFACE_DIR`; set
-`AGI_ROSBRIDGE_URL` to select the local bridge.
+`AGI_ROSBRIDGE_URL` to select the local bridge. The Canvas Studio UI is served
+by this host WebUI. Its drawing language and SVG renderer are provided by the
+separate `grace-canvas` library. Browser requests use the host's WebSocket API,
+which relays them through ROS so AIVA topics remain monitorable.
 
 Both AuRoRA and AIVA include this package in their colcon workspaces through
 `src/telepathic_management`. Build with `colcon build --packages-select

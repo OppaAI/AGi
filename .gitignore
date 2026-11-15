@@ -57,7 +57,8 @@ CATKIN_IGNORE
 models/**/*.gguf
 
 # MOSS-Image weights (large binaries)
-/models/mossimage/
+/models/mossimage
+/models/.mossimage.symlink.tmp
 
 # These are separate AGi-robot repositories; commit within each repo.
 /AIVA/

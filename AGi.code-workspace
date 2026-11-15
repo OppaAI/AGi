@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "AIVA"
+		},
+		{
+			"path": "canvas"
+		},
+		{
+			"path": "imaging"
+		},
+		{
+			"path": "memory"
+		}
+	],
+	"settings": {}
+}

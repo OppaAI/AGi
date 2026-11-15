@@ -64,7 +64,8 @@
 .probe-wire { fill: none; stroke: #201d20; stroke-width: .85; stroke-linecap: round; stroke-linejoin: round; }
 .probe-head { stroke: #c08d88; stroke-width: .22; }
 .probe-body { stroke: #899f91; stroke-width: .23; }
-.probe-signal { fill: #54eaff; stroke: #c3fbff; stroke-width: .025; opacity: .98; }
+.probe-signal { fill: #00f4ff; stroke: #e8ffff; stroke-width: .035; opacity: 1; filter: drop-shadow(0 0 1.1px #00f4ff) drop-shadow(0 0 2.4px #00dfff); }
+.robot-container:not(.aiva-online) .probe-signal { visibility: hidden; }
 .companion-console #robotVrmCanvas { cursor: default; touch-action: auto; }
 .companion-console #robotVrmCanvas:active { cursor: default; }
 .companion-console #robotVrmCanvas { width: 100%; height: 100%; }
@@ -111,6 +112,7 @@
 @keyframes liquid-refraction { from { transform: translate3d(-3%, 3%, 0) rotate(-4deg); opacity: .16; } to { transform: translate3d(4%, -4%, 0) rotate(5deg); opacity: .32; } }
 @keyframes liquid-twinkle { 0%, 55%, 100% { transform: scale(.4); opacity: .08; } 72% { transform: scale(1.3); opacity: .9; } 85% { transform: scale(.7); opacity: .35; } }
 .avatar-placeholder { position: absolute; top: 42%; left: 0; width: 100%; text-align: center; color: #cff8ff; font-size: 19px; letter-spacing: .5px; text-shadow: 0 1px 10px #02142a; }
+.avatar-loaded .avatar-placeholder { display: none; }
 .avatar-placeholder span { display: block; margin-top: 9px; color: #aad6e8; font-size: 12px; letter-spacing: 0; }
 .aiva-online .avatar-placeholder, .grace-only .avatar-placeholder { display: none; }
 .companion-console .robot-container > .robot { display: none; }

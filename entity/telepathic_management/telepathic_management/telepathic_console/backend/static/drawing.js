@@ -1,7 +1,16 @@
-/* Retained drawing objects allow both Grace and the user to edit the same artwork. */
+/* Retained drawing objects let an assistant and the user edit the same artwork. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  const config = window.CANVAS_STUDIO_CONFIG || {};
+  const assistantName = String(config.assistantName || 'Assistant').slice(0, 48);
+  if(config.apiKeyRequired)$('apiKeySettings').hidden=false;
+  try{$('canvasApiKey').value=sessionStorage.getItem('agi-canvas-api-key')||'';}catch(_){}
+  document.querySelectorAll('[data-assistant]').forEach(el=>{el.textContent=assistantName;});
+  const backLink=$('backLink');
+  if(config.backUrl)backLink.href=config.backUrl;else backLink.hidden=true;
+  for(const [feature,enabled] of Object.entries(config.features||{}))if(!enabled)document.querySelectorAll(`[data-feature="${feature}"]`).forEach(el=>el.hidden=true);
+  document.title=`${assistantName} · Canvas Studio`;
   const canvas = $('drawingCanvas'), ctx = canvas.getContext('2d');
   const WIDTH = 1000, HEIGHT = 650, KEY = 'grace-canvas-v1';
   const MAX_IMAGE_CHARS = 8000000, MAX_ARTWORK_BYTES = 32 * 1024 * 1024;
@@ -10,11 +19,11 @@
   const fonts = {sans:'system-ui, sans-serif',serif:'Georgia, serif',mono:'monospace',handwritten:'"Segoe Print", "Bradley Hand", cursive'};
   let objects = [], undo = [], redo = [], selected = null, gesture = null;
   const imageCache = new Map();
-  let busy = false, connected = false, token = 0, requestId = null, deadline = null;
+  let busy = false, connected = true, token = 0, requestId = null, deadline = null;
   let lastStudyId = null;
-  let inputTopic, replay = Promise.resolve();
+  let apiSocket = null, replay = Promise.resolve();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const status = text => { $('drawStatus').textContent = text; };
+  const status = text => { $('drawStatus').textContent = String(text).replaceAll('Grace',assistantName).replaceAll('AIVA',assistantName); };
   const uid = () => globalThis.crypto?.randomUUID?.() || `shape-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const fontFamily = a => fonts[a.font] || (a.kind==='letter' ? fonts.serif : fonts.sans);
   function save() { try { localStorage.setItem(KEY, JSON.stringify(objects)); } catch (_) { status('Browser storage is full; use Save artwork to keep your editable picture.'); } }
@@ -209,7 +218,7 @@
     layerSignature=signature;
     const fragment=document.createDocumentFragment();
     if(!objects.length) {
-      const note=document.createElement('p');note.className='layers-empty';note.textContent='Your marks and Grace’s strokes will appear here.';fragment.append(note);
+      const note=document.createElement('p');note.className='layers-empty';note.textContent=`Your marks and ${assistantName}’s strokes will appear here.`;fragment.append(note);
     }
     [...objects].reverse().forEach((a,index)=>{
       const button=document.createElement('button');button.type='button';button.className='layer-item';
@@ -408,6 +417,38 @@
       link.download='grace-drawing.png';link.href=output.toDataURL('image/png');link.click();render();
     }catch(error){status(error.message);}
   });
+  $('drawExportSvg').addEventListener('click',()=>{
+    try {
+      if(objects.some(a=>a.kind==='erase'))throw new Error('SVG export cannot preserve eraser strokes yet; export this artwork as PNG instead.');
+      const esc=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
+      const number=value=>Number(value||0).toFixed(2).replace(/\.?0+$/,'');
+      const defs=[], body=[];
+      objects.forEach((a,index)=>{
+        let fill=a.fill||a.kind==='polygon'?esc(a.fill_color||a.color||'#c75b4b'):'none';
+        if(a.gradient&&a.gradient!=='none'&&(a.gradient_color||a.gradient_stops)){
+          const id=`gradient-${index}`, stops=a.gradient_stops||[{offset:0,color:a.fill_color||a.color||'#c75b4b'},{offset:1,color:a.gradient_color}];
+          if(a.gradient==='radial')defs.push(`<radialGradient id="${id}">${stops.map(stop=>`<stop offset="${number(stop.offset*100)}%" stop-color="${esc(stop.color)}"/>`).join('')}</radialGradient>`);
+          else {const angle=(a.gradient_angle??45)*Math.PI/180,x=Math.cos(angle)*50+50,y=Math.sin(angle)*50+50;defs.push(`<linearGradient id="${id}" x1="${number(100-x)}%" y1="${number(100-y)}%" x2="${number(x)}%" y2="${number(y)}%">${stops.map(stop=>`<stop offset="${number(stop.offset*100)}%" stop-color="${esc(stop.color)}"/>`).join('')}</linearGradient>`);}
+          fill=`url(#${id})`;
+        }
+        const opacity=number(a.opacity??1), stroke=a.stroke===false?'none':esc(a.color||'#c75b4b'), sw=number(a.size||5);
+        if(['path','polygon','line','curve'].includes(a.kind)){
+          const pts=a.points||[];if(!pts.length)return;let d=`M ${number(pts[0][0])} ${number(pts[0][1])}`;
+          if(a.kind==='curve'&&(pts.length-1)%3===0){for(let i=1;i+2<pts.length;i+=3)d+=` C ${pts.slice(i,i+3).map(p=>`${number(p[0])} ${number(p[1])}`).join(' ')}`;}
+          else if(a.kind==='line')d+=` L ${number(pts.at(-1)[0])} ${number(pts.at(-1)[1])}`;
+          else {for(let i=1;i<pts.length;i++)d+=` L ${number(pts[i][0])} ${number(pts[i][1])}`;if(a.kind==='polygon'||a.fill)d+=' Z';}
+          if(a.kind==='curve'&&a.fill)d+=' Z';
+          body.push(`<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`);
+        } else if(a.kind==='rectangle')body.push(`<rect x="${number(a.x)}" y="${number(a.y)}" width="${number(a.width)}" height="${number(a.height)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" opacity="${opacity}"/>`);
+        else if(a.kind==='ellipse')body.push(`<ellipse cx="${number((a.x||0)+(a.width||0)/2)}" cy="${number((a.y||0)+(a.height||0)/2)}" rx="${number((a.width||0)/2)}" ry="${number((a.height||0)/2)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" opacity="${opacity}"/>`);
+        else if(a.kind==='text')body.push(`<text x="${number(a.x)}" y="${number((a.y||0)+(a.size||24)*.8)}" font-size="${number(a.size||24)}" fill="${esc(a.color||'#333333')}" opacity="${opacity}">${esc(a.text||'')}</text>`);
+        else if(a.kind==='image')body.push(`<image x="${number(a.x)}" y="${number(a.y)}" width="${number(a.width)}" height="${number(a.height)}" href="${esc(a.src)}"/>`);
+        else if(a.kind==='letter')throw new Error('Letter pages are not supported in SVG export yet; export this artwork as PNG instead.');
+      });
+      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}"><defs>${defs.join('')}</defs><rect width="100%" height="100%" fill="#ffffff"/>${body.join('')}</svg>`;
+      const blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='grace-artwork.svg';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){status(error.message);}
+  });
 
   function documentObjects(source) {
     if(!Array.isArray(source)||source.length>100)throw new Error('Artwork must contain at most 100 layers.');
@@ -448,11 +489,11 @@
   $('loadStudy').addEventListener('click',async()=>{
     if(busy)return;const session=++token;setBusy(true);
     try{
-      const response=await fetch('/static/canvas-study.json');
+      const response=await fetch('static/canvas-study.json');
       if(!response.ok)throw new Error('The colour study could not be loaded.');
       const document=await response.json();if(session!==token)return;
       replaceArtwork(document);status('Colour study opened — an editable example. Undo restores your previous canvas.');
-      $('drawResponse').textContent='A prepared colour study to explore. Select any layer to change its colour, or ask Grace to develop the scene.';
+      $('drawResponse').textContent=`A prepared colour study to explore. Select any layer to change its colour, or ask ${assistantName} to develop the scene.`;
     }catch(error){if(session===token)status(error.message);}
     finally{if(session===token)setBusy(false);}
   });
@@ -471,56 +512,58 @@
     } catch(_) { return null; }
   }
   $('drawOpacity').addEventListener('input',()=>{if($('opacityValue'))$('opacityValue').textContent=`${$('drawOpacity').value}%`;});
-  function stop(message='Stopped. Completed actions are kept; Undo can remove them.') { token++;requestId=null;clearTimeout(deadline);setBusy(false);render();status(message); }
+  function stop(message='Stopped. Completed actions are kept; Undo can remove them.') { token++;requestId=null;clearTimeout(deadline);const socket=apiSocket;apiSocket=null;if(socket&&socket.readyState<2)socket.close();connected=true;setBusy(false);render();status(message); }
   $('drawStop').addEventListener('click',()=>stop());
-  try { objects=documentObjects(JSON.parse(localStorage.getItem(KEY)||'[]')); }catch(_){objects=[];status('Saved artwork could not be restored. Open an exported artwork file to recover it.');}render();syncControls();
+  try { objects=documentObjects(JSON.parse(localStorage.getItem(KEY)||'[]')); }catch(_){objects=[];status('Saved artwork could not be restored. Open an exported artwork file to recover it.');}render();syncControls();setBusy(false);
   $('drawingPrompt').addEventListener('submit',async e=> {
     e.preventDefault();if(busy||!connected)return;const text=$('drawPrompt').value.trim();if(!text)return;finishGesture();
-    requestId=uid();token++;setBusy(true);status('Grace is planning her drawing…');
+    requestId=uid();token++;setBusy(true);status(`${assistantName} is planning the drawing…`);
     $('referencePanel').hidden=true;$('referenceImage').removeAttribute('src');
     $('studyReview').hidden=true;lastStudyId=null;$('reviewStatus').textContent='';$('studyNotes').value='';
-    $('drawResponse').textContent='Grace is thinking about what to draw…';
+    $('drawResponse').textContent=`${assistantName} is thinking about what to draw…`;
     // Allow the local model time to produce a detailed plan, then replay it.
-    deadline=setTimeout(()=>stop('Grace did not finish in time. Try a simpler request or check the AIVA chat log.'),720000);
+    deadline=setTimeout(()=>stop(`${assistantName} did not finish in time. Try a simpler request or check the connected assistant service log.`),720000);
     const identifier=requestId;
     try {
       const image=await snapshot();if(requestId!==identifier)return;
       // PNG bytes stay local. The model sees metadata plus the downscaled render.
       const layers=objects.map(({src,...metadata})=>metadata);
-      inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({text,identifier,canvas:{objects:layers,selected,mode:$('creationMode').value||'draw'},snapshot:image})}));
+      if(apiSocket&&apiSocket.readyState<2){const previous=apiSocket;apiSocket=null;previous.onclose=null;previous.close();}
+      const socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/canvas/ws`);apiSocket=socket;
+      socket.onopen=()=>{
+        const apiKey=$('canvasApiKey').value.trim();
+        if(config.apiKeyRequired&&!apiKey){status('Enter the configured Canvas API key under API connection.');stop('Canvas API key required.');return;}
+        if(config.apiKeyRequired){try{sessionStorage.setItem('agi-canvas-api-key',apiKey);}catch(_){}socket.send(JSON.stringify({type:'auth',token:apiKey}));}
+        const payload={text,identifier,canvas:{objects:layers,selected,mode:$('creationMode').value||'draw'},snapshot:image};
+        socket.send(JSON.stringify({type:'request',payload}));
+      };
+      socket.onmessage=message=>{let event;try{event=JSON.parse(message.data);}catch(_){return;}handleEvent(event);};
+      socket.onerror=()=>{connected=false;setBusy(busy);status('Canvas API connection failed. Check the host WebUI and its rosbridge connection.');};
+      socket.onclose=event=>{if(apiSocket===socket)apiSocket=null;if(requestId===identifier){connected=true;stop(event.reason||'Canvas API disconnected. Completed actions are kept.');}};
     }catch(error){stop(error.message);}
   });
   for(const [id,rating] of [['keepStudy','keep'],['improveStudy','improve']])$(id).addEventListener('click',()=>{
-    if(!lastStudyId||!connected||busy)return;
-    try{inputTopic.publish(new ROSLIB.Message({data:JSON.stringify({canvas_feedback:{identifier:lastStudyId,rating,notes:$('studyNotes').value.slice(0,1000)}})}));$('reviewStatus').textContent='Saving review…';}
+    if(!lastStudyId||!apiSocket||apiSocket.readyState!==WebSocket.OPEN||busy)return;
+    try{apiSocket.send(JSON.stringify({type:'feedback',identifier:lastStudyId,rating,notes:$('studyNotes').value.slice(0,1000)}));$('reviewStatus').textContent='Saving review…';}
     catch(error){$('reviewStatus').textContent=error.message;}
   });
-  if(!window.ROSLIB) { status('Could not load the ROS connection library. You can still draw by hand.');return; }
-  const ros=new ROSLIB.Ros({url:`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/rosbridge`});
-  inputTopic=new ROSLIB.Topic({ros,name:'/aiva/chat_input',messageType:'std_msgs/String'});
-  const snapshotTopic=new ROSLIB.Topic({ros,name:'/aiva/canvas_snapshot',messageType:'std_msgs/String'});
-  const responses=new ROSLIB.Topic({ros,name:'/tms/text_response',messageType:'std_msgs/String'});
-  ros.on('connection',()=>{connected=true;setBusy(busy);status('Connected. Ask Grace to draw, or use the tools yourself.');});
-  ros.on('error',()=>{connected=false;stop('ROS connection unavailable. You can still draw by hand.');});
-  ros.on('close',()=>{connected=false;stop('Disconnected. Reload this page after AIVA reconnects.');});
-  responses.subscribe(message=> {
-    let event;try{event=JSON.parse(message.data);}catch(_){return;}
+  function handleEvent(event) {
     if(event.type==='canvas_feedback' && event.identifier===lastStudyId){$('reviewStatus').textContent=String(event.content||'');return;}
     if(!requestId||event.identifier!==requestId)return;
-    if(event.type==='canvas_start') { status('Grace is planning her drawing…');$('drawResponse').textContent='Grace is planning the composition, colour and light…'; }
-    else if(event.type==='canvas_progress') { const message=String(event.content||'Grace is refining her drawing…');status(message);$('drawResponse').textContent=message; }
+    if(event.type==='canvas_start') { status(`${assistantName} is planning the drawing…`);$('drawResponse').textContent=`${assistantName} is planning the composition, colour and light…`; }
+    else if(event.type==='canvas_progress') { const message=String(event.content||`${assistantName} is refining the drawing…`);status(message);$('drawResponse').textContent=message.replaceAll('Grace',assistantName).replaceAll('AIVA',assistantName); }
     else if(event.type==='canvas_snapshot_request') {
       // Answer after the replayed strokes settle so the screenshot shows her draft.
-      status('Grace is looking at her draft before refining it…');
-      $('drawResponse').textContent='Grace is looking at what she painted and deciding what to improve…';
+      status(`${assistantName} is reviewing the draft…`);
+      $('drawResponse').textContent=`${assistantName} is looking at the draft and deciding what to improve…`;
       replay.then(async()=>{if(requestId===event.identifier) {
-        const image=await snapshot();if(image&&requestId===event.identifier)try{snapshotTopic.publish(new ROSLIB.Message({data:JSON.stringify({identifier:event.identifier,image})}));}catch(_){}
+        const image=await snapshot();if(image&&requestId===event.identifier&&apiSocket?.readyState===WebSocket.OPEN)try{apiSocket.send(JSON.stringify({type:'snapshot',identifier:event.identifier,image}));}catch(_){}
       }});
     }
     else if(event.type==='canvas_reference') {
       if(typeof event.src!=='string'||event.src.length>MAX_IMAGE_CHARS||!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(event.src)){stop('Invalid reference image');return;}
       $('referenceImage').src=event.src;$('referencePanel').hidden=false;
-      status('Reference ready. Grace is drawing with tools…');
+      status(`Reference ready. ${assistantName} is drawing with tools…`);
     }
     else if(event.type==='canvas_image') {
       const session=token;
@@ -532,19 +575,19 @@
         await waitForImages([object]);
         if(session!==token)return;
         action(object);
-        status('Grace painted a picture onto the canvas.');
+        status(`${assistantName} painted a picture onto the canvas.`);
       }).catch(error=>{if(session===token)stop(error.message);});
     }
     else if(event.type==='canvas_reply')$('drawResponse').textContent=String(event.content||'').slice(0,1000);
     else if(event.type==='canvas_actions') {
       try {
         if(!Array.isArray(event.actions)||!event.actions.length||event.actions.length>100)throw new Error('Invalid drawing plan');
-        const actions=event.actions.map(normalize),session=token;status('Grace is painting the first forms…');
-        $('drawResponse').textContent='Grace is painting now. She will look at the result and refine it before finishing.';
-        replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`Grace is painting · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>{if(session===token)stop(error.message);});
+        const actions=event.actions.map(normalize),session=token;status(`${assistantName} is painting the first forms…`);
+        $('drawResponse').textContent=`${assistantName} is painting now. The assistant will review and refine the result before finishing.`;
+        replay=replay.then(async()=>{for(let i=0;i<actions.length;i++){if(session!==token)return;status(`${assistantName} is painting · ${i+1} / ${actions.length}`);await animate(actions[i],session);}}).catch(error=>{if(session===token)stop(error.message);});
       }catch(error){stop(error.message);}
     } else if(event.type==='canvas_done') {
-      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);lastStudyId=requestId;$('studyReview').hidden=false;requestId=null;setBusy(false);status(event.partial?'Draft saved. Ask Grace to refine a specific part for more detail.':'Grace finished. You can edit the drawing or ask for changes.');}});
+      const session=token;replay.then(()=>{if(session===token&&requestId){clearTimeout(deadline);lastStudyId=requestId;$('studyReview').hidden=!(config.features?.feedback??true);requestId=null;setBusy(false);status(event.partial?`Draft saved. Ask ${assistantName} to refine a specific part for more detail.`:`${assistantName} finished. You can edit the drawing or ask for changes.`);}});
     } else if(event.type==='canvas_error') {
       const detail=String(event.content||'The drawing request failed.');
       $('drawResponse').textContent=`I couldn't finish that drawing: ${detail}`;
@@ -552,6 +595,6 @@
       // Finish replaying validated actions already received, including those from a truncated pass.
       replay.then(()=>{if(session===token&&requestId)stop(`Drawing interrupted: ${detail}`);});
     }
-  });
-  window.addEventListener('pagehide',()=>{token++;ros.close();},{once:true});
+  }
+  window.addEventListener('pagehide',()=>{token++;apiSocket?.close();},{once:true});
 })();

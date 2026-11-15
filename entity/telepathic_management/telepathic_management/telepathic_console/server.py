@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import re
 import os
@@ -14,7 +15,7 @@ from pathlib import Path
 import uvicorn
 import websockets
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 try:
@@ -304,6 +305,125 @@ async def send_telepathic_input(request: Request) -> dict[str, str]:
 @app.get("/canvas")
 async def canvas_page():
     return FileResponse(FRONTEND_DIR / "canvas.html")
+
+
+@app.get("/api/canvas/config.js")
+async def canvas_config_script() -> Response:
+    settings = {
+        "assistantName": os.getenv("AGI_CANVAS_ASSISTANT_NAME", "Grace"),
+        "backUrl": "/",
+        "apiKeyRequired": bool(os.getenv("AGI_CANVAS_API_KEY")),
+        "features": {
+            "reference": os.getenv("AGI_CANVAS_REFERENCE_MODE", "1") == "1",
+            "image": os.getenv("AGI_CANVAS_IMAGE_MODE", "1") == "1",
+            "feedback": os.getenv("AGI_CANVAS_FEEDBACK", "1") == "1",
+        },
+    }
+    return Response("window.CANVAS_STUDIO_CONFIG=" + json.dumps(settings, separators=(",", ":")) + ";",
+                    media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+
+@app.websocket("/api/canvas/ws")
+async def canvas_api(browser: WebSocket) -> None:
+    """WebSocket drawing API; relay requests/events through ROS for monitoring."""
+    await browser.accept()
+    identifier = ""
+    api_key = os.getenv("AGI_CANVAS_API_KEY", "")
+    input_topic = os.getenv("AGI_CANVAS_INPUT_TOPIC", "/aiva/chat_input")
+    response_topic = os.getenv("AGI_CANVAS_RESPONSE_TOPIC", "/tms/text_response")
+    snapshot_topic = os.getenv("AGI_CANVAS_SNAPSHOT_TOPIC", "/aiva/canvas_snapshot")
+
+    async def send_error(message: str) -> None:
+        try:
+            await browser.send_json({"type": "canvas_error", "identifier": identifier, "content": message})
+        except (RuntimeError, WebSocketDisconnect):
+            pass
+
+    try:
+        if api_key:
+            try:
+                auth = await browser.receive_json()
+            except (WebSocketDisconnect, ValueError):
+                return
+            if not isinstance(auth, dict) or auth.get("type") != "auth" or not isinstance(auth.get("token"), str) \
+                    or not hmac.compare_digest(auth["token"], api_key):
+                await send_error("Canvas API key is missing or invalid.")
+                await browser.close(code=4401, reason="API key required")
+                return
+        try:
+            packet = await browser.receive_json()
+        except (WebSocketDisconnect, ValueError):
+            return
+        if not isinstance(packet, dict) or packet.get("type") != "request" or not isinstance(packet.get("payload"), dict):
+            await send_error("Expected a canvas request payload.")
+            await browser.close(code=4400, reason="Invalid request")
+            return
+        payload = packet["payload"]
+        identifier = payload.get("identifier", "")
+        if not isinstance(identifier, str) or not identifier or len(identifier) > 64:
+            await send_error("Canvas request needs an identifier of at most 64 characters.")
+            await browser.close(code=4400, reason="Invalid identifier")
+            return
+        if len(json.dumps(payload, separators=(",", ":"))) > 12_000_000:
+            await send_error("Canvas request exceeds the 12 MB limit.")
+            await browser.close(code=4400, reason="Request too large")
+            return
+
+        target = os.getenv("AGI_ROSBRIDGE_URL", "ws://127.0.0.1:9090")
+        async with websockets.connect(target, open_timeout=5, max_size=None) as ros:
+            await ros.send(json.dumps({"op": "subscribe", "topic": response_topic,
+                                       "type": "std_msgs/String", "queue_length": 100}))
+            await ros.send(json.dumps({"op": "advertise", "topic": input_topic, "type": "std_msgs/String"}))
+            if snapshot_topic != input_topic:
+                await ros.send(json.dumps({"op": "advertise", "topic": snapshot_topic, "type": "std_msgs/String"}))
+
+            async def publish(topic: str, body: dict) -> None:
+                await ros.send(json.dumps({"op": "publish", "topic": topic,
+                                           "msg": {"data": json.dumps(body, separators=(",", ":"))}}))
+
+            await publish(input_topic, payload)
+
+            async def browser_to_ros() -> None:
+                while True:
+                    message = await browser.receive_json()
+                    if not isinstance(message, dict) or message.get("identifier") != identifier:
+                        continue
+                    kind = message.get("type")
+                    if kind == "snapshot" and isinstance(message.get("image"), str):
+                        await publish(snapshot_topic, {"identifier": identifier, "image": message["image"]})
+                    elif kind == "feedback" and message.get("rating") in ("keep", "improve"):
+                        await publish(input_topic, {"canvas_feedback": {
+                            "identifier": identifier, "rating": message["rating"],
+                            "notes": str(message.get("notes", ""))[:1000],
+                        }})
+
+            async def ros_to_browser() -> None:
+                async for raw in ros:
+                    try:
+                        envelope = json.loads(raw)
+                        if envelope.get("op") != "publish" or envelope.get("topic") != response_topic:
+                            continue
+                        event = json.loads(envelope.get("msg", {}).get("data", "{}"))
+                    except (json.JSONDecodeError, AttributeError, TypeError):
+                        continue
+                    if not isinstance(event, dict) or event.get("identifier") != identifier:
+                        continue
+                    await browser.send_json(event)
+
+            tasks = [asyncio.create_task(browser_to_ros()), asyncio.create_task(ros_to_browser())]
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            for task in done:
+                task.result()
+    except (websockets.WebSocketException, OSError, TimeoutError, RuntimeError, WebSocketDisconnect) as error:
+        await send_error(f"Canvas API could not reach its drawing service: {error}")
+    finally:
+        try:
+            await browser.close()
+        except RuntimeError:
+            pass
 
 
 @app.get("/api/logs")

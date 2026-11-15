@@ -4,21 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#201d22">
-  <title>Grace · Canvas Studio</title>
+  <title>Canvas Studio</title>
   <link rel="icon" href="/static/assets/favicon.svg">
   <link rel="stylesheet" href="/static/drawing.css">
   <script src="/static/theme.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js" defer></script>
-  <script src="/static/drawing.js?v=reference-study-20261114" defer></script>
+  <script src="/api/canvas/config.js" defer></script>
+  <script src="/static/drawing.js?v=api-canvas-20261114" defer></script>
 </head>
 <body>
   <header class="studio-header">
-    <a class="back-link" href="/" aria-label="Back to chat with Grace"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg><span>Chat</span></a>
-    <div class="studio-title"><span class="brand-mark" aria-hidden="true">g.</span><div><span class="eyebrow">GRACE’S WORKSPACE</span><h1>Canvas Studio</h1></div></div>
+    <a class="back-link" id="backLink" href="/" aria-label="Back to companion"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg><span>Back</span></a>
+    <div class="studio-title"><span class="brand-mark" aria-hidden="true">✦</span><div><span class="eyebrow"><span data-assistant>YOUR CREATIVE COMPANION</span> · CANVAS STUDIO</span><h1>Canvas Studio</h1></div></div>
     <div class="document-actions" role="group" aria-label="Artwork files">
       <label class="button file-button">Open artwork<input id="importProject" type="file" accept="application/json,.json"></label>
       <button id="saveProject" type="button">Save artwork</button>
       <button id="drawExport" class="accent-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Export PNG</button>
+      <button id="drawExportSvg" type="button" title="Save the editable vector layers as SVG">Export SVG</button>
       <button id="themeToggle" class="theme-button" type="button">◐ <span>Dark</span></button>
     </div>
   </header>
@@ -39,20 +40,21 @@
             <svg class="empty-mark" viewBox="0 0 100 90"><path d="M20 68C12 45 33 14 47 28S45 73 62 66 88 40 76 23"/><path d="M33 76C46 57 67 63 78 70"/></svg>
             <span class="eyebrow">A LITTLE SPACE FOR BIG IDEAS</span>
             <h3>What shall we create?</h3>
-            <p>Ask Grace to paint something you imagine,<br>or pick up a brush and make the first mark.</p>
+            <p>Ask <span data-assistant>your assistant</span> to create something you imagine,<br>or pick up a brush and make the first mark.</p>
           </div>
         </div>
         <div class="canvas-footnote"><span>Made together, one mark at a time.</span><span>Saved in this browser</span></div>
         <div class="grace-dock">
-          <section class="grace-response" aria-label="Grace's response"><div class="grace-avatar" aria-hidden="true">G</div><div class="response-copy"><strong>Grace <span>YOUR CREATIVE COMPANION</span></strong><p id="drawResponse" role="status" aria-live="polite">Tell me what you have in mind. We can make it our own.</p></div></section>
-          <form id="drawingPrompt"><label for="creationMode">How Grace creates <select id="creationMode"><option value="draw">Draw with tools</option><option value="reference">Draw from MOSS reference</option><option value="image">Generate image with MOSS</option></select></label><label class="visually-hidden" for="drawPrompt">Ask Grace to draw or write</label><div class="prompt-row"><input id="drawPrompt" placeholder="A wildflower meadow at golden hour, soft light and rich colours…" maxlength="4000" required autocomplete="off"><button id="drawAsk" class="accent-button" disabled>Ask Grace <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button></div></form>
+          <section class="grace-response" aria-label="Assistant response"><div class="grace-avatar" aria-hidden="true">✦</div><div class="response-copy"><strong data-assistant>Assistant</strong> <span>CREATIVE COMPANION</span><p id="drawResponse" role="status" aria-live="polite">Tell me what you have in mind. We can make it our own.</p></div></section>
+          <form id="drawingPrompt"><label for="creationMode">How <span data-assistant>your assistant</span> creates <select id="creationMode"><option value="draw">Draw with tools</option><option value="svg">Create vector art (SVG)</option><option value="reference" data-feature="reference">Draw from a reference</option><option value="image" data-feature="image">Generate an image</option></select></label><label class="visually-hidden" for="drawPrompt">Ask your assistant to draw or write</label><div class="prompt-row"><input id="drawPrompt" placeholder="A wildflower meadow at golden hour, soft light and rich colours…" maxlength="4000" required autocomplete="off"><button id="drawAsk" class="accent-button" disabled>Ask <span data-assistant>Assistant</span> <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button></div></form>
 
-          <div class="connection-row"><p id="drawStatus" role="status" aria-live="polite">Connecting to Grace…</p><button id="drawStop" type="button" disabled>Stop Grace</button></div>
+          <details id="apiKeySettings" class="connection-settings" hidden><summary>API connection</summary><label>API key <input id="canvasApiKey" type="password" autocomplete="off" placeholder="Only needed for a protected remote API"></label></details>
+          <div class="connection-row"><p id="drawStatus" role="status" aria-live="polite">Ready for local drawing…</p><button id="drawStop" type="button" disabled>Stop</button></div>
         </div>
       </div>
       <aside class="inspector" aria-label="Artist tools and layers">
-          <section id="studyReview" class="inspector-section" hidden aria-label="Review Grace's drawing"><label>Feedback for future practice <input id="studyNotes" maxlength="1000" placeholder="What worked, or what should she improve?"></label><button id="keepStudy" type="button">Keep as example</button><button id="improveStudy" type="button">Needs improvement</button><p id="reviewStatus" role="status"></p></section>
-        <section id="referencePanel" class="inspector-section" hidden aria-label="Drawing reference"><h2>MOSS reference</h2><img id="referenceImage" alt="Separate MOSS-generated reference for Grace to study"><p>A study target. Grace draws her own version on the canvas.</p></section>
+          <section id="studyReview" class="inspector-section" hidden aria-label="Review drawing"><label>Feedback for future practice <input id="studyNotes" maxlength="1000" placeholder="What worked, or what should improve?"></label><button id="keepStudy" type="button">Keep as example</button><button id="improveStudy" type="button">Needs improvement</button><p id="reviewStatus" role="status"></p></section>
+        <section id="referencePanel" class="inspector-section" hidden aria-label="Drawing reference"><h2>Reference image</h2><img id="referenceImage" alt="A separate reference image"><p>A study target for the assistant to interpret and redraw.</p></section>
         <div class="inspector-heading"><span class="eyebrow">YOUR TOOLKIT</span><svg class="toolkit-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M6 6l12 12M6 18 18 6"/></svg></div>
         <section class="inspector-section tools" aria-labelledby="toolsHeading">
           <h2 id="toolsHeading">Make your mark</h2>
