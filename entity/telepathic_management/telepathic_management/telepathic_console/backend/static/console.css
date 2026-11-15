@@ -118,6 +118,84 @@
 .companion-console .robot-container > .robot { display: none; }
 .companion-console .robot-container.aurora-online > .robot { display: block; position: absolute; left: auto; right: -5%; bottom: 3%; transform-origin: 50% 100%; --robot-scale: .58; z-index: 3; }
 .chamber-panel.portrait-zoom .robot-container.aurora-online.aiva-online > .robot { right: -3%; bottom: 1%; --robot-scale: .84; }
+
+/* Shape the small animated companion like the plush robot in Grace's mascot. */
+.companion-console .robot { filter: drop-shadow(0 8px 9px #120b123d); }
+.companion-console .robot-head,
+.companion-console .robot-head.happy,
+.companion-console .robot-head.sad,
+.companion-console .robot-head.angry,
+.companion-console .robot-head.surprised,
+.companion-console .robot-head.thinking,
+.companion-console .robot-head.loving,
+.companion-console .robot-head.petted,
+.companion-console .robot-head.poked {
+    top: 20px; left: 29px; width: 142px; height: 130px;
+    border: 2px solid #dc78aa; border-radius: 47% 47% 43% 43%;
+    background: radial-gradient(ellipse at 32% 15%, #fff9fb 0, #ffd6e8 35%, #f58abd 72%, #d9549c 100%);
+    box-shadow: 0 5px 13px #82245442, inset 5px 7px 10px #fff9, inset -7px -9px 13px #a62b6952;
+}
+.companion-console .robot-head::before {
+    top: 8px; left: 28px; width: 78px; height: 13px;
+    background: linear-gradient(90deg, transparent, #fff9, transparent);
+}
+.companion-console .robot-head::after { inset: 8px 9px; border-bottom-color: #b84f8730; box-shadow: inset 0 -5px 8px #ae3d7418; }
+.companion-console .robot-ear {
+    position: absolute; z-index: -1; top: 43px; width: 42px; height: 42px;
+    border: 5px solid #f18abc; border-radius: 50%;
+    background: radial-gradient(circle, #5df4f2 0 30%, #c8ffff 35% 46%, #ec79b5 52% 100%);
+    box-shadow: 0 0 0 2px #a9437b, 0 0 10px #4ce9e6a6, inset 0 0 5px #fff;
+}
+.companion-console .robot-ear.left { left: -20px; }
+.companion-console .robot-ear.right { right: -20px; }
+.companion-console .robot-head .antenna-left,
+.companion-console .robot-head .antenna-right { display: none; }
+.companion-console .robot-head .face {
+    top: 24px; left: 18px; width: 102px; height: 84px; padding-top: 13px;
+    border: 1px solid #e9bad0; border-radius: 48%;
+    background: radial-gradient(ellipse at 45% 30%, #fffdfb, #ffe9ed 72%, #f8cdd9);
+    box-shadow: inset 0 2px 5px #fff, inset 0 -3px 7px #d79aa444;
+}
+.companion-console .robot-head .face::before { display: none; }
+.companion-console .robot-head .eyes { width: 73px; }
+.companion-console .robot-head .eye { width: 28px; height: 32px; overflow: visible; background: #30222e; border-radius: 50%; box-shadow: 0 1px 3px #8f456c66; }
+.companion-console .robot-head .eye::after {
+    top: 5px; left: 4px; width: 21px; height: 24px; border-radius: 50%;
+    background: radial-gradient(ellipse at 42% 32%, #7b4d66, #2a1b2a 72%);
+    box-shadow: inset 0 -3px 4px #100c18, 0 0 3px #ec98bd66;
+}
+.companion-console .robot-head .eye::before { top: 7px; left: 7px; width: 8px; height: 8px; background: #fff; box-shadow: 0 0 4px #fff; }
+.companion-console .robot-head .cheeks { width: 88px; margin: 4px auto 0; }
+.companion-console .robot-head .cheek { width: 19px; height: 9px; border-radius: 50%; background: #f28cac; opacity: .72; }
+.companion-console .robot-head .mouth { width: 24px; height: 13px; margin-top: 6px; border: 2px solid #9d456c; border-top: 0; border-radius: 0 0 50% 50%; filter: none; }
+.companion-console .robot-body,
+.companion-console .robot-head.sad ~ .robot-body,
+.companion-console .robot-head.angry ~ .robot-body,
+.companion-console .robot-head.thinking ~ .robot-body,
+.companion-console .robot-head.petted ~ .robot-body,
+.companion-console .robot-head.poked ~ .robot-body {
+    left: 40px; bottom: 0; width: 120px; height: 91px;
+    border: 2px solid #e89ac0; border-radius: 46% 46% 35% 35%;
+    background: linear-gradient(145deg, #fff6f7 0, #ffe1eb 45%, #f2a8ca 100%);
+    box-shadow: 0 5px 12px #76234a35, inset 4px 5px 8px #fff9, inset -5px -6px 9px #ad447035;
+}
+.companion-console .robot-body::before { top: 8px; left: 24px; right: 24px; height: 7px; background: linear-gradient(90deg, transparent, #fff, transparent); }
+.companion-console .robot-body::after {
+    top: 25px; left: 25px; width: 66px; height: 52px; border: 1px solid #e3a8bc;
+    border-radius: 48%; background: radial-gradient(ellipse at 35% 25%, #fffdfb, #ffe9ed 80%);
+    box-shadow: inset 0 2px 4px #fff, 0 1px 3px #aa55741f;
+}
+.companion-console .robot-body .heart { top: 47px; left: 52px; background: #f05291; filter: drop-shadow(0 1px 2px #aa356b66); }
+.companion-console .robot-body .heart::before,
+.companion-console .robot-body .heart::after { background: #f05291; }
+.companion-console .arm-left,
+.companion-console .arm-right {
+    top: 116px; width: 39px; height: 54px; border: 2px solid #e88db8;
+    border-radius: 22px; background: linear-gradient(145deg, #fff5f7, #f4a7ca 76%, #df6ba7);
+    box-shadow: inset 3px 3px 5px #fff9, inset -3px -4px 5px #a83d7130, 0 3px 5px #501a382b;
+}
+.companion-console .arm-left { left: 22px; transform: rotate(23deg); animation: none; }
+.companion-console .arm-right { right: 22px; transform: rotate(-23deg); animation: none; }
 .chamber-footer { position: absolute; bottom: 0; width: 100%; padding: 5px 10px 0; text-align: center; }
 .companion-console .avatar-controls { position: static; transform: none; display: inline-flex; padding: 0; gap: 15px; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
 .companion-console .avatar-zoom-control { align-items: center; gap: 12px; min-height: 40px; cursor: default; font-size: 13px; color: var(--console-muted); }

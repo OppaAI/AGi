@@ -14,6 +14,9 @@
 		},
 		{
 			"path": "memory"
+		},
+		{
+			"path": "scorecard"
 		}
 	],
 	"settings": {}
