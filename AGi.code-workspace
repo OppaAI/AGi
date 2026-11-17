@@ -20,6 +20,9 @@
 		},
 		{
 			"path": "../telepathy"
+		},
+		{
+			"path": "../cypher"
 		}
 	],
 	"settings": {}
