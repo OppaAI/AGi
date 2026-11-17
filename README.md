@@ -533,6 +533,7 @@ sequenceDiagram
 ```bash
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
+git clone https://github.com/AGi-robot/telepathy.git ~/telepathy
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
@@ -541,7 +542,7 @@ rosdep install --from-paths src --ignore-src -r -y
 pip3 install -r requirements.txt --break-system-packages
  
 # 3. Build
-colcon build --packages-select scs
+colcon build --packages-up-to scs telepathic_management
 source install/setup.bash
  
 # 4. Start LLM inference
