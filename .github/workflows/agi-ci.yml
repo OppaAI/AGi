@@ -21,6 +21,12 @@ jobs:
         with:
           repository: AGi-robot/telepathy
           path: telepathy
+      - name: Check out shared Cypher package
+        uses: actions/checkout@v4
+        with:
+          repository: AGi-robot/cypher
+          path: cypher
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -38,13 +44,13 @@ jobs:
           node --check AuRoRA/src/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
           node --test AuRoRA/src/telepathic_management/test/test_canvas.cjs
       - name: Compile shared ROS packages
-        run: python -m compileall -q AuRoRA/src/telepathic_management/telepathic_management entity/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
+        run: python -m compileall -q AuRoRA/src/telepathic_management/telepathic_management AuRoRA/src/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
       - name: Import the shared console and test signal encoding
         env:
-          PYTHONPATH: AuRoRA/src/telepathic_management:entity/cryptic_signal_core:AuRoRA/src/tms
+          PYTHONPATH: AuRoRA/src/telepathic_management:AuRoRA/src/cryptic_signal_core:AuRoRA/src/tms
         run: |
           python -c "from telepathic_management.telepathic_console.server import app; assert app.title == 'AGi Web Teleops Console'"
-          python -m pytest -q AuRoRA/tests/tms/test_radio_encoding.py
+          python -m pytest -q AuRoRA/src/cryptic_signal_core/test/test_telepathic_encoding.py
 
   shared-ros-jazzy:
     runs-on: ubuntu-24.04
@@ -60,6 +66,12 @@ jobs:
         with:
           repository: AGi-robot/telepathy
           path: telepathy
+      - name: Check out shared Cypher package
+        uses: actions/checkout@v4
+        with:
+          repository: AGi-robot/cypher
+          path: cypher
+          persist-credentials: false
       - name: Configure ROS apt source
         run: |
           set -euo pipefail
@@ -78,7 +90,8 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.bash
           test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f ../telepathy)"
-          colcon build --base-paths entity/cryptic_signal_core AuRoRA/src/telepathic_management --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+          test "$(readlink -f AuRoRA/src/cryptic_signal_core)" = "$(readlink -f ../cypher)"
+          colcon build --base-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Verify the built ROS packages
         run: |
           source /opt/ros/jazzy/setup.bash

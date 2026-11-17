@@ -54,7 +54,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
  
 ## Shared Telepathy Console
 
-The Web Teleops Console is maintained in the separate [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy) repository. AuRoRA uses it through `AuRoRA/src/telepathic_management`; clone the repository beside this checkout as `../telepathy`. Its ROS package depends on `cryptic_signal_core`, which remains in this repository.
+The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories beside this checkout as `../telepathy` and `../cypher`. AuRoRA links them into `AuRoRA/src` for colcon.
 
 ## Repository Structure
  
@@ -534,6 +534,7 @@ sequenceDiagram
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
 git clone https://github.com/AGi-robot/telepathy.git ~/telepathy
+git clone https://github.com/AGi-robot/cypher.git ~/cypher
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
