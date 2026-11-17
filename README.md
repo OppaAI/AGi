@@ -56,6 +56,10 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 
 The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories beside this checkout as `../telepathy` and `../cypher`. AuRoRA links them into `AuRoRA/src` for colcon.
 
+## Augmented Reality
+
+Grace's Android ARCore Unity project is maintained in [AGi-Robot/augmented-reality](https://github.com/AGi-robot/augmented-reality). Its repository contains the Unity setup and build instructions.
+
 ## Repository Structure
  
 ```
