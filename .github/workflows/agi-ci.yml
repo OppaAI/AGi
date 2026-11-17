@@ -60,6 +60,13 @@ jobs:
         with:
           repository: AGi-robot/telepathy
           path: telepathy
+      - name: Configure ROS apt source
+        run: |
+          set -euo pipefail
+          source_version=1.3.0
+          curl --fail --location --retry 3 --retry-delay 2 -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${source_version}/ros2-apt-source_${source_version}.noble_all.deb"
+          sudo dpkg -i /tmp/ros2-apt-source.deb
+          sudo apt-get update
       - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: jazzy
