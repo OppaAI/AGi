@@ -26,6 +26,7 @@ jobs:
         with:
           repository: AGi-robot/cypher
           path: cypher
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -70,6 +71,7 @@ jobs:
         with:
           repository: AGi-robot/cypher
           path: cypher
+          persist-credentials: false
       - name: Configure ROS apt source
         run: |
           set -euo pipefail
