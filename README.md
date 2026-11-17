@@ -52,6 +52,10 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **ephem** — local moon phase calculation (no network)
 ---
  
+## Shared Telepathy Console
+
+The Web Teleops Console is maintained in the separate [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy) repository. AuRoRA uses it through `AuRoRA/src/telepathic_management`; clone the repository beside this checkout as `../telepathy`. Its ROS package depends on `cryptic_signal_core`, which remains in this repository.
+
 ## Repository Structure
  
 ```
@@ -529,6 +533,7 @@ sequenceDiagram
 ```bash
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
+git clone https://github.com/AGi-robot/telepathy.git ~/telepathy
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
@@ -537,7 +542,7 @@ rosdep install --from-paths src --ignore-src -r -y
 pip3 install -r requirements.txt --break-system-packages
  
 # 3. Build
-colcon build --packages-select scs
+colcon build --packages-up-to scs telepathic_management
 source install/setup.bash
  
 # 4. Start LLM inference
