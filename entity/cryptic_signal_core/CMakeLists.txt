@@ -32,6 +32,13 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-ament_python_install_package(${PROJECT_NAME})
+# Install the codec helpers into the same Python namespace as the generated
+# message modules. rosidl_generator_py already registers this package name, so
+# ament_python_install_package(${PROJECT_NAME}) would register it twice.
+ament_get_python_install_dir(PYTHON_INSTALL_DIR)
+install(
+  FILES ${PROJECT_NAME}/telepathic_encoding.py
+  DESTINATION "${PYTHON_INSTALL_DIR}/${PROJECT_NAME}"
+)
 
 ament_package()
