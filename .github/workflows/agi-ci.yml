@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out shared Telepathy package
+        uses: actions/checkout@v4
+        with:
+          repository: AGi-robot/telepathy
+          path: telepathy
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -23,13 +28,13 @@ jobs:
         run: bash -n AuRoRA/launch.sh
       - name: Check console JavaScript and canvas behavior
         run: |
-          node --check entity/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
-          node --test entity/telepathic_management/test/test_canvas.cjs
+          node --check telepathy/telepathic_management/telepathic_console/backend/static/drawing.js
+          node --test telepathy/test/test_canvas.cjs
       - name: Compile shared ROS packages
-        run: python -m compileall -q entity/telepathic_management/telepathic_management entity/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
+        run: python -m compileall -q telepathy/telepathic_management entity/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
       - name: Import the shared console and test signal encoding
         env:
-          PYTHONPATH: entity/telepathic_management:entity/cryptic_signal_core:AuRoRA/src/tms
+          PYTHONPATH: telepathy:entity/cryptic_signal_core:AuRoRA/src/tms
         run: |
           python -c "from telepathic_management.telepathic_console.server import app; assert app.title == 'AGi Web Teleops Console'"
           python -m pytest -q AuRoRA/tests/tms/test_radio_encoding.py
@@ -38,6 +43,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Check out shared Telepathy package
+        uses: actions/checkout@v4
+        with:
+          repository: AGi-robot/telepathy
+          path: telepathy
       - uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: jazzy
@@ -48,7 +58,7 @@ jobs:
       - name: Build shared ROS message and console packages
         run: |
           source /opt/ros/jazzy/setup.bash
-          colcon build --base-paths entity --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+          colcon build --base-paths entity telepathy --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Verify the built ROS packages
         run: |
           source /opt/ros/jazzy/setup.bash

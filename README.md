@@ -52,6 +52,10 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **ephem** — local moon phase calculation (no network)
 ---
  
+## Shared Telepathy Console
+
+The Web Teleops Console is maintained in the separate [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy) repository. AuRoRA uses it through `AuRoRA/src/telepathic_management`; clone the repository beside this checkout as `../telepathy`. Its ROS package depends on `cryptic_signal_core`, which remains in this repository.
+
 ## Repository Structure
  
 ```
