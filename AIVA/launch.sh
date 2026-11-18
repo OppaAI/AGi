@@ -125,7 +125,7 @@ set -u
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   error "AIVA Python venv not found: $VENV_DIR"
   info "Create it and install dependencies with:"
-  printf '  /usr/bin/python3 -m venv --system-site-packages %q\n  %q/bin/python -m pip install -r %q/requirements.txt\n' "$VENV_DIR" "$VENV_DIR" "$SHELL_DIR"
+  printf '  /usr/bin/python3 -m venv --system-site-packages %q\n  (cd %q && %q/bin/python -m pip install -r requirements.txt)\n' "$VENV_DIR" "$SCRIPT_DIR" "$VENV_DIR"
   exit 1
 fi
 export VIRTUAL_ENV="$VENV_DIR"
@@ -161,7 +161,7 @@ done
 
 if [[ "$START_CHAT" == "1" ]] && ! "$AIVA_ROS_PYTHON" -c 'from memory.conversation import ConversationStore' >/dev/null 2>&1; then
   error "The AIVA venv cannot import the Memory conversation store."
-  printf '  cd %q && %q -m pip install -r requirements.txt\n' "$SHELL_DIR" "$AIVA_ROS_PYTHON"
+  printf '  cd %q && %q -m pip install -r requirements.txt\n' "$SCRIPT_DIR" "$AIVA_ROS_PYTHON"
   exit 1
 fi
 
