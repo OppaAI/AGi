@@ -35,6 +35,8 @@ LLM_PORT="${AIVA_LLM_PORT:-8080}"
 LLM_BASE_URL="${AIVA_LLM_BASE_URL:-http://127.0.0.1:${LLM_PORT}/v1}"
 EMBED_BASE_URL="${AIVA_EMBED_BASE_URL:-$LLM_BASE_URL}"
 LLM_MODEL="${AIVA_LLM_MODEL:-ministral-3-8b-uncensored}"
+DRAW_MODEL="${AIVA_DRAW_MODEL:-swift15-qwen3.8-27b}"
+DRAW_REASONING_EFFORT="${AIVA_DRAW_REASONING_EFFORT:-medium}"
 
 # --- llama.cpp router binaries and model presets ------------------------------
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-$HOME/llama.cpp}"
@@ -47,6 +49,8 @@ export AGI_HOME AGI_LOG_DIR="$LOG_DIR" ROS_LOG_DIR="$LOG_DIR/ros"
 export LD_LIBRARY_PATH="$LLAMA_CPP_DIR/build/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export AIVA_LLM_BASE_URL="$LLM_BASE_URL"
 export AIVA_LLM_MODEL="$LLM_MODEL"
+export AIVA_DRAW_MODEL="$DRAW_MODEL"
+export AIVA_DRAW_REASONING_EFFORT="$DRAW_REASONING_EFFORT"
 export AIVA_EMBED_BASE_URL="$EMBED_BASE_URL"
 export MOSS_PAINT_WEIGHTS_ROOT="${MOSS_PAINT_WEIGHTS_ROOT:-$AGI_ROOT_DIR/models/mossimage}"
 
@@ -467,7 +471,7 @@ start_llama_backends() {
       info "Router preset: $LLAMA_ROUTER_INI  ${C_DIM}· port: $LLM_PORT${C_RESET}"
       start_service llama-router "$LLAMA_SERVER_BIN" \
         --models-preset "$LLAMA_ROUTER_INI" --models-max 2 \
-        --port "$LLM_PORT"
+        --reasoning-effort "$DRAW_REASONING_EFFORT" --port "$LLM_PORT"
     fi
   fi
 }
