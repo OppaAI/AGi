@@ -30,8 +30,12 @@ git clone https://github.com/AGi-robot/shell.git      AIVA/shell
 git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
 git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
 git clone https://github.com/AGi-robot/interaction.git AIVA/interaction
-git clone https://github.com/AGi-robot/memory.git      AIVA/mind/memory
+git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory
 ```
+
+The AIVA Shell adapter currently uses `memory.conversation.ConversationStore`,
+which is available on Memory's `dev` branch. Use that branch until the feature
+is promoted to Memory's `main` branch.
 
 Then follow [`shell/README.md`](shell/README.md) for the venv, build, and
 launch instructions.
