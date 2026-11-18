@@ -83,7 +83,7 @@ jobs:
       - uses: ros-tooling/setup-ros@v0.7
       - name: Install ROS Jazzy base and package dependencies
         run: |
-          set -euo pipefail
+          set -eo pipefail
           sudo apt-get install --no-install-recommends --quiet --yes \
             ros-jazzy-ros-base python3-colcon-common-extensions
           source /opt/ros/jazzy/setup.bash
