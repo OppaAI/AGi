@@ -66,6 +66,7 @@ models/**/*.gguf
 /AIVA/shell/
 /AIVA/cypher/
 /AIVA/telepathy/
+/AIVA/interaction/
 /capability/canvas/
 /capability/imaging/
 /AIVA/mind/memory/
