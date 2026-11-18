@@ -50,6 +50,11 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **rosbridge** — WebSocket bridge to web GUI
 - **FastAPI + Uvicorn** — authenticated HTTP ingress for PC health telemetry and homing requests; existing TIC/TOC WebSockets remain active
 - **ephem** — local moon phase calculation (no network)
+
+On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
+(`agi-llm-router`, port 8080): **Ministral 3 8B** (chat, resident) +
+**Swift 1.5 Qwen3.8 27B** (agentic/vision, on-demand) + **voyage-4-nano**
+(embeddings) — see [`models/llama-router.ini`](models/llama-router.ini).
 ---
  
 ## Shared Telepathy Console
@@ -85,6 +90,7 @@ AGi/
 │               ├── emc.py   # Episodic Memory Cortex
 │               └── msb.py   # Memory Storage Bank (shared substrate)
 ├── AIVA/            # PC companion repositories
+│   ├── launch.sh    # Grace's launcher (router + shell services) — tracked here
 │   ├── shell/       # ROS 2 workspace (aiva_chat and agi_logging nodes)
 │   ├── cypher/      # Shared ROS messages and codec
 │   ├── telepathy/   # Shared WebUI and rosbridge transport
