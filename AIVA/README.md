@@ -12,12 +12,13 @@ the shared capabilities.
 | `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `aiva_chat`, `agi_logging`, `scs` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
 | `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Shared WebUI and rosbridge transport (`telepathic_management`) |
+| `interaction/` | [AGi-robot/interaction](https://github.com/AGi-robot/interaction) | Text conversation engine used by the `aiva_chat` ROS adapter |
 | `mind/memory/` | [AGi-robot/memory](https://github.com/AGi-robot/memory) | Pure Python memory library installed into AIVA's venv |
 
 The component repositories are intentionally separate from `OppaAI/AGi` and
 gitignored here; commit inside each one. The ROS workspace links Cypher and
-Telepathy under `shell/src/`; Memory installs into AIVA's root venv as a Python
-package. Canvas, Imaging, and Memory install as editable Python packages from
+Telepathy under `shell/src/`; Interaction and Memory install into AIVA's root
+venv as Python packages. Canvas, Imaging, Interaction, and Memory install from
 their local checkouts through `AIVA/requirements.txt`.
 
 ## Checkout
@@ -28,8 +29,13 @@ From the AGi checkout root:
 git clone https://github.com/AGi-robot/shell.git      AIVA/shell
 git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
 git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
-git clone https://github.com/AGi-robot/memory.git     AIVA/mind/memory
+git clone https://github.com/AGi-robot/interaction.git AIVA/interaction
+git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory
 ```
+
+The AIVA Shell adapter currently uses `memory.conversation.ConversationStore`,
+which is available on Memory's `dev` branch. Use that branch until the feature
+is promoted to Memory's `main` branch.
 
 Then follow [`shell/README.md`](shell/README.md) for the venv, build, and
 launch instructions.

@@ -54,6 +54,7 @@ jobs:
 
   shared-ros-jazzy:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: AGi
@@ -80,8 +81,15 @@ jobs:
           sudo dpkg -i /tmp/ros2-apt-source.deb
           sudo apt-get update
       - uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: jazzy
+      - name: Install ROS Jazzy base and package dependencies
+        run: |
+          set -eo pipefail
+          sudo apt-get install --no-install-recommends --quiet --yes \
+            ros-jazzy-ros-base python3-colcon-common-extensions
+          source /opt/ros/jazzy/setup.bash
+          rosdep update --rosdistro jazzy
+          rosdep install --from-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management \
+            --ignore-src --rosdistro jazzy -r -y
       - name: Prepare Python test environment
         run: |
           /usr/bin/python3 -m venv --system-site-packages .venv
