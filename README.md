@@ -73,9 +73,14 @@ AGi/
 │               ├── wmc.py   # Working Memory Cortex
 │               ├── emc.py   # Episodic Memory Cortex
 │               └── msb.py   # Memory Storage Bank (shared substrate)
-│
-└── AIVA/            # Server workspace (PC) — future
-    └── src/
+├── AIVA/            # Server workspace (PC)
+│   └── soma/
+│       └── src/
+├── capability/      # Shared, independently versioned capabilities
+│   ├── canvas/      # AGi-robot/canvas
+│   └── imaging/     # AGi-robot/imaging
+└── diagnostic/     # Independently versioned evaluation tooling
+    └── scorecard/  # AGi-robot/scorecard
 ```
  
 ---

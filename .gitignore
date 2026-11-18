@@ -61,9 +61,10 @@ models/**/*.gguf
 /models/.mossimage.symlink.tmp
 
 # These are separate AGi-robot repositories; commit within each repo.
-/AIVA/
-/canvas/
-/imaging/
-/memory/
-/scorecard/
+/AIVA/soma/
+/capability/canvas/
+/capability/imaging/
+/AIVA/psyche/
+/diagnostic/scorecard/
 
+.pytest_cache/
