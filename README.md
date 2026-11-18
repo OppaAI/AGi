@@ -380,6 +380,13 @@ AGi/
 - [ ] Multiple search combining semantic + keyword + SQL
 ### M10 — Messaging
 → Promoted to M1.X-c. Updated scope: Telegram, Discord, Gmail (Slack removed). See Side Quests.
+
+> **Capabilities stay direct API.** Canvas and imaging are steps inside the chat
+> flow with tight contracts (placement sizing, PNG limits, VRAM budget), so they
+> remain in-process calls. If an external agent ever needs to use them, add a
+> thin MCP server (HTTP transport) as a wrapper over the existing
+> `capability/imaging` / `canvas` entry points — Grace's internal path stays
+> unchanged.
  
 ---
  
