@@ -5,14 +5,14 @@ set -Eeuo pipefail
 # --- Paths -------------------------------------------------------------------
 # Absolute path of the folder containing this script (not the user's current directory)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# AIVA's shell ROS workspace (colcon build artifacts and venv live there)
+# AIVA's shell ROS workspace (colcon build artifacts live there)
 SHELL_DIR="$SCRIPT_DIR/shell"
 # AGi checkout root, one level above this script (AIVA/launch.sh)
 AGI_ROOT_DIR="${AGI_ROOT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
 CANVAS_SOURCE_DIR="${AGI_CANVAS_SOURCE_DIR:-$AGI_ROOT_DIR/capability/canvas}"
 IMAGING_SOURCE_DIR="${AGI_IMAGING_SOURCE_DIR:-$AGI_ROOT_DIR/capability/imaging}"
-# Python venv location (default: .venv in the shell workspace; override with AIVA_VENV)
-VENV_DIR="${AIVA_VENV:-$SHELL_DIR/.venv}"
+# Python venv location (default: .venv at the AIVA root; override with AIVA_VENV)
+VENV_DIR="${AIVA_VENV:-$SCRIPT_DIR/.venv}"
 
 # --- ROS 2 -------------------------------------------------------------------
 # ROS 2's environment script (default: Jazzy; override with ROS_SETUP)
@@ -125,7 +125,7 @@ set -u
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   error "AIVA Python venv not found: $VENV_DIR"
   info "Create it and install dependencies with:"
-  printf '  cd %q\n  /usr/bin/python3 -m venv --system-site-packages .venv\n  .venv/bin/python -m pip install -r requirements.txt\n' "$SHELL_DIR"
+  printf '  /usr/bin/python3 -m venv --system-site-packages %q\n  %q/bin/python -m pip install -r %q/requirements.txt\n' "$VENV_DIR" "$VENV_DIR" "$SHELL_DIR"
   exit 1
 fi
 export VIRTUAL_ENV="$VENV_DIR"

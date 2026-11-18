@@ -12,11 +12,11 @@ the shared capabilities.
 | `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `aiva_chat`, `agi_logging`, `scs` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
 | `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Shared WebUI and rosbridge transport (`telepathic_management`) |
-| `mind/memory/` | [AGi-robot/memory](https://github.com/AGi-robot/memory) | Pure Python memory library installed into Shell's venv |
+| `mind/memory/` | [AGi-robot/memory](https://github.com/AGi-robot/memory) | Pure Python memory library installed into AIVA's venv |
 
 The component repositories are intentionally separate from `OppaAI/AGi` and
 gitignored here; commit inside each one. The ROS workspace links Cypher and
-Telepathy under `shell/src/`; Memory installs into Shell's venv as a Python
+Telepathy under `shell/src/`; Memory installs into AIVA's root venv as a Python
 package.
 
 ## Checkout
