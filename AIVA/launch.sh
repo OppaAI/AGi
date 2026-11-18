@@ -137,8 +137,7 @@ AIVA_ROS_PYTHON="$VENV_DIR/bin/python"
 VENV_SITE_PACKAGES="$($AIVA_ROS_PYTHON -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
 for package_source in \
   "$CANVAS_SOURCE_DIR/src" \
-  "$IMAGING_SOURCE_DIR/src" \
-  "$SHELL_DIR/src/agi_memory/src"; do
+  "$IMAGING_SOURCE_DIR/src"; do
   if [[ -d "$package_source" ]]; then
     PYTHONPATH="$package_source${PYTHONPATH:+:$PYTHONPATH}"
   fi
@@ -152,18 +151,17 @@ fi
 
 for source_package in \
   "$SHELL_DIR/src/cryptic_signal_core/package.xml" \
-  "$SHELL_DIR/src/telepathic_management/package.xml" \
-  "$SHELL_DIR/src/agi_memory/package.xml"; do
+  "$SHELL_DIR/src/telepathic_management/package.xml"; do
   if [[ ! -f "$source_package" ]]; then
     error "Required ROS package source is missing: $source_package"
-    info "See $SHELL_DIR/README.md for the Cypher, Telepathy, and Memory checkout/link setup."
+    info "See $SHELL_DIR/README.md for the Cypher and Telepathy checkout/link setup."
     exit 1
   fi
 done
 
 if [[ "$START_CHAT" == "1" ]] && ! "$AIVA_ROS_PYTHON" -c 'from memory.conversation import ConversationStore' >/dev/null 2>&1; then
   error "The AIVA venv cannot import the Memory conversation store."
-  printf '  %q -m pip install -r %q\n' "$AIVA_ROS_PYTHON" "$SHELL_DIR/requirements.txt"
+  printf '  cd %q && %q -m pip install -r requirements.txt\n' "$SHELL_DIR" "$AIVA_ROS_PYTHON"
   exit 1
 fi
 

@@ -66,8 +66,8 @@ The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.co
 AIVA's actual ROS nodes include `aiva_chat` and `agi_logging`; rosbridge is
 started from the ROS distribution. Telepathy's `telepathic_console` and
 `scs`'s `aiva-presence` are standalone processes packaged for `ros2 run`, not
-ROS nodes. Memory's `agi_memory` package exposes a Python library used directly
-by `aiva_chat`; Cypher provides message definitions and encoding support. The
+ROS nodes. Memory exposes a Python library used directly by `aiva_chat`; Cypher
+provides message definitions and encoding support. The
 Canvas and Imaging capabilities are invoked by the chat flow and do not
 currently need their own ROS nodes. See [`AIVA/shell/README.md`](AIVA/shell/README.md)
 for the workspace setup and component details.
@@ -95,7 +95,7 @@ AGi/
 │   ├── cypher/      # Shared ROS messages and codec
 │   ├── telepathy/   # Shared WebUI and rosbridge transport
 │   └── mind/
-│       └── memory/ # Memory library plus agi_memory ROS package metadata
+│       └── memory/ # Reusable Python memory library
 ├── capability/      # Shared, independently versioned capabilities
 │   ├── canvas/      # AGi-robot/canvas
 │   └── imaging/     # AGi-robot/imaging
