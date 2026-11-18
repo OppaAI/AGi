@@ -54,7 +54,18 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
  
 ## Shared Telepathy Console
 
-The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories beside this checkout as `../telepathy` and `../cypher`. AuRoRA links them into `AuRoRA/src` for colcon.
+The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories into this checkout as `telepathy/` and `cypher/`. AuRoRA and AIVA link them into their ROS workspaces for colcon.
+
+## AIVA ROS 2 layout
+
+AIVA's actual ROS nodes include `aiva_chat` and `agi_logging`; rosbridge is
+started from the ROS distribution. Telepathy's `telepathic_console` and
+`scs`'s `aiva-presence` are standalone processes packaged for `ros2 run`, not
+ROS nodes. Psyche's `agi_memory` package exposes a Python library used directly
+by `aiva_chat`; Cypher provides message definitions and encoding support. The
+Canvas and Imaging capabilities are invoked by the chat flow and do not
+currently need their own ROS nodes. See [`AIVA/soma/README.md`](AIVA/soma/README.md)
+for the workspace setup and component details.
 
 ## Augmented Reality
 
@@ -73,9 +84,9 @@ AGi/
 │               ├── wmc.py   # Working Memory Cortex
 │               ├── emc.py   # Episodic Memory Cortex
 │               └── msb.py   # Memory Storage Bank (shared substrate)
-├── AIVA/            # Server workspace (PC)
-│   └── soma/
-│       └── src/
+├── AIVA/            # PC companion repositories
+│   ├── soma/        # ROS 2 workspace (aiva_chat and agi_logging nodes)
+│   └── psyche/      # Memory library plus agi_memory ROS package metadata
 ├── capability/      # Shared, independently versioned capabilities
 │   ├── canvas/      # AGi-robot/canvas
 │   └── imaging/     # AGi-robot/imaging
