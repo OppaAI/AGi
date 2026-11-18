@@ -1,12 +1,12 @@
 {
-  "name": "Protect dev",
+  "name": "Protect main",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
       "exclude": [],
       "include": [
-        "refs/heads/dev"
+        "refs/heads/main"
       ]
     }
   },
