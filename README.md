@@ -54,17 +54,17 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
  
 ## Shared Telepathy Console
 
-The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories into this checkout as `telepathy/` and `cypher/`. AuRoRA and AIVA link them into their ROS workspaces for colcon.
+The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories into this checkout as `AIVA/telepathy/` and `AIVA/cypher/`. AuRoRA and AIVA link them into their ROS workspaces for colcon.
 
 ## AIVA ROS 2 layout
 
 AIVA's actual ROS nodes include `aiva_chat` and `agi_logging`; rosbridge is
 started from the ROS distribution. Telepathy's `telepathic_console` and
 `scs`'s `aiva-presence` are standalone processes packaged for `ros2 run`, not
-ROS nodes. Psyche's `agi_memory` package exposes a Python library used directly
+ROS nodes. Memory's `agi_memory` package exposes a Python library used directly
 by `aiva_chat`; Cypher provides message definitions and encoding support. The
 Canvas and Imaging capabilities are invoked by the chat flow and do not
-currently need their own ROS nodes. See [`AIVA/soma/README.md`](AIVA/soma/README.md)
+currently need their own ROS nodes. See [`AIVA/shell/README.md`](AIVA/shell/README.md)
 for the workspace setup and component details.
 
 ## Augmented Reality
@@ -85,8 +85,11 @@ AGi/
 │               ├── emc.py   # Episodic Memory Cortex
 │               └── msb.py   # Memory Storage Bank (shared substrate)
 ├── AIVA/            # PC companion repositories
-│   ├── soma/        # ROS 2 workspace (aiva_chat and agi_logging nodes)
-│   └── psyche/      # Memory library plus agi_memory ROS package metadata
+│   ├── shell/       # ROS 2 workspace (aiva_chat and agi_logging nodes)
+│   ├── cypher/      # Shared ROS messages and codec
+│   ├── telepathy/   # Shared WebUI and rosbridge transport
+│   └── mind/
+│       └── memory/ # Memory library plus agi_memory ROS package metadata
 ├── capability/      # Shared, independently versioned capabilities
 │   ├── canvas/      # AGi-robot/canvas
 │   └── imaging/     # AGi-robot/imaging
@@ -471,7 +474,7 @@ flowchart TD
         SIG[SIG - Sensory Integration Gateway]
     end
  
-    LLM[LLM - Ollama / vLLM]
+    LLM[LLM - llama.cpp router]
     DB[(Engram Complex - SQLite WAL)]
     EMBED[Embedding Model - CPU]
  
@@ -500,7 +503,7 @@ flowchart TD
     SIG -->|threshold breach| EEE
 ```
 
-The Web Teleops Console runs on AuRoRA and is exposed through Tailscale Serve. Its same-origin WebSocket proxy keeps rosbridge private on loopback; see [`interface/web_teleops_console/README.md`](interface/web_teleops_console/README.md) for setup.
+The Web Teleops Console runs on AuRoRA and is exposed through Tailscale Serve. Its same-origin WebSocket proxy keeps rosbridge private on loopback; see [the Telepathy console guide](AIVA/telepathy/README.md) for setup.
  
 ---
  
@@ -513,7 +516,7 @@ sequenceDiagram
     participant MCC
     participant WMC
     participant EMC
-    participant LLM as LLM (Ollama / vLLM)
+    participant LLM as LLM (llama.cpp router)
  
     GUI->>CNC: /cns/neural_input
     activate CNC
@@ -548,13 +551,13 @@ sequenceDiagram
  
 ---
  
-## Quick Start
+## Quick Start (AuRoRA / Jetson)
  
 ```bash
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
-git clone https://github.com/AGi-robot/telepathy.git ~/telepathy
-git clone https://github.com/AGi-robot/cypher.git ~/cypher
+git clone https://github.com/AGi-robot/telepathy.git ~/AGi/AIVA/telepathy
+git clone https://github.com/AGi-robot/cypher.git ~/AGi/AIVA/cypher
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
@@ -563,15 +566,13 @@ rosdep install --from-paths src --ignore-src -r -y
 pip3 install -r requirements.txt --break-system-packages
  
 # 3. Build
-colcon build --packages-up-to scs telepathic_management
+colcon build --packages-up-to scs tms telepathic_management
 source install/setup.bash
  
-# 4. Start LLM inference
-# Option A — Ollama (recommended for development)
-ollama serve                          # on inference PC
-# set VLLM_BASE_URL = "http://<pc-ip>:11434" in cnc.py
- 
-# Option B — vLLM / Cosmos (Jetson target)
+# 4. Start LLM inference (PC — agi-llm-router, see models/llama-router.ini)
+systemctl --user start agi-llm-router      # llama-server on :8080, OpenAI-compatible
+
+# Option — vLLM / Cosmos (Jetson target)
 bash ./launch.sh
 # Wait ~3 min for: Application startup complete
  
@@ -579,7 +580,7 @@ bash ./launch.sh
 ros2 run scs cnc
 
 # Or start the complete launch description (CNC, HTTP API, and Web Teleops Console)
-ros2 launch ras ras.launch.py
+ros2 launch ras/ras.launch.py
  
 # 6. Start rosbridge on loopback; Web Teleops Console proxies its WebSocket through Tailscale
 ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=127.0.0.1
@@ -589,7 +590,7 @@ tailscale serve --bg 8853
 # Open the HTTPS URL reported by: tailscale serve status
 ```
 
-The HTTP API starts with `ros2 launch ras ras.launch.py`. It listens on
+The HTTP API starts with `ros2 launch ras/ras.launch.py`. It listens on
 `127.0.0.1:8852` by default. The unauthenticated liveness endpoint is
 `GET /health/live`; mutating endpoints require a bearer token:
 

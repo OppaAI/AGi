@@ -145,11 +145,9 @@ class AGi:                                                              # Amazin
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
        
         class GCE:                                                                              # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:11434"                                 # [STATIC]    LLM inferencer server base URL
-            COGNITIVE_ENGINE      : str   = "hf.co/unsloth/Ministral-3-14B-Instruct-2512-GGUF:UD-Q4_K_XL"  # [STATIC] LLM model tag
-            BASE_COGNITIVE_ENGINE : str   = "mistralai/Ministral-3-14B-Instruct-2512"           # [STATIC]  for token estimation by tokenizer
+            NEURAL_ENDPOINT       : str   = "http://AIVA:8080"                                  # [STATIC]    llama.cpp router base URL (agi-llm-router, OpenAI-compatible /v1)
+            COGNITIVE_ENGINE      : str   = "ministral-3-8b-uncensored"                          # [STATIC] frontend chatbot model — router key in models/llama-router.ini
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
-            CONTEXT_WINDOW        : int   = 32768                                               # [INTRINSIC] num_ctx — total token slots allocated to model
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
             PROBABILITY_THRESHOLD : float = 0.9                                                 # [INTRINSIC] top-p nucleus sampling cutoff
             CANDIDATE_THRESHOLD   : int   = 40                                                  # [INTRINSIC] top-k token candidate limit per sampling step

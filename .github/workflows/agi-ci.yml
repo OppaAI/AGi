@@ -20,12 +20,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/telepathy
-          path: telepathy
+          path: AGi/AIVA/telepathy
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/cypher
-          path: cypher
+          path: AGi/AIVA/cypher
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -38,7 +38,7 @@ jobs:
       - name: Check AuRoRA launch script syntax
         run: bash -n AuRoRA/launch.sh
       - name: Verify the sibling Telepathy checkout link
-        run: test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f ../telepathy)"
+        run: test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/telepathy)"
       - name: Check console JavaScript and canvas behavior
         run: |
           node --check AuRoRA/src/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
@@ -65,12 +65,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/telepathy
-          path: telepathy
+          path: AGi/AIVA/telepathy
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/cypher
-          path: cypher
+          path: AGi/AIVA/cypher
           persist-credentials: false
       - name: Configure ROS apt source
         run: |
@@ -89,8 +89,8 @@ jobs:
       - name: Build shared ROS message and console packages
         run: |
           source /opt/ros/jazzy/setup.bash
-          test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f ../telepathy)"
-          test "$(readlink -f AuRoRA/src/cryptic_signal_core)" = "$(readlink -f ../cypher)"
+          test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/telepathy)"
+          test "$(readlink -f AuRoRA/src/cryptic_signal_core)" = "$(readlink -f AIVA/cypher)"
           colcon build --base-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Verify the built ROS packages
         run: |

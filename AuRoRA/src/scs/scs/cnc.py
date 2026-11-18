@@ -109,12 +109,11 @@ class CNC(Node):
         self._gce_inference_packet: dict = {                                # setup inference parameters of GCE
             "model"              : GCE.COGNITIVE_ENGINE,                    # GCE model identifier from HRS
             "messages"           : "",                                      # placeholder for input prompt
-            "num_ctx"            : GCE.CONTEXT_WINDOW,                      # override Ollama default 2048 — allocate full model context
             "max_tokens"         : GCE.RESPONSE_DEPTH,                      # maximum response tokens per inference
             "temperature"        : GCE.TEMPERATURE,                         # response creativity
             "top_p"              : GCE.PROBABILITY_THRESHOLD,               # cumulative probability cutoff
             "top_k"              : GCE.CANDIDATE_THRESHOLD,                 # maximum candidate tokens per step
-            "repetition_penalty" : GCE.PERSEVERATION_DAMPING,               # suppresses repetition
+            "repeat_penalty"     : GCE.PERSEVERATION_DAMPING,               # suppresses repetition (llama.cpp param)
             "frequency_penalty"  : GCE.HABITUATION_DAMPING,                 # suppresses frequent tokens
             "presence_penalty"   : GCE.NOVELTY_BIAS,                        # bias toward new topics
             "stream"             : True,                                    # enable SSE streaming — fragments published as they arrive

@@ -20,8 +20,9 @@ Architecture:
 Terminology:
     Manifest    — the AGi class tree of cognitive architecture constants
     Hydration   — binding ROS2 parameter server values into AGi manifest constants
-    Chunk       — model-agnostic unit of context length; maps to a token when 
-                  the tokenizer is available, or a character-division approximation otherwise
+    Chunk       — model-agnostic unit of context length; maps to a token when
+                  the router's /tokenize endpoint is reachable, or a
+                  character-division approximation otherwise
 
 Public interface:
     hydrate_manifest(core, system) → None
@@ -34,6 +35,9 @@ Public interface:
         truncate(content, limit)  → str
 """
 # System components
+import json                                 # JSON encoding for /tokenize request bodies
+import urllib.request                       # sync HTTP POST — chunk counting against the llama.cpp router
+import urllib.error                         # HTTP error handling for tokenize requests
 from dataclasses import dataclass, field    # for GatewayMap frozen dataclass
 from enum import Enum                       # enum base for UserType identity classification
 from pathlib import Path                    # filesystem path abstraction — GatewayMap builds all AuRoRA paths from this
@@ -209,27 +213,78 @@ class GatewayMap:
 class ChunkSampler:
     """
     Estimate and truncate cognitive context chunks for cognitive context management.
+
+    Counts tokens through the llama.cpp router's /tokenize endpoint — the exact
+    tokenizer of the serving model — with a char-division fallback when the
+    endpoint is unreachable.
     """
     def __init__(self, logger) -> None:
         """
-        Initialize the chunk sampler and attempt to load the base model chunk sampler.
-    
+        Initialize the chunk sampler — no model load; the router serves tokenization.
+
         Args:
             logger : logger instance for runtime diagnostics passed from the caller
         """        
         self.logger           = logger                                    # runtime diagnostics interface
-        self._chunk_slicer    = None                                      # tokenizer — loaded lazily from base model, None until successful load
-        self._gce_base        = AGi.SCS.GCE.BASE_COGNITIVE_ENGINE         # base model name — used to load tokenizer
-        self._units_per_chunk = AGi.SCS.UNITS_PER_CHUNK                   # chars-per-token constant — used in fallback approximation
-        
-        try:                                                                                          # attempt to load the tokenizer
-            from transformers import AutoTokenizer                                                    # lazy import — only load HuggingFace tokenizer if available
-            self.logger.info(f"⏳ Activating chunk sampler ({self._gce_base})…")                      # log the activating of the tokenizer
-            self._chunk_slicer = AutoTokenizer.from_pretrained(self._gce_base)                        # load base model tokenizer — slices context into model-accurate chunks
-            self.logger.info("✅ Chunk sampler activated")                                            # log the activation successful
-        except Exception as e:                                                                        # broad catch — any load failure is non-fatal, chunk-division takes over
-            self.logger.debug(f"⚠️ Chunk sampler unavailable, falling back to chunk-division: {e}")   # soft fail — chunk-division approximation takes over
-    
+        self._tokenize_url    = f"{AGi.SCS.GCE.NEURAL_ENDPOINT}/tokenize"     # llama.cpp router tokenize endpoint — token-accurate counting
+        self._detokenize_url  = f"{AGi.SCS.GCE.NEURAL_ENDPOINT}/detokenize"   # llama.cpp router detokenize endpoint — used by truncate to rebuild text
+        self._endpoint_ok     = None                                          # tri-state — None until the first endpoint probe, then sticky True/False
+        self._units_per_chunk = AGi.SCS.UNITS_PER_CHUNK                       # chars-per-token constant — used in fallback approximation
+
+    def _tokenize(self, content: str) -> list[int] | None:
+        """
+        Tokenize content through the llama.cpp router's /tokenize endpoint.
+
+        Args:
+            content (str): text to tokenize
+
+        Returns:
+            list[int] | None: token IDs, or None when the endpoint is unavailable — caller falls back
+        """
+        if self._endpoint_ok is False:                                                 # sticky failure — skip the request entirely
+            return None                                                                # signal fallback to char-division
+
+        try:                                                                           # attempt to reach the router
+            request  = urllib.request.Request(                                         # build the tokenize request
+                self._tokenize_url,
+                data    = json.dumps({"content": content, "add_special": False}).encode(),  # exclude structural special tokens — matches prior tokenizer behaviour
+                headers = {"Content-Type": "application/json"},
+                method  = "POST",
+            )
+            with urllib.request.urlopen(request, timeout=10.0) as response:            # generous timeout — long contexts tokenize slowly on CPU
+                tokens: list[int] = json.loads(response.read()).get("tokens", [])      # parse the token ID list from the reply
+            self._endpoint_ok = True                                                   # endpoint confirmed — sticky success, skip probing on later calls
+            return tokens                                                              # return the token IDs for counting
+
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:  # broad catch — any failure is non-fatal
+            if self._endpoint_ok is not True:                                          # log only on first failure — avoid spamming every probe
+                self.logger.debug(f"⚠️ Chunk sampler endpoint unavailable, falling back to chunk-division: {e}")
+            self._endpoint_ok = False                                                  # sticky failure — later probes skip the request
+            return None                                                                # signal fallback to char-division
+
+    def _detokenize(self, tokens: list[int]) -> str | None:
+        """
+        Detokenize token IDs back into text through the router's /detokenize endpoint.
+
+        Args:
+            tokens (list[int]): token IDs to rebuild into text
+
+        Returns:
+            str | None: rebuilt text, or None when the endpoint is unavailable — caller falls back
+        """
+        try:                                                                           # attempt to reach the router
+            request  = urllib.request.Request(                                         # build the detokenize request
+                self._detokenize_url,
+                data    = json.dumps({"tokens": tokens}).encode(),                     # token ID list to rebuild
+                headers = {"Content-Type": "application/json"},
+                method  = "POST",
+            )
+            with urllib.request.urlopen(request, timeout=10.0) as response:            # same timeout policy as tokenize
+                return json.loads(response.read()).get("content", "")                  # return the rebuilt text
+
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):   # broad catch — any failure is non-fatal
+            return None                                                                # signal fallback to char-division
+
     def probe(self, content: str, overhead: int = 0) -> int:
         """
         Probe content and return the estimated chunk count.
@@ -244,8 +299,9 @@ class ChunkSampler:
         if not content:                                                                                # guard — empty content yields zero tokens
             return 0                                                                                   # return zero tokens
             
-        if self._chunk_slicer:                                                                         # if tokenizer loaded successfully,
-            return len(self._chunk_slicer.encode(content, add_special_tokens=False)) + overhead        # encode content into tokens — return count excluding structural special tokens
+        tokens: list[int] | None = self._tokenize(content)                                             # tokenize through the router — exact serving-model tokenizer
+        if tokens is not None:                                                                         # endpoint reachable — token-accurate count
+            return len(tokens) + overhead                                                              # return token count plus structural overhead
         # Fallback: character-division approximation
         return max(1, (len(content) + self._units_per_chunk - 1) // self._units_per_chunk) + overhead  # fallback — ceiling divide by chars-per-token constant, minimum 1
 
@@ -261,11 +317,14 @@ class ChunkSampler:
         """
         if not content or limit <= 0:                                                       # guard — empty content or zero limit yields empty string
             return ""                                                                       # return empty string
-    
-        if self._chunk_slicer:                                                              # if chunk slicer loaded successfully,
-            chunks = self._chunk_slicer.encode(content, add_special_tokens=False)           # encode content into chunk IDs — exclude structural special tokens
-            if len(chunks) <= limit:                                                        # content already fits — no truncation needed
+
+        tokens: list[int] | None = self._tokenize(content)                                  # tokenize through the router — exact serving-model tokenizer
+        if tokens is not None:                                                              # endpoint reachable — token-accurate truncation
+            if len(tokens) <= limit:                                                        # content already fits — no truncation needed
                 return content                                                              # content fits within limit — no truncation needed
-            return self._chunk_slicer.decode(chunks[:limit])                                # decode truncated tokens back to text — exact chunk boundary
+            rebuilt: str | None = self._detokenize(tokens[:limit])                          # rebuild text from the retained token prefix — exact chunk boundary
+            if rebuilt is not None:                                                         # detokenize succeeded
+                return rebuilt                                                              # return the truncated text
+            return content[:limit * self._units_per_chunk]                                  # detokenize failed — fall back to char-division slicing
     
         return content[:limit * self._units_per_chunk]                                      # fallback — ceiling char-division approximation

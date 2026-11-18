@@ -58,15 +58,18 @@ models/**/*.gguf
 
 # MOSS-Image weights (large binaries)
 /models/mossimage
-/models/ministral3-14b
+/models/ministral3-8b
 /models/voyage-4-nano
 /models/swift15-qwen3.8-27b
 
 # These are separate AGi-robot repositories; commit within each repo.
-/AIVA/soma/
+/AIVA/shell/
+/AIVA/cypher/
+/AIVA/telepathy/
 /capability/canvas/
 /capability/imaging/
-/AIVA/psyche/
+/AIVA/mind/memory/
 /diagnostic/scorecard/
+/augmented-reality/
 
 .pytest_cache/
