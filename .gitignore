@@ -58,7 +58,9 @@ models/**/*.gguf
 
 # MOSS-Image weights (large binaries)
 /models/mossimage
-/models/.mossimage.symlink.tmp
+/models/ministral3-14b
+/models/voyage-4-nano
+/models/swift15-qwen3.8-27b
 
 # These are separate AGi-robot repositories; commit within each repo.
 /AIVA/soma/
