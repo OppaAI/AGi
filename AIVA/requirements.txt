@@ -1,4 +1,4 @@
 httpx>=0.27,<1
-grace-canvas @ git+https://github.com/AGi-robot/canvas.git@dev
-grace-imagegen @ git+https://github.com/AGi-robot/imaging.git@dev
+-e ../capability/canvas
+-e ../capability/imaging
 -e ./mind/memory

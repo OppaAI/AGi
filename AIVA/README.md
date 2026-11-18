@@ -17,7 +17,8 @@ the shared capabilities.
 The component repositories are intentionally separate from `OppaAI/AGi` and
 gitignored here; commit inside each one. The ROS workspace links Cypher and
 Telepathy under `shell/src/`; Memory installs into AIVA's root venv as a Python
-package.
+package. Canvas, Imaging, and Memory install as editable Python packages from
+their local checkouts through `AIVA/requirements.txt`.
 
 ## Checkout
 
