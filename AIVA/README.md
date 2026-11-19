@@ -9,7 +9,7 @@ the shared capabilities.
 | Path | Tracked in | Contents |
 |---|---|---|
 | `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `agi-llm-router`, rosbridge, chat, telepathy |
-| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `aiva_chat`, `agi_logging`, `scs` |
+| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `aiva_chat`, `agi_logging`, `aiva_presence` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
 | `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Shared WebUI and rosbridge transport (`telepathic_management`) |
 | `interaction/` | [AGi-robot/interaction](https://github.com/AGi-robot/interaction) | Text conversation engine used by the `aiva_chat` ROS adapter |

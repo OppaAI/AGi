@@ -65,8 +65,10 @@ The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.co
 
 AIVA's actual ROS nodes include `aiva_chat` and `agi_logging`; rosbridge is
 started from the ROS distribution. Telepathy's `telepathic_console` and
-`scs`'s `aiva-presence` are standalone processes packaged for `ros2 run`, not
-ROS nodes. Memory exposes a Python library used directly by `aiva_chat`; Cypher
+Grace's `aiva_presence` heartbeat are standalone processes packaged for
+`ros2 run`, not ROS nodes. The heartbeat sends an outbound HTTP presence update
+to AuRoRA's console; it does not run or import AuRoRA's Semantic Cognitive
+System. Memory exposes a Python library used directly by `aiva_chat`; Cypher
 provides message definitions and encoding support. The
 Canvas and Imaging capabilities are invoked by the chat flow and do not
 currently need their own ROS nodes. See [`AIVA/shell/README.md`](AIVA/shell/README.md)
@@ -91,7 +93,7 @@ AGi/
 │               └── msb.py   # Memory Storage Bank (shared substrate)
 ├── AIVA/            # PC companion repositories
 │   ├── launch.sh    # Grace's launcher (router + shell services) — tracked here
-│   ├── shell/       # ROS 2 workspace (aiva_chat and agi_logging nodes)
+│   ├── shell/       # ROS 2 workspace (Grace chat, logging, and presence packages)
 │   ├── cypher/      # Shared ROS messages and codec
 │   ├── telepathy/   # Shared WebUI and rosbridge transport
 │   └── mind/
