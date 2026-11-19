@@ -26,6 +26,7 @@ TELEPATHIC_CONSOLE_HOST="${TELEPATHIC_CONSOLE_HOST:-127.0.0.1}"
 TELEPATHIC_CONSOLE_PORTAL="${TELEPATHIC_CONSOLE_PORTAL:-8853}"
 TELEPATHIC_GATEWAY="${TELEPATHIC_GATEWAY:-http://${TELEPATHIC_CONSOLE_HOST}:${TELEPATHIC_CONSOLE_PORTAL}}"
 export TELEPATHIC_CONSOLE_HOST TELEPATHIC_CONSOLE_PORTAL
+export AGI_WEB_TELEOPS_CONSOLE_AIVA_LOCAL=true
 
 START_CHAT="${AIVA_START_CHAT:-1}"
 # Grace runs on a single llama.cpp router: one llama-server process serves
@@ -158,6 +159,7 @@ fi
 for source_package in \
   "$SHELL_DIR/src/cryptic_signal_core/package.xml" \
   "$SHELL_DIR/src/telepathic_management/package.xml" \
+  "$SHELL_DIR/src/telepathy_receptor/package.xml" \
   "$SHELL_DIR/src/agi_logging/package.xml"; do
   if [[ ! -f "$source_package" ]]; then
     error "Required ROS package source is missing: $source_package"
@@ -486,7 +488,7 @@ fi
 start_service rosbridge ros2 launch rosbridge_server rosbridge_websocket_launch.xml address:=127.0.0.1
 start_service log-collector ros2 run agi_logging agi_log_collector
 if [[ "$START_CHAT" == "1" ]]; then
-  start_service aiva-chat ros2 run aiva_chat aiva_chat
+  start_service telepathy-receptor ros2 run telepathy_receptor telepathy_receptor
 fi
 start_service webui ros2 run telepathic_management telepathic_console
 

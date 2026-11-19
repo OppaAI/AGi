@@ -1,0 +1,142 @@
+{
+  "repos": {
+    "console": {
+      "files": 1,
+      "sha": "c924fe33aa0679334362c1bda3c1d8bb0a20e867",
+      "types": {
+        "": 1
+      }
+    },
+    "shell": {
+      "files": 37,
+      "sha": "55b21bd4f1dad3240873c360c75b2cdb6e78eec1",
+      "types": {
+        "": 5,
+        ".md": 2,
+        ".py": 23,
+        ".xml": 3,
+        ".cfg": 2,
+        ".txt": 1,
+        ".service": 1
+      }
+    },
+    "telepathy": {
+      "files": 34,
+      "sha": "74cdd16ae01daa0017ac94e3ba7d893242ba3668",
+      "types": {
+        "": 3,
+        ".md": 4,
+        ".xml": 1,
+        ".cfg": 1,
+        ".py": 4,
+        ".vrm": 1,
+        ".svg": 1,
+        ".webp": 1,
+        ".png": 1,
+        ".js": 7,
+        ".css": 5,
+        ".html": 4,
+        ".cjs": 1
+      }
+    },
+    "health": {
+      "files": 9,
+      "sha": "933964a0439f5e3df5bcecb2b63d9db26db3ccf2",
+      "types": {
+        "": 3,
+        ".md": 1,
+        ".py": 3,
+        ".xml": 1,
+        ".cfg": 1
+      }
+    },
+    "scorecard": {
+      "files": 325,
+      "sha": "8819b0db25093b2618b5b2ae5d83bb3fa2fa8346",
+      "types": {
+        "": 4,
+        ".md": 14,
+        ".lock": 1,
+        ".json": 116,
+        ".py": 28,
+        ".example": 1,
+        ".patch": 2,
+        ".yml": 2,
+        ".log": 27,
+        ".jsonl": 17,
+        ".EQ-Bench-MIT": 1,
+        ".png": 111,
+        ".txt": 1
+      }
+    },
+    "interactive": {
+      "files": 6,
+      "sha": "5a284214ed2c7b87bbe44c5787263438cadcb070",
+      "types": {
+        "": 2,
+        ".md": 1,
+        ".toml": 1,
+        ".py": 2
+      }
+    },
+    "memory": {
+      "files": 12,
+      "sha": "f21422966a4e952a1d182e7ac8af811849dd55cb",
+      "types": {
+        "": 2,
+        ".md": 1,
+        ".py": 9
+      }
+    },
+    "imaging": {
+      "files": 7,
+      "sha": "b74b12fff679ef695d556c8883314082b05dc5ac",
+      "types": {
+        "": 2,
+        ".py": 5
+      }
+    },
+    "canvas": {
+      "files": 13,
+      "sha": "e68293adda33a3916c51c62f85dd4667f5dcd82a",
+      "types": {
+        "": 2,
+        ".md": 1,
+        ".py": 10
+      }
+    },
+    "cypher": {
+      "files": 10,
+      "sha": "35b53ed6988c00f55d00f3e3d8ec4c4de8293299",
+      "types": {
+        "": 2,
+        ".txt": 1,
+        ".md": 1,
+        ".py": 3,
+        ".msg": 2,
+        ".xml": 1
+      }
+    },
+    ".github": {
+      "files": 3,
+      "sha": "ab69e1ee4c8449b6f00f0f64c57075eeab46dad4",
+      "types": {
+        ".md": 2,
+        ".png": 1
+      }
+    },
+    "augmented-reality": {
+      "files": 12,
+      "sha": "baf8b01f96304d75d003dd546ed7f7e3fb2cadd3",
+      "types": {
+        "": 2,
+        ".cs": 6,
+        ".vrm": 1,
+        ".json": 1,
+        ".txt": 1,
+        ".md": 1
+      }
+    }
+  },
+  "syntax_errors": []
+}
