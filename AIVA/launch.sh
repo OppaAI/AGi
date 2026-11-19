@@ -161,6 +161,7 @@ for source_package in \
   "$SHELL_DIR/src/agi_logging/package.xml"; do
   if [[ ! -f "$source_package" ]]; then
     error "Required ROS package source is missing: $source_package"
+    info "For existing checkouts, update Shell to remove its bundled agi_logging package before linking Health."
     info "See $SHELL_DIR/README.md for the Cypher, Health, and Telepathy checkout/link setup."
     exit 1
   fi
