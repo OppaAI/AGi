@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/console
+          ref: dev
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
@@ -66,6 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/console
+          ref: dev
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4

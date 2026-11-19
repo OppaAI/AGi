@@ -34,7 +34,7 @@ chat.
 | Path | Tracked in | Contents |
 |---|---|---|
 | `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `agi-llm-router`, rosbridge, chat, telepathy |
-| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `telepathy_receptor`, `aiva_presence` |
+| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace, component links and `aiva_presence` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
 | `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Grace entity receptor (`telepathy_receptor`) |
 | `console/` | [AGi-robot/console](https://github.com/AGi-robot/console) | External WebUI, encoding and rosbridge transport |
@@ -56,7 +56,7 @@ From the AGi checkout root:
 git clone --branch dev https://github.com/AGi-robot/shell.git AIVA/shell
 git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
 git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
-git clone https://github.com/AGi-robot/console.git AIVA/console
+git clone --branch dev https://github.com/AGi-robot/console.git AIVA/console
 git clone https://github.com/AGi-robot/interactive.git AIVA/interactive
 git clone https://github.com/AGi-robot/health.git      AIVA/health
 git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory
