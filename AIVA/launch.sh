@@ -141,7 +141,9 @@ AIVA_ROS_PYTHON="$VENV_DIR/bin/python"
 VENV_SITE_PACKAGES="$($AIVA_ROS_PYTHON -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
 for package_source in \
   "$CANVAS_SOURCE_DIR/src" \
-  "$IMAGING_SOURCE_DIR/src"; do
+  "$IMAGING_SOURCE_DIR/src" \
+  "$SCRIPT_DIR/interactive/src" \
+  "$SCRIPT_DIR/mind/memory/src"; do
   if [[ -d "$package_source" ]]; then
     PYTHONPATH="$package_source${PYTHONPATH:+:$PYTHONPATH}"
   fi
