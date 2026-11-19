@@ -6,7 +6,7 @@ the shared capabilities.
 
 ## AIVA and AuRoRA configuration
 
-`AIVA/launch.sh` runs AIVA's `aiva_chat` adapter, not
+`AIVA/launch.sh` runs AIVA's `telepathy_receptor` adapter, not
 `AuRoRA/ras/ras.launch.py`. It does not start AuRoRA's CNC or TMS TIC, import
 the HRM manifest into chat, or load `~/.agi/ras/aurora.yaml`. The shared
 `/tms/text_response` topic name does not imply that AuRoRA's TMS is running.
@@ -34,10 +34,11 @@ chat.
 | Path | Tracked in | Contents |
 |---|---|---|
 | `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `agi-llm-router`, rosbridge, chat, telepathy |
-| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `aiva_chat`, `aiva_presence` |
+| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace — `telepathy_receptor`, `aiva_presence` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
-| `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Shared WebUI and rosbridge transport (`telepathic_management`) |
-| `interactive/` | [AGi-robot/interactive](https://github.com/AGi-robot/interactive) | Text conversation engine used by the `aiva_chat` ROS adapter |
+| `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Grace entity receptor (`telepathy_receptor`) |
+| `console/` | [AGi-robot/console](https://github.com/AGi-robot/console) | External WebUI, encoding and rosbridge transport |
+| `interactive/` | [AGi-robot/interactive](https://github.com/AGi-robot/interactive) | Text conversation engine used by the `telepathy_receptor` ROS adapter |
 | `health/` | [AGi-robot/health](https://github.com/AGi-robot/health) | ROS logging and system-health components; `agi_logging` is linked into Shell |
 | `mind/memory/` | [AGi-robot/memory](https://github.com/AGi-robot/memory) | Pure Python memory library installed into AIVA's venv |
 
@@ -55,6 +56,7 @@ From the AGi checkout root:
 git clone --branch dev https://github.com/AGi-robot/shell.git AIVA/shell
 git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
 git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
+git clone https://github.com/AGi-robot/console.git AIVA/console
 git clone https://github.com/AGi-robot/interactive.git AIVA/interactive
 git clone https://github.com/AGi-robot/health.git      AIVA/health
 git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory

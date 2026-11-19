@@ -19,8 +19,8 @@ jobs:
       - name: Check out shared Telepathy package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/telepathy
-          path: AGi/AIVA/telepathy
+          repository: AGi-robot/console
+          path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
@@ -38,7 +38,7 @@ jobs:
       - name: Check AuRoRA launch script syntax
         run: bash -n AuRoRA/launch.sh
       - name: Verify the sibling Telepathy checkout link
-        run: test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/telepathy)"
+        run: test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/console)"
       - name: Check console JavaScript and canvas behavior
         run: |
           node --check AuRoRA/src/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
@@ -65,8 +65,8 @@ jobs:
       - name: Check out shared Telepathy package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/telepathy
-          path: AGi/AIVA/telepathy
+          repository: AGi-robot/console
+          path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
@@ -99,7 +99,7 @@ jobs:
       - name: Build shared ROS message and console packages
         run: |
           source /opt/ros/jazzy/setup.bash
-          test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/telepathy)"
+          test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/console)"
           test "$(readlink -f AuRoRA/src/cryptic_signal_core)" = "$(readlink -f AIVA/cypher)"
           colcon build --base-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Verify the built ROS packages

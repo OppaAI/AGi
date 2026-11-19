@@ -76,3 +76,5 @@ models/**/*.gguf
 /augmented-reality/
 
 .pytest_cache/
+
+/AIVA/console/
