@@ -5,6 +5,14 @@ set -Eeuo pipefail
 # --- Paths -------------------------------------------------------------------
 # Absolute path of the folder containing this script (not the user's current directory)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Load local overrides without committing machine paths or credentials.
+ENV_FILE="${AIVA_ENV_FILE:-$SCRIPT_DIR/.env}"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
 # AIVA's shell ROS workspace (colcon build artifacts live there)
 SHELL_DIR="$SCRIPT_DIR/shell"
 # AGi checkout root, one level above this script (AIVA/launch.sh)
