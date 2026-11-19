@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [dev]
 
+permissions:
+  contents: read
+
+env:
+  # Console #1 implementation; dev is initially an empty repository.
+  CONSOLE_REF: ce9af3a65df0ed8778e44aea974cd6a2ce28e35f
+
 jobs:
   shared-console-and-encoding:
     runs-on: ubuntu-latest
@@ -16,11 +23,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: AGi
+          persist-credentials: false
       - name: Check out shared Telepathy package
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/console
-          ref: dev
+          ref: ${{ env.CONSOLE_REF }}
+          persist-credentials: false
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
@@ -40,6 +49,8 @@ jobs:
         run: bash -n AuRoRA/launch.sh
       - name: Verify the sibling Telepathy checkout link
         run: test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/console)"
+      - name: Verify Console package contents
+        run: test -f AIVA/console/package.xml && test -f AIVA/console/telepathic_management/telepathic_console/backend/static/drawing.js
       - name: Check console JavaScript and canvas behavior
         run: |
           node --check AuRoRA/src/telepathic_management/telepathic_management/telepathic_console/backend/static/drawing.js
@@ -63,11 +74,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: AGi
+          persist-credentials: false
       - name: Check out shared Telepathy package
         uses: actions/checkout@v4
         with:
           repository: AGi-robot/console
-          ref: dev
+          ref: ${{ env.CONSOLE_REF }}
+          persist-credentials: false
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
