@@ -54,11 +54,11 @@ From the AGi checkout root:
 
 ```sh
 git clone --branch dev https://github.com/AGi-robot/shell.git AIVA/shell
-git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
-git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
+git clone --branch dev https://github.com/AGi-robot/cypher.git     AIVA/cypher
+git clone --branch dev https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
 git clone --branch dev https://github.com/AGi-robot/console.git AIVA/console
-git clone https://github.com/AGi-robot/interactive.git AIVA/interactive
-git clone https://github.com/AGi-robot/health.git      AIVA/health
+git clone --branch dev https://github.com/AGi-robot/interactive.git AIVA/interactive
+git clone --branch dev https://github.com/AGi-robot/health.git      AIVA/health
 git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory
 ln -s ../../health AIVA/shell/src/agi_logging
 ```
