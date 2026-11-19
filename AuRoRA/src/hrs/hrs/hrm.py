@@ -83,7 +83,7 @@ class AGi:                                                              # Amazin
         TELEPATHY_GATEWAY          : str   = "127.0.0.1"                # [STATIC] loopback only — unauthenticated legacy gateway stays private
         TELEPATHY_PORTAL           : int   = 8848                       # [STATIC] WebUI — HTTP static file server
         TELORECEPTOR_PORTAL        : int   = 8850                       # [STATIC] WebSocket server port — TIC input adapter
-        TELEEFFCTOR_PORTAL         : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
+        TELEEFFECTOR_PORTAL         : int   = 8851                       # [STATIC] WebSocket server port — TOC output adapter
         API_GATEWAY                : str   = "127.0.0.1"                # [STATIC] HTTP API bind; use LAN IP only with AGI_API_TOKEN set
         API_PORTAL                 : int   = 8852                       # [STATIC] FastAPI/Uvicorn HTTP API port
         API_IMPULSE_GATEWAY        : str   = "/agi/api/neural_impulse"  # [STATIC] typed PC telemetry and robot request ingress

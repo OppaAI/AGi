@@ -67,7 +67,7 @@ import threading                                                              # 
 import rclpy                                                                  # ROS2 Python client library — node lifecycle and spin
 from rclpy.node import Node                                                   # base class for all ROS2 nodes
 from std_msgs.msg import String                                               # ROS2 string message type for topic I/O
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK   # clean disconnect vs unexpected drop — handled separately in _on_peripheral_link
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError, ConnectionClosedOK   # clean disconnect vs unexpected drop — handled in _on_peripheral_connected
 from websockets.server import ServerConnection                                # type hint for peripheral link parameter
 
 from hrs.hrm import AGi                                                       # homeostatic regulation manifest namespace
@@ -147,17 +147,17 @@ class TOC(Node):
         Args:
             peripheral_link: Active connection from a peripheral adapter to the telepathy domain.
         """
-        self._active_connections.add(websocket)                                                 # register as broadcast target
+        self._active_connections.add(peripheral_link)                                                 # register as broadcast target
         self.get_logger().info("🔗 Telepathy output connected")                                 # TODO: log the connection to telepathy gateway
 
         try:                                                                                    # attempt to connect to telepathy domain
-            await websocket.wait_closed()                                                       # hold open — TOC pushes, WebUI doesn't send here
-        except websockets.exceptions.ConnectionClosedOK:                                        # 
+            await peripheral_link.wait_closed()                                                       # hold open — TOC pushes, WebUI doesn't send here
+        except ConnectionClosedOK:                                        # normal close
             pass                                                                                # no action needed
-        except websockets.exceptions.ConnectionClosedError as e:                                # if error causing connection closed,
+        except ConnectionClosedError as e:                                # if error causing connection closed,
             self.get_logger().warning(f"⚠️  Telepathy Domain disconnected unexpectedly: {e}")   # TODO: log the error 
         finally:                                                                                # on every closing path
-            self._active_connections.discard(websocket)                                         # unregister the connection
+            self._active_connections.discard(peripheral_link)                                         # unregister the connection
             self.get_logger().info("🔌 Telepathy Domain disconnected")                          #
 
     def _receive_crs(self, msg: String) -> None:
@@ -192,12 +192,12 @@ class TOC(Node):
             return
 
         raw: str = json.dumps(payload)                                          # serialize once — broadcast same payload to all connections
-        dead: Set = set()                                                       # collect dead connections — pruned after iteration
+        dead = set()                                                       # collect dead connections — pruned after iteration
 
-        for websocket in self._active_connections:
+        for websocket in tuple(self._active_connections):
             try:
                 await websocket.send(raw)                                       # relay CRS fragment to this connection
-            except websockets.exceptions.ConnectionClosed:
+            except ConnectionClosed:
                 dead.add(websocket)                                             # mark dead — prune after iteration completes
             except Exception as e:
                 self.get_logger().warning(f"⚠️  Broadcast error: {e}")

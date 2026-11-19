@@ -140,6 +140,7 @@ import hashlib                                                              # SH
 import json                                                                 # serialize/deserialize message payloads at both boundaries
 import threading                                                            # owns the websocket server thread — keeps asyncio loop off the ROS2 spin thread
 import time                                                                 # wall-clock timestamps for debounce window and lifecycle markers
+import math                                                                 # finite-number validation for response echo expiry
 from datetime import datetime, timezone                                     # UTC timestamps for SSS lifecycle fields
 
 # Third-party libraries
@@ -235,13 +236,19 @@ class TelepathyInputCore(Node):
         """
         try:                                                                                                        # attempt to interpret response echo
             echo = json.loads(response_echo.data)                                                                   # deserialize echo imprint payload
+            if not isinstance(echo, dict):                                                                           # require an object with named fields
+                raise ValueError("response echo must be a JSON object")
             imprint = echo.get("imprint", "")                                                                       # SHA-256 hex digest of CNC outbound response
+            if not isinstance(imprint, str):                                                                         # keys and debug slicing require text
+                raise ValueError("response echo imprint must be a string")
             echo_duration = float(echo.get("duration", TMS.RESPONSE_ECHO_DURATION))                                 # suppression window — falls back to module default
+            if not math.isfinite(echo_duration):                                                                    # NaN and infinity cannot define a useful expiry
+                raise ValueError("response echo duration must be finite")
             if imprint:                                                                                             # if echo contains an imprint
                 echo_expiry = time.monotonic() + echo_duration                                                      # absolute expiry time on monotonic clock
                 self._response_echoes[imprint] = echo_expiry                                                        # register imprint with expiry duration
-                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={echo_duration}s")  # log registry of the imprint and expiry duration
-        except (json.JSONDecodeError, ValueError) as e:                                                             # malformed response echo payload
+                self.get_logger().debug(f"🧠 Response echo registered: {imprint[:12]}… duration={echo_duration}s")  # log registry of the imprint and expiry
+        except (json.JSONDecodeError, TypeError, ValueError) as e:                                                   # malformed response echo payload
             self.get_logger().warning(f"⚠️  Response echo parse error: {e}")                                        # log parsing error and continue
 
     def _prune_response_echoes(self) -> None:

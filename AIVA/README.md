@@ -26,7 +26,7 @@ their local checkouts through `AIVA/requirements.txt`.
 From the AGi checkout root:
 
 ```sh
-git clone https://github.com/AGi-robot/shell.git      AIVA/shell
+git clone --branch dev https://github.com/AGi-robot/shell.git AIVA/shell
 git clone https://github.com/AGi-robot/cypher.git     AIVA/cypher
 git clone https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
 git clone https://github.com/AGi-robot/interactive.git AIVA/interactive
