@@ -68,6 +68,7 @@ models/**/*.gguf
 /AIVA/telepathy/
 /AIVA/interaction/
 /AIVA/interactive/
+/AIVA/health/
 /capability/canvas/
 /capability/imaging/
 /AIVA/mind/memory/

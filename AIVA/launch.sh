@@ -157,10 +157,11 @@ fi
 
 for source_package in \
   "$SHELL_DIR/src/cryptic_signal_core/package.xml" \
-  "$SHELL_DIR/src/telepathic_management/package.xml"; do
+  "$SHELL_DIR/src/telepathic_management/package.xml" \
+  "$SHELL_DIR/src/agi_logging/package.xml"; do
   if [[ ! -f "$source_package" ]]; then
     error "Required ROS package source is missing: $source_package"
-    info "See $SHELL_DIR/README.md for the Cypher and Telepathy checkout/link setup."
+    info "See $SHELL_DIR/README.md for the Cypher, Health, and Telepathy checkout/link setup."
     exit 1
   fi
 done

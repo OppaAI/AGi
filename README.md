@@ -57,14 +57,14 @@ On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
 (embeddings) — see [`models/llama-router.ini`](models/llama-router.ini).
 ---
  
-## Shared Telepathy Console
+## Shared Components
 
-The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and the shared ROS messages and codec are maintained in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Clone both repositories into this checkout as `AIVA/telepathy/` and `AIVA/cypher/`. AuRoRA and AIVA link them into their ROS workspaces for colcon.
+The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and shared ROS messages and codecs in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Grace's logging and system-health components are maintained in [AGi-Robot/health](https://github.com/AGi-robot/health). Clone them into `AIVA/telepathy/`, `AIVA/cypher/`, and `AIVA/health/`; link their ROS packages into the relevant colcon workspaces.
 
 ## AIVA ROS 2 layout
 
-AIVA's actual ROS nodes include `aiva_chat` and `agi_logging`; rosbridge is
-started from the ROS distribution. Telepathy's `telepathic_console` and
+AIVA's actual ROS nodes include `aiva_chat` and Health's `agi_logging`;
+rosbridge is started from the ROS distribution. Telepathy's `telepathic_console` and
 Grace's `aiva_presence` heartbeat are standalone processes packaged for
 `ros2 run`, not ROS nodes. The heartbeat sends an outbound HTTP presence update
 to AuRoRA's console; it does not run or import AuRoRA's Semantic Cognitive
