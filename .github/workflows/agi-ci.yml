@@ -80,12 +80,14 @@ jobs:
           curl --fail --location --retry 3 --retry-delay 2 -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${source_version}/ros2-apt-source_${source_version}.noble_all.deb"
           sudo dpkg -i /tmp/ros2-apt-source.deb
           sudo apt-get update
-      - uses: ros-tooling/setup-ros@v0.7
       - name: Install ROS Jazzy base and package dependencies
         run: |
           set -eo pipefail
           sudo apt-get install --no-install-recommends --quiet --yes \
-            ros-jazzy-ros-base python3-colcon-common-extensions
+            ros-jazzy-ros-base python3-colcon-common-extensions python3-rosdep
+          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+            sudo rosdep init
+          fi
           source /opt/ros/jazzy/setup.bash
           rosdep update --rosdistro jazzy
           rosdep install --from-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management \
