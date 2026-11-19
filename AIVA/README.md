@@ -74,6 +74,16 @@ ignored by Git. `.env` is sourced as a Bash file, so only use trusted local
 content. Scorecard-only settings stay in Scorecard rather than Grace's runtime
 environment.
 
+The current Console Settings page is **read-only** for runtime values. Its theme
+and other browser-local preferences apply immediately. Environment and
+`launch.sh` settings (model endpoints, model selection, memory path, service
+ports, ROS bridge, Canvas/Imaging options, and MOSS paths) are captured when
+processes start, so changing `.env` requires restarting Grace's launcher.
+There is no live ROS parameter callback for these settings yet. A future editor
+should label each setting as immediate or restart-required and save through a
+validated configuration interface rather than presenting the current status
+page as an editor.
+
 The setup script requires ROS 2 Jazzy, `colcon`, and initialized `rosdep`. It
 may invoke the system package manager through `rosdep`; install missing ROS
 dependencies with the platform's usual permissions, then rerun setup.

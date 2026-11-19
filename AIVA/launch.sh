@@ -5,6 +5,7 @@ set -Eeuo pipefail
 # --- Paths -------------------------------------------------------------------
 # Absolute path of the folder containing this script (not the user's current directory)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+START_DIR="$PWD"
 # Load local overrides without committing machine paths or credentials.
 ENV_FILE="${AIVA_ENV_FILE:-$SCRIPT_DIR/.env}"
 if [[ -f "$ENV_FILE" ]]; then
@@ -21,6 +22,10 @@ CANVAS_SOURCE_DIR="${AGI_CANVAS_SOURCE_DIR:-$AGI_ROOT_DIR/capability/canvas}"
 IMAGING_SOURCE_DIR="${AGI_IMAGING_SOURCE_DIR:-$AGI_ROOT_DIR/capability/imaging}"
 # Python venv location (default: .venv at the AIVA root; override with AIVA_VENV)
 VENV_DIR="${AIVA_VENV:-$SCRIPT_DIR/.venv}"
+case "$VENV_DIR" in
+  /*) ;;
+  *) VENV_DIR="$START_DIR/$VENV_DIR" ;;
+esac
 
 # --- ROS 2 -------------------------------------------------------------------
 # ROS 2's environment script (default: Jazzy; override with ROS_SETUP)

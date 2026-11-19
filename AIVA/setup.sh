@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+START_DIR="$PWD"
 ENV_FILE="${AIVA_ENV_FILE:-$SCRIPT_DIR/.env}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -77,11 +78,24 @@ command -v rosdep >/dev/null 2>&1 || fail "rosdep is missing. Install and initia
 PYTHON_BIN="${AIVA_PYTHON:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python executable not found: $PYTHON_BIN"
 VENV_DIR="${AIVA_VENV:-$SCRIPT_DIR/.venv}"
+case "$VENV_DIR" in
+  /*) ;;
+  *) VENV_DIR="$START_DIR/$VENV_DIR" ;;
+esac
 if [[ ! -x "$VENV_DIR/bin/python" ]]; then
   "$PYTHON_BIN" -m venv --system-site-packages "$VENV_DIR"
 fi
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
-(cd "$SCRIPT_DIR" && "$VENV_DIR/bin/python" -m pip install -r requirements.txt)
+TEMP_REQUIREMENTS="$(mktemp "$SCRIPT_DIR/.requirements.XXXXXX")"
+trap 'rm -f "$TEMP_REQUIREMENTS"' EXIT
+sed \
+  -e '\|^-e \.\./capability/canvas$|d' \
+  -e '\|^-e \.\./capability/imaging$|d' \
+  "$SCRIPT_DIR/requirements.txt" > "$TEMP_REQUIREMENTS"
+(cd "$SCRIPT_DIR" && "$VENV_DIR/bin/python" -m pip install -r "$TEMP_REQUIREMENTS")
+"$VENV_DIR/bin/python" -m pip install \
+  -e "$AGI_ROOT_DIR/capability/canvas" \
+  -e "$AGI_ROOT_DIR/capability/imaging"
 
 (cd "$SCRIPT_DIR/shell" && rosdep install --from-paths src --ignore-src -r -y)
 (cd "$SCRIPT_DIR/shell" && colcon build --cmake-args "-DPython3_EXECUTABLE=$VENV_DIR/bin/python")
