@@ -4,6 +4,31 @@ AIVA is Grace's PC-side runtime. The `launch.sh` orchestrator at this level
 starts the llama.cpp router, the shell ROS 2 workspace services, and wires in
 the shared capabilities.
 
+## AIVA and AuRoRA configuration
+
+`AIVA/launch.sh` runs AIVA's `aiva_chat` adapter, not
+`AuRoRA/ras/ras.launch.py`. It does not start AuRoRA's CNC or TMS TIC, import
+the HRM manifest into chat, or load `~/.agi/ras/aurora.yaml`. The shared
+`/tms/text_response` topic name does not imply that AuRoRA's TMS is running.
+
+AIVA chat uses its declared ROS parameters and defaults, environment variables
+such as `AIVA_LLM_MODEL` and `AIVA_LLM_BASE_URL`, the Shell `persona/SOUL.md`,
+and `~/.agi/profile/user.md`. Its conversation history defaults to
+`~/.agi/profile/grace_memory.sqlite3`. See the Shell README for overrides.
+The AuRoRA YAML is not required for this AIVA chat path.
+
+AuRoRA has a separate launch path: `ras/ras.launch.py` supplies
+`~/.agi/ras/aurora.yaml` to CNC, TIC, and its HTTP API. CNC and TIC declare
+parameters using HRM defaults and apply matching ROS YAML overrides. HRM is a
+Python manifest, not a running service. AuRoRA also reads its own user and
+persona YAML files where configured. Starting AIVA alone does not start AuRoRA.
+
+The shared console's intrinsic settings page targets AuRoRA's YAML, not AIVA's
+chat parameters. Its settings API requires AuRoRA's `hrs` Python package;
+when that package is absent from an AIVA-only environment, the settings API
+fails. Even if it is available, saving those values does not configure AIVA
+chat.
+
 ## Layout
 
 | Path | Tracked in | Contents |

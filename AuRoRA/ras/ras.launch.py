@@ -5,14 +5,13 @@ AuRoRA · Reticular Activation System (RAS)
 
 Responsibilities:
     1. Construct the AGi config path from HRM constants
-    2. Load aurora.yaml as ROS parameters — distributed to all nodes before any start
-    3. Spawn downstream ROS2 nodes in dependency order
-    4. ROS2 guarantees parameters are set before nodes initialise — no race condition
+    2. Supply aurora.yaml as ROS parameter overrides to CNC, TIC, and the API
+    3. Start CNC, TIC, the HTTP API, and the Web Teleops Console
 
 Boot order (current → future):
     Stage 1 — Infrastructure : EEC  (stub — uncomment when ready)
     Stage 2 — Regulatory     : HRS  (stub — uncomment when ready)
-    Stage 3 — Cognition      : CNC
+    Stage 3 — Cognition      : CNC, TIC, API, and Web Teleops Console
 
 Usage:
     ros2 launch ras/ras.launch.py
@@ -39,7 +38,7 @@ from hrs.hru import GatewayMap          # gateway paths — resolves aurora.yaml
 #
 #   aurora.yaml  — robot-wide intrinsic params (scs.emc.*, scs.wmc.*, etc.)
 #
-#   Distributed to all nodes before any node starts.
+#   Supplied to CNC, TIC, and the API as per-node launch parameters.
 #   allow_substs=True — enables $(env HOME) and similar substitutions in YAML.
 
 _aurora_params = ParameterFile(                             # parameter file loader — binds YAML params to all nodes before start
