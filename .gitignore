@@ -78,3 +78,5 @@ models/**/*.gguf
 .pytest_cache/
 
 /AIVA/console/
+/AIVA/.env
+/AIVA/.venv/

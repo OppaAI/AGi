@@ -50,22 +50,40 @@ install from their local checkouts through `AIVA/requirements.txt`.
 
 ## Checkout
 
-From the AGi checkout root:
+Clone this development workspace and run `AIVA/setup.sh`; it fetches the
+component repositories at `dev` when they are missing. Existing checkouts are
+preserved on their current branch. The setup script also checks out Canvas and
+Imaging under `capability/` and links ROS packages into Shell.
 
-```sh
-git clone --branch dev https://github.com/AGi-robot/shell.git AIVA/shell
-git clone --branch dev https://github.com/AGi-robot/cypher.git     AIVA/cypher
-git clone --branch dev https://github.com/AGi-robot/telepathy.git  AIVA/telepathy
-git clone --branch dev https://github.com/AGi-robot/console.git AIVA/console
-git clone --branch dev https://github.com/AGi-robot/interactive.git AIVA/interactive
-git clone --branch dev https://github.com/AGi-robot/health.git      AIVA/health
-git clone --branch dev https://github.com/AGi-robot/memory.git AIVA/mind/memory
-ln -s ../../health AIVA/shell/src/agi_logging
-```
+## First-time setup and local settings
 
-The AIVA Shell adapter currently uses `memory.conversation.ConversationStore`,
-which is available on Memory's `dev` branch. Use that branch until the feature
-is promoted to Memory's `main` branch.
+After the coordinated Shell, Telepathy, and Console changes have landed on
+their `dev` branches, run `AIVA/setup.sh`. On its first run it creates an
+untracked `AIVA/.env` from `AIVA/.env.example` and exits so you can review local
+settings. Run it again to clone missing sibling repositories at `dev`, create
+the Shell component links, install the editable Python packages from
+`requirements.txt`, install ROS dependencies with `rosdep`, and build the ROS
+workspace. Existing Git checkouts are left on their current branch and are not
+updated automatically.
 
-Then follow [`shell/README.md`](shell/README.md) for the venv, build, and
-launch instructions.
+`AIVA/launch.sh` and `AIVA/setup.sh` load `.env` before reading settings. The
+example groups ROS/Python paths, model endpoints, local console and ROS bridge,
+memory/log paths, and optional Canvas/Imaging settings. Values left blank use
+the code defaults. Keep API keys and machine-specific values in `.env`; it is
+ignored by Git. `.env` is sourced as a Bash file, so only use trusted local
+content. Scorecard-only settings stay in Scorecard rather than Grace's runtime
+environment.
+
+The current Console Settings page is **read-only** for runtime values. Its theme
+and other browser-local preferences apply immediately. Environment and
+`launch.sh` settings (model endpoints, model selection, memory path, service
+ports, ROS bridge, Canvas/Imaging options, and MOSS paths) are captured when
+processes start, so changing `.env` requires restarting Grace's launcher.
+There is no live ROS parameter callback for these settings yet. A future editor
+should label each setting as immediate or restart-required and save through a
+validated configuration interface rather than presenting the current status
+page as an editor.
+
+The setup script requires ROS 2 Jazzy, `colcon`, and initialized `rosdep`. It
+may invoke the system package manager through `rosdep`; install missing ROS
+dependencies with the platform's usual permissions, then rerun setup.
