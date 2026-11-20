@@ -69,7 +69,7 @@ server and optional `aiva_presence` heartbeat are standalone processes, not ROS
 nodes. Interactive and Memory are Python libraries loaded by the receptor;
 Canvas and Imaging capabilities are called by the receptor and are not ROS
 nodes. AIVA does not launch AuRoRA's separate SCS/HRM/TMS runtime. See the
-[current Grace architecture](docs/architecture.md) for the component map,
+[current Grace architecture](docs/ARCHITECTURE.md) for the component map,
 message flow, and source snapshot.
 
 ## Augmented Reality
@@ -81,7 +81,7 @@ Grace's Android ARCore Unity project is maintained in [AGi-Robot/augmented-reali
 The AGi checkout contains AIVA's launcher and configuration, the separate
 AuRoRA robot workspace, and local checkouts of independently maintained
 components. AIVA's actual runtime boundaries are listed in
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
  
 ---
  
@@ -448,7 +448,7 @@ modules are not part of Grace's current AIVA chat runtime.
 ## Architecture
 
 The current Grace chat/data flow and runtime process map are documented in
-[`docs/architecture.md`](docs/architecture.md). That document separates the
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). That document separates the
 implemented AIVA path from the AuRoRA design and labels the future robot
 gateway as proposed.
 
