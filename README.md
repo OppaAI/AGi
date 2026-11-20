@@ -59,55 +59,36 @@ On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
  
 ## Shared Components
 
-The Web Teleops Console is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy), and shared ROS messages and codecs in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher). Grace's logging and system-health components are maintained in [AGi-Robot/health](https://github.com/AGi-robot/health). Clone them into `AIVA/telepathy/`, `AIVA/cypher/`, and `AIVA/health/`; link their ROS packages into the relevant colcon workspaces.
+Grace's entity receptor is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy). The external WebUI is maintained in [AGi-Robot/console](https://github.com/AGi-robot/console). Shared ROS messages and codecs live in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher), and logging and system health live in [AGi-Robot/health](https://github.com/AGi-robot/health). AIVA's setup links these component checkouts into the Shell ROS workspace or installs them as Python libraries.
 
 ## AIVA ROS 2 layout
 
-AIVA's actual ROS nodes include `aiva_chat` and Health's `agi_logging`;
-rosbridge is started from the ROS distribution. Telepathy's `telepathic_console` and
-Grace's `aiva_presence` heartbeat are standalone processes packaged for
-`ros2 run`, not ROS nodes. The heartbeat sends an outbound HTTP presence update
-to AuRoRA's console; it does not run or import AuRoRA's Semantic Cognitive
-System. Memory exposes a Python library used directly by `aiva_chat`; Cypher
-provides message definitions and encoding support. The
-Canvas and Imaging capabilities are invoked by the chat flow and do not
-currently need their own ROS nodes. See [`AIVA/shell/README.md`](AIVA/shell/README.md)
-for the workspace setup and component details.
+AIVA launches the Telepathy receptor and Health log collector as ROS nodes, with
+`rosbridge_websocket` and `rosapi` connecting the external Console. The Console
+server and optional `aiva_presence` heartbeat are standalone processes, not ROS
+nodes. Interactive and Memory are Python libraries loaded by the receptor;
+Canvas and Imaging capabilities are called by the receptor and are not ROS
+nodes. AIVA does not launch AuRoRA's separate SCS/HRM/TMS runtime. See the
+[current Grace architecture](docs/architecture.md) for the component map,
+message flow, and source snapshot.
 
 ## Augmented Reality
 
 Grace's Android ARCore Unity project is maintained in [AGi-Robot/augmented-reality](https://github.com/AGi-robot/augmented-reality). Its repository contains the Unity setup and build instructions.
 
 ## Repository Structure
- 
-```
-AGi/
-├── AuRoRA/          # Robot workspace (Jetson Orin Nano)
-│   └── src/
-│       └── scs/     # Semantic Cognitive System
-│           └── scs/
-│               ├── cnc.py   # Central Neural Core (ROS2 node)
-│               ├── mcc.py   # Memory Coordination Core
-│               ├── wmc.py   # Working Memory Cortex
-│               ├── emc.py   # Episodic Memory Cortex
-│               └── msb.py   # Memory Storage Bank (shared substrate)
-├── AIVA/            # PC companion repositories
-│   ├── launch.sh    # Grace's launcher (router + shell services) — tracked here
-│   ├── shell/       # ROS 2 workspace (Grace chat, logging, and presence packages)
-│   ├── cypher/      # Shared ROS messages and codec
-│   ├── telepathy/   # Shared WebUI and rosbridge transport
-│   └── mind/
-│       └── memory/ # Reusable Python memory library
-├── capability/      # Shared, independently versioned capabilities
-│   ├── canvas/      # AGi-robot/canvas
-│   └── imaging/     # AGi-robot/imaging
-└── diagnostic/     # Independently versioned evaluation tooling
-    └── scorecard/  # AGi-robot/scorecard
-```
+
+The AGi checkout contains AIVA's launcher and configuration, the separate
+AuRoRA robot workspace, and local checkouts of independently maintained
+components. AIVA's actual runtime boundaries are listed in
+[`docs/architecture.md`](docs/architecture.md).
  
 ---
  
-## CNS Module Reference
+## AuRoRA CNS module reference
+
+The following table describes the separate AuRoRA robot-side SCS design. These
+modules are not part of Grace's current AIVA chat runtime.
  
 | Acronym | Name | Biological Analogue | Function |
 |---|---|---|---|
@@ -465,105 +446,12 @@ AGi/
 ---
  
 ## Architecture
- 
-```mermaid
-flowchart TD
-    WEB_TELEOPS_CONSOLE[Interface — Web Teleops Console WebUI]
-    IN[ /cns/neural_input]
-    OUT[ /gce/response]
- 
-    subgraph SCS[Semantic Cognitive System]
-        CNC[CNC - Central Neural Core]
-        MCC[MCC - Memory Coordination Core]
-        WMC[WMC - Working Memory Cortex]
-        EMC[EMC - Episodic Memory Cortex]
-    end
- 
-    subgraph HRS[Homeostatic Regulation System - Phase 2]
-        SCN[SCN - BioLogic Clock]
-        EEE[EEE - Emergency & Exception Event]
-        VCS[VCS - Vital Circulatory System]
-    end
- 
-    subgraph SENS[Sensory Layer - Phase 5]
-        SIG[SIG - Sensory Integration Gateway]
-    end
- 
-    LLM[LLM - llama.cpp router]
-    DB[(Engram Complex - SQLite WAL)]
-    EMBED[Embedding Model - CPU]
- 
-    WEB_TELEOPS_CONSOLE -->|user message| IN
-    IN --> CNC
-    CNC --> MCC
-    MCC --> WMC
-    MCC --> EMC
-    WMC -->|evicted PMTs| MCC
-    MCC -->|bind async| EMC
-    EMC --- DB
-    EMC --- EMBED
-    MCC -->|context window| CNC
-    CNC -->|stream request| LLM
-    LLM -->|SSE tokens| CNC
-    CNC -->|chunks| OUT
-    OUT --> WEB_TELEOPS_CONSOLE
- 
-    SCN -->|chrono_state| MCC
-    SCN -->|schedule triggers| EEE
-    VCS -->|vitals| EEE
-    VCS -->|vitality_index| WMC
-    EEE -->|EMER PMT| WMC
-    EEE -->|alerts| OUT
-    SIG -->|sensor data| EMC
-    SIG -->|threshold breach| EEE
-```
 
-The Web Teleops Console runs on AuRoRA and is exposed through Tailscale Serve. Its same-origin WebSocket proxy keeps rosbridge private on loopback; see [the Telepathy console guide](AIVA/telepathy/README.md) for setup.
- 
----
- 
-## Conversation Sequence
- 
-```mermaid
-sequenceDiagram
-    participant GUI
-    participant CNC
-    participant MCC
-    participant WMC
-    participant EMC
-    participant LLM as LLM (llama.cpp router)
- 
-    GUI->>CNC: /cns/neural_input
-    activate CNC
- 
-    CNC->>MCC: register_memory("user")
-    MCC->>WMC: fill_pmt("user")
-    WMC-->>MCC: [] (user turn cached, awaiting response)
- 
-    CNC->>MCC: assemble_memory_context(user_prompt)
-    par concurrent
-        MCC->>WMC: recall_pmt_schema()
-        WMC-->>MCC: active turns
-    and
-        MCC->>EMC: reinstate_episodes(cue)
-        EMC-->>MCC: recalled past episodes
-    end
-    MCC-->>CNC: full context window
- 
-    CNC->>LLM: POST /v1/chat/completions stream
-    loop tokens
-        LLM-->>CNC: token
-        CNC-->>GUI: start / delta
-    end
-    CNC-->>GUI: done
- 
-    CNC->>MCC: register_memory("assistant")
-    MCC->>WMC: fill_pmt("assistant")
-    WMC-->>MCC: evicted PMTs (if capacity exceeded)
-    MCC-->>EMC: bind_pmt() async
-    deactivate CNC
-```
- 
+The current Grace chat/data flow and runtime process map are documented in
+[`docs/architecture.md`](docs/architecture.md). That document separates the
+implemented AIVA path from the AuRoRA design and labels the future robot
+gateway as proposed.
+
 ---
  
 ## Quick Start (AuRoRA / Jetson)
