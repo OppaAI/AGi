@@ -8,8 +8,8 @@ the shared capabilities.
 
 `AIVA/launch.sh` runs AIVA's `telepathy_receptor` adapter, not
 `AuRoRA/ras/ras.launch.py`. It does not start AuRoRA's CNC or TMS TIC, import
-the HRM manifest into chat, or load `~/.agi/ras/aurora.yaml`. The shared
-`/tms/text_response` topic name does not imply that AuRoRA's TMS is running.
+the HRM manifest into chat, or load `~/.agi/ras/aurora.yaml`. Chat responses
+use `/telepathic/response`; AuRoRA's TMS topic and launch path are separate.
 
 AIVA chat uses its declared ROS parameters and defaults, environment variables
 such as `AIVA_LLM_MODEL` and `AIVA_LLM_BASE_URL`, the Shell `persona/SOUL.md`,
@@ -25,11 +25,13 @@ parameters using HRM defaults and apply matching ROS YAML overrides. HRM is a
 Python manifest, not a running service. AuRoRA also reads its own user and
 persona YAML files where configured. Starting AIVA alone does not start AuRoRA.
 
-The shared console's intrinsic settings page targets AuRoRA's YAML, not AIVA's
-chat parameters. Its settings API requires AuRoRA's `hrs` Python package;
-when that package is absent from an AIVA-only environment, the settings API
-fails. Even if it is available, saving those values does not configure AIVA
-chat.
+The current Console settings page is read-only for runtime configuration. Its
+browser-local appearance preferences apply immediately; AIVA process settings
+are read when the launcher starts and require a restart to change. Console does
+not edit AIVA's `.env` or AuRoRA's parameter YAML, and its standalone runtime
+does not require AuRoRA's HRM, SCS, or TMS packages. See
+[`docs/telepathy-flow.md`](docs/telepathy-flow.md) for current topic and process
+details.
 
 ## Layout
 
@@ -59,8 +61,8 @@ Imaging under `capability/` and links ROS packages into Shell.
 
 ## First-time setup and local settings
 
-After the coordinated Shell, Telepathy, and Console changes have landed on
-their `dev` branches, run `AIVA/setup.sh`. On its first run it creates an
+The coordinated Shell, Telepathy, and Console changes are merged on their
+`dev` branches. Run `AIVA/setup.sh`. On its first run it creates an
 untracked `AIVA/.env` from `AIVA/.env.example` and exits so you can review local
 settings. Run it again to clone missing sibling repositories at `dev`, create
 the Shell component links, install the editable Python packages from

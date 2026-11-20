@@ -1,65 +1,111 @@
-# Grace Telepathy boundary and architecture audit
+# Telepathy chat flow
 
-Audited against AGi dev b7f7524, Shell dev 55b21bd and Telepathy dev 74cdd16.
-This document describes the coordinated Console/Receptor migration.
+This page records the source-level request/response path for Grace's current
+PC runtime. For the complete process map and repository ownership, see
+[`../../docs/architecture.md`](../../docs/architecture.md). The checked-in
+component changes are merged on the component `dev` branches; this document
+does not confirm which code or processes are currently running on a PC.
+
+## Text conversation
 
 ```mermaid
-flowchart LR
-  subgraph External[Outside Grace]
-    Browser[Telepathy Console browser]
-    Console[Console backend: encode request]
-  end
-  subgraph Grace[Grace entity runtime]
-    Bridge[ROS bridge]
-    Receptor[telepathy_receptor: decode signal]
-    Engine[Interactive conversation engine]
-    Memory[GraceMemory and Memory SQLite store]
-    Model[llama.cpp model endpoint]
-  end
-  Browser -->|HTTP request| Console
-  Console -->|TelepathicSignal: /telepathic/stimulus| Bridge
-  Bridge --> Receptor
-  Receptor --> Engine
-  Engine <-->|recent context and completed exchanges| Memory
-  Engine <--> Model
-  Engine --> Receptor
-  Receptor -->|JSON events: /telepathic/response| Bridge
-  Bridge -->|WebSocket stream| Browser
+sequenceDiagram
+    actor User
+    participant Browser as Console browser
+    participant Console as Console HTTP API / WebSocket proxy
+    participant Bridge as rosbridge / ROS 2
+    participant Receptor as Telepathy receptor node
+    participant Engine as Interactive library
+    participant Memory as Memory library / SQLite
+    participant Model as OpenAI-compatible model endpoint
+
+    Browser->>Console: Open /rosbridge WebSocket
+    Console->>Bridge: Open upstream WebSocket
+    Browser->>Console: Subscribe /telepathic/response through ROSLIB
+    Console->>Bridge: Forward ROSLIB subscription
+    User->>Browser: Submit text
+    Browser->>Console: HTTP POST /api/telepathic/send
+    Console->>Console: Encode with Cypher
+    Console->>Bridge: Publish TelepathicSignal over WebSocket
+    Bridge->>Receptor: /telepathic/stimulus
+    Receptor->>Receptor: Decode signal and parse request
+    Receptor->>Engine: answer(text, request ID)
+    Engine->>Memory: Load recent exchanges
+    Memory-->>Engine: Up to 8 recent exchanges by default
+    Engine->>Model: Streaming /v1/chat/completions
+    loop response chunks
+        Model-->>Engine: Text delta
+        Engine->>Receptor: start / delta event
+        Receptor->>Bridge: JSON std_msgs/String on /telepathic/response
+        Bridge-->>Console: ROS event over rosbridge WebSocket
+        Console-->>Browser: Relay event through /rosbridge proxy
+    end
+    Engine->>Memory: Persist completed exchange
+    Engine->>Receptor: done event
+    Receptor->>Bridge: JSON std_msgs/String on /telepathic/response
+    Bridge-->>Console: Completion event over rosbridge WebSocket
+    Console-->>Browser: Relay completion through /rosbridge proxy
 ```
 
-## Audit findings
+The browser subscribes to the ROS response topic through Console's transparent
+`/rosbridge` WebSocket proxy; Console relays those ROS messages without parsing
+or repackaging the text stream. Console encodes the submitted request before
+ROS publication. The current
+Cypher scheme is reversible encoding, not encryption. The original prompt
+travels from browser to Console over HTTP; use HTTPS if that leg leaves a
+trusted local network.
 
-- AIVA/launch.sh starts rosbridge, Health's log collector, the receptor and
-  Console. It may start or use a systemd-managed llama.cpp router.
-- It does not source AuRoRA's workspace or launch ras.launch.py, scs/cnc,
-  hrs/hrm or tms. Those packages still belong to AuRoRA, a separate runtime.
-- Previously Console optionally imported hrs.hrm and tms.radio_encoding and
-  exposed AuRoRA settings. This migration removes those imports and disables
-  that settings editor. Console requires only the shared Cypher encoder.
-- Shell no longer contains aiva_chat. Its implementation, memory adapter,
-  persona and existing capability orchestration move to Telepathy.
-- The receptor subscribes to /telepathic/stimulus. The /aiva/chat_input
-  subscriber is removed. The retired response name /tms/text_response becomes
-  /telepathic/response. Canvas snapshots retain /aiva/canvas_snapshot.
-- Interactive, Memory and the signal codecs are libraries inside the receptor
-  process. They are not separate ROS nodes. Console is a web process.
-- Expected ROS nodes: /telepathy_receptor, /agi_log_collector,
-  /rosbridge_websocket and /rosapi. Installed packages alone do not show use.
+Interactive assembles the persona, current time, recent exchanges, and current
+prompt, calls the configured model endpoint, and persists the completed turn
+through Memory. Memory is a Python library in the receptor process, not a
+separate ROS node or database service. The default store is SQLite. Older turns
+remain stored, but this chat path currently passes only the configured recent
+window to the model; semantic retrieval is not part of this flow.
 
-## Local migration and verification
+## Canvas requests
 
-Merge Console, Telepathy, Shell and AGi changes together in that order, then
-update their local checkouts. Link Shell's src/telepathic_management to
-../../console and src/telepathy_receptor to ../../telepathy. Remove only stale
-build/aiva_chat and install/aiva_chat artifacts. Rebuild from a fresh terminal
-sourced with the ROS setup configured by `paths.ros_setup` in
-[`../spec.yaml`](../spec.yaml), so the old overlay is not inherited.
+Canvas Studio sends requests over Console's `/api/canvas/ws` WebSocket. Console
+encodes the request and publishes a `TelepathicSignal` on
+`/telepathic/stimulus`, then relays matching `/telepathic/response` events to
+the page. The receptor handles drawing orchestration, calls the configured
+model with the Canvas action schema, and publishes progress, actions, replies,
+and completion events. When requested, raster painting uses the optional MOSS
+sidecar; Canvas and Imaging packages and the painting sidecar are not ROS
+nodes. The page sends review screenshots over the same Console WebSocket, and
+Console publishes them on `/aiva/canvas_snapshot` for the pending draw request.
 
-After startup inspect `ros2 node list`, `ros2 topic info /telepathic/stimulus -v`
-and `ros2 topic info /telepathic/response -v`. Send a chat and restart to verify
-history persistence on the actual PC. This cloud environment cannot establish
-which manually started or separately managed processes exist on that PC.
+## Processes and topics
 
-The current codec is reversible encoding, not encryption. Encoding happens in
-the console backend before ROS publication; browser-to-console HTTP still
-contains text. Configure HTTPS when deploying that interface remotely.
+| Name | Kind | Role |
+|---|---|---|
+| `telepathic_console` | Standalone web process | Serves the external Console and exchanges events with rosbridge |
+| `/telepathy_receptor` | ROS 2 node | Decodes stimulus signals, runs chat/Canvas handling, publishes response events |
+| `/agi_log_collector` | ROS 2 node | Collects ROS logs and publishes log events |
+| `/rosbridge_websocket`, `/rosapi` | ROS 2 nodes | Connect the Console process to ROS 2 |
+| `agi-interactive`, `agi-memory`, Cypher codecs | In-process libraries | Conversation, storage, and signal decoding |
+| llama.cpp or configured compatible server | Separate model process/service | Chat and any configured model endpoints |
+
+The old `aiva_chat` node and `/aiva/chat_input` subscriber are retired from
+this flow. `/tms/text_response` is also retired; responses use
+`/telepathic/response`. AuRoRA's SCS, HRM, and TMS launch path is separate and
+is not started by AIVA.
+
+## Check the local ROS graph
+
+Run these after syncing the component `dev` branches and rebuilding the Shell
+workspace. The launcher starts `telepathy_receptor` only when chat is enabled
+with `AIVA_START_CHAT=1` (the default); if it is set to `0`, the receptor will
+not appear in the ROS graph. Start Grace in a fresh terminal, then run:
+
+```sh
+ros2 node list
+ros2 topic info /telepathic/stimulus -v
+ros2 topic info /telepathic/response -v
+ros2 topic info /aiva/canvas_snapshot -v
+ros2 pkg list | rg '^(telepathy_receptor|telepathic_management|aiva_chat)$'
+```
+
+After a clean rebuild, `telepathy_receptor` and `telepathic_management` should
+be installed; `aiva_chat` should not. A stale `build/` or `install/` overlay
+can make retired packages appear, so verify from a terminal that has sourced
+the intended ROS and workspace setup files.
