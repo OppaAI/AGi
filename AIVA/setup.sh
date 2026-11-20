@@ -17,8 +17,24 @@ set -a
 source "$ENV_FILE"
 set +a
 
-AGI_ROOT_DIR="${AGI_ROOT_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"
-ROS_SETUP="${ROS_SETUP:-/opt/ros/jazzy/setup.bash}"
+SPEC_FILE="${AIVA_SPEC_FILE:-$SCRIPT_DIR/spec.yaml}"
+SPEC_DIR="$(cd -- "$(dirname -- "$SPEC_FILE")" && pwd)"
+spec_path() {
+  local key="$1" value
+  value="$(awk -F: -v key="$key" '
+    /^paths:[[:space:]]*$/ { in_paths=1; next }
+    in_paths && /^[^[:space:]#]/ { in_paths=0 }
+    in_paths && $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
+      sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, "")
+      gsub(/^['\''"]|['\''"]$/, ""); print; exit
+    }
+  ' "$SPEC_FILE")"
+  [[ -n "$value" ]] || { printf 'Missing paths.%s in %s\n' "$key" "$SPEC_FILE" >&2; exit 1; }
+  if [[ "$value" == '~/'* ]]; then value="$HOME/${value:2}"; fi
+  if [[ "$value" = /* ]]; then printf '%s\n' "$value"; else (cd -- "$SPEC_DIR/$value" 2>/dev/null && pwd) || printf '%s/%s\n' "$SPEC_DIR" "$value"; fi
+}
+AGI_ROOT_DIR="${AGI_ROOT_DIR:-$(spec_path agi_root)}"
+ROS_SETUP="${ROS_SETUP:-$(spec_path ros_setup)}"
 AGI_BRANCH="${AGI_BRANCH:-dev}"
 
 fail() { printf '✗ %s\n' "$*" >&2; exit 1; }
@@ -77,7 +93,11 @@ command -v rosdep >/dev/null 2>&1 || fail "rosdep is missing. Install and initia
 
 PYTHON_BIN="${AIVA_PYTHON:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python executable not found: $PYTHON_BIN"
-VENV_DIR="${AIVA_VENV:-$SCRIPT_DIR/.venv}"
+VENV_DIR="${AIVA_VENV:-$(spec_path python_venv)}"
+case "$VENV_DIR" in
+  /*) ;;
+  *) VENV_DIR="$SCRIPT_DIR/$VENV_DIR" ;;
+esac
 case "$VENV_DIR" in
   /*) ;;
   *) VENV_DIR="$START_DIR/$VENV_DIR" ;;

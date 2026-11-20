@@ -66,13 +66,13 @@ the Shell component links, install the editable Python packages from
 workspace. Existing Git checkouts are left on their current branch and are not
 updated automatically.
 
-`AIVA/launch.sh` and `AIVA/setup.sh` load `.env` before reading settings. The
-example groups ROS/Python paths, model endpoints, local console and ROS bridge,
-memory/log paths, and optional Canvas/Imaging settings. Values left blank use
-the code defaults. Keep API keys and machine-specific values in `.env`; it is
-ignored by Git. `.env` is sourced as a Bash file, so only use trusted local
-content. Scorecard-only settings stay in Scorecard rather than Grace's runtime
-environment.
+`AIVA/launch.sh` and `AIVA/setup.sh` load `AIVA/.env` before reading settings.
+Workspace and tool paths are listed in `AIVA/spec.yaml`; relative paths resolve
+from that file. Environment variables in `.env` override those values. The
+example is a blank template; local defaults and credentials belong in the
+ignored `.env`. It is sourced as Bash, so only use trusted local content.
+Scorecard-only settings stay in Scorecard rather than Grace's runtime
+environment. AuRoRA keeps its own separate configuration.
 
 The current Console Settings page is **read-only** for runtime values. Its theme
 and other browser-local preferences apply immediately. Environment and
