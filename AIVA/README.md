@@ -13,8 +13,10 @@ the HRM manifest into chat, or load `~/.agi/ras/aurora.yaml`. The shared
 
 AIVA chat uses its declared ROS parameters and defaults, environment variables
 such as `AIVA_LLM_MODEL` and `AIVA_LLM_BASE_URL`, the Shell `persona/SOUL.md`,
-and `~/.agi/profile/user.md`. Its conversation history defaults to
-`~/.agi/profile/grace_memory.sqlite3`. See the Shell README for overrides.
+and `$AGI_HOME/profile/user.md`. Its conversation history defaults to
+`$AGI_HOME/profile/grace_memory.sqlite3`. `AGI_HOME` is defined by
+[`spec.yaml`](spec.yaml) and can be overridden in `.env`. See the Shell README
+for persona and profile overrides.
 The AuRoRA YAML is not required for this AIVA chat path.
 
 AuRoRA has a separate launch path: `ras/ras.launch.py` supplies
@@ -67,8 +69,8 @@ workspace. Existing Git checkouts are left on their current branch and are not
 updated automatically.
 
 `AIVA/launch.sh` and `AIVA/setup.sh` load `AIVA/.env` before reading settings.
-Workspace and tool paths are listed in `AIVA/spec.yaml`; relative paths resolve
-from that file. Environment variables in `.env` override those values. The
+Workspace and tool paths are listed in [`spec.yaml`](spec.yaml); relative paths
+resolve from that file. Environment variables in `.env` override those values. The
 example is a blank template; local defaults and credentials belong in the
 ignored `.env`. It is sourced as Bash, so only use trusted local content.
 Scorecard-only settings stay in Scorecard rather than Grace's runtime
@@ -84,6 +86,7 @@ should label each setting as immediate or restart-required and save through a
 validated configuration interface rather than presenting the current status
 page as an editor.
 
-The setup script requires ROS 2 Jazzy, `colcon`, and initialized `rosdep`. It
-may invoke the system package manager through `rosdep`; install missing ROS
-dependencies with the platform's usual permissions, then rerun setup.
+The setup script requires the ROS installation configured by `paths.ros_setup`
+in [`spec.yaml`](spec.yaml), `colcon`, and initialized `rosdep`. It may invoke
+the system package manager through `rosdep`; install missing ROS dependencies
+with the platform's usual permissions, then rerun setup.

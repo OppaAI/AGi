@@ -52,7 +52,8 @@ Merge Console, Telepathy, Shell and AGi changes together in that order, then
 update their local checkouts. Link Shell's src/telepathic_management to
 ../../console and src/telepathy_receptor to ../../telepathy. Remove only stale
 build/aiva_chat and install/aiva_chat artifacts. Rebuild from a fresh terminal
-sourced with /opt/ros/jazzy/setup.bash, so the old overlay is not inherited.
+sourced with the ROS setup configured by `paths.ros_setup` in
+[`../spec.yaml`](../spec.yaml), so the old overlay is not inherited.
 
 After startup inspect `ros2 node list`, `ros2 topic info /telepathic/stimulus -v`
 and `ros2 topic info /telepathic/response -v`. Send a chat and restart to verify
