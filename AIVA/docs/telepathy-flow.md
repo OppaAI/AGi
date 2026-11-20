@@ -92,8 +92,10 @@ is not started by AIVA.
 
 ## Check the local ROS graph
 
-Run these after syncing the component `dev` branches, rebuilding the Shell
-workspace, and starting Grace in a fresh terminal:
+Run these after syncing the component `dev` branches and rebuilding the Shell
+workspace. The launcher starts `telepathy_receptor` only when chat is enabled
+with `AIVA_START_CHAT=1` (the default); if it is set to `0`, the receptor will
+not appear in the ROS graph. Start Grace in a fresh terminal, then run:
 
 ```sh
 ros2 node list
