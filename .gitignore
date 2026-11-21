@@ -80,5 +80,3 @@ models/**/*.gguf
 /AIVA/console/
 /AIVA/.env
 /AIVA/.venv/
-/models/inkling-2-mini
-/models/saluki-27b
