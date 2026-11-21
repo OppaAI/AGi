@@ -1,21 +1,24 @@
-# AIVA anatomical blueprint. Tracts are relayed from the parent source.
-#tracts:
-  entity_identity: "AGi" 
-  entity_codename: "AIVA"
-  creator_identity: "OppaAI"
-  
-  #entity_root: f"~/{entity_identity}/{entity_codename}"
-  #entity_repo: "http://github.com/{creator_identity}/{entity_identity}"
-  #homebase_root: f".{entity_root.lower()}"
-  
-  # Execution tracts
-  python_venv: .venv
-  ros_setup: /opt/ros/jazzy/setup.bash
+# AIVA identity and local component routes.
+# Component routes are resolved from this file's directory by wakeup.py.
+# Capability routes are relative to agi_root; user data is derived from identity.
+identity:
+  entity_identity: AGi
+  entity_codename: AIVA
+  creator_identity: OppaAI
 
-  shell_workspace: shell
-  canvas_source: ../capability/canvas
-  imaging_source: ../capability/imaging
-  agi_home: ~/.agi
-  llama_cpp_dir: ~/llama.cpp
-  llama_router_ini: ../models/llama-router.ini
-  moss_paint_weights_root: ../models/mossimage
+tracts:
+  agi_root: ..
+  shell_connect: shell
+  cypher_connect: cypher
+  telepathy_connect: telepathy
+  console_connect: console
+  interactive_connect: interactive
+  health_connect: health
+  memory_connect: mind/memory
+  canvas_connect: capability/canvas
+  imaging_connect: capability/imaging
+  python_environment: .venv
+  ros_setup: /opt/ros/jazzy/setup.bash
+  llama_cpp_connect: ~/llama.cpp
+  llama_router_config: ../models/llama-router.ini
+  moss_weights_connect: ../models/mossimage

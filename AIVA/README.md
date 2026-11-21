@@ -71,10 +71,15 @@ workspace. Existing Git checkouts are left on their current branch and are not
 updated automatically.
 
 `AIVA/launch.sh` and `AIVA/setup.sh` load `AIVA/.env` before reading settings.
-Workspace and tool paths are listed in [`spec.yaml`](spec.yaml); relative paths
-resolve from that file. Environment variables in `.env` override those values. The
-example is a blank template; local defaults and credentials belong in the
-ignored `.env`. It is sourced as Bash, so only use trusted local content.
+Workspace identity and component routes are listed in [`spec.yaml`](spec.yaml).
+`wakeup.py` resolves the `tracts:` entries into absolute paths, derives
+`AGI_HOME` from the entity identity, and reports missing or invalid settings
+before setup or launch continues. Component paths are relative to the spec file;
+Canvas and Imaging routes are relative to `agi_root`. `.env` remains for
+non-secret, machine-specific runtime overrides. It is sourced as Bash, so only
+use trusted local content. API keys are not part of the path resolver; moving
+their current environment-variable consumers to an OS credential store remains
+separate work.
 Scorecard-only settings stay in Scorecard rather than Grace's runtime
 environment. AuRoRA keeps its own separate configuration.
 
@@ -88,7 +93,8 @@ should label each setting as immediate or restart-required and save through a
 validated configuration interface rather than presenting the current status
 page as an editor.
 
-The setup script requires the ROS installation configured by `paths.ros_setup`
-in [`spec.yaml`](spec.yaml), `colcon`, and initialized `rosdep`. It may invoke
+The setup script requires the ROS installation configured by `tracts.ros_setup`
+in [`spec.yaml`](spec.yaml), `colcon`, initialized `rosdep`, and PyYAML for the
+bootstrap Python. It may invoke
 the system package manager through `rosdep`; install missing ROS dependencies
 with the platform's usual permissions, then rerun setup.
