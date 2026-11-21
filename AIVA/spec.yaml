@@ -1,11 +1,20 @@
-# AIVA workspace layout. Relative paths are resolved from this file's directory.
-paths:
-  agi_root: ..
+# AIVA anatomical blueprint. Tracts are relayed from the parent source.
+#tracts:
+  entity_identity: "AGi" 
+  entity_codename: "AIVA"
+  creator_identity: "OppaAI"
+  
+  #entity_root: f"~/{entity_identity}/{entity_codename}"
+  #entity_repo: "http://github.com/{creator_identity}/{entity_identity}"
+  #homebase_root: f".{entity_root.lower()}"
+  
+  # Execution tracts
+  python_venv: .venv
+  ros_setup: /opt/ros/jazzy/setup.bash
+
   shell_workspace: shell
   canvas_source: ../capability/canvas
   imaging_source: ../capability/imaging
-  python_venv: .venv
-  ros_setup: /opt/ros/jazzy/setup.bash
   agi_home: ~/.agi
   llama_cpp_dir: ~/llama.cpp
   llama_router_ini: ../models/llama-router.ini
