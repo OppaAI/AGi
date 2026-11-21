@@ -80,5 +80,5 @@ models/**/*.gguf
 /AIVA/console/
 /AIVA/.env
 /AIVA/.venv/
-/models/deepseek-v4-pro-qwen3.5-9b
+/models/inkling-2-mini
 /models/saluki-27b
