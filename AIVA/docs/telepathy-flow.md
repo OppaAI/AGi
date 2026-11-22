@@ -2,7 +2,7 @@
 
 This page records the source-level request/response path for Grace's current
 PC runtime. For the complete process map and repository ownership, see
-[`../../docs/architecture.md`](../../docs/architecture.md). The checked-in
+[`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). The checked-in
 component changes are merged on the component `dev` branches; this document
 does not confirm which code or processes are currently running on a PC.
 
@@ -33,27 +33,31 @@ sequenceDiagram
     Engine->>Memory: Load recent exchanges
     Memory-->>Engine: Up to 8 recent exchanges by default
     Engine->>Model: Streaming /v1/chat/completions
-    loop response chunks
+    loop each response event with textual content
         Model-->>Engine: Text delta
         Engine->>Receptor: start / delta event
+        Receptor->>Receptor: Cypher-encode content as content_signal
         Receptor->>Bridge: JSON std_msgs/String on /telepathic/response
         Bridge-->>Console: ROS event over rosbridge WebSocket
-        Console-->>Browser: Relay event through /rosbridge proxy
+        Console->>Console: Decode content_signal after rosbridge
+        Console-->>Browser: Relay restored event through /rosbridge proxy
     end
     Engine->>Memory: Persist completed exchange
     Engine->>Receptor: done event
+    Receptor->>Receptor: Encode content if event contains textual content
     Receptor->>Bridge: JSON std_msgs/String on /telepathic/response
     Bridge-->>Console: Completion event over rosbridge WebSocket
-    Console-->>Browser: Relay completion through /rosbridge proxy
+    Console->>Console: Decode content_signal when present
+    Console-->>Browser: Relay restored completion through /rosbridge proxy
 ```
 
-The browser subscribes to the ROS response topic through Console's transparent
-`/rosbridge` WebSocket proxy; Console relays those ROS messages without parsing
-or repackaging the text stream. Console encodes the submitted request before
-ROS publication. The current
-Cypher scheme is reversible encoding, not encryption. The original prompt
-travels from browser to Console over HTTP; use HTTPS if that leg leaves a
-trusted local network.
+Console encodes the submitted request before ROS publication. For each response
+event, Telepathy encodes textual `content` as `content_signal`; Console decodes
+it after rosbridge and restores `content` before forwarding the event to the
+browser. Event types, request IDs, metrics, Canvas actions, and images remain
+structured JSON fields. The Cypher scheme is reversible encoding, not
+encryption. The original prompt travels from browser to Console over HTTP; use
+HTTPS if that leg leaves a trusted local network.
 
 Interactive assembles the persona, current time, recent exchanges, and current
 prompt, calls the configured model endpoint, and persists the completed turn
@@ -66,9 +70,10 @@ window to the model; semantic retrieval is not part of this flow.
 
 Canvas Studio sends requests over Console's `/api/canvas/ws` WebSocket. Console
 encodes the request and publishes a `TelepathicSignal` on
-`/telepathic/stimulus`, then relays matching `/telepathic/response` events to
-the page. The receptor handles drawing orchestration, calls the configured
-model with the Canvas action schema, and publishes progress, actions, replies,
+`/telepathic/stimulus`, then decodes response text after rosbridge and relays
+matching `/telepathic/response` events to the page. The receptor handles drawing
+orchestration, calls the configured model with the Canvas action schema, and
+publishes progress, actions, replies,
 and completion events. When requested, raster painting uses the optional MOSS
 sidecar; Canvas and Imaging packages and the painting sidecar are not ROS
 nodes. The page sends review screenshots over the same Console WebSocket, and
@@ -78,8 +83,8 @@ Console publishes them on `/aiva/canvas_snapshot` for the pending draw request.
 
 | Name | Kind | Role |
 |---|---|---|
-| `telepathic_console` | Standalone web process | Serves the external Console and exchanges events with rosbridge |
-| `/telepathy_receptor` | ROS 2 node | Decodes stimulus signals, runs chat/Canvas handling, publishes response events |
+| `telepathic_console` | Standalone web process | Serves the external Console, encodes requests, and decodes response text around rosbridge |
+| `/telepathy_receptor` | ROS 2 node | Decodes stimulus signals, runs chat/Canvas handling, encodes response text, publishes response events |
 | `/agi_log_collector` | ROS 2 node | Collects ROS logs and publishes log events |
 | `/rosbridge_websocket`, `/rosapi` | ROS 2 nodes | Connect the Console process to ROS 2 |
 | `agi-interactive`, `agi-memory`, Cypher codecs | In-process libraries | Conversation, storage, and signal decoding |
