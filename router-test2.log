@@ -1,0 +1,65 @@
+0.00.001.262 I srv  llama_server: initializing ...
+0.00.090.435 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.090.438 I srv  server_run_r: starting server in router mode. models will be automatically loaded on-demand
+0.00.263.339 I srv    operator(): Available models (4):
+0.00.263.342 I srv    operator():   [    preset] ministral-3-8b-uncensored
+0.00.263.342 I srv    operator():   [    preset] swift15-qwen3.8-27b
+0.00.263.342 I srv    operator():   [    preset] swift15-qwen3.8-27b-iq3-xxs
+0.00.263.342 I srv    operator():   [    preset] voyage-4-nano
+0.00.263.630 I srv  measure_next: measuring memory for model name=ministral-3-8b-uncensored
+0.00.263.730 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.263.738 W srv  server_setup: security: router mode enabled - do not expose to untrusted environments
+0.00.265.807 I srv  load_startup: (startup) loading model ministral-3-8b-uncensored
+0.00.265.812 I srv     make_room: waiting for the memory measurement of model name=ministral-3-8b-uncensored
+[    0] 0.00.073.825 I srv  llama_server: initializing ...
+[    0] 0.00.073.843 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+[    0] 0.00.557.063 I srv  server_run_m: memory measured for model name=/home/oppa-ai/AGi/models/ministral3-8b/Ministral-3-8B-Uncensored.i1-Q4_K_M.gguf at n_ctx=24576 (min) and n_ctx=24576 (max)
+0.00.859.784 I srv  handle_measu: model name=ministral-3-8b-uncensored needs on CUDA0: 3335 MiB at n_ctx=24576 (min), 3335 MiB at n_ctx=24576 (max), 7643 MiB free
+0.00.859.786 I srv  handle_measu: model name=ministral-3-8b-uncensored needs on CUDA1: 3714 MiB at n_ctx=24576 (min), 3714 MiB at n_ctx=24576 (max), 7436 MiB free
+0.00.859.898 I srv          load: spawning server instance with name=ministral-3-8b-uncensored on port 35989
+0.00.859.917 I srv          load: spawning server instance with args:
+0.00.859.917 I srv          load:   /home/oppa-ai/llama.cpp/build/bin/llama-server
+0.00.859.918 I srv          load:   --cache-reuse
+0.00.859.918 I srv          load:   256
+0.00.859.918 I srv          load:   --host
+0.00.859.918 I srv          load:   127.0.0.1
+0.00.859.918 I srv          load:   --log-colors
+0.00.859.918 I srv          load:   off
+0.00.859.918 I srv          load:   --port
+0.00.859.918 I srv          load:   35989
+0.00.859.918 I srv          load:   --alias
+0.00.859.919 I srv          load:   ministral-3-8b-uncensored
+0.00.859.919 I srv          load:   --ctx-size
+0.00.859.919 I srv          load:   24576
+0.00.859.919 I srv          load:   --cache-type-k
+0.00.859.919 I srv          load:   q4_0
+0.00.859.920 I srv          load:   --cache-type-v
+0.00.859.920 I srv          load:   q4_0
+0.00.859.920 I srv          load:   --flash-attn
+0.00.859.920 I srv          load:   on
+0.00.859.920 I srv          load:   --model
+0.00.859.920 I srv          load:   /home/oppa-ai/AGi/models/ministral3-8b/Ministral-3-8B-Uncensored.i1-Q4_K_M.gguf
+0.00.859.920 I srv          load:   --n-gpu-layers
+0.00.859.920 I srv          load:   999
+0.00.859.920 I srv          load:   --ubatch-size
+0.00.859.920 I srv          load:   1024
+0.00.860.118 I srv  load_startup: (startup) loading model swift15-qwen3.8-27b
+0.00.860.121 I srv     make_room: waiting for the memory measurement of model name=swift15-qwen3.8-27b
+0.00.962.342 I srv  measure_next: measuring memory for model name=swift15-qwen3.8-27b
+0.00.962.355 I srv           run: instance name=ministral-3-8b-uncensored exited with status 0
+[35989] 0.00.088.333 I srv  llama_server: initializing ...
+[35989] 0.00.088.350 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+[35989] 0.00.089.707 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+[35989] 0.00.092.275 I srv    load_model: loading model '/home/oppa-ai/AGi/models/ministral3-8b/Ministral-3-8B-Uncensored.i1-Q4_K_M.gguf'
+[    0] 0.00.051.370 I srv  llama_server: initializing ...
+[    0] 0.00.051.388 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+[    0] 0.00.774.054 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 999, abort
+0.02.015.081 I srv  handle_measu: model name=swift15-qwen3.8-27b needs on CUDA0: 6750 MiB at n_ctx=32768 (min), 6750 MiB at n_ctx=32768 (max), 5302 MiB free
+0.02.015.084 I srv  handle_measu: model name=swift15-qwen3.8-27b needs on CUDA1: 8268 MiB at n_ctx=32768 (min), 8268 MiB at n_ctx=32768 (max), 4895 MiB free
+[    0] 0.01.013.029 I srv  server_run_m: memory measured for model name=/home/oppa-ai/AGi/models/swift15-qwen3.8-27b/Swift-1.5-Qwen3.8-27B-GSQ-RCO-IQ3_S-mtp.gguf at n_ctx=32768 (min) and n_ctx=32768 (max)
+0.02.018.544 E srv  server_run_r: failed to load models on startup: model limit reached, try again later
+0.02.018.969 I srv    operator(): operator(): cleaning up before exit...
+0.02.019.025 I srv  cancel_measu: stopping measure process for model name=swift15-qwen3.8-27b
+0.02.019.047 I srv    unload_all: stopping model instance name=ministral-3-8b-uncensored
+0.02.145.908 I srv           run: instance name=swift15-qwen3.8-27b exited with status 1
+0.02.196.036 I srv           run: instance name=ministral-3-8b-uncensored exited with status 1

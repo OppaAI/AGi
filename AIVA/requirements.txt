@@ -1,5 +1,6 @@
 httpx>=0.27,<1
 PyYAML>=6.0,<7
+openrgb-python==0.3.8
 -e ../capability/canvas
 -e ../capability/imaging
 -e ./mind/memory

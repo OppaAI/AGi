@@ -497,7 +497,7 @@ start_llama_backends() {
       fi
       info "Router preset: $LLAMA_ROUTER_INI  ${C_DIM}· port: $LLM_PORT${C_RESET}"
       start_service llama-router "$LLAMA_SERVER_BIN" \
-        --models-preset "$LLAMA_ROUTER_INI" --models-max 2 \
+        --models-preset "$LLAMA_ROUTER_INI" --models-max 3 --models-memory-margin 512 \
         --reasoning-effort "$DRAW_REASONING_EFFORT" --port "$LLM_PORT"
     fi
   fi
