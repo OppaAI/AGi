@@ -5,8 +5,7 @@ set -Eeuo pipefail
 # --- Paths -------------------------------------------------------------------
 # Absolute path of the folder containing this script (not the user's current directory)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-START_DIR="$PWD"
-# Load local overrides without committing machine paths or credentials.
+# Load non-secret machine-specific runtime overrides.
 ENV_FILE="${AIVA_ENV_FILE:-$SCRIPT_DIR/.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
@@ -14,34 +13,26 @@ if [[ -f "$ENV_FILE" ]]; then
   source "$ENV_FILE"
   set +a
 fi
-# Path defaults are shared in spec.yaml; .env values override them.
+# Identity and tract defaults are shared in spec.yaml; .env values override them.
 SPEC_FILE="${AIVA_SPEC_FILE:-$SCRIPT_DIR/spec.yaml}"
-SPEC_DIR="$(cd -- "$(dirname -- "$SPEC_FILE")" && pwd)"
+CONFIG_PYTHON="${AIVA_PYTHON:-python3}"
 spec_path() {
-  local key="$1" value
-  value="$(awk -F: -v key="$key" '
-    /^paths:[[:space:]]*$/ { in_paths=1; next }
-    in_paths && /^[^[:space:]#]/ { in_paths=0 }
-    in_paths && $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
-      sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, "")
-      gsub(/^['\''"]|['\''"]$/, ""); print; exit
-    }
-  ' "$SPEC_FILE")"
-  [[ -n "$value" ]] || { printf 'Missing paths.%s in %s\n' "$key" "$SPEC_FILE" >&2; exit 1; }
-  if [[ "$value" == '~/'* ]]; then value="$HOME/${value:2}"; fi
-  if [[ "$value" = /* ]]; then printf '%s\n' "$value"; else (cd -- "$SPEC_DIR/$value" 2>/dev/null && pwd) || printf '%s/%s\n' "$SPEC_DIR" "$value"; fi
+  "$CONFIG_PYTHON" "$SCRIPT_DIR/wakeup.py" --spec "$SPEC_FILE" resolve "$1"
 }
 # AIVA's shell ROS workspace (colcon build artifacts live there)
 # AGi checkout root, one level above this script (AIVA/launch.sh)
 AGI_ROOT_DIR="${AGI_ROOT_DIR:-$(spec_path agi_root)}"
+export AGI_ROOT_DIR
 SHELL_DIR="${AIVA_SHELL_DIR:-$(spec_path shell_workspace)}"
+INTERACTIVE_DIR="${AIVA_INTERACTIVE_DIR:-$(spec_path interactive_connect)}"
+MEMORY_DIR="${AIVA_MEMORY_REPO_DIR:-$(spec_path memory_connect)}"
 CANVAS_SOURCE_DIR="${AGI_CANVAS_SOURCE_DIR:-$(spec_path canvas_source)}"
 IMAGING_SOURCE_DIR="${AGI_IMAGING_SOURCE_DIR:-$(spec_path imaging_source)}"
 # Python venv location (default: .venv at the AIVA root; override with AIVA_VENV)
 VENV_DIR="${AIVA_VENV:-$(spec_path python_venv)}"
 case "$VENV_DIR" in
   /*) ;;
-  *) VENV_DIR="$START_DIR/$VENV_DIR" ;;
+  *) VENV_DIR="$SCRIPT_DIR/$VENV_DIR" ;;
 esac
 
 # --- ROS 2 -------------------------------------------------------------------
@@ -173,8 +164,8 @@ VENV_SITE_PACKAGES="$($AIVA_ROS_PYTHON -c 'import sysconfig; print(sysconfig.get
 for package_source in \
   "$CANVAS_SOURCE_DIR/src" \
   "$IMAGING_SOURCE_DIR/src" \
-  "$SCRIPT_DIR/interactive/src" \
-  "$SCRIPT_DIR/mind/memory/src"; do
+  "$INTERACTIVE_DIR/src" \
+  "$MEMORY_DIR/src"; do
   if [[ -d "$package_source" ]]; then
     PYTHONPATH="$package_source${PYTHONPATH:+:$PYTHONPATH}"
   fi
