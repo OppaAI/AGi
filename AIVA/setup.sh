@@ -65,7 +65,7 @@ link_component() {
 clone_or_check https://github.com/AGi-robot/shell.git "$SCRIPT_DIR/shell"
 clone_or_check https://github.com/AGi-robot/cypher.git "$SCRIPT_DIR/cypher"
 clone_or_check https://github.com/AGi-robot/telepathy.git "$SCRIPT_DIR/telepathy"
-clone_or_check https://github.com/AGi-robot/console.git "$SCRIPT_DIR/console"
+clone_or_check https://github.com/AGi-robot/console.git "$AGI_ROOT_DIR/console"
 clone_or_check https://github.com/AGi-robot/interactive.git "$SCRIPT_DIR/interactive"
 clone_or_check https://github.com/AGi-robot/health.git "$SCRIPT_DIR/health"
 clone_or_check https://github.com/AGi-robot/memory.git "$SCRIPT_DIR/mind/memory"
@@ -74,7 +74,7 @@ clone_or_check https://github.com/AGi-robot/imaging.git "$AGI_ROOT_DIR/capabilit
 
 link_component "$SCRIPT_DIR/shell/src/cryptic_signal_core" "$SCRIPT_DIR/cypher" "../../cypher"
 link_component "$SCRIPT_DIR/shell/src/telepathy_receptor" "$SCRIPT_DIR/telepathy" "../../telepathy"
-link_component "$SCRIPT_DIR/shell/src/telepathic_management" "$SCRIPT_DIR/console" "../../console"
+link_component "$SCRIPT_DIR/shell/src/telepathic_management" "$AGI_ROOT_DIR/console" "../../../console"
 link_component "$SCRIPT_DIR/shell/src/agi_logging" "$SCRIPT_DIR/health" "../../health"
 for package_xml in \
   "$SCRIPT_DIR/shell/src/cryptic_signal_core/package.xml" \

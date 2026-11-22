@@ -9,12 +9,13 @@
   #homebase_root: f".{entity_root.lower()}"
   
   # Execution tracts
-  python_venv: .venv
-  ros_setup: /opt/ros/jazzy/setup.bash
-
+paths:
+  agi_root: ../
   shell_workspace: shell
   canvas_source: ../capability/canvas
   imaging_source: ../capability/imaging
+  python_venv: .venv
+  ros_setup: /opt/ros/jazzy/setup.bash
   agi_home: ~/.agi
   llama_cpp_dir: ~/llama.cpp
   llama_router_ini: ../models/llama-router.ini
