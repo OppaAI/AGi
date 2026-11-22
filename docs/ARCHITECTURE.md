@@ -1,9 +1,11 @@
 # Grace system architecture
 
 **Status:** implementation map for the PC-side Grace runtime (AIVA), reviewed
-against the component `dev` branches on 2026-11-20. This describes checked-in
-code, not a live inspection of the PC. Planned robot integration is marked
-separately.
+against the component `dev` branches on 2026-11-20, including the merged
+[Telepathy #6](https://github.com/AGi-robot/telepathy/pull/6) and
+[Console #2](https://github.com/AGi-robot/console/pull/2). This describes
+checked-in code, not a live inspection of the PC. Planned robot integration is
+marked separately.
 
 Update this document when a component boundary, process, topic, or data path
 changes. Keep proposed architecture visually separate from running code.
@@ -14,7 +16,8 @@ changes. Keep proposed architecture visually separate from running code.
 flowchart LR
   subgraph Outside[Outside Grace]
     Browser[Console browser UI]
-    Console[Console web process<br/>HTTP API and WebSocket proxy]
+    Console[Console HTTP API and WebSocket proxy]
+    ResponseDecoder[Cypher response decoder<br/>inside Console]
   end
 
   subgraph Runtime[Grace AIVA runtime]
@@ -28,12 +31,12 @@ flowchart LR
     Painter[MOSS painting sidecar<br/>optional]
   end
 
-  Browser -->|HTTP POST /api/telepathic/send| Console
-  Console -->|encode; publish TelepathicSignal over WebSocket| Bridge
-  Browser -->|Canvas WebSocket /api/canvas/ws| Console
-  Console -->|publish Canvas signal and snapshots| Bridge
-  Browser <-->|ROSLIB stream via /rosbridge proxy| Console
-  Console <-->|upstream WebSocket| Bridge
+  Browser -->|HTTP chat and Canvas requests| Console
+  Console -->|encode request; publish TelepathicSignal| Bridge
+  Console -->|publish Canvas snapshots| Bridge
+  Browser -->|ROSLIB subscription| Console
+  Console <-->|upstream rosbridge WebSocket| Bridge
+  ResponseDecoder -->|decoded response event| Browser
   Bridge -->|/telepathic/stimulus| Receptor
   Receptor -->|decode signal and route text turn| Interactive
   Interactive <-->|recent context and completed exchanges| Memory
@@ -43,13 +46,19 @@ flowchart LR
   Capabilities -. optional raster generation .-> Painter
   Interactive -->|start, delta, done, or error events| Receptor
   Capabilities -. action results .-> Receptor
-  Receptor -->|JSON events on /telepathic/response| Bridge
+  Receptor -->|response event with text| ResponseEncoder[Cypher response encoder<br/>inside Telepathy]
+  ResponseEncoder -->|JSON event on /telepathic/response| Bridge
+  Bridge -->|response event via rosbridge| ResponseDecoder
 ```
 
-Console encodes the request before publishing a Cypher `TelepathicSignal` on
-`/telepathic/stimulus`. The current codec is reversible encoding, not
-encryption; the browser-to-Console HTTP leg still carries the original text.
-Use HTTPS when that leg crosses an untrusted network.
+Console encodes each request before publishing a Cypher `TelepathicSignal` on
+`/telepathic/stimulus`. The receptor also encodes each response event's textual
+`content` as `content_signal` before publishing it on `/telepathic/response`;
+Console decodes it after rosbridge and restores `content` before forwarding the
+event to the browser. Event type, IDs, metrics, Canvas actions, and image fields
+remain ordinary JSON. Cypher is reversible encoding, not encryption; the
+browser-to-Console HTTP leg still carries the original text. Use HTTPS when
+that leg crosses an untrusted network.
 
 The Telepathy receptor decodes the signal and calls Interactive for ordinary
 text turns. Interactive assembles the persona, current time, recent conversation
@@ -63,12 +72,14 @@ installed Canvas and Imaging Python packages. MOSS raster painting is an
 optional sidecar. These are not separate ROS nodes. The chat and Canvas flows
 return structured JSON events on `/telepathic/response`. Canvas events use
 request identifiers so the Console's Canvas page can route results to its
-active request.
+active request. Console also decodes Canvas response events in its dedicated
+`/api/canvas/ws` handler. The decoder accepts legacy plain-text events during
+rollout.
 
-Standard chat submits text to `/api/telepathic/send` and receives ROS topic
-events through the transparent `/rosbridge` proxy. Canvas Studio uses
-`/api/canvas/ws`; that Console handler publishes the encoded request, subscribes
-to response events, and relays the matching request's events to the page.
+Standard chat submits text to `/api/telepathic/send` and receives decoded ROS
+topic events through the `/rosbridge` proxy. Canvas Studio uses
+`/api/canvas/ws`; that Console handler publishes the encoded request, decodes
+response text, and relays matching request events to the page.
 
 ## ROS interfaces and streaming
 
@@ -77,16 +88,15 @@ Chat uses ROS 2 topics and messages, not a synchronous ROS service:
 | Topic | Current type | Purpose |
 |---|---|---|
 | `/telepathic/stimulus` | `cryptic_signal_core/msg/TelepathicSignal` | Asynchronous user request into Grace |
-| `/telepathic/response` | `std_msgs/msg/String` with a JSON event | `start`, `delta`, `done`, `error`, and Canvas events, with request identifiers |
+| `/telepathic/response` | `std_msgs/msg/String` with a JSON event | `start`, `delta`, `done`, `error`, and Canvas events; each text `content` is carried as `content_signal`, with request identifiers |
 | `/aiva/canvas_snapshot` | `std_msgs/msg/String` with a JSON/data URL | Browser-rendered Canvas snapshot for a pending drawing request |
 
 The model endpoint streams its completion to Interactive over the
 OpenAI-compatible HTTP streaming API. Interactive turns stream chunks into
-events; the receptor publishes those events on `/telepathic/response`. The
-chat browser subscribes to that ROS topic through Console's transparent
-`/rosbridge` WebSocket proxy. For Canvas Studio, Console's `/api/canvas/ws`
-handler subscribes to the same ROS response topic and forwards events matching
-the Canvas request identifier.
+events; the receptor encodes each textual event content and publishes the JSON
+event on `/telepathic/response`. Console decodes response events after
+rosbridge, both in the `/rosbridge` proxy for chat and in the `/api/canvas/ws`
+handler for Canvas, then forwards the restored events to the browser.
 
 A service would suit a short request with one final reply, but it would force a
 streaming chat response to wait until generation completed. ROS 2 Actions could
@@ -104,8 +114,8 @@ endpoint is configured.
 
 | Process or package | Runtime role | ROS node? |
 |---|---|---:|
-| `telepathic_console` from Console | Web server; forwards browser requests and ROS response events through rosbridge | No |
-| `telepathy_receptor` from Telepathy | Decodes `/telepathic/stimulus`, runs chat/Canvas orchestration, publishes `/telepathic/response` | Yes |
+| `telepathic_console` from Console | Web server; encodes requests and decodes ROS response text around rosbridge | No |
+| `telepathy_receptor` from Telepathy | Decodes `/telepathic/stimulus`, runs chat/Canvas orchestration, encodes response text, publishes `/telepathic/response` | Yes |
 | `agi_log_collector` from Health | Collects ROS logs and publishes system log events | Yes |
 | `rosbridge_websocket` and `rosapi` | WebSocket gateway and ROS API exposed to Console | Yes |
 | Interactive | Conversation engine imported by the receptor process | No; Python library |
