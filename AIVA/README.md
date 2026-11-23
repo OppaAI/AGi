@@ -13,7 +13,8 @@ use `/telepathic/response`; AuRoRA's TMS topic and launch path are separate.
 
 AIVA chat uses its declared ROS parameters and defaults, environment variables
 such as `AIVA_LLM_MODEL` and `AIVA_LLM_BASE_URL`, the Shell `persona/SOUL.md`,
-and `$AGI_HOME/profile/user.md`. Its conversation history defaults to
+and `$AGI_HOME/profile/USERS.md` (with `USER.md` and `user.md` accepted as
+legacy names). Its conversation history defaults to
 `$AGI_HOME/profile/grace_memory.sqlite3`. `AGI_HOME` is defined by
 [`spec.yaml`](spec.yaml) and can be overridden in `.env`. See the Shell README
 for persona and profile overrides.
@@ -82,6 +83,9 @@ their current environment-variable consumers to an OS credential store remains
 separate work.
 Scorecard-only settings stay in Scorecard rather than Grace's runtime
 environment. AuRoRA keeps its own separate configuration.
+
+Run the Scorecard launcher from any working directory with `AIVA/scorecard.sh`;
+it forwards arguments to `diagnostic/scorecard/launch.sh`.
 
 The current Console Settings page is **read-only** for runtime values. Its theme
 and other browser-local preferences apply immediately. Environment and
