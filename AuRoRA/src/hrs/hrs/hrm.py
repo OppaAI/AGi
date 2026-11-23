@@ -146,7 +146,7 @@ class AGi:                                                              # Amazin
        
         class GCE:                                                                              # Generative Cognitive Engine
             NEURAL_ENDPOINT       : str   = "http://AIVA:8080"                                  # [STATIC]    llama.cpp router base URL (agi-llm-router, OpenAI-compatible /v1)
-            COGNITIVE_ENGINE      : str   = "ministral-3-8b-uncensored"                          # [STATIC] frontend chatbot model — router key in models/llama-router.ini
+            COGNITIVE_ENGINE      : str   = "ministral-3-8b-instruct-2512-abliterated"                          # [STATIC] frontend chatbot model — router key in models/llama-router.ini
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature
             PROBABILITY_THRESHOLD : float = 0.9                                                 # [INTRINSIC] top-p nucleus sampling cutoff
