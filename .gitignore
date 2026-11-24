@@ -59,6 +59,7 @@ models/**/*.gguf
 # MOSS-Image weights (large binaries)
 /models/mossimage
 /models/ministral3-8b
+/models/inkling-2-mini
 /models/voyage-4-nano
 /models/swift15-qwen3.8-27b
 
