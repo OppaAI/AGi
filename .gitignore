@@ -62,6 +62,9 @@ models/**/*.gguf
 /models/inkling-2-mini
 /models/voyage-4-nano
 /models/swift15-qwen3.8-27b
+/models/bonsai-2.5-27b
+/models/occamy-1.0
+
 
 # These are separate AGi-robot repositories; commit within each repo.
 /AIVA/shell/
