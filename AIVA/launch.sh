@@ -371,7 +371,7 @@ cleanup() {
   # launch are left alone.
   if [[ "$LLM_UNITS_STARTED" == "1" ]] && command -v systemctl >/dev/null 2>&1; then
     info "Unloading the llama.cpp router (systemd unit)."
-    systemctl --user stop agi-llm-router.service 2>/dev/null || true
+    systemctl --user stop aiva-brain.service 2>/dev/null || true
   fi
 
   # Confirm rosbridge has released its fixed local WebSocket port as well.
@@ -461,7 +461,7 @@ start_llama_backends() {
   # are free between Grace sessions.
   local have_units=0
   if command -v systemctl >/dev/null 2>&1 && \
-     systemctl --user cat agi-llm-router.service >/dev/null 2>&1; then
+     systemctl --user cat aiva-brain.service >/dev/null 2>&1; then
     have_units=1
   fi
 
@@ -475,10 +475,10 @@ start_llama_backends() {
       return 1
     fi
     info "Loading Grace's models via systemd  ${C_DIM}· router :$LLM_PORT${C_RESET}"
-    systemctl --user start agi-llm-router.service
+    systemctl --user start aiva-brain.service
     LLM_UNITS_STARTED=1
     if ! wait_llama_health "$LLM_PORT" 240; then
-      error "llama.cpp router did not become healthy; check: journalctl --user -u agi-llm-router"
+      error "llama.cpp router did not become healthy; check: journalctl --user -u aiva-brain"
       return 1
     fi
     success "Router ready  ${C_DIM}(Ministral-3-8B + voyage-4-nano · :$LLM_PORT)${C_RESET}"

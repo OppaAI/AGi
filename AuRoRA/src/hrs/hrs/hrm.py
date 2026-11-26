@@ -145,7 +145,7 @@ class AGi:                                                              # Amazin
         MEMORY_STATS_GATEWAY: str   = f"/{RRR.SEMANTIC_COGNITIVE_SYSTEM}/memory_stats"          # [STATIC] ROS topic — memory diagnostics from all memory subsystems
        
         class GCE:                                                                              # Generative Cognitive Engine
-            NEURAL_ENDPOINT       : str   = "http://AIVA:8080"                                  # [STATIC]    llama.cpp router base URL (agi-llm-router, OpenAI-compatible /v1)
+            NEURAL_ENDPOINT       : str   = "http://AIVA:8080"                                  # [STATIC]    llama.cpp router base URL (aiva-brain, OpenAI-compatible /v1)
             COGNITIVE_ENGINE      : str   = "ministral-3-8b-uncensored"                          # [STATIC] frontend chatbot model — router key in models/llama-router.ini
             RESPONSE_DEPTH        : int   = 512                                                 # [INTRINSIC] max tokens per completion
             TEMPERATURE           : float = 0.7                                                 # [INTRINSIC] sampling temperature

@@ -37,7 +37,7 @@ details.
 
 | Path | Tracked in | Contents |
 |---|---|---|
-| `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `agi-llm-router`, rosbridge, chat, telepathy |
+| `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `aiva-brain`, rosbridge, chat, telepathy |
 | `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace, component links and `aiva_presence` |
 | `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
 | `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Grace entity receptor (`telepathy_receptor`) |

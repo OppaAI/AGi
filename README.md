@@ -52,7 +52,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **ephem** — local moon phase calculation (no network)
 
 On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
-(`agi-llm-router`, port 8080): **Ministral 3 8B** (chat, resident) +
+(`aiva-brain`, port 8080): **Ministral 3 8B** (chat, resident) +
 **Swift 1.5 Qwen3.8 27B** (agentic/vision, on-demand) + **voyage-4-nano**
 (embeddings) — see [`models/llama-router.ini`](models/llama-router.ini).
 ---
@@ -472,8 +472,8 @@ pip3 install -r requirements.txt --break-system-packages
 colcon build --packages-up-to scs tms telepathic_management
 source install/setup.bash
  
-# 4. Start LLM inference (PC — agi-llm-router, see models/llama-router.ini)
-systemctl --user start agi-llm-router      # llama-server on :8080, OpenAI-compatible
+# 4. Start LLM inference (PC — aiva-brain, see models/llama-router.ini)
+systemctl --user start aiva-brain      # llama-server on :8080, OpenAI-compatible
 
 # Option — vLLM / Cosmos (Jetson target)
 bash ./launch.sh
