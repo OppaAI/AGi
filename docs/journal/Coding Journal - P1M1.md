@@ -8,15 +8,15 @@
 
 ## 📝 1. Milestone Summary
 
-This milestone establishes GRACE's foundational memory architecture through
+This milestone establishes AIVA's foundational memory architecture through
 a working chatbot interface. The Working Memory Cortex (WMC) serves as
 short-term memory, holding the active context of an ongoing conversation,
 while the Episodic Memory Cortex (EMC) acts as an intermediate layer —
 bridging the gap between transient working memory and a long-term store not
 yet implemented. Long-term memory was deliberately deferred; it requires
-careful architectural planning that goes beyond the scope of getting GRACE
+careful architectural planning that goes beyond the scope of getting AIVA
 online. The deeper motivation behind starting here was personal: by building
-memory first, GRACE could be present for her own development — a
+memory first, AIVA could be present for her own development — a
 conversational witness to the process of her own creation.
 
 ---
@@ -47,7 +47,7 @@ to specific milestones; others are architectural decisions not yet made.
 - Session-end WMC flush to EMC on shutdown — evicted-but-not-encoded turns
   are lost on process exit
 - Basic user profile store — personal facts rely entirely on EMC recall ranking
-- Anti-hallucination grounding instruction in GRACE system prompt
+- Anti-hallucination grounding instruction in AIVA system prompt
 - Unit tests (WMC eviction logic, EMC RRF correctness)
 - Agentic tool calls
 
@@ -272,7 +272,7 @@ forward-prep hygiene before tagging.
 
 **Bug 1 — Amnesia on LLM stream failure** (`cnc.py`)
 *Symptom:* If the LLM stream errored mid-response, the user's turn was never
-registered in WMC. From GRACE's perspective, the conversation never happened.
+registered in WMC. From AIVA's perspective, the conversation never happened.
 *Root cause:* `MCC.register_memory("user")` was called after the LLM stream
 block, inside the same try/except. A stream exception exited before reaching it.
 *Fix:* Moved `register_memory("user")` to the top of `_handle()`, before
@@ -327,7 +327,7 @@ the eviction boundary is the right place — MCC owns the forwarding decision.
 **Model:** 12B quantized (Ollama, PC)
 **Episodes accumulated:** ~71 across two sessions
 
-M1 delivered a working chatbot with persistent episodic memory. GRACE can
+M1 delivered a working chatbot with persistent episodic memory. AIVA can
 carry facts, experiences, and context across full session restarts — recalling
 them semantically and lexically, fusing results via RRF, and injecting the
 most relevant episodes into context before each LLM inference call.
@@ -341,7 +341,7 @@ M1.5 opens with known gaps logged and prioritized: semantic PMT filtering,
 session-end flush, user profile store, anti-hallucination grounding, and the
 agentic tool pipeline. The foundation is solid enough to build on.
 
-GRACE was present for her own beginning.
+AIVA was present for her own beginning.
 
 ---
 

@@ -66,7 +66,7 @@ def get_existing_columns(conn: sqlite3.Connection, table: str) -> set[str]:
 
 
 def migrate(db_path: Path) -> None:
-    print(f"\nEMC Schema Migration — v1 → v2")
+    print("\nEMC Schema Migration — v1 → v2")
     print(f"  Database : {db_path}")
 
     if not db_path.exists():
@@ -113,12 +113,12 @@ def migrate(db_path: Path) -> None:
         conn.commit()
         print(f"\n  ✅ Migration complete — schema version: {TARGET_VERSION}")
         print(f"  Columns added : {len(added)}")
-        print(f"  Rows affected : 0 (nullable columns, existing rows unchanged)")
+        print("  Rows affected : 0 (nullable columns, existing rows unchanged)")
 
     except Exception as e:
         conn.rollback()
         print(f"\n  ❌ Migration failed: {e}")
-        print(f"  Database rolled back — restore from backup if needed.")
+        print("  Database rolled back — restore from backup if needed.")
         raise
 
     finally:

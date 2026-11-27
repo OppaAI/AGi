@@ -3,7 +3,7 @@
  
 ---
   
-# AGi — Amazing Grace infrastructure
+# AGi — companion infrastructure
  
 **AuRoRA** · Autonomous Rover Robotics Assistant 
 **Author:** [OppaAI](https://github.com/OppaAI) · Beautiful British Columbia, Canada
@@ -51,7 +51,7 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **FastAPI + Uvicorn** — authenticated HTTP ingress for PC health telemetry and homing requests; existing TIC/TOC WebSockets remain active
 - **ephem** — local moon phase calculation (no network)
 
-On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
+On the PC (AIVA), AIVA's language stack runs on a **llama.cpp router**
 (`aiva-brain`, port 8080): **Ministral 3 8B** (chat, resident) +
 **Swift 1.5 Qwen3.8 27B** (agentic/vision, on-demand) + **voyage-4-nano**
 (embeddings) — see [`models/llama-router.ini`](models/llama-router.ini).
@@ -59,7 +59,7 @@ On the PC (AIVA), Grace's language stack runs on a **llama.cpp router**
  
 ## Shared Components
 
-Grace's entity receptor is maintained in [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy). The external WebUI is maintained in [AGi-Robot/console](https://github.com/AGi-robot/console). Shared ROS messages and codecs live in [AGi-Robot/cypher](https://github.com/AGi-robot/cypher), and logging and system health live in [AGi-Robot/health](https://github.com/AGi-robot/health). AIVA's setup links these component checkouts into the Shell ROS workspace or installs them as Python libraries.
+AIVA's entity receptor is maintained in [Project-AGi/telepathy](https://github.com/Project-AGi/telepathy). The external WebUI is maintained in [Project-AGi/console](https://github.com/Project-AGi/console). Shared ROS messages and codecs live in [Project-AGi/cypher](https://github.com/Project-AGi/cypher), and logging and system health live in [Project-AGi/health](https://github.com/Project-AGi/health). AIVA's setup links these component checkouts into the Shell ROS workspace or installs them as Python libraries.
 
 ## AIVA ROS 2 layout
 
@@ -69,12 +69,12 @@ server and optional `aiva_presence` heartbeat are standalone processes, not ROS
 nodes. Interactive and Memory are Python libraries loaded by the receptor;
 Canvas and Imaging capabilities are called by the receptor and are not ROS
 nodes. AIVA does not launch AuRoRA's separate SCS/HRM/TMS runtime. See the
-[current Grace architecture](docs/ARCHITECTURE.md) for the component map,
+[current AIVA architecture](docs/ARCHITECTURE.md) for the component map,
 message flow, and source snapshot.
 
 ## Augmented Reality
 
-Grace's Android ARCore Unity project is maintained in [AGi-Robot/augmented-reality](https://github.com/AGi-robot/augmented-reality). Its repository contains the Unity setup and build instructions.
+AIVA's Android ARCore Unity project is maintained in [Project-AGi/augmented-reality](https://github.com/Project-AGi/augmented-reality). Its repository contains the Unity setup and build instructions.
 
 ## Repository Structure
 
@@ -88,7 +88,7 @@ components. AIVA's actual runtime boundaries are listed in
 ## AuRoRA CNS module reference
 
 The following table describes the separate AuRoRA robot-side SCS design. These
-modules are not part of Grace's current AIVA chat runtime.
+modules are not part of AIVA's current AIVA chat runtime.
  
 | Acronym | Name | Biological Analogue | Function |
 |---|---|---|---|
@@ -126,7 +126,7 @@ modules are not part of Grace's current AIVA chat runtime.
 ---
  
 ### M1 — Chatbot + WMC + EMC
-**Goal:** Grace can remember across sessions.
+**Goal:** AIVA can remember across sessions.
  
 - [x] PMT lifecycle with hybrid chunk/slot eviction (Miller's Law 7±2)
 - [x] Async embedding worker via BAAI/bge-base-en-v1.5
@@ -152,7 +152,7 @@ modules are not part of Grace's current AIVA chat runtime.
 - [ ] Anchor vector filter — safety net at eviction boundary for any PMTs that slipped through induction scoring
 - [ ] Session-end WMC flush to EMC on shutdown — gated on content length threshold
 - [ ] Basic user profile store — personal facts always injected into context (lightweight SMC precursor)
-- [ ] Anti-hallucination grounding instruction in GRACE system prompt — only reference injected memories
+- [ ] Anti-hallucination grounding instruction in AIVA system prompt — only reference injected memories
 - [ ] Recall tuning validation — verify `RECALL_DEPTH`, `RECALL_SURFACE_LIMIT`, `RELEVANCE_THRESHOLD` under real usage
 - [ ] Episodic scaffold — `EpisodicScaffold` class in `emc.py` owning RECALL_RESERVE trimming and chronological sequencing before context injection
 - [ ] Chunk budget enforcement — `ChunkEstimator` in `msb.py` shared across WMC, EMC, MCC; enforces `RECALL_RESERVE` and `CORTICAL_CAPACITY`
@@ -175,12 +175,12 @@ modules are not part of Grace's current AIVA chat runtime.
 ---
  
 ### M1.6 — Config Refactor + BioLogic Clock
-**Goal:** Clean separation of all tuneable parameters into YAML. Grace has a shared sense of time across the whole system.
+**Goal:** Clean separation of all tuneable parameters into YAML. AIVA has a shared sense of time across the whole system.
  
 #### Config Refactor
 - [ ] Intrinsic parameters YAML — internal cognitive constants (`RECALL_DEPTH`, `CORTICAL_CAPACITY`, `RELEVANCE_THRESHOLD`, Miller's Law slots, etc.)
 - [ ] Extrinsic parameters YAML — hardware and environment settings (LLM endpoint, ROS domain, device paths, ports)
-- [ ] Persona YAML — Grace's name, personality traits, system prompt fragments, tone modifiers
+- [ ] Persona YAML — AIVA's name, personality traits, system prompt fragments, tone modifiers
 - [ ] LLM parameters YAML — model name, temperature, max tokens, top_p, stop sequences, stream flag
 - [ ] All hardcoded values across CNC, MCC, WMC, EMC, MSB migrated to YAML loaders
 - [ ] Hot-reload support — parameter changes apply without full restart where safe
@@ -190,7 +190,7 @@ modules are not part of Grace's current AIVA chat runtime.
 - [ ] Publish `/cns/chrono_state`: unix time, uptime, circadian phase (dawn / active / wind_down / sleep / dream), day progress, fatigue factor, seconds_since_human_contact, next scheduled event
 - [ ] Write `/tmp/bio_clock.json` for non-ROS readers (Web UI, agentic tools)
 - [ ] Replace all internal ad-hoc timers and sleep loops — whole system shares one time source
-- [ ] Circadian phase feeds MCC — modulates Grace's response length and tone (wind_down = shorter, more reflective)
+- [ ] Circadian phase feeds MCC — modulates AIVA's response length and tone (wind_down = shorter, more reflective)
 - [ ] Drives 11pm daily reflection and weekly deep sweep trigger timing (M2a)
 - [ ] Persists `last_uptime`, `energy_level` across reboots
 ---
@@ -202,7 +202,7 @@ modules are not part of Grace's current AIVA chat runtime.
 - [ ] Evaluate Piper vs Kokoro for on-device CPU streaming quality
 - [ ] Piper CPU streaming on Jetson — proven, lightweight
 - [ ] Kokoro evaluation — newer model, potentially higher quality
-- [ ] Selected TTS engine integrated into Grace's response pipeline
+- [ ] Selected TTS engine integrated into AIVA's response pipeline
 #### M1.X-b — ASR
 - [ ] FasterWhisper on-device speech to text
 - [ ] Microphone input pipeline into CNC
@@ -217,12 +217,12 @@ modules are not part of Grace's current AIVA chat runtime.
 #### M1.X-d — Web UI + TTS Web
 - [ ] Sophisticated monitoring web UI — cognitive state, memory panels, inner monologue, controls
 - [ ] Real-time memory visualization — WMC occupancy, EMC stats, active recall
-- [ ] Browser TTS audio playback — streams Grace's voice to web client
+- [ ] Browser TTS audio playback — streams AIVA's voice to web client
 - [ ] Robot controls and sensor feeds in UI
 ---
  
 ### M2a — EMC Maturity
-**Goal:** Grace knows what matters and forgets what doesn't.
+**Goal:** AIVA knows what matters and forgets what doesn't.
  
 - [ ] Decision: keep async embedding per-segment or move to 11pm batch (based on M1 data)
 - [ ] 3-dimension importance scoring:
@@ -251,21 +251,21 @@ modules are not part of Grace's current AIVA chat runtime.
 ---
  
 ### M2b — SMC Basics
-**Goal:** Grace builds structured knowledge from episodic experience.
+**Goal:** AIVA builds structured knowledge from episodic experience.
  
 - [ ] SMC structure decision — flat key-value vs triples vs graph
 - [ ] Distillation pipeline — EMC episodes → Cosmos → SMC facts
 - [ ] 11pm nightly reflection — novel vs routine day detection
 - [ ] Recursive summary update: `Mi = LLM(Hi, Mi-1)`
 - [ ] SMC fact update — when facts change, old fact versioned not deleted
-- [ ] Conflict detection during conversation — GRACE asks to clarify
+- [ ] Conflict detection during conversation — AIVA asks to clarify
 - [ ] `_pending_conflict` flag in MCC for turn-spanning conflict state
 - [ ] Memory versioning — `valid_from`, `valid_until`, `superseded_by`
 - [ ] SMC feeds back into WMC context injection via MCC
 ---
  
 ### M2c — SMC Maturity
-**Goal:** Grace has a structured, anchored, queryable knowledge graph.
+**Goal:** AIVA has a structured, anchored, queryable knowledge graph.
  
 - [ ] SMC as knowledge graph — entities + relationships + triples
 - [ ] SMC anchors EMC importance scoring (personal facts never decay)
@@ -276,7 +276,7 @@ modules are not part of Grace's current AIVA chat runtime.
 ---
  
 ### M3 — Procedural Memory (PMC)
-**Goal:** Grace can learn and execute skills.
+**Goal:** AIVA can learn and execute skills.
  
 - [ ] YAML-based skill storage
 - [ ] Skill ingestion pipeline
@@ -295,7 +295,7 @@ modules are not part of Grace's current AIVA chat runtime.
 | P2-M2 | VCS — Vital Circulatory System (Autonomic Nervous System) | ⬜ Planned |
  
 ### P2-M1 — EEE — Emergency & Exception Event
-**Goal:** Grace can feel pain, urgency, and danger. Structured events replace raw logging everywhere.
+**Goal:** AIVA can feel pain, urgency, and danger. Structured events replace raw logging everywhere.
  
 - [ ] `eee.py` in HRS — severity-tiered structured event records: INFO, WARN, CRIT, EMER
 - [ ] Drop-in replacement for all raw logger handles across CNC, MCC, WMC, EMC, MSB
@@ -305,14 +305,14 @@ modules are not part of Grace's current AIVA chat runtime.
 - [ ] Emergency shutdown — EMER events initiate WAL checkpoint and memory sync before halt
 - [ ] EEE → Messaging bridge — CRIT/EMER events push Telegram alerts immediately
 ### P2-M2 — VCS — Vital Circulatory System
-**Goal:** Grace monitors her own body — power, thermals, and hardware health.
+**Goal:** AIVA monitors her own body — power, thermals, and hardware health.
  
 - [ ] `vcs.py` — parse `tegrastats` at 1 Hz: CPU load, GPU load, RAM, NVMe temp, SoC temp
 - [ ] INA219 battery monitor — voltage, current, brownout prediction
 - [ ] Publish `/vcs/health` ROS2 topic with structured vitals
 - [ ] 60-second ring buffer of VCS samples — feeds Web UI dashboard and LCD ECG display
 - [ ] VCS → EEE — auto-trigger EEE events when thresholds breach (RAM > 90%, temp > 80°C, battery < 20%)
-- [ ] VCS → Dynamic WMC — `vitality_index` shrinks available PMT slots when Grace is overloaded or overheating
+- [ ] VCS → Dynamic WMC — `vitality_index` shrinks available PMT slots when AIVA is overloaded or overheating
 - [ ] Active thermal management — GPIO fan control
 - [ ] WS2812B RGB LED ring or SSD1306 OLED — physical heartbeat display and status colours (Thinking, Listening, EEE Error)
 - [ ] Disable desktop GUI (`gnome-shell`) and unused camera carveouts in JetPack — free ~1.5GB RAM for LLM headroom
@@ -368,7 +368,7 @@ modules are not part of Grace's current AIVA chat runtime.
 > flow with tight contracts (placement sizing, PNG limits, VRAM budget), so they
 > remain in-process calls. If an external agent ever needs to use them, add a
 > thin MCP server (HTTP transport) as a wrapper over the existing
-> `capability/imaging` / `canvas` entry points — Grace's internal path stays
+> `capability/imaging` / `canvas` entry points — AIVA's internal path stays
 > unchanged.
  
 ---
@@ -426,7 +426,7 @@ modules are not part of Grace's current AIVA chat runtime.
 - [ ] Multiple search strategies combined
 ### M16 — LoRA Fine-tuning
 - [ ] Bake frequently accessed SMC knowledge into Cosmos weights
-- [ ] GRACE learns permanently, not just retrieves
+- [ ] AIVA learns permanently, not just retrieves
 ### M17 — Test-Time Training
 - [ ] Adapt Cosmos weights during inference from new context
 - [ ] Self-evolution milestone
@@ -447,7 +447,7 @@ modules are not part of Grace's current AIVA chat runtime.
  
 ## Architecture
 
-The current Grace chat/data flow and runtime process map are documented in
+The current AIVA chat/data flow and runtime process map are documented in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). That document separates the
 implemented AIVA path from the AuRoRA design and labels the future robot
 gateway as proposed.
@@ -459,8 +459,8 @@ gateway as proposed.
 ```bash
 # 1. Clone
 git clone https://github.com/OppaAI/AGi ~/AGi
-git clone https://github.com/AGi-robot/telepathy.git ~/AGi/AIVA/telepathy
-git clone https://github.com/AGi-robot/cypher.git ~/AGi/AIVA/cypher
+git clone https://github.com/Project-AGi/telepathy.git ~/AGi/AIVA/telepathy
+git clone https://github.com/Project-AGi/cypher.git ~/AGi/AIVA/cypher
 cd ~/AGi/AuRoRA
  
 # 2. Install deps
@@ -479,7 +479,7 @@ systemctl --user start aiva-brain      # llama-server on :8080, OpenAI-compatibl
 bash ./launch.sh
 # Wait ~3 min for: Application startup complete
  
-# 5. Start GRACE
+# 5. Start AIVA
 ros2 run scs cnc
 
 # Or start the complete launch description (CNC, HTTP API, and Web Teleops Console)

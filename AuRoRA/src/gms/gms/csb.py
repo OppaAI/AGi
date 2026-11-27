@@ -1,9 +1,9 @@
 # gms/gms/csb.py
 # Circuit Substrate Blueprints (CSB)
 # ===================================
-# AuRoRA · Grace Motor System (GMS)
+# AuRoRA · AIVA Motor System (GMS)
 #
-# The genome of Grace — every circuit dataclass blueprint lives here.
+# The genome of AIVA — every circuit dataclass blueprint lives here.
 # Biological analogue: the genome — centralized structural blueprints
 # expressed by each system at runtime.
 # No logic, no behaviour — pure structure, pure definition.
@@ -88,7 +88,7 @@ class SSS:
 
     # ── identity — set by adapter ─────────────────────────────────────────────
     sss_id      : str                 = ""                           # "SSS-<source>-<generated_at>-<uuid>"
-    robot_id    : str                 = "AuRoRA"                     # Grace instance identity — set by adapter
+    robot_id    : str                 = "AuRoRA"                     # AIVA instance identity — set by adapter
     user_id     : str                 = "demo"                       # speaker identity — resolved by IRU at CNC
     role        : str                 = "user"                       # speaker role — always "user" from external channels
 
@@ -140,8 +140,8 @@ class SSS:
 # CRS — Cognitive Response Signal
 # ══════════════════════════════════════════════════════════════════════════════
 # Efferent signal: GCE → MCC only.
-# Grace's generated output — efference copy for memory encoding.
-# Not a sensory signal — never originates from outside Grace.
+# AIVA's generated output — efference copy for memory encoding.
+# Not a sensory signal — never originates from outside AIVA.
 #
 # Biological analogue: efference copy — motor cortex sends a copy of the
 # outgoing command back to sensory cortex and hippocampus so the brain can
@@ -236,7 +236,7 @@ class PMT:
 class VST:
     # ── identity ──────────────────────────────────────────────────────────────
     sensor_id   : str | None  = None    # source sensor — "oak_d", "lidar", "imu", None if fused
-    robot_id    : str         = ""      # Grace instance identity — set by CNC from AGi.ROBOT_ID
+    robot_id    : str         = ""      # AIVA instance identity — set by CNC from AGi.ROBOT_ID
     timestamp   : datetime    = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ class VST:
     trace           : str         = ""                           # formatted text — EMC embedding and reinstatement
     objects         : list[dict]  = field(default_factory=list)  # [{label, confidence, bbox, depth}]
     spatial_map     : str         = ""                           # occupancy/spatial layout summary — LiDAR derived
-    pose            : list[float] = field(default_factory=list)  # Grace pose at capture [x, y, z, yaw]
+    pose            : list[float] = field(default_factory=list)  # AIVA pose at capture [x, y, z, yaw]
 
     # ── scoring ───────────────────────────────────────────────────────────────
     chunk_count     : int         = 0

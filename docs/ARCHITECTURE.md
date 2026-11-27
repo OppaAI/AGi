@@ -1,9 +1,9 @@
-# Grace system architecture
+# AIVA system architecture
 
-**Status:** implementation map for the PC-side Grace runtime (AIVA), reviewed
+**Status:** implementation map for the PC-side AIVA runtime (AIVA), reviewed
 against the component `dev` branches on 2026-11-20, including the merged
-[Telepathy #6](https://github.com/AGi-robot/telepathy/pull/6) and
-[Console #2](https://github.com/AGi-robot/console/pull/2). This describes
+[Telepathy #6](https://github.com/Project-AGi/telepathy/pull/6) and
+[Console #2](https://github.com/Project-AGi/console/pull/2). This describes
 checked-in code, not a live inspection of the PC. Planned robot integration is
 marked separately.
 
@@ -14,13 +14,13 @@ changes. Keep proposed architecture visually separate from running code.
 
 ```mermaid
 flowchart LR
-  subgraph Outside[Outside Grace]
+  subgraph Outside[Outside AIVA]
     Browser[Console browser UI]
     Console[Console HTTP API and WebSocket proxy]
     ResponseDecoder[Cypher response decoder<br/>inside Console]
   end
 
-  subgraph Runtime[Grace AIVA runtime]
+  subgraph Runtime[AIVA AIVA runtime]
     Bridge[rosbridge WebSocket and ROS 2]
     Receptor[Telepathy receptor<br/>ROS 2 node]
     Interactive[Interactive<br/>conversation library]
@@ -87,7 +87,7 @@ Chat uses ROS 2 topics and messages, not a synchronous ROS service:
 
 | Topic | Current type | Purpose |
 |---|---|---|
-| `/telepathic/stimulus` | `cryptic_signal_core/msg/TelepathicSignal` | Asynchronous user request into Grace |
+| `/telepathic/stimulus` | `cryptic_signal_core/msg/TelepathicSignal` | Asynchronous user request into AIVA |
 | `/telepathic/response` | `std_msgs/msg/String` with a JSON event | `start`, `delta`, `done`, `error`, and Canvas events; each text `content` is carried as `content_signal`, with request identifiers |
 | `/aiva/canvas_snapshot` | `std_msgs/msg/String` with a JSON/data URL | Browser-rendered Canvas snapshot for a pending drawing request |
 
@@ -126,7 +126,7 @@ endpoint is configured.
 | `aiva_presence` | Optional HTTP heartbeat process | No |
 
 The AIVA launcher does not start the separate AuRoRA robot runtime. AuRoRA's
-SCS, HRM, and legacy TMS packages are not part of Grace's PC chat path. The
+SCS, HRM, and legacy TMS packages are not part of AIVA's PC chat path. The
 package name `telepathic_management` is retained for Console deployment; it
 does not mean that AuRoRA's TMS is running.
 
@@ -135,38 +135,38 @@ does not mean that AuRoRA's TMS is running.
 | Component | Repository | Responsibility |
 |---|---|---|
 | Runtime assembly and local configuration | [OppaAI/AGi](https://github.com/OppaAI/AGi) | `AIVA/launch.sh`, setup, environment/path configuration, system-level documentation |
-| ROS workspace and package links | [AGi-Robot/shell](https://github.com/AGi-robot/shell) | ROS build/runtime integration and launcher support |
-| Grace entity receptor | [AGi-Robot/telepathy](https://github.com/AGi-robot/telepathy) | Signal decoding, chat adapter, Canvas orchestration |
-| External WebUI | [AGi-Robot/console](https://github.com/AGi-robot/console) | Browser UI, request encoding, rosbridge transport |
-| Conversation engine | [AGi-Robot/interactive](https://github.com/AGi-robot/interactive) | Prompt/context assembly, model request, streamed turn events |
-| Conversation storage | [AGi-Robot/memory](https://github.com/AGi-robot/memory) | SQLite APIs for exchanges and related memory records |
-| Signal schema and codec | [AGi-Robot/cypher](https://github.com/AGi-robot/cypher) | Shared `TelepathicSignal` and codecs |
-| Logging and health | [AGi-Robot/health](https://github.com/AGi-robot/health) | ROS logging and system health components |
-| Drawing and image capabilities | [AGi-Robot/canvas](https://github.com/AGi-robot/canvas), [AGi-Robot/imaging](https://github.com/AGi-robot/imaging) | Independently maintained capabilities used by the receptor |
+| ROS workspace and package links | [Project-AGi/shell](https://github.com/Project-AGi/shell) | ROS build/runtime integration and launcher support |
+| AIVA entity receptor | [Project-AGi/telepathy](https://github.com/Project-AGi/telepathy) | Signal decoding, chat adapter, Canvas orchestration |
+| External WebUI | [Project-AGi/console](https://github.com/Project-AGi/console) | Browser UI, request encoding, rosbridge transport |
+| Conversation engine | [Project-AGi/interactive](https://github.com/Project-AGi/interactive) | Prompt/context assembly, model request, streamed turn events |
+| Conversation storage | [Project-AGi/memory](https://github.com/Project-AGi/memory) | SQLite APIs for exchanges and related memory records |
+| Signal schema and codec | [Project-AGi/cypher](https://github.com/Project-AGi/cypher) | Shared `TelepathicSignal` and codecs |
+| Logging and health | [Project-AGi/health](https://github.com/Project-AGi/health) | ROS logging and system health components |
+| Drawing and image capabilities | [Project-AGi/canvas](https://github.com/Project-AGi/canvas), [Project-AGi/imaging](https://github.com/Project-AGi/imaging) | Independently maintained capabilities used by the receptor |
 
 Interactive and Memory are libraries loaded into the receptor process, not
-independent ROS services. Console is outside Grace's entity; Telepathy's
+independent ROS services. Console is outside AIVA's entity; Telepathy's
 receptor is part of it.
 
 ## Robot connection — proposed
 
-No robot gateway or Grace-to-robot task API is represented as implemented here.
+No robot gateway or AIVA-to-robot task API is represented as implemented here.
 The following is a proposed boundary, not the current runtime:
 
 ```mermaid
 flowchart LR
-  Grace[Grace tool router]
+  AIVA[AIVA tool router]
   Gateway[Robot gateway\nvalidate task and permissions]
   Actions[ROS 2 actions and services]
   Topics[ROS 2 state and sensor topics]
   Robot[Robot controllers and safety layer]
 
-  Grace -. high-level task request .-> Gateway
+  AIVA -. high-level task request .-> Gateway
   Gateway -. dispatch and cancel .-> Actions
   Actions -. execute on robot .-> Robot
   Robot -. result / feedback .-> Actions
   Topics -. state / sensor events .-> Gateway
-  Gateway -. task status / result .-> Grace
+  Gateway -. task status / result .-> AIVA
 ```
 
 For ROS-based robots on a suitable LAN, ROS 2 actions fit long-running tasks
@@ -190,13 +190,13 @@ The implementation map above was checked against these `dev` commits on
 | Repository | Commit |
 |---|---|
 | OppaAI/AGi | `41558e1` |
-| AGi-Robot/shell | `18e47ac` |
-| AGi-Robot/telepathy | `708e80b` |
-| AGi-Robot/console | `f4c2fdf` |
-| AGi-Robot/interactive | `042b683` |
-| AGi-Robot/memory | `95aa9f6` |
-| AGi-Robot/health | `933964a` |
-| AGi-Robot/cypher | `3fdc72d` |
+| Project-AGi/shell | `18e47ac` |
+| Project-AGi/telepathy | `708e80b` |
+| Project-AGi/console | `f4c2fdf` |
+| Project-AGi/interactive | `042b683` |
+| Project-AGi/memory | `95aa9f6` |
+| Project-AGi/health | `933964a` |
+| Project-AGi/cypher | `3fdc72d` |
 
 This is a code snapshot, not proof that the same commits or processes are
 currently installed on a particular machine. See [Telepathy flow](../AIVA/docs/telepathy-flow.md)

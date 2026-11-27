@@ -3,11 +3,11 @@ PPU — Personal Progression Unit
 ================================
 AuRoRA · Semantic Cognitive System (SCS)
 
-Loads and maintains Grace's active persona and assembles the session system prompt.
+Loads and maintains AIVA's active persona and assembles the session system prompt.
 Called once by CNC during boot — before the cognitive cycle begins.
 
 Responsibilities:
-    - Load Grace's active persona from persona.yaml
+    - Load AIVA's active persona from persona.yaml
     - Assemble the session system prompt from persona and user context
     - Expose the assembled system prompt to CNC for injection into the cognitive cycle
     - Future: self-learning, persona evolution, knowledge acquisition
@@ -24,9 +24,9 @@ Lifecycle:
                    → ppu.active_cognition available to CNC
 
 Terminology:
-    Persona       — Grace's active identity, personality, and system prompt template
-    Provision     — loading Grace's persona and assembling the session system prompt
-    System Prompt — assembled prompt injecting Grace's persona and user context into the cognitive cycle
+    Persona       — AIVA's active identity, personality, and system prompt template
+    Provision     — loading AIVA's persona and assembling the session system prompt
+    System Prompt — assembled prompt injecting AIVA's persona and user context into the cognitive cycle
 
 Public interface:
     ppu.provision_cognition(user_profile) → None
@@ -34,7 +34,7 @@ Public interface:
 """
 
 # System components
-from pathlib import Path                   # resolve the packaged Grace soul file
+from pathlib import Path                   # resolve the packaged AIVA soul file
 import yaml                             # YAML parsing — loads persona profile from persona.yaml
 
 # AGi components
@@ -78,17 +78,17 @@ class PersonalProgressionUnit:
 
     def _retrieve_active_persona(self) -> None:
         """
-        Load the packaged Grace soul and apply it to the HRS manifest.
+        Load the packaged AIVA soul and apply it to the HRS manifest.
         Fall back to the legacy runtime persona YAML, then the HRS default.
         """
         soul_file = Path(__file__).parent / "persona" / "SOUL.md"
         if soul_file.is_file():
             try:
                 AGi.SCS.GCE.ACTIVE_COGNITION = soul_file.read_text(encoding="utf-8").strip()
-                self._logger.info("✅ Grace soul retrieved")
+                self._logger.info("✅ AIVA soul retrieved")
                 return
             except OSError as e:
-                self._logger.error(f"❌ Failed to load Grace soul: {e}")
+                self._logger.error(f"❌ Failed to load AIVA soul: {e}")
 
         gateway = GatewayMap().active_persona                                                           # retrieve the path to active persona file
 

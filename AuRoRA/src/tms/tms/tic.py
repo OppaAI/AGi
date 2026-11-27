@@ -129,12 +129,6 @@ Terminology:
 """
 
 # System libraries
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-from launch.substitutions import text_substitution
-import websockets
 import asyncio                                                              # async event loop — runs websocket server on its own thread, isolated from ROS2 spin
 import hashlib                                                              # SHA-256 hashing for response echo imprints
 import json                                                                 # serialize/deserialize message payloads at both boundaries
@@ -467,7 +461,6 @@ class TelepathyInputCore(Node):
             SSS | None: Stimulus marked TRIAGED, or None if intercepted or discarded.
         """
         content        = sss.content                                                        # normalized stimulus content from transduction stage
-        current_time   = datetime.now(timezone.utc).isoformat()                             # UTC timestamp — moment of intercept/discard
 
         self._prune_response_echoes()                                                       # evict stale echo imprints before any check — cheap housekeeping
 
@@ -481,7 +474,7 @@ class TelepathyInputCore(Node):
             return None                                                                     # stop processing this stimulus
 
         # 2. Local slash commands stay peripheral; `/web <query>` is an input
-        # directive that must continue to Grace for downstream handling.
+        # directive that must continue to AIVA for downstream handling.
         is_web_directive = content.lower().startswith("/web ") and bool(content[5:].strip())
         if content.startswith("/") and not is_web_directive:
             sss.state       = "INTERCEPTED"                                                 # lifecycle marker — signal dies here

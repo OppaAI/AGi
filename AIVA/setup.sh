@@ -65,15 +65,15 @@ link_component() {
   fi
 }
 
-clone_or_check https://github.com/AGi-robot/shell.git "$SHELL_DIR"
-clone_or_check https://github.com/AGi-robot/cypher.git "$CYPHER_DIR"
-clone_or_check https://github.com/AGi-robot/telepathy.git "$TELEPATHY_DIR"
-clone_or_check https://github.com/AGi-robot/console.git "$CONSOLE_DIR"
-clone_or_check https://github.com/AGi-robot/interactive.git "$INTERACTIVE_DIR"
-clone_or_check https://github.com/AGi-robot/health.git "$HEALTH_DIR"
-clone_or_check https://github.com/AGi-robot/memory.git "$MEMORY_DIR"
-clone_or_check https://github.com/AGi-robot/canvas.git "$CANVAS_DIR"
-clone_or_check https://github.com/AGi-robot/imaging.git "$IMAGING_DIR"
+clone_or_check https://github.com/Project-AGi/shell.git "$SHELL_DIR"
+clone_or_check https://github.com/Project-AGi/cypher.git "$CYPHER_DIR"
+clone_or_check https://github.com/Project-AGi/telepathy.git "$TELEPATHY_DIR"
+clone_or_check https://github.com/Project-AGi/console.git "$CONSOLE_DIR"
+clone_or_check https://github.com/Project-AGi/interactive.git "$INTERACTIVE_DIR"
+clone_or_check https://github.com/Project-AGi/health.git "$HEALTH_DIR"
+clone_or_check https://github.com/Project-AGi/memory.git "$MEMORY_DIR"
+clone_or_check https://github.com/Project-AGi/canvas.git "$CANVAS_DIR"
+clone_or_check https://github.com/Project-AGi/imaging.git "$IMAGING_DIR"
 
 link_component "$SHELL_DIR/src/cryptic_signal_core" "$CYPHER_DIR"
 link_component "$SHELL_DIR/src/telepathy_receptor" "$TELEPATHY_DIR"
@@ -121,5 +121,5 @@ sed \
 (cd "$SHELL_DIR" && rosdep install --from-paths src --ignore-src -r -y)
 (cd "$SHELL_DIR" && colcon build --cmake-args "-DPython3_EXECUTABLE=$VENV_DIR/bin/python")
 
-printf '\nGrace setup completed. Start with: %q\n' "$SCRIPT_DIR/launch.sh"
+printf '\nAIVA setup completed. Start with: %q\n' "$SCRIPT_DIR/launch.sh"
 printf 'Component branch: %s (existing checkouts were left unchanged).\n' "$AGI_BRANCH"

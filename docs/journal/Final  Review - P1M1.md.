@@ -1,9 +1,9 @@
-# AGi · AuRoRA · GRACE — Milestone 1 Review
+# AGi · AuRoRA · AIVA — Milestone 1 Review
 
 **Reviewer:** Antigravity (Opus 4.6)
 **Date:** 2026-05-04
 **Tag reviewed:** `0.1.0` (commit `817de39`)
-**Sources:** README.md M1 spec, SCS CHANGELOG.rst, HRS CHANGELOG.rst, GitHub v0.1.0 release notes, full source inspection of `cnc.py`, `mcc.py`, `wmc.py`, `emc.py`, `msb.py`, `hrp.py`, `AGi.html`, `grace_ui.py`
+**Sources:** README.md M1 spec, SCS CHANGELOG.rst, HRS CHANGELOG.rst, GitHub v0.1.0 release notes, full source inspection of `cnc.py`, `mcc.py`, `wmc.py`, `emc.py`, `msb.py`, `hrp.py`, `AGi.html`, `aiva_ui.py`
 
 ---
 
@@ -87,11 +87,11 @@ staging: id, timestamp, date, content
 ### F3 — CLI Not Registered as Entry Point
 
 > [!NOTE]
-> The CLI (`grace_ui.py`) exists in `/tests/` but is not registered as a `console_scripts` entry point in [setup.py](file:///home/oppa-ai/AGi/AuRoRA/src/scs/setup.py#L25-L29). Only `cnc` is registered.
+> The CLI (`aiva_ui.py`) exists in `/tests/` but is not registered as a `console_scripts` entry point in [setup.py](file:///home/oppa-ai/AGi/AuRoRA/src/scs/setup.py#L25-L29). Only `cnc` is registered.
 
-The CHANGELOG line 24 claims `grace_cli.py` was introduced, but the file is actually named `grace_ui.py` and lives under `/tests/`, not `/src/scs/scs/`. It is functional (publishes/subscribes on the correct ROS topics) but not installable via `ros2 run scs grace_cli`.
+The CHANGELOG line 24 claims `aiva_cli.py` was introduced, but the file is actually named `aiva_ui.py` and lives under `/tests/`, not `/src/scs/scs/`. It is functional (publishes/subscribes on the correct ROS topics) but not installable via `ros2 run scs aiva_cli`.
 
-**Recommendation:** Either register it as an entry point or document the manual invocation path. Also resolve the naming discrepancy (`grace_cli` vs `grace_ui`).
+**Recommendation:** Either register it as an entry point or document the manual invocation path. Also resolve the naming discrepancy (`aiva_cli` vs `aiva_ui`).
 
 ---
 
@@ -118,7 +118,7 @@ This is correctly deferred.
 
 ## 3. M1 Goal Assessment
 
-**M1 Goal from README:** *"Grace can remember across sessions."*
+**M1 Goal from README:** *"AIVA can remember across sessions."*
 
 | Criterion | Status |
 |---|---|
@@ -130,9 +130,9 @@ This is correctly deferred.
 | Schema versioning preventing silent corruption | ✅ Working |
 | Parameter centralization in HRP | ✅ Working |
 | Web GUI for interaction | ✅ Present (3188-line `AGi.html`) |
-| CLI for interaction | ✅ Present (`grace_ui.py`, functional, not installable) |
+| CLI for interaction | ✅ Present (`aiva_ui.py`, functional, not installable) |
 
-**Overall M1 verdict: ✅ PASS — the core goal is met.** GRACE can hold conversations with working memory and episodic recall across sessions. The cognitive pipeline (CNC → MCC → WMC/EMC → GCE) is fully operational.
+**Overall M1 verdict: ✅ PASS — the core goal is met.** AIVA can hold conversations with working memory and episodic recall across sessions. The cognitive pipeline (CNC → MCC → WMC/EMC → GCE) is fully operational.
 
 ---
 
@@ -142,7 +142,7 @@ This is correctly deferred.
 |---|---|---|
 | **F1** — Phantom schema columns checked in README | 🟡 Low | Uncheck items 5–6, or add the 8 nullable columns to `EMC_SCHEMA`. Zero runtime impact either way. Closing before M1.5 avoids a schema version bump mid-milestone. |
 | **F2** — Release notes mix shipped vs planned | 🟡 Low | Edit the v0.1.0 GitHub release to clearly delimit M1 deliverables from M1.5 roadmap. |
-| **F3** — CLI naming/registration | 🟢 Trivial | Rename `grace_ui.py` → `grace_cli.py`, move to `src/scs/scs/`, register entry point. Or document the manual run path. |
+| **F3** — CLI naming/registration | 🟢 Trivial | Rename `aiva_ui.py` → `aiva_cli.py`, move to `src/scs/scs/`, register entry point. Or document the manual run path. |
 | **F5** — `setup.py` TODO description | 🟢 Trivial | Fill in the package description. |
 
 > [!TIP]

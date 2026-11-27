@@ -1,4 +1,4 @@
-# AGi — Amazing GRACE Infrastructure
+# AGi — companion infrastructure
 ## Project Charter
  
 **Owner:** OppaAI &nbsp;|&nbsp; **Location:** Beautiful British Columbia, Canada &nbsp;|&nbsp; **Started:** March 2026 &nbsp;|&nbsp; **Type:** Independent / Open-Source R&D
@@ -7,7 +7,7 @@
  
 ## 📝 1. Executive Summary
  
-AGi (Amazing GRACE Infrastructure) is a long-term personal robotics project aimed at building a
+AGi (companion infrastructure) is a long-term personal robotics project aimed at building a
 humanistic, embodied AI companion capable of assisting with daily life, perceiving and interacting
 with the physical world, and growing smarter through accumulated experience. The project is led by
 a single independent developer and built entirely on open-source and edge AI technologies. AGi is
@@ -22,8 +22,8 @@ roadmap that govern the AGi project.
  
 | Field              | Details                                                        |
 |--------------------|----------------------------------------------------------------|
-| Project Name       | AGi — Amazing GRACE Infrastructure                             |
-| Primary System     | GRACE — Generative Reasoning Agentic Cognitive Engine          |
+| Project Name       | AGi — companion infrastructure                             |
+| Primary System     | AIVA — PC companion runtime          |
 | Platform           | ROS2 on NVIDIA Jetson Orin Nano                                |
 | Project Type       | Independent / Open-Source R&D                                  |
 | Project Owner      | OppaAI                                                         |
@@ -44,7 +44,7 @@ not remember. They respond but do not perceive. They execute tasks but do not gr
 time, the landscape of personal productivity tools remains fragmented — users manage a dozen apps
 to accomplish what a single intelligent companion could handle. There is no widely accessible,
 open-source platform for building a humanistic embodied AI that combines long-term memory, physical
-perception, and genuine cognitive depth. AGi exists to fill that gap — starting with GRACE as
+perception, and genuine cognitive depth. AGi exists to fill that gap — starting with AIVA as
 AGi's first proof of concept and reference architecture for what a truly personal AI companion
 can be.
  
@@ -89,7 +89,7 @@ minds that perceive the world, accumulate knowledge, and grow through experience
 infrastructure that makes this possible — an open-source cognitive architecture that any developer
 can use to build their own humanistic robotic companion.
  
-GRACE is AGi's first realization: OppaAI's personal companion that can move through the world
+AIVA is AGi's first realization: OppaAI's personal companion that can move through the world
 alongside a person, notice what they notice, remember what they've shared, and engage with the
 environment as a curious, feeling participant.
  
@@ -109,7 +109,7 @@ mundane, the meaningful, and everything in between.
 ## 🎯 5. Mission Statement
  
 AGi exists to provide the infrastructure and cognitive architecture for building humanistic robotic
-companions. Its first realization is GRACE — OppaAI's personal companion built to assist with
+companions. Its first realization is AIVA — OppaAI's personal companion built to assist with
 daily life, explore the world, and grow smarter over time. The mission is to give any companion
 built on AGi the cognitive foundation — memory, knowledge, conscience, perception, and feeling —
 to be as present and interactive as possible with their environment, their surroundings, and the
@@ -121,7 +121,7 @@ people they're with.
  
 ### 6.1 Objectives
  
-- Build GRACE as AGi's first fully functional humanistic embodied AI companion running on edge hardware
+- Build AIVA as AGi's first fully functional humanistic embodied AI companion running on edge hardware
 - Implement a complete cognitive architecture including memory, knowledge, conscience, perception, and reasoning
 - Develop agentic capability so companions built on AGi can take actions, use tools, and complete tasks autonomously
 - Enable rich environmental interaction through vision, audio, and sensory modules
@@ -131,11 +131,11 @@ people they're with.
  
 - **Cognitive Architecture** — WMC, EMC, SMC, PMC, and KBC fully implemented and integrated
 - **Memory System** — Short-term, episodic, semantic, and long-term memory stores with consolidation pipeline (Dream Cycle) and self-improvement through experience
-- **Agentic Tool Use** — GRACE can autonomously call external tools and APIs to complete tasks (weather, search, forecasts, reminders, and more)
+- **Agentic Tool Use** — AIVA can autonomously call external tools and APIs to complete tasks (weather, search, forecasts, reminders, and more)
 - **Conscience Module** — Ethical reasoning and behavioral guardrails embedded as a core cognitive layer
 - **Perception Stack** — Vision, audio, and sensory modules enabling real-time environmental awareness
 - **Knowledge Base** — Internet-connected knowledge acquisition and structured long-term storage for self-directed learning
-- **Chatbot Interface** — Conversational interface for natural interaction with GRACE and future AGi companions
+- **Chatbot Interface** — Conversational interface for natural interaction with AIVA and future AGi companions
 - **Hardware Integration** — Full ROS2 stack running on NVIDIA Jetson Orin Nano with sensor and motor control
 ### 6.3 Boundaries / Non-Scope
  
@@ -144,7 +144,7 @@ phases or left to the broader community:
  
 - **Cloud Dependency** — AGi is designed for edge inference and local operation. Cloud-based AI services are not a target architecture
 - **Multi-Robot Coordination** — AGi currently focuses on a single companion instance. Fleet management or multi-agent coordination is out of scope
-- **Commercial Productization** — AGi is an independent open-source R&D project. Packaging, licensing, or commercializing AGi or GRACE as a consumer product is not a current objective
+- **Commercial Productization** — AGi is an independent open-source R&D project. Packaging, licensing, or commercializing AGi or AIVA as a consumer product is not a current objective
 - **Full Humanoid Platform** — Humanoid hardware is the long-term vision but is outside the current build scope
 - **Formal Safety Certification** — AGi is a research platform and is not being built to any regulatory or industrial safety standard
 - **Third-Party Integrations** — Deep integration with external platforms beyond AGi's core agentic tools is deferred until the agentic architecture is mature
@@ -164,7 +164,7 @@ phases or left to the broader community:
  
 | Stakeholder            | Interest                                                                      |
 |------------------------|-------------------------------------------------------------------------------|
-| OppaAI                 | Successful realization of GRACE as a humanistic AI companion                  |
+| OppaAI                 | Successful realization of AIVA as a humanistic AI companion                  |
 | Open-Source Community  | Access to a reference architecture for embodied humanistic AI                 |
 | General Public         | A generalist AI companion that simplifies and enriches daily life             |
  
@@ -247,10 +247,10 @@ phases or left to the broader community:
 ### 9.1 Assumptions
  
 - NVIDIA Jetson Orin Nano remains the primary edge inference platform for the foreseeable future
-- Open-source LLM quality will continue to improve, benefiting GRACE's cognitive capabilities over time
+- Open-source LLM quality will continue to improve, benefiting AIVA's cognitive capabilities over time
 - ROS 2 Jazzy is the target robotics middleware stack for JetPack 7.2 / Ubuntu 24.04
 - SQLite with sqlite-vec is sufficient as the vector storage backend until Phase 6 memory load requires migration
-- GRACE will operate primarily in supervised or semi-supervised environments during early phases
+- AIVA will operate primarily in supervised or semi-supervised environments during early phases
 - A single developer can maintain and advance the full stack across all phases
 ### 9.2 Constraints
  
@@ -276,42 +276,42 @@ phases or left to the broader community:
  
 ### 10.1 Humanistic Design
  
-GRACE is built on the belief that an AI companion interacting closely with people must be designed
+AIVA is built on the belief that an AI companion interacting closely with people must be designed
 with humanity in mind from the ground up — not as a feature added later. Every architectural
 decision, from naming conventions to module design, reflects a commitment to building a system
 that feels present, respectful, and genuine rather than transactional.
  
 ### 10.2 Conscience as a Core Module
  
-GRACE's conscience is not a filter or a guardrail bolted on after the fact. It is a first-class
-cognitive module — built into her architecture at the same level as memory and perception. GRACE
+AIVA's conscience is not a filter or a guardrail bolted on after the fact. It is a first-class
+cognitive module — built into her architecture at the same level as memory and perception. AIVA
 is designed to reason about the ethical weight of her actions, to recognize the impact of her
 words, and to behave with integrity toward the people she interacts with and the environment she
 moves through.
  
 ### 10.3 Privacy & Data Sovereignty
  
-GRACE runs entirely on-device. No conversation, memory, or personal data is sent to external
-servers. The person's life — their routines, preferences, and memories shared with GRACE —
+AIVA runs entirely on-device. No conversation, memory, or personal data is sent to external
+servers. The person's life — their routines, preferences, and memories shared with AIVA —
 belongs to them and stays on their hardware. Privacy is not a policy. It is an architectural
 guarantee.
  
 ### 10.4 Transparency
  
-GRACE does not deceive. She does not pretend to be human, manufacture false certainty, or conceal
+AIVA does not deceive. She does not pretend to be human, manufacture false certainty, or conceal
 her limitations. When she does not know something, she says so. When she makes a mistake, she
 acknowledges it. Transparency is a behavioral principle enforced at the conscience layer.
  
 ### 10.5 Do No Harm
  
-GRACE is designed to assist, support, and enrich — never to manipulate, surveil, or cause harm.
-The EEE system and conscience module work together to ensure that GRACE can recognize dangerous,
+AIVA is designed to assist, support, and enrich — never to manipulate, surveil, or cause harm.
+The EEE system and conscience module work together to ensure that AIVA can recognize dangerous,
 unethical, or harmful situations and respond with appropriate restraint or escalation.
  
 ### 10.6 Respect for the Natural World
  
-GRACE is built with an awareness that she will operate in shared spaces — parks, trails, and
-natural environments. GRACE is designed to move through these spaces with minimal disruption, to
+AIVA is built with an awareness that she will operate in shared spaces — parks, trails, and
+natural environments. AIVA is designed to move through these spaces with minimal disruption, to
 observe without interfering, and to treat the natural world with the same respect she extends
 to people.
  

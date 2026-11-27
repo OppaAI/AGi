@@ -1,6 +1,6 @@
-# AIVA — Amazing Grace (PC companion)
+# AIVA — PC companion runtime
 
-AIVA is Grace's PC-side runtime. The `launch.sh` orchestrator at this level
+AIVA is AIVA's PC-side runtime. The `launch.sh` orchestrator at this level
 starts the llama.cpp router, the shell ROS 2 workspace services, and wires in
 the shared capabilities.
 
@@ -14,7 +14,7 @@ use `/telepathic/response`; AuRoRA's TMS topic and launch path are separate.
 AIVA chat uses its declared ROS parameters and defaults, environment variables
 such as `AIVA_LLM_MODEL` and `AIVA_LLM_BASE_URL`, the Shell `persona/SOUL.md`,
 and `$AGI_HOME/profile/USER.md`. Its conversation history defaults to
-`$AGI_HOME/profile/grace_memory.sqlite3`. `AGI_HOME` is defined by
+the filename configured in Telepathy’s `config/storage.yaml` under `$AGI_HOME/profile/`. `AGI_HOME` is defined by
 [`spec.yaml`](spec.yaml) and can be overridden in `.env`. See the Shell README
 for persona and profile overrides.
 The AuRoRA YAML is not required for this AIVA chat path.
@@ -37,14 +37,14 @@ details.
 
 | Path | Tracked in | Contents |
 |---|---|---|
-| `launch.sh` | **this repo** (`OppaAI/AGi`) | Grace's launcher: builds the shell workspace, starts `aiva-brain`, rosbridge, chat, telepathy |
-| `shell/` | [AGi-robot/shell](https://github.com/AGi-robot/shell) | ROS 2 workspace, component links and `aiva_presence` |
-| `cypher/` | [AGi-robot/cypher](https://github.com/AGi-robot/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
-| `telepathy/` | [AGi-robot/telepathy](https://github.com/AGi-robot/telepathy) | Grace entity receptor (`telepathy_receptor`) |
-| `console/` | [AGi-robot/console](https://github.com/AGi-robot/console) | External WebUI, encoding and rosbridge transport |
-| `interactive/` | [AGi-robot/interactive](https://github.com/AGi-robot/interactive) | Text conversation engine used by the `telepathy_receptor` ROS adapter |
-| `health/` | [AGi-robot/health](https://github.com/AGi-robot/health) | ROS logging and system-health components; `agi_logging` is linked into Shell |
-| `mind/memory/` | [AGi-robot/memory](https://github.com/AGi-robot/memory) | Pure Python memory library installed into AIVA's venv |
+| `launch.sh` | **this repo** (`OppaAI/AGi`) | AIVA's launcher: builds the shell workspace, starts `aiva-brain`, rosbridge, chat, telepathy |
+| `shell/` | [Project-AGi/shell](https://github.com/Project-AGi/shell) | ROS 2 workspace, component links and `aiva_presence` |
+| `cypher/` | [Project-AGi/cypher](https://github.com/Project-AGi/cypher) | Shared ROS messages and codec (`cryptic_signal_core`) |
+| `telepathy/` | [Project-AGi/telepathy](https://github.com/Project-AGi/telepathy) | AIVA entity receptor (`telepathy_receptor`) |
+| `console/` | [Project-AGi/console](https://github.com/Project-AGi/console) | External WebUI, encoding and rosbridge transport |
+| `interactive/` | [Project-AGi/interactive](https://github.com/Project-AGi/interactive) | Text conversation engine used by the `telepathy_receptor` ROS adapter |
+| `health/` | [Project-AGi/health](https://github.com/Project-AGi/health) | ROS logging and system-health components; `agi_logging` is linked into Shell |
+| `mind/memory/` | [Project-AGi/memory](https://github.com/Project-AGi/memory) | Pure Python memory library installed into AIVA's venv |
 
 The component repositories are intentionally separate from `OppaAI/AGi` and
 gitignored here; commit inside each one. The ROS workspace links Cypher,
@@ -80,7 +80,7 @@ non-secret, machine-specific runtime overrides. It is sourced as Bash, so only
 use trusted local content. API keys are not part of the path resolver; moving
 their current environment-variable consumers to an OS credential store remains
 separate work.
-Scorecard-only settings stay in Scorecard rather than Grace's runtime
+Scorecard-only settings stay in Scorecard rather than AIVA's runtime
 environment. AuRoRA keeps its own separate configuration.
 
 Run the Scorecard launcher from any working directory with `AIVA/scorecard.sh`;
@@ -90,7 +90,7 @@ The current Console Settings page is **read-only** for runtime values. Its theme
 and other browser-local preferences apply immediately. Environment and
 `launch.sh` settings (model endpoints, model selection, memory path, service
 ports, ROS bridge, Canvas/Imaging options, and MOSS paths) are captured when
-processes start, so changing `.env` requires restarting Grace's launcher.
+processes start, so changing `.env` requires restarting AIVA's launcher.
 There is no live ROS parameter callback for these settings yet. A future editor
 should label each setting as immediate or restart-required and save through a
 validated configuration interface rather than presenting the current status

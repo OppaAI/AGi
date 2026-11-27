@@ -4,10 +4,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Grace · Operator Dashboard</title>
+  <title>AIVA · Operator Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
   <style>
-    /* ─── Grace's Lavender Dark Theme ─── */
+    /* ─── AIVA's Lavender Dark Theme ─── */
     :root {
       --bg-deep: #0b0a0f;
       --bg-panel: rgba(139, 92, 246, 0.06);
@@ -285,7 +285,7 @@
       background: rgba(250, 204, 21, 0.88);
     }
 
-    .chunk-seg.wmc-grace {
+    .chunk-seg.wmc-aiva {
       background: rgba(167, 139, 250, 0.88);
     }
 
@@ -333,7 +333,7 @@
       background: rgba(250, 204, 21, 0.95);
     }
 
-    .chunk-dot.wmc-grace {
+    .chunk-dot.wmc-aiva {
       background: rgba(167, 139, 250, 0.95);
     }
 
@@ -426,7 +426,7 @@
       justify-content: flex-end;
     }
 
-    .bubble-row.grace-row {
+    .bubble-row.aiva-row {
       justify-content: flex-start;
     }
 
@@ -448,7 +448,7 @@
       color: #cffafe;
     }
 
-    .bubble.grace-bubble {
+    .bubble.aiva-bubble {
       background: rgba(167, 139, 250, 0.10);
       border: 1px solid rgba(167, 139, 250, 0.22);
       border-bottom-left-radius: 4px;
@@ -483,7 +483,7 @@
       color: #22d3ee;
     }
 
-    .grace-bubble .bubble-label {
+    .aiva-bubble .bubble-label {
       color: var(--lavender-soft);
     }
 
@@ -694,7 +694,7 @@
       color: #fef08a;
     }
 
-    .pill.grace {
+    .pill.aiva {
       background: rgba(167, 139, 250, 0.14);
       color: #c4b5fd;
     }
@@ -877,10 +877,10 @@
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="brand">🌸 Grace OS</div>
+      <div class="brand">🌸 AIVA OS</div>
 
       <select class="robot-select" id="robotSelect">
-        <option value="ws://aurora:9090">Grace (aurora)</option>
+        <option value="ws://aurora:9090">AIVA (aurora)</option>
       </select>
 
       <nav class="nav-tabs">
@@ -976,7 +976,7 @@
             USER</span>
           <span
             style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:4px;font-size:0.68rem;background:rgba(167,139,250,0.12);color:#c4b5fd;">🟣
-            GRACE</span>
+            AIVA</span>
           <span style="font-size:0.62rem;color:var(--text-muted);margin-left:4px;">· System/WMC/EMC inside <em>Context
               Inspector</em></span>
         </div>
@@ -984,7 +984,7 @@
         <!-- Debug Stream -->
         <div class="debug-stream" id="debugStream">
           <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:40px;">
-            Waiting for Grace to think...
+            Waiting for AIVA to think...
           </div>
         </div>
       </div>
@@ -994,11 +994,11 @@
         <div class="glass-card"
           style="height:calc(100vh - 100px);display:flex;align-items:center;justify-content:center;flex-direction:column;">
           <div style="font-size:4rem;margin-bottom:16px;">🤖</div>
-          <div style="color:var(--lavender-soft);font-size:1.2rem;font-weight:600;">Grace Chat Interface</div>
-          <div style="color:var(--text-muted);margin-top:8px;">Embed your existing grace.html here</div>
+          <div style="color:var(--lavender-soft);font-size:1.2rem;font-weight:600;">AIVA Chat Interface</div>
+          <div style="color:var(--text-muted);margin-top:8px;">Embed your existing aiva.html here</div>
           <code
             style="margin-top:16px;background:rgba(0,0,0,0.3);padding:12px 20px;border-radius:8px;font-size:0.85rem;color:var(--lavender-soft);">
-            &lt;iframe src="grace.html"&gt;&lt;/iframe&gt;
+            &lt;iframe src="aiva.html"&gt;&lt;/iframe&gt;
           </code>
         </div>
       </div>
@@ -1064,8 +1064,8 @@
     let latestChunkBreakdown = null;
     // currentTurn shape:
     // { id, prompt, startTime, firstTokenTime, tokenCount,
-    //   card, inspector, inspBody, graceRow, thinkingBubble,
-    //   pills, contextSlots, graceBubble, graceText, graceMeta }
+    //   card, inspector, inspBody, aivaRow, thinkingBubble,
+    //   pills, contextSlots, aivaBubble, aivaText, aivaMeta }
 
     // ─── Tab Switching ────────────────────────────────────────────────────────
     function switchTab(tabName, el) {
@@ -1176,7 +1176,7 @@
           system: 0,
           emc: 0,
           wmcUser: 0,
-          wmcGrace: 0,
+          wmcAIVA: 0,
           liveUser: 0,
         };
         messages.forEach((m, i) => {
@@ -1203,9 +1203,9 @@
                 `System prompt · slot ${slot} · ${content.length} chars`);
             }
           } else if (role === 'assistant') {
-            breakdown.wmcGrace += estimateTokens(content);
-            addContextRow('wmc-assistant', 'WMC·GRACE', content,
-              `WMC prior Grace turn · slot ${slot} · ${content.length} chars`);
+            breakdown.wmcAIVA += estimateTokens(content);
+            addContextRow('wmc-assistant', 'WMC·AIVA', content,
+              `WMC prior AIVA turn · slot ${slot} · ${content.length} chars`);
           } else if (role === 'user') {
             if (isEmc(content)) {
               breakdown.emc += estimateTokens(content);
@@ -1296,13 +1296,13 @@
       card.appendChild(inspector);
 
       // Thinking bubble
-      const graceRow = document.createElement('div');
-      graceRow.className = 'bubble-row grace-row';
+      const aivaRow = document.createElement('div');
+      aivaRow.className = 'bubble-row aiva-row';
       const thinkingBubble = document.createElement('div');
       thinkingBubble.className = 'bubble thinking-bubble';
-      thinkingBubble.innerHTML = `<div class="bubble-label">⚡ Grace</div><span>Thinking...</span>`;
-      graceRow.appendChild(thinkingBubble);
-      card.appendChild(graceRow);
+      thinkingBubble.innerHTML = `<div class="bubble-label">⚡ AIVA</div><span>Thinking...</span>`;
+      aivaRow.appendChild(thinkingBubble);
+      card.appendChild(aivaRow);
 
       const stream = document.getElementById('debugStream');
       if (stream.children.length === 1 &&
@@ -1315,12 +1315,12 @@
 
       currentTurn = {
         id, prompt, startTime: streamStartTime, firstTokenTime: null, tokenCount: 0,
-        card, inspector, inspBody, graceRow, thinkingBubble,
+        card, inspector, inspBody, aivaRow, thinkingBubble,
         pills: toggle.querySelector('.inspector-pills'),
         contextSlots: [],
-        graceBubble: null,
-        graceText: null,
-        graceMeta: null,
+        aivaBubble: null,
+        aivaText: null,
+        aivaMeta: null,
       };
     }
 
@@ -1385,27 +1385,27 @@
         document.getElementById('statTokensSec').textContent = tps;
         document.getElementById('statTokensTotal').textContent = `${currentTurn.tokenCount} tokens`;
 
-        if (!currentTurn.graceBubble) {
-          // First delta — swap thinking → real Grace bubble
+        if (!currentTurn.aivaBubble) {
+          // First delta — swap thinking → real AIVA bubble
           currentTurn.thinkingBubble.remove();
-          const graceBubble = document.createElement('div');
-          graceBubble.className = 'bubble grace-bubble streaming-cursor';
-          graceBubble.innerHTML = `<div class="bubble-label">🤖 Grace</div>`;
+          const aivaBubble = document.createElement('div');
+          aivaBubble.className = 'bubble aiva-bubble streaming-cursor';
+          aivaBubble.innerHTML = `<div class="bubble-label">🤖 AIVA</div>`;
           const responseText = document.createElement('div');
-          responseText.className = 'grace-text';
+          responseText.className = 'aiva-text';
           responseText.textContent = chunk;
-          graceBubble.appendChild(responseText);
+          aivaBubble.appendChild(responseText);
           const metaEl = document.createElement('div');
           metaEl.className = 'bubble-meta';
           metaEl.textContent = `Streaming... ${tps} tok/s`;
-          graceBubble.appendChild(metaEl);
-          currentTurn.graceRow.appendChild(graceBubble);
-          currentTurn.graceBubble = graceBubble;
-          currentTurn.graceText = responseText;
-          currentTurn.graceMeta = metaEl;
+          aivaBubble.appendChild(metaEl);
+          currentTurn.aivaRow.appendChild(aivaBubble);
+          currentTurn.aivaBubble = aivaBubble;
+          currentTurn.aivaText = responseText;
+          currentTurn.aivaMeta = metaEl;
         } else {
-          currentTurn.graceText.textContent += chunk;
-          currentTurn.graceMeta.textContent = `Streaming... ${tps} tok/s · ${currentTurn.tokenCount} tokens`;
+          currentTurn.aivaText.textContent += chunk;
+          currentTurn.aivaMeta.textContent = `Streaming... ${tps} tok/s · ${currentTurn.tokenCount} tokens`;
         }
 
       } else if (data.type === 'done') {
@@ -1444,23 +1444,23 @@
         document.getElementById('statTpsMin').textContent = `↓ ${minTps}`;
         document.getElementById('statTpsMax').textContent = `↑ ${maxTps}`;
 
-        // ── Finalise Grace bubble ──
-        if (currentTurn.graceBubble) {
-          currentTurn.graceBubble.classList.remove('streaming-cursor');
-          currentTurn.graceMeta.textContent =
+        // ── Finalise AIVA bubble ──
+        if (currentTurn.aivaBubble) {
+          currentTurn.aivaBubble.classList.remove('streaming-cursor');
+          currentTurn.aivaMeta.textContent =
             `TTFT ${ttft}s · Gen ${generation}s · E2E ${endToEnd}s · ${currentTurn.tokenCount} tokens · ${tps.toFixed(1)} tok/s`;
         } else {
           // done but no content
-          currentTurn.thinkingBubble.className = 'bubble grace-bubble';
-          currentTurn.thinkingBubble.querySelector('div').textContent = '✓ Grace';
+          currentTurn.thinkingBubble.className = 'bubble aiva-bubble';
+          currentTurn.thinkingBubble.querySelector('div').textContent = '✓ AIVA';
           currentTurn.thinkingBubble.querySelector('span').textContent = '(empty response)';
         }
 
         currentTurn = null;
 
       } else if (data.type === 'error') {
-        if (currentTurn.graceBubble) {
-          currentTurn.graceBubble.classList.remove('streaming-cursor');
+        if (currentTurn.aivaBubble) {
+          currentTurn.aivaBubble.classList.remove('streaming-cursor');
         } else {
           currentTurn.thinkingBubble.remove();
         }
@@ -1470,7 +1470,7 @@
         const errText = document.createElement('div');
         errText.textContent = data.content ?? data.message ?? 'Unknown error';
         errBubble.appendChild(errText);
-        currentTurn.graceRow.appendChild(errBubble);
+        currentTurn.aivaRow.appendChild(errBubble);
         currentTurn = null;
       }
 
@@ -1499,7 +1499,7 @@
         system: 0,
         emc: 0,
         wmcUser: 0,
-        wmcGrace: 0,
+        wmcAIVA: 0,
         liveUser: 0,
       };
       const used = Object.values(breakdown).reduce((sum, count) => sum + count, 0);
@@ -1527,7 +1527,7 @@
         { key: 'system', label: 'SYS', value: breakdown.system, className: 'system' },
         { key: 'emc', label: 'EMC', value: breakdown.emc, className: 'emc' },
         { key: 'wmc-user', label: 'WMC U', value: breakdown.wmcUser, className: 'wmc-user' },
-        { key: 'wmc-grace', label: 'WMC G', value: breakdown.wmcGrace, className: 'wmc-grace' },
+        { key: 'wmc-aiva', label: 'WMC G', value: breakdown.wmcAIVA, className: 'wmc-aiva' },
         { key: 'live-user', label: 'USER', value: breakdown.liveUser, className: 'live-user' },
         { key: 'free', label: 'FREE', value: free, className: 'free' },
       ];
@@ -1582,7 +1582,7 @@
       renderChunkGraph();
       document.getElementById('debugStream').innerHTML = `
         <div style="color:var(--text-muted);font-style:italic;text-align:center;margin-top:60px;font-size:0.9rem;">
-          Connected · Waiting for Grace to think...
+          Connected · Waiting for AIVA to think...
         </div>`;
     }
 

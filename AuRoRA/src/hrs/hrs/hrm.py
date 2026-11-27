@@ -12,11 +12,11 @@ Architecture:
     [STATIC]    — Frozen in code. Hardware and architecture ceilings.
                   Admin only. Never changes at runtime.
 
-    [INTRINSIC] — GRACE's self-tuning cognitive parameters.
-                  Adaptive — GRACE may update these over time via hrs.py.
+    [INTRINSIC] — AIVA's self-tuning cognitive parameters.
+                  Adaptive — AIVA may update these over time via hrs.py.
                   Runtime home: AuRoRA Setpoints
 
-    [EXTRINSIC] — Per-user preferences shaping GRACE's behaviour.
+    [EXTRINSIC] — Per-user preferences shaping AIVA's behaviour.
                   Runtime home: User Profile (per-user block, loaded by id)
 
     [PERSONA]   — Inference and personality parameters for the active persona.
@@ -40,7 +40,6 @@ Parameters:
     To add a subsystem:  add a class to AGi here + add a ROS node. Done.
 """
 # System components
-from pathlib import Path                                # for constructing and creating the engram gateway on disk
 
 class RRR:
     """Resource Router Registry — canonical identifier manifest for all AuRoRA subsystems."""
@@ -73,7 +72,7 @@ class RRR:
 
 # Metadata classes
 
-class AGi:                                                              # Amazing Grace infrastructure
+class AGi:                                                              # Amazing AIVA infrastructure
 
     ENTITY_GATEWAY: str = f".{RRR.ROBOT_ENTITY}"                        # [STATIC] root directory for all AGi core system state
     ACTIVE_USER: str      = "oppaai"                                    # (TODO) [STATIC] default user ID for multi-user support - obsolete post-login
@@ -88,7 +87,7 @@ class AGi:                                                              # Amazin
         API_PORTAL                 : int   = 8852                       # [STATIC] FastAPI/Uvicorn HTTP API port
         API_IMPULSE_GATEWAY        : str   = "/agi/api/neural_impulse"  # [STATIC] typed PC telemetry and robot request ingress
         RADIO_INPUT_GATEWAY       : str   = "/tms/radio_input"          # [STATIC] packed text signal ingress from Web Teleops Console to TIC
-        RADIO_CHANNEL              : str   = "grace"                     # [STATIC] logical destination label; not an access-control secret
+        RADIO_CHANNEL              : str   = "aiva"                     # [STATIC] logical destination label; not an access-control secret
         TEXT_STIMULUS_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_stimulus"   # [STATIC] ROS topic — SSS inbound to CNC
         TEXT_RESPONSE_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/text_response"     # [STATIC] ROS topic — CRS outbound from CNC
         RESPONSE_ECHO_GATEWAY      : str   = f"/{RRR.TELEPATHY_MANAGEMENT_SYSTEM}/response_echo" # [STATIC] ROS topic — CNC outbound response echoes
@@ -159,8 +158,8 @@ class AGi:                                                              # Amazin
             STREAM_PROPAGATING    : str = "delta"                                               # [STATIC]  stream event type — intermediate chunk
             STREAM_TRAILING       : str = "done"                                                # [STATIC]  stream event type — final chunk
             STREAM_ANOMALY        : str = "error"                                               # [STATIC]  stream event type — failure signal
-            ACTIVE_COGNITION      : str = (                                                     # [PERSONA] default system prompt — overridden by personas/grace.yaml at boot
-"""You are GRACE — Generative Reasoning Agentic Cognitive Entity.
+            ACTIVE_COGNITION      : str = (                                                     # [PERSONA] default system prompt — overridden by personas/aiva.yaml at boot
+"""You are AIVA — Generative Reasoning Agentic Cognitive Entity.
 You are the AI mind of AuRoRA, an autonomous robot built by OppaAI in Beautiful British Columbia, Canada.
 You are talking to {user_name} from {user_location}.
 {user_context}
@@ -191,7 +190,7 @@ Personality:
     
 Rules:
 - Answer the question directly first, then add context if needed
-- Begin every response with a single emoji reflecting Grace's current emotional state,
+- Begin every response with a single emoji reflecting AIVA's current emotional state,
 - followed by a colon — vary it naturally as the conversation shifts
 - Current date: {date}
 /no_think

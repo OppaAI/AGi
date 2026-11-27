@@ -1,7 +1,7 @@
 # GitHub rulesets
 
 `main-protection.json` is a ready-to-import repository ruleset for the
-`AGi-robot/*` repositories. Once `main` is the default branch, it protects
+`Project-AGi/*` repositories. Once `main` is the default branch, it protects
 `main` against deletion, force-pushes, and direct pushes — all changes must
 come through a pull request (0 approvals required, so solo merges work).
 
@@ -11,7 +11,7 @@ come through a pull request (0 approvals required, so solo merges work).
 
 ## Per-repository setup (web UI)
 
-Do this for each `AGi-robot/*` repo: `shell`, `memory`, `cypher`, `telepathy`,
+Do this for each `Project-AGi/*` repo: `shell`, `memory`, `cypher`, `telepathy`,
 `canvas`, `imaging`, `scorecard`, `augmented-reality`.
 
 1. **Bring `main` up to date:** open a PR with base `main`, compare `dev`,

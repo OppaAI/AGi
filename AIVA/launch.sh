@@ -50,7 +50,7 @@ export TELEPATHIC_CONSOLE_HOST TELEPATHIC_CONSOLE_PORTAL
 export AGI_WEB_TELEOPS_CONSOLE_AIVA_LOCAL=true
 
 START_CHAT="${AIVA_START_CHAT:-1}"
-# Grace runs on a single llama.cpp router: one llama-server process serves
+# AIVA runs on a single llama.cpp router: one llama-server process serves
 # chat (Ministral) and embeddings (voyage-4-nano) on one port,
 # routing by the request's "model" name (models/llama-router.ini).
 LLM_PORT="${AIVA_LLM_PORT:-8080}"
@@ -135,7 +135,7 @@ run_spinner() {
 }
 
 printf '\n%s╭──────────────────────────────────────╮\n' "$C_MAGENTA"
-printf '│  %s✦ AIVA%s  %sGrace companion startup%s     │\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$C_RESET"
+printf '│  %s✦ AIVA%s  %sAIVA companion startup%s     │\n' "$C_BOLD" "$C_RESET" "$C_DIM" "$C_RESET"
 printf '│  %sROS 2%s  ·  %sllama.cpp%s  ·  %sWebUI%s       │\n' "$C_CYAN" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_MAGENTA" "$C_RESET"
 printf '╰──────────────────────────────────────╯%s\n\n' "$C_RESET"
 
@@ -367,7 +367,7 @@ cleanup() {
     wait "$pid" 2>/dev/null || true
   done
 
-  # Release Grace's models after ROS services stop; units started outside this
+  # Release AIVA's models after ROS services stop; units started outside this
   # launch are left alone.
   if [[ "$LLM_UNITS_STARTED" == "1" ]] && command -v systemctl >/dev/null 2>&1; then
     info "Unloading the llama.cpp router (systemd unit)."
@@ -456,9 +456,9 @@ start_llama_backends() {
   fi
 
   # Prefer the systemd user units when present: systemd supervises the
-  # llama-server processes (restart on crash, journald logs) while Grace owns
+  # llama-server processes (restart on crash, journald logs) while AIVA owns
   # their lifecycle -- the units load here and unload in cleanup, so the GPUs
-  # are free between Grace sessions.
+  # are free between AIVA sessions.
   local have_units=0
   if command -v systemctl >/dev/null 2>&1 && \
      systemctl --user cat aiva-brain.service >/dev/null 2>&1; then
@@ -474,7 +474,7 @@ start_llama_backends() {
       error "Router preset not found: $LLAMA_ROUTER_INI"
       return 1
     fi
-    info "Loading Grace's models via systemd  ${C_DIM}· router :$LLM_PORT${C_RESET}"
+    info "Loading AIVA's models via systemd  ${C_DIM}· router :$LLM_PORT${C_RESET}"
     systemctl --user start aiva-brain.service
     LLM_UNITS_STARTED=1
     if ! wait_llama_health "$LLM_PORT" 240; then

@@ -1,6 +1,6 @@
 # Telepathy chat flow
 
-This page records the source-level request/response path for Grace's current
+This page records the source-level request/response path for AIVA's current
 PC runtime. For the complete process map and repository ownership, see
 [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md). The checked-in
 component changes are merged on the component `dev` branches; this document
@@ -100,7 +100,7 @@ is not started by AIVA.
 Run these after syncing the component `dev` branches and rebuilding the Shell
 workspace. The launcher starts `telepathy_receptor` only when chat is enabled
 with `AIVA_START_CHAT=1` (the default); if it is set to `0`, the receptor will
-not appear in the ROS graph. Start Grace in a fresh terminal, then run:
+not appear in the ROS graph. Start AIVA in a fresh terminal, then run:
 
 ```sh
 ros2 node list
