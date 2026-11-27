@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 env:
-  # Console #1 implementation; dev is initially an empty repository.
-  CONSOLE_REF: ce9af3a65df0ed8778e44aea974cd6a2ce28e35f
+  # Exercise the current shared development interfaces.
+  CONSOLE_REF: dev
 
 jobs:
   shared-console-and-encoding:
@@ -24,18 +24,33 @@ jobs:
         with:
           path: AGi
           persist-credentials: false
-      - name: Check out shared Telepathy package
+      - name: Check out shared Console package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/console
+          repository: Project-AGi/console
           ref: ${{ env.CONSOLE_REF }}
           persist-credentials: false
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/cypher
+          repository: Project-AGi/cypher
           path: AGi/AIVA/cypher
+          ref: dev
+          persist-credentials: false
+      - name: Check out shared Telepathy receptor
+        uses: actions/checkout@v4
+        with:
+          repository: Project-AGi/telepathy
+          ref: dev
+          path: AGi/AIVA/telepathy
+          persist-credentials: false
+      - name: Check out Shell signal registry
+        uses: actions/checkout@v4
+        with:
+          repository: Project-AGi/shell
+          ref: dev
+          path: AGi/AIVA/shell
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -59,7 +74,7 @@ jobs:
         run: python -m compileall -q AuRoRA/src/telepathic_management/telepathic_management AuRoRA/src/cryptic_signal_core/cryptic_signal_core AuRoRA/src/tms/tms
       - name: Import the shared console and test signal encoding
         env:
-          PYTHONPATH: AuRoRA/src/telepathic_management:AuRoRA/src/cryptic_signal_core:AuRoRA/src/tms
+          PYTHONPATH: AIVA/telepathy:AuRoRA/src/telepathic_management:AuRoRA/src/cryptic_signal_core:AuRoRA/src/tms
         run: |
           python -c "from telepathic_management.telepathic_console.server import app; assert app.title == 'AGi Web Teleops Console'"
           python -m pytest -q AuRoRA/src/cryptic_signal_core/test/test_telepathic_encoding.py
@@ -75,18 +90,33 @@ jobs:
         with:
           path: AGi
           persist-credentials: false
-      - name: Check out shared Telepathy package
+      - name: Check out shared Console package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/console
+          repository: Project-AGi/console
           ref: ${{ env.CONSOLE_REF }}
           persist-credentials: false
           path: AGi/AIVA/console
       - name: Check out shared Cypher package
         uses: actions/checkout@v4
         with:
-          repository: AGi-robot/cypher
+          repository: Project-AGi/cypher
           path: AGi/AIVA/cypher
+          ref: dev
+          persist-credentials: false
+      - name: Check out shared Telepathy receptor
+        uses: actions/checkout@v4
+        with:
+          repository: Project-AGi/telepathy
+          ref: dev
+          path: AGi/AIVA/telepathy
+          persist-credentials: false
+      - name: Check out Shell signal registry
+        uses: actions/checkout@v4
+        with:
+          repository: Project-AGi/shell
+          ref: dev
+          path: AGi/AIVA/shell
           persist-credentials: false
       - name: Configure ROS apt source
         run: |
@@ -105,7 +135,7 @@ jobs:
           fi
           source /opt/ros/jazzy/setup.bash
           rosdep update --rosdistro jazzy
-          rosdep install --from-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management \
+          rosdep install --from-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management AIVA/telepathy AIVA/shell/src/central_neural_system/aiva_cryptic_signal_core \
             --ignore-src --rosdistro jazzy -r -y
       - name: Prepare Python test environment
         run: |
@@ -116,7 +146,7 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           test "$(readlink -f AuRoRA/src/telepathic_management)" = "$(readlink -f AIVA/console)"
           test "$(readlink -f AuRoRA/src/cryptic_signal_core)" = "$(readlink -f AIVA/cypher)"
-          colcon build --base-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+          colcon build --base-paths AuRoRA/src/cryptic_signal_core AuRoRA/src/telepathic_management AIVA/telepathy AIVA/shell/src/central_neural_system/aiva_cryptic_signal_core --packages-up-to telepathic_management --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
       - name: Verify the built ROS packages
         run: |
           source /opt/ros/jazzy/setup.bash

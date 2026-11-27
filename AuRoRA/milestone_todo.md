@@ -38,7 +38,7 @@
 - [ ] **M2** `emc.py` — graceful drain + optional timeout fallback for SWR trigger during close
 
 ### HRS / HRU / HRC
-- [ ] **M2** `hrs.py` — build hrs.py to allow GRACE to update [INTRINSIC] constants at runtime and persist changes back to aurora.yaml
+- [ ] **M2** `hrs.py` — build hrs.py to allow AIVA to update [INTRINSIC] constants at runtime and persist changes back to aurora.yaml
 - [ ] **M2** `hrs.py` — add HRS startup/shutdown lifecycle management
 - [ ] **M2** `hrs.py` — add recency parameter for identification of the most recent event segments in EMC
 - [ ] **M2?** `hru.py` — decide whether to use database to store user profile instead of yaml
@@ -61,7 +61,7 @@ Current state: Single active user per session, set at startup via AGi.ACTIVE_USE
 Architecture ready: user_id threading complete (CNC → MCC → WMC → EMC → MSB)
  
 Deferred decision: How should users authenticate?
-   - Voice command? ("Grace, login as Alice")
+   - Voice command? ("AIVA, login as Alice")
    - GUI button/form?
    - ROS2 service call from external UI?
    - Face recognition integration?

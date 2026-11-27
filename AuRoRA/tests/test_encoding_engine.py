@@ -20,7 +20,7 @@ MODEL = "BAAI/bge-base-en-v1.5"
 TEST_CUE = "what did we talk about yesterday"
 
 print(f"\n{'═' * 60}")
-print(f"  AuRoRA · Encoding Engine diagnostic")
+print("  AuRoRA · Encoding Engine diagnostic")
 print(f"  Model : {MODEL}")
 print(f"{'═' * 60}\n")
 
@@ -44,7 +44,7 @@ print("\n── huggingface_hub.utils ──────────────
 try:
     import huggingface_hub.utils as hfu
     print(f"  path    : {hfu.__file__}")
-    print(f"  OK")
+    print("  OK")
 except Exception as e:
     print(f"  FAILED: {e}")
     traceback.print_exc()
@@ -64,7 +64,7 @@ print(f"\n── SentenceTransformer('{MODEL}') ──────────�
 try:
     from sentence_transformers import SentenceTransformer
     model = SentenceTransformer(MODEL)
-    print(f"  loaded ✓")
+    print("  loaded ✓")
 except Exception as e:
     print(f"  FAILED: {e}")
     traceback.print_exc()
@@ -76,12 +76,12 @@ try:
     vec = model.encode(TEST_CUE).tolist()
     print(f"  dim     : {len(vec)}")
     print(f"  sample  : {vec[:4]}")
-    print(f"  encode ✓")
+    print("  encode ✓")
 except Exception as e:
     print(f"  FAILED: {e}")
     traceback.print_exc()
     sys.exit(1)
 
 print(f"\n{'═' * 60}")
-print(f"  Encoding Engine — all checks passed ✓")
+print("  Encoding Engine — all checks passed ✓")
 print(f"{'═' * 60}\n")

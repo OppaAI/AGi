@@ -199,7 +199,7 @@ class EngramComplex:
         try:
 
             # 0. Schema Version Check - create schema and verify version on startup
-            self._ecx_conn.execute(f"""
+            self._ecx_conn.execute("""
                 CREATE TABLE IF NOT EXISTS schema_meta (
                     key   TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -461,7 +461,7 @@ class EngramComplex:
         """
         try:                                                                    # attempt semantic recall with given cue
             # Filter by user ID
-            user_filter: str = f"AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
+            user_filter: str = "AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
             user_params: list = [user_id] if user_id else []                    # guest: bind user_id to placeholder — admin: empty, no binding needed
 
             date_from, date_to = date_range if(date_range and self._is_temporal) else (None, None) # unpack date range — None if no filter; skip temporal filter if schema has no temporal trace column
@@ -515,7 +515,7 @@ class EngramComplex:
         Returns:
             list[dict]: Engram traces with relevancy and _rank fields appended.
         """
-        user_filter: str = f"AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
+        user_filter: str = "AND store.user_id = ?" if user_id else ""      # guest: filter by user_id — admin: no filter, accesses all engrams
         user_params: list = [user_id] if user_id else []                    # guest: bind user_id to placeholder — admin: empty, no binding needed
 
         clean_cue: str = self._clean_cue(cue)                               # strip punctuation, filter stop words, join with OR

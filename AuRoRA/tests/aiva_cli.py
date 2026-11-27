@@ -80,9 +80,8 @@ STREAM_TIMEOUT_SEC = 15.0
 
 def print_header(mode: str) -> None:
     """Print boot header with active mode label."""
-    mode_label = f"{'relay' if mode == 'relay' else 'direct'} mode"
     print(f"\n{BOLD}{PINK}╔══════════════════════════════════╗")
-    print(f"║     Chat with GRACE — AuRoRA     ║")
+    print("║     Chat with AIVA — AuRoRA     ║")
     print(f"╚══════════════════════════════════╝{RESET}")
     if mode == "relay":
         print(f"{YELLOW}[relay mode] routing through TIC/TOC websockets{RESET}")
@@ -93,7 +92,7 @@ def print_header(mode: str) -> None:
         print(f"  PUB  {TOPIC_INPUT}")
         print(f"  SUB  {TOPIC_RESPONSE}{RESET}")
     print(f"\n{GREY}Type your message and press Enter.")
-    print(f"/web <message> to enable web search.")
+    print("/web <message> to enable web search.")
     print(f"Ctrl+C to quit.{RESET}\n")
 
 
@@ -122,7 +121,7 @@ def render_fragment(data: dict, state: dict, print_lock: threading.Lock) -> None
             state["turn_start"]  = time.monotonic()
             state["token_count"] = 0
             _arm_timeout(state, print_lock)
-            print(f"\n{BOLD}{PINK}GRACE{RESET}{PINK} 🌸  {RESET}", end="", flush=True)
+            print(f"\n{BOLD}{PINK}AIVA{RESET}{PINK} 🌸  {RESET}", end="", flush=True)
             print(content, end="", flush=True)
 
         elif msg_type == STREAM_PROPAGATING:                             # delta fragment — accumulate
@@ -207,7 +206,7 @@ def build_payload(text: str, web_search: bool = False) -> str:
 # Direct mode — ROS2 node, bypasses TIC/TOC
 # ══════════════════════════════════════════════════════════════════════════════
 
-class GraceCLI(Node):
+class AivaCLI(Node):
     """
     Direct mode CLI — ROS2 node.
     Publishes SSS directly to TMS sensory gateway.
@@ -216,7 +215,7 @@ class GraceCLI(Node):
     """
 
     def __init__(self):
-        super().__init__("grace_cli")
+        super().__init__("aiva_cli")
 
         self._pub = self.create_publisher(String, TOPIC_INPUT, 10)
         self._sub = self.create_subscription(
@@ -252,13 +251,13 @@ class GraceCLI(Node):
         self._pub.publish(msg)
 
 
-def input_loop_direct(node: GraceCLI) -> None:
+def input_loop_direct(node: AivaCLI) -> None:
     """
     Blocking input loop for direct mode — runs on dedicated thread.
     Reads stdin, sends SSS via ROS2 publisher.
 
     Args:
-        node (GraceCLI): Active CLI node for publishing.
+        node (AivaCLI): Active CLI node for publishing.
     """
     print_prompt()
 
@@ -273,7 +272,7 @@ def input_loop_direct(node: GraceCLI) -> None:
             continue
 
         if node._state["streaming"]:                                     # cognitive cycle busy — hold input
-            print(f"{GREY}[GRACE is still thinking — please wait]{RESET}")
+            print(f"{GREY}[AIVA is still thinking — please wait]{RESET}")
             print_prompt()
             continue
 
@@ -294,7 +293,7 @@ def run_direct_mode(ros_args) -> None:
         ros_args: Filtered ROS2 args from argparse.
     """
     rclpy.init(args=ros_args)
-    node = GraceCLI()
+    node = AivaCLI()
 
     input_thread = threading.Thread(
         target=input_loop_direct,
@@ -368,7 +367,7 @@ async def relay_loop() -> None:
                     continue
 
                 if state["streaming"]:
-                    print(f"{GREY}[GRACE is still thinking — please wait]{RESET}")
+                    print(f"{GREY}[AIVA is still thinking — please wait]{RESET}")
                     print_prompt()
                     continue
 
@@ -411,7 +410,7 @@ def run_relay_mode() -> None:
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description="Grace CLI — chat interface for AuRoRA"
+        description="AIVA CLI — chat interface for AuRoRA"
     )
     parser.add_argument(
         "--relay",

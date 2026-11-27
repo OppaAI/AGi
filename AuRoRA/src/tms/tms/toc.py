@@ -62,6 +62,7 @@ Terminology:
 
 import asyncio                                                                # for running telepathy domain on a dedicated neural thread, isolated from robot system cycle
 import json                                                                   # serialize/deserialize payloads at both boundaries
+import websockets
 import threading                                                              # owns the telepathy domain thread — keeps asyncio loop off the robot system cycle
 
 import rclpy                                                                  # ROS2 Python client library — node lifecycle and spin

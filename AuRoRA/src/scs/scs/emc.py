@@ -5,7 +5,7 @@ AuRoRA · Semantic Cognitive System (SCS)
 
 Episodic memory layer of the SCS — "I remember that specific moment."
 Stores conversational PMTs as dated, semantically encoded engrams for future recall.
-No expiry — 1TB NVMe means Grace remembers everything.
+No expiry — 1TB NVMe means AIVA remembers everything.
 
 Responsibilities:
     - Receive evicted PMTs from MCC into crash-safe episodic buffer (binding)

@@ -21,7 +21,7 @@ Changelog for AuRoRA · Semantic Cognitive System (SCS)
 * feat(M1): add trivial PMT filter — discards turns under 20 chars at WMC→EMC eviction boundary
 * feat(M1): add consecutive user message guard in WMC — appends to ``_induced_pmt`` rather than overwriting
 * feat(M1): upgrade embedding model to ``BAAI/bge-base-en-v1.5`` with asymmetric cue prefixing for improved retrieval accuracy
-* feat(M1): introduce web GUI (``AGi.html``) and CLI (``grace_cli.py``) — WebSocket bridge via rosbridge
+* feat(M1): introduce web GUI (``AGi.html``) and CLI (``aiva_cli.py``) — WebSocket bridge via rosbridge
 * fix(M1): amnesia bug — ``register_memory("user")`` now called before ``_stream_gce()``
 * fix(M1): attention gate TOCTOU — gate closed before coroutine scheduled
 * fix(M1): ``stored_version`` type annotation corrected from ``str`` to ``int`` in MSB schema versioning

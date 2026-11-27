@@ -59,7 +59,7 @@ class UserAccessLevel(Enum):
 class UserProfile:
     user_id:              str                # unique identifier — matches the key in users.yaml
     name:                 str                # full legal name — used in formal contexts
-    known_as:             str                # preferred address — how Grace speaks to the user
+    known_as:             str                # preferred address — how AIVA speaks to the user
     location:             str                # physical location — timezone and locale context
     access_level:         UserAccessLevel    # permission scope — admin unrestricted, guest user-scoped only
     seed:                 str   = ""         # relational seed — injected into system prompt for context

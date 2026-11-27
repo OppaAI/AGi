@@ -3,7 +3,7 @@ CNC — Central Neural Core
 ===========================
 AuRoRA · Semantic Cognitive System (SCS)
 
-ROS2 node — central cognitive coordinator of Grace.
+ROS2 node — central cognitive coordinator of AIVA.
 Orchestrates the full perception-cognition-response cycle each conversational turn.
 Milestone 1: Chatbot with Working Memory (WMC) + Episodic Memory (EMC)
 
@@ -49,7 +49,7 @@ Terminology:
     Neural Gateway  — persistent async HTTP connection to an external cognitive engine
     Neural Thread   — dedicated background thread hosting an async event loop
     Thalamic Relay  — role of the CNC in routing signals between sensory input, memory systems, and motor output
-    CRS             — Cognitive Response Signal — Grace's generated output, efference copy for memory encoding
+    CRS             — Cognitive Response Signal — AIVA's generated output, efference copy for memory encoding
 """
 
 # System components
@@ -126,7 +126,7 @@ class CNC(Node):
         self._iru.recognize_user(user_id=self._active_user)                 # recognize active user — loads relational context
         self._access_level: UserAccessLevel = self._iru.user_profile.access_level  # access classification — governs recall scope
 
-        self._ppu = PersonalProgressionUnit(logger=self.get_logger())       # boot personal progression — loads Grace's persona
+        self._ppu = PersonalProgressionUnit(logger=self.get_logger())       # boot personal progression — loads AIVA's persona
         self._ppu.provision_cognition(user_profile=self._iru.user_profile)  # assemble system prompt — persona + user context
 
         # Initialize separate execution thread for memory and blocking operations
@@ -187,7 +187,7 @@ class CNC(Node):
         self.get_logger().info(f"✅ Subscribed  : {TMS.TEXT_STIMULUS_GATEWAY}")
         self.get_logger().info(f"✅ Publishing  : {TMS.TEXT_RESPONSE_GATEWAY}")
         self.get_logger().info("=" * 60)
-        self.get_logger().info("🌸 GRACE is ready")
+        self.get_logger().info("🌸 AIVA is ready")
         self.get_logger().info("=" * 60)
 
     def _receive_stimulus(self, msg: String) -> None:
@@ -282,7 +282,7 @@ class CNC(Node):
 
             # 7. Register interaction — pair SSS + CRS into complete episode for memory
             if cognitive_response:
-                crs = CRS(                                                                      # CRS — Grace's cognitive output, not a sensory signal
+                crs = CRS(                                                                      # CRS — AIVA's cognitive output, not a sensory signal
                     text       = cognitive_response,
                     trace_type = TraceType.PMT,
                 )

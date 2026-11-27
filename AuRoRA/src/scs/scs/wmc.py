@@ -21,7 +21,7 @@ Architecture:
     Capacity:
         Phonological limit — Miller's Law (7±2 PMTs), tunable via HRS config
         Global chunk limit — cognitive engine context window minus system prompt,
-                             GRACE personality, and EMC injection reserve
+                             AIVA personality, and EMC injection reserve
 
     Eviction triggers (both checked on every fill):
         - Sustained chunks + incoming PMT chunks > global chunk limit
@@ -61,8 +61,7 @@ import math                            # for exponential recency decay — half-
 from collections import deque          # for PMT slot — O(1) append and popleft on eviction
 from datetime import datetime, timezone  # for PMT timestamps and UTC-aware age calculations
 import json                            # for structured PMT storage — serialization and recall
-from typing import TypeAlias, TypedDict # for type hints
-from typing_extensions import Unpack
+from typing import TypedDict # for type hints
 
 # AGi components
 from hrs.hru import ChunkSampler       # probes and truncates cognitive context for budget management
@@ -825,7 +824,7 @@ class WorkingMemoryCortex:
     def assess_pmt_schema(self) -> dict:
         """
         Assess current occupancy of the sustaining PMT schema.
-        Used for monitoring and GRACE cognitive state display.
+        Used for monitoring and AIVA cognitive state display.
 
         Returns:
             dict: Current memory usage stats including PMT count, sustained chunks, free chunks, global chunk limit, and load percentage

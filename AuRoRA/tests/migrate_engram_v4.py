@@ -164,8 +164,8 @@ def check_schema_version(state: dict) -> None:
     """
     v = state["current_version"]
     if v is None:
-        print(f"\n  ERROR: schema_meta table missing or has no schema_version.")
-        print(f"         Cannot migrate safely — inspect DB manually.")
+        print("\n  ERROR: schema_meta table missing or has no schema_version.")
+        print("         Cannot migrate safely — inspect DB manually.")
         sys.exit(1)
     if v == SCHEMA_VERSION_NEW:
         print(f"\n  NOTE: schema_version already {SCHEMA_VERSION_NEW} — likely from a previously failed run.")
@@ -460,7 +460,7 @@ def main() -> None:
     db_path = Path(args.db)
 
     print(f"\n{'═' * 60}")
-    print(f"  AuRoRA · EMC schema migration")
+    print("  AuRoRA · EMC schema migration")
     print(f"  DB   : {db_path.resolve()}")
     print(f"  Mode : {'DRY RUN — no writes' if args.dry_run else 'LIVE'}")
     print(f"{'═' * 60}")
