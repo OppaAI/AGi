@@ -1,16 +1,17 @@
 # Ministral chat template
 
-`mistral-v7-tekken.jinja` is the unmodified official template from
+`mistral-v7-tekken.jinja` is based on the official template from
 [`mistralai/Ministral-3-8B-Instruct-2512`](https://huggingface.co/mistralai/Ministral-3-8B-Instruct-2512/blob/d2ff65a33fc5f72d77a65a2bc366feefd44ca320/chat_template.jinja),
 revision `d2ff65a33fc5f72d77a65a2bc366feefd44ca320`.
-SHA-256: `338c134a61cf54e1d250a8f6c2e974c788c14ae97dd6e7b2491d5446ec472490`.
-It is licensed under Apache-2.0 by Mistral AI; see `LICENSE-Ministral-3.txt`.
+SHA-256: `18b200f0ed32a89fa4942bc48ad897269a795d3e61c2a0ae69621a2644739265`.
+The template retains the upstream Apache-2.0 license; see `LICENSE-Ministral-3.txt`. The tool-result branch is locally adapted to render text blocks through `render_content`; the source revision and file hash identify this exact adaptation.
 
 With `jinja = on`, llama.cpp b12359 treats `chat-template` as Jinja source,
 so a built-in name such as `mistral-v7-tekken` becomes literal prompt text.
 The router instead uses `chat-template-file` to load this template. Its absolute
-path follows the model path in `../llama-router.ini`; update both when moving
-the checkout. Keep Jinja enabled for tool definitions, calls and results.
+path follows the model path in `../llama-router.ini`; update it when moving
+the checkout. The regression check compares the configured template filename,
+so it continues to work when the absolute checkout path changes. Keep Jinja enabled for tool definitions, calls and results.
 
 The template uses Mistral V7-Tekken markers, including `[SYSTEM_PROMPT]`,
 `[INST]`, `[AVAILABLE_TOOLS]`, `[TOOL_CALLS]`, `[ARGS]` and `[TOOL_RESULTS]`.
@@ -32,6 +33,6 @@ python models/templates/check_template.py /tmp/llama-template-check/build/bin/te
 ```
 
 This checks the router setting, pinned template hash, system/user and multi-turn
-content, tool schemas/calls/results, and rejection of an empty conversation
+content, tool schemas/calls/results including typed text blocks, and rejection of an empty conversation
 using llama.cpp's actual common chat renderer. No GGUF is needed. Loading the
 chosen GGUF and checking a live chat/tool round trip remain deployment checks.

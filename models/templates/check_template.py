@@ -15,14 +15,14 @@ def main():
     renderer = Path(sys.argv[1]).resolve(strict=True)
     directory = Path(__file__).resolve().parent
     template = directory / "mistral-v7-tekken.jinja"
-    expected_hash = "338c134a61cf54e1d250a8f6c2e974c788c14ae97dd6e7b2491d5446ec472490"
+    expected_hash = "18b200f0ed32a89fa4942bc48ad897269a795d3e61c2a0ae69621a2644739265"
     assert hashlib.sha256(template.read_bytes()).hexdigest() == expected_hash
     config = configparser.ConfigParser(interpolation=None)
     config.read(directory.parent / "llama-router.ini")
     preset = config["ministral-3-8b-instruct-2512-abliterated"]
     assert preset["jinja"] == "on"
     assert "chat-template" not in preset
-    assert preset["chat-template-file"] == f"/home/oppa-ai/AGi/models/templates/{template.name}"
+    assert Path(preset["chat-template-file"]).name == template.name
 
     system = {"role": "system", "content": "SYSTEM_SENTINEL: You are AIVA."}
     user = {"role": "user", "content": "USER_SENTINEL"}
@@ -48,6 +48,10 @@ def main():
                 "[AVAILABLE_TOOLS]", "TOOL_SCHEMA_SENTINEL",
                 "[TOOL_CALLS]weather_probe[ARGS]", "CITY_SENTINEL",
                 "[TOOL_RESULTS]TOOL_RESULT_SENTINEL[/TOOL_RESULTS]"]),
+        ("typed text tool result", [system, user, call,
+            {"role": "tool", "tool_call_id": "call00001",
+             "content": [{"type": "text", "text": "TYPED_TOOL_TEXT_SENTINEL"}]}], [tool], [
+                "[TOOL_RESULTS]TYPED_TOOL_TEXT_SENTINEL[/TOOL_RESULTS]"]),
     ]
     with tempfile.TemporaryDirectory() as temp:
         fixture = Path(temp) / "input.json"
