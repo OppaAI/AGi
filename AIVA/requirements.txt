@@ -3,5 +3,7 @@ PyYAML>=6.0,<7
 openrgb-python==0.3.8
 -e ../capability/canvas
 -e ../capability/imaging
+-e ../capability/telekinesis
+PyAutoGUI>=0.9.54,<1
 -e ./mind/memory
 -e ./interactive
