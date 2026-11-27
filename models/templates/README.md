@@ -8,16 +8,15 @@ The template retains the upstream Apache-2.0 license; see `LICENSE-Ministral-3.t
 
 With `jinja = on`, llama.cpp b12359 treats `chat-template` as Jinja source,
 so a built-in name such as `mistral-v7-tekken` becomes literal prompt text.
-The router instead uses `chat-template-file` to load this template. Its absolute
-path follows the model path in `../llama-router.ini`; update it when moving
-the checkout. The regression check compares the configured template filename,
-so it continues to work when the absolute checkout path changes. Keep Jinja enabled for tool definitions, calls and results.
+For the Nymphaea-RP override, use `--chat-template-file` with this file’s absolute
+path. The IQ4_XS router preset uses its GGUF’s embedded template instead.
+Keep Jinja enabled for tool definitions, calls and results.
 
 The template uses Mistral V7-Tekken markers, including `[SYSTEM_PROMPT]`,
 `[INST]`, `[AVAILABLE_TOOLS]`, `[TOOL_CALLS]`, `[ARGS]` and `[TOOL_RESULTS]`.
 Pass AIVA's explicit system message: without one, the upstream template inserts
-Mistral's default Le Chat identity. This is a formatting override for the current
-Ministral preset and a candidate Nymphaea-RP model; it does not change the model
+Mistral's default Le Chat identity. This is an optional formatting override for
+Nymphaea-RP; it does not change the model
 file, sampling parameters, or make tools available by itself.
 
 ## Rendering regression check
@@ -32,7 +31,7 @@ cmake --build /tmp/llama-template-check/build --target test-chat-template -j 4
 python models/templates/check_template.py /tmp/llama-template-check/build/bin/test-chat-template
 ```
 
-This checks the router setting, pinned template hash, system/user and multi-turn
+This checks that IQ4_XS has no template override, the pinned template hash, system/user and multi-turn
 content, tool schemas/calls/results including typed text blocks, and rejection of an empty conversation
 using llama.cpp's actual common chat renderer. No GGUF is needed. Loading the
 chosen GGUF and checking a live chat/tool round trip remain deployment checks.

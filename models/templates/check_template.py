@@ -1,4 +1,4 @@
-"""Check the pinned router template using llama.cpp's real chat renderer."""
+"""Check the optional pinned template using llama.cpp's real chat renderer."""
 
 import configparser
 import hashlib
@@ -22,7 +22,7 @@ def main():
     preset = config["ministral-3-8b-instruct-2512-abliterated"]
     assert preset["jinja"] == "on"
     assert "chat-template" not in preset
-    assert Path(preset["chat-template-file"]).name == template.name
+    assert "chat-template-file" not in preset
 
     system = {"role": "system", "content": "SYSTEM_SENTINEL: You are AIVA."}
     user = {"role": "user", "content": "USER_SENTINEL"}
@@ -73,7 +73,7 @@ def main():
         assert result.returncode != 0, "Empty conversation must be rejected"
         assert "Conversation must have at least one message" in result.stdout + result.stderr
         print("PASS: empty conversation rejected")
-    print("PASS: pinned source and router configuration")
+    print("PASS: pinned source and IQ4_XS embedded-template configuration")
 
 
 if __name__ == "__main__":
