@@ -21,7 +21,7 @@ EOF
 
 if [[ "${1:-}" == "perf" ]]; then
   shift
-  exec /usr/bin/python3 "$SCORECARD_DIR/benchmarks/inference_perf/inference_perf.py" "$@"
+  exec "$AIVA_DIR/.venv/bin/python" "$SCORECARD_DIR/benchmarks/inference_perf/inference_perf.py" "$@"
 fi
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
