@@ -63,9 +63,8 @@ models/**/*.gguf
 /models/voyage-4-nano
 /models/swift15-qwen3.8-27b
 /models/bonsai-2.5-27b
-/models/occamy-1.0
-/models/occamy-1.0-abliterated-apex
-/models/occamy-1.0-abliterated-i1
+/models/occamy-1.0-apex
+/models/occamy-1.0-i1
 
 
 # These are separate Project-AGi repositories; commit within each repo.
@@ -86,4 +85,3 @@ models/**/*.gguf
 /console/
 /AIVA/.env
 /AIVA/.venv/
-
