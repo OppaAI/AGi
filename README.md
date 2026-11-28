@@ -52,29 +52,34 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **ephem** — local moon phase calculation (no network)
 
 On the PC (AIVA), Grace's language stack runs on the **llama.cpp router**
-(`aiva-brain`, port 8080). **Nymphaea RP (Ministral 3 8B IQ4_XS)** is the
-preloaded chat frontend; **Ministral 3 8B Instruct 2512 Abliterated (IQ4_XS)**
-is an on-demand alternate. **voyage-4-nano** runs on CPU for embeddings. The
-router presets are in [`models/llama-router.ini`](models/llama-router.ini).
+(`aiva-brain`, port 8080). Its model roster is split between the front-end
+chat models and the back-end agentic models below. **voyage-4-nano** runs on
+CPU for embeddings. Router presets are in
+[`models/llama-router.ini`](models/llama-router.ini).
 
-The PC also has these locally installed GGUF models for separate agentic,
-coding, and multimodal experiments; they are not all loaded by the AIVA router
-at once:
+### Front-end chat models
 
-| Model | Local build | Notes |
-|---|---|---|
-| Agents A1 4B | Q4_K_M | Compact agentic model; vision projector installed |
-| NeoHorse 1 4B | Q4_K_M | Compact agentic model |
-| MiniCPM5 2B | Q8_0 | Compact multimodal model; vision projector installed |
-| Bonsai 2.5 27B | Ternary Q2_0 MTP | Multimodal build; vision projector installed |
-| Occamy 1.0 I1 | Q4_K_M | Multimodal build; vision projector installed |
-| Occamy 1.0 APEX-I Quality | APEX-I Quality build | Alternate Occamy multimodal build; vision projector installed |
-| Ornith 1.5 35B A3B Heretic MTP | APEX GSQ RCO IQ3_XXS | MoE build; vision projector installed |
-| Inkling 2 Mini AD | Q4_K | Multimodal build; vision projector installed |
+| Full model name | Router role |
+|---|---|
+| `Ministral-3-8B-Nymphaea-RP.i1-IQ4_XS.gguf` | Preloaded Grace chat frontend; uses the V7-Tekken template override |
+| `Ministral-3-8B-Instruct-2512-BF16-abliterated.i1-IQ4_XS.gguf` | On-demand alternate chat model; uses its embedded template |
 
-**Swift 1.5 Qwen3.8 27B** remains part of the model roster as a previously
-used on-demand agentic/vision model. Its local weights and router preset are
-currently absent.
+### Back-end agentic models
+
+These locally installed models are used for separate agentic, coding, and
+multimodal experiments rather than being preloaded by the AIVA router:
+
+| Full model name | Notes |
+|---|---|
+| `Swift 1.5 Qwen3.8 27B` | Retained roster entry for the on-demand agentic/vision model; local weights and router preset are currently absent |
+| `Agents-A1-4B-Q4_K_M.gguf` | Compact agentic model; vision projector installed |
+| `NeoHorse-1-4B-Q4_K_M.gguf` | Compact agentic model |
+| `MiniCPM5-2B-Q8_0.gguf` | Compact multimodal model; vision projector installed |
+| `Ternary-Bonsai-2.5-27B-Q2_0-mtp.gguf` | Multimodal reasoning model; vision projector installed |
+| `occamy-1.0.i1-Q4_K_M.gguf` | Occamy 1.0 I1; vision projector installed |
+| `occamy-1.0-APEX-I-Quality.gguf` | Occamy 1.0 APEX-I Quality; vision projector installed |
+| `Ornith-1.5-35B-A3B-Heretic-MTP-APEX-GSQ-RCO-IQ3_XXS.gguf` | MoE build; vision projector installed |
+| `Inkling-2-Mini-AD-Q4_K.gguf` | Multimodal model; vision projector installed |
 
 MOSS is an optional raster-painting sidecar, separate from the GGUF chat
 roster. Model files live under `/opt/agi/models`; the corresponding checkout
