@@ -51,10 +51,34 @@ The goal: build an autonomous ground robot that can explore nature with me, powe
 - **FastAPI + Uvicorn** — authenticated HTTP ingress for PC health telemetry and homing requests; existing TIC/TOC WebSockets remain active
 - **ephem** — local moon phase calculation (no network)
 
-On the PC (AIVA), AIVA's language stack runs on a **llama.cpp router**
-(`aiva-brain`, port 8080): **Ministral 3 8B** (chat, resident) +
-**Swift 1.5 Qwen3.8 27B** (agentic/vision, on-demand) + **voyage-4-nano**
-(embeddings) — see [`models/llama-router.ini`](models/llama-router.ini).
+On the PC (AIVA), Grace's language stack runs on the **llama.cpp router**
+(`aiva-brain`, port 8080). **Nymphaea RP (Ministral 3 8B IQ4_XS)** is the
+preloaded chat frontend; **Ministral 3 8B Instruct 2512 Abliterated (IQ4_XS)**
+is an on-demand alternate. **voyage-4-nano** runs on CPU for embeddings. The
+router presets are in [`models/llama-router.ini`](models/llama-router.ini).
+
+The PC also has these locally installed GGUF models for separate agentic,
+coding, and multimodal experiments; they are not all loaded by the AIVA router
+at once:
+
+| Model | Local build | Notes |
+|---|---|---|
+| Agents A1 4B | Q4_K_M | Compact agentic model; vision projector installed |
+| NeoHorse 1 4B | Q4_K_M | Compact agentic model |
+| MiniCPM5 2B | Q8_0 | Compact multimodal model; vision projector installed |
+| Bonsai 2.5 27B | Ternary Q2_0 MTP | Multimodal build; vision projector installed |
+| Occamy 1.0 I1 | Q4_K_M | Multimodal build; vision projector installed |
+| Occamy 1.0 APEX-I Quality | APEX-I Quality build | Alternate Occamy multimodal build; vision projector installed |
+| Ornith 1.5 35B A3B Heretic MTP | APEX GSQ RCO IQ3_XXS | MoE build; vision projector installed |
+| Inkling 2 Mini AD | Q4_K | Multimodal build; vision projector installed |
+
+**Swift 1.5 Qwen3.8 27B** remains part of the model roster as a previously
+used on-demand agentic/vision model. Its local weights and router preset are
+currently absent.
+
+MOSS is an optional raster-painting sidecar, separate from the GGUF chat
+roster. Model files live under `/opt/agi/models`; the corresponding checkout
+links are under `models/`.
 ---
  
 ## Shared Components
